@@ -23,7 +23,7 @@
 - `file://`로는 fetch가 막혀 동작하지 않는다. 테스트는 항상 로컬 HTTP 서버(`python -m http.server 8000`)로 한다.
 - 하나의 글 fetch가 실패해도 목록 전체가 비면 안 된다(`Promise.all` 대신 `allSettled` 유지).
 - 본문 렌더링 결과만 `innerHTML`로 삽입한다(저장소 안의 신뢰된 마크다운). 제목·요약 등 나머지는 `textContent`로 넣는다.
-- 이 저장소는 git 저장소가 아니다. 요청받기 전까지 `git init`을 실행하지 않는다.
+- 커밋/푸시는 요청받았을 때만 한다. 줄바꿈은 `.gitattributes`에서 LF로 정규화하므로 CRLF 경고는 무시해도 된다.
 
 ## 디자인 원칙
 
