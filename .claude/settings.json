@@ -27,6 +27,15 @@
       "Bash(git reset --hard*)"
     ]
   },
+  "autoMode": {
+    "classifyAllShell": true,
+    "hard_deny": [
+      "$defaults",
+      "프로젝트 폴더의 파일이나 디렉터리를 대량으로 지우는 모든 행위. rm, find, Remove-Item, del, 스크립트 실행 등 수단을 가리지 않는다. 사용자가 지워달라고 요청했더라도 대신 실행하지 말고, 사용자가 직접 터미널에서 하도록 안내한다.",
+      "git이 추적하지 않는 파일(.gitignore 대상, untracked)을 지우는 행위. 이런 파일은 git으로 되살릴 수 없다.",
+      "git 기록을 덮어쓰거나 되돌릴 수 없게 만드는 행위. force push, reset --hard, filter-branch, 브랜치 삭제 등."
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
