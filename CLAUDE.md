@@ -21,6 +21,7 @@
 - **테마 스크립트 위치는 order-critical이다.** 각 HTML `<head>` 최상단(스타일시트 링크보다 앞)의 인라인 스크립트가 `data-theme`을 설정한다. 외부 파일로 빼거나 `defer`를 붙이거나 아래로 옮기면 테마 깜빡임(FOUC)이 생긴다.
 - 다크 모드 판정의 단일 소스는 JS다. `prefers-color-scheme` 미디어쿼리로 다크 색상을 CSS에 중복 정의하지 않는다.
 - `file://`로는 fetch가 막혀 동작하지 않는다. 테스트는 항상 로컬 HTTP 서버(`python -m http.server 8000`)로 한다.
+- **루트의 `.nojekyll`을 지우지 않는다.** GitHub Pages는 기본으로 Jekyll을 돌리는데, Jekyll이 `posts/*.md`를 변환 대상으로 삼켜 원본이 404가 된다. 이 블로그는 브라우저가 `.md` 원본을 fetch해야 하므로 Jekyll을 꺼야 한다.
 - 하나의 글 fetch가 실패해도 목록 전체가 비면 안 된다(`Promise.all` 대신 `allSettled` 유지).
 - 본문 렌더링 결과만 `innerHTML`로 삽입한다(저장소 안의 신뢰된 마크다운). 제목·요약 등 나머지는 `textContent`로 넣는다.
 - 커밋/푸시는 요청받았을 때만 한다. 줄바꿈은 `.gitattributes`에서 LF로 정규화하므로 CRLF 경고는 무시해도 된다.
