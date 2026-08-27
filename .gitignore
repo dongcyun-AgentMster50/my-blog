@@ -10,3 +10,7 @@ desktop.ini
 
 # 로컬 설정 (launch.json은 공유해도 무방하므로 제외하지 않음)
 .claude/settings.local.json
+
+# 명령 차단 후크. 이것을 부르는 설정이 settings.local.json에 있어
+# 함께 로컬에 둔다. 한쪽만 올라가면 다른 컴퓨터에서 연결이 끊긴다.
+.claude/hooks/
