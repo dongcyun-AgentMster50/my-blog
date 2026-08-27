@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>2048</title>
+  <meta name="description" content="방향키 또는 스와이프로 같은 숫자를 합쳐 2048을 만드는 퍼즐 게임.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="stylesheet" href="style.css">
+  <script src="game.js" defer></script>
+</head>
+<body>
+  <!-- tabindex="0": iframe 안에서 방향키를 받으려면 이 래퍼가 포커스를 가져야 한다.
+       autofocus는 쓰지 않는다 — 로드 즉시 포커스를 뺏으면 부모 페이지가 게임 위치로 튄다. -->
+  <div id="game" tabindex="0">
+
+    <header class="hud">
+      <div class="hud-row">
+        <div class="titles">
+          <h1 class="title">2048</h1>
+          <p class="subtitle">타일을 합쳐 2048을 만드세요</p>
+        </div>
+        <div class="scores">
+          <div class="score-box" id="score-box">
+            <span class="sr-only">현재 점수</span>
+            <span class="score-label" aria-hidden="true">현재</span>
+            <span class="score-value" id="score">0</span>
+          </div>
+          <div class="score-box">
+            <span class="sr-only">최고 점수</span>
+            <span class="score-label" aria-hidden="true">최고</span>
+            <span class="score-value" id="best">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="controls">
+        <button type="button" id="undo" class="btn" disabled>
+          <span aria-hidden="true">↩</span> 되돌리기
+        </button>
+        <button type="button" id="restart" class="btn btn-primary">새 게임</button>
+      </div>
+    </header>
+
+    <div class="board-wrap">
+      <!-- 16개 .cell은 game.js가 한 번만 생성하고, 이후에는 data-value만 갱신한다. -->
+      <div class="board" id="board"></div>
+
+      <!-- hidden 속성으로 토글한다. display:none만 쓰면 스크린 리더가 내용을 읽을 수 있다. -->
+      <div class="overlay" id="overlay" hidden>
+        <h2 class="overlay-title" id="overlay-title"></h2>
+        <p class="overlay-desc" id="overlay-desc"></p>
+        <p class="overlay-record" id="overlay-record" hidden>최고 기록!</p>
+        <div class="overlay-actions">
+          <button type="button" class="btn btn-primary" id="overlay-primary"></button>
+          <button type="button" class="btn" id="overlay-new">새 게임</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="hint">
+      <p class="hint-focus">화면을 한 번 누른 뒤 방향키로 움직이세요.</p>
+      <p class="hint-play">방향키(또는 WASD)·스와이프로 조작합니다.</p>
+      <p class="sr-only" id="live" role="status" aria-live="polite"></p>
+    </footer>
+
+  </div>
+</body>
+</html>

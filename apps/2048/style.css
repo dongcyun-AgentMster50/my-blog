@@ -1,0 +1,500 @@
+/* ============================================================
+   2048 — 스타일
+   자체 완결. 폴더 바깥 파일을 참조하지 않는다.
+   타일 색은 모든 조합에서 글자/배경 대비 4.5:1 이상을 계산해 골랐다.
+   ============================================================ */
+
+/* ── 라이트 팔레트 ─────────────────────────────────────── */
+:root {
+  --bg: #faf8ef;
+  --fg: #5f574e;
+  /* 점수판(--surface) 위에 얹혀도 4.5:1을 넘도록 잡은 값이다. 더 밝히지 말 것. */
+  --muted: #6b6158;
+  --surface: #efe8dd;
+  --border: #ded4c6;
+
+  --board-bg: #bbada0;
+  --cell-empty: #cdc1b4;
+
+  --btn-bg: #efe8dd;
+  --btn-fg: #5f574e;
+  --btn-primary-bg: #75604e;
+  --btn-primary-fg: #ffffff;
+  --btn-armed-bg: #a3341a;
+  --focus: #8a5a07;
+
+  --overlay-bg: rgba(245, 239, 228, 0.93);
+
+  /* 타일 — 값이 커질수록 진해지고 따뜻해진다. */
+  --tile-fg-dark: #5f574e;
+  --tile-fg-light: #ffffff;
+  --t2: #eee4da;
+  --t4: #ede0c8;
+  --t8: #c2410c;
+  --t16: #b23a0c;
+  --t32: #a32f14;
+  --t64: #92261a;
+  --t128: #8a5a07;
+  --t256: #7a4d06;
+  --t512: #6a4106;
+  --t1024: #5b3708;
+  --t2048: #4d2f07;
+  --tbig: #3a2b26;
+  --glow: rgba(224, 176, 98, 0.45);
+  --tile-ring: transparent;
+
+  --radius: 6px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Pretendard, "Apple SD Gothic Neo",
+    "Malgun Gothic", "Noto Sans KR", sans-serif;
+}
+
+/* ── 다크 팔레트 ───────────────────────────────────────────
+   자체 대응(prefers-color-scheme) + 임베드 측의 ?theme= 오버라이드를 함께 지원한다.
+   두 선택자가 같은 값을 공유해야 하는데 CSS에는 변수 묶음을 재사용할 문법이 없어
+   블록을 두 번 쓴다. 값을 바꿀 때는 반드시 두 곳을 같이 고칠 것.
+   8 이상 타일 색은 라이트와 동일하다 — 이미 충분히 진해 다크 배경에서도 그대로 쓰이고,
+   대비가 검증된 값을 두 벌로 나누면 관리 지점만 늘어난다. 눈부신 2·4만 채도를 낮춘다. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #181a1e;
+    --fg: #d7d2cb;
+    --muted: #9c968e;
+    --surface: #262a31;
+    --border: #343941;
+
+    --board-bg: #101216;
+    --cell-empty: #1e2126;
+
+    --btn-bg: #262a31;
+    --btn-fg: #d7d2cb;
+    --focus: #e0b062;
+
+    --overlay-bg: rgba(28, 31, 36, 0.93);
+
+    --tile-fg-dark: #2a251f;
+    --t2: #cfc3b3;
+    --t4: #c4b291;
+    /* 어두운 판 위에서 어두운 타일의 경계가 묻히지 않도록 미세한 링을 준다. */
+    --tile-ring: rgba(255, 255, 255, 0.10);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #181a1e;
+  --fg: #d7d2cb;
+  --muted: #9c968e;
+  --surface: #262a31;
+  --border: #343941;
+
+  --board-bg: #101216;
+  --cell-empty: #1e2126;
+
+  --btn-bg: #262a31;
+  --btn-fg: #d7d2cb;
+  --focus: #e0b062;
+
+  --overlay-bg: rgba(28, 31, 36, 0.93);
+
+  --tile-fg-dark: #2a251f;
+  --t2: #cfc3b3;
+  --t4: #c4b291;
+  --tile-ring: rgba(255, 255, 255, 0.10);
+}
+
+/* ── 기본 ─────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  /* 3차 스크롤 방어: iframe 끝에서 부모 페이지로 스크롤이 전파되는 체이닝과
+     iOS 당겨서 새로고침을 막는다. */
+  overscroll-behavior: contain;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 외부 리셋에 기대지 않고 직접 정의한다. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 레이아웃 ─────────────────────────────────────────── */
+#game {
+  width: 100%;
+  max-width: 28rem;
+  margin-inline: auto;
+  padding: clamp(0.75rem, 3vw, 1.25rem);
+  padding-bottom: calc(clamp(0.75rem, 3vw, 1.25rem) + env(safe-area-inset-bottom));
+  min-height: 100vh;   /* 100dvh 미지원 브라우저용 선언이 먼저 온다 */
+  min-height: 100dvh;  /* iOS 주소창 때문에 아래가 잘리는 것을 막는다 */
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 2vw, 0.9rem);
+  outline: none;
+}
+
+/* 포커스가 어디 있는지 반드시 눈에 보여야 한다. */
+#game:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+.hud-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.6rem, 7vw, 2.2rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.scores {
+  display: flex;
+  gap: 0.4rem;
+  flex: none;
+}
+
+.score-box {
+  position: relative;
+  min-width: 4.2rem;
+  padding: 0.3rem 0.55rem 0.4rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: center;
+  line-height: 1.15;
+}
+
+.score-label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.score-value {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 어떤 이동이 몇 점이었는지 즉시 알려주는 연출. */
+.score-float {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--focus);
+  pointer-events: none;
+  animation: score-float 700ms ease-out forwards;
+}
+
+@keyframes score-float {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-1.6rem); }
+}
+
+.controls {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.btn {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  cursor: pointer;
+  /* 더블탭 확대만 없애고 탭은 정상 동작시킨다. */
+  touch-action: manipulation;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border-color: transparent;
+}
+
+.btn-primary.is-armed {
+  background: var(--btn-armed-bg);
+}
+
+/* ── 보드 ─────────────────────────────────────────────── */
+.board-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.board {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  /* 세로가 짧은 화면에서 가로로만 커지다 아래가 잘리는 것을 막는다. */
+  max-height: min(100%, 60dvh);
+  max-width: 60dvh;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: clamp(6px, 2%, 12px);
+  padding: clamp(6px, 2%, 12px);
+  border-radius: calc(var(--radius) * 1.5);
+  background: var(--board-bg);
+
+  /* 1차이자 정공법인 스크롤 방어. 이 영역의 터치를 브라우저가
+     스크롤·핀치로 소비하지 않고 전부 스크립트에 넘긴다. */
+  touch-action: none;
+  /* 스와이프 중 숫자가 드래그 선택되거나 회색 하이라이트가 번쩍이는 것을 막는다. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+
+  /* 글자 크기는 뷰포트가 아니라 보드 자신의 폭에 비례해야 iframe 안에서 맞는다. */
+  container-type: inline-size;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  background: var(--cell-empty);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--tile-fg-light);
+  font-size: 9cqw;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+@supports not (container-type: inline-size) {
+  .cell { font-size: clamp(1rem, 6vw, 2rem); }
+  .cell[data-value="128"],
+  .cell[data-value="256"],
+  .cell[data-value="512"] { font-size: clamp(0.8rem, 4.7vw, 1.55rem); }
+  .cell[data-value="1024"],
+  .cell[data-value="2048"],
+  .cell[data-big="true"] { font-size: clamp(0.65rem, 3.7vw, 1.2rem); }
+}
+
+/* 자릿수가 늘면 줄인다. */
+.cell[data-value="128"],
+.cell[data-value="256"],
+.cell[data-value="512"] { font-size: 7cqw; }
+
+.cell[data-value="1024"],
+.cell[data-value="2048"],
+.cell[data-big="true"] { font-size: 5.5cqw; }
+
+.cell[data-value="2"]    { background: var(--t2);    color: var(--tile-fg-dark); }
+.cell[data-value="4"]    { background: var(--t4);    color: var(--tile-fg-dark); }
+.cell[data-value="8"]    { background: var(--t8); }
+.cell[data-value="16"]   { background: var(--t16); }
+.cell[data-value="32"]   { background: var(--t32); }
+.cell[data-value="64"]   { background: var(--t64); }
+.cell[data-value="128"]  { background: var(--t128); }
+.cell[data-value="256"]  { background: var(--t256); }
+.cell[data-value="512"]  { background: var(--t512); }
+.cell[data-value="1024"] { background: var(--t1024); box-shadow: 0 0 10px var(--glow); }
+.cell[data-value="2048"] { background: var(--t2048); box-shadow: 0 0 14px var(--glow); }
+
+/* 4096, 8192…마다 색을 추가하지 않는다. 하나의 스타일을 공유한다. */
+.cell[data-big="true"] { background: var(--tbig); box-shadow: 0 0 14px var(--glow); }
+
+.cell:not([data-value="0"]) {
+  box-shadow: inset 0 0 0 1px var(--tile-ring);
+}
+
+.cell[data-value="1024"] { box-shadow: inset 0 0 0 1px var(--tile-ring), 0 0 10px var(--glow); }
+.cell[data-value="2048"],
+.cell[data-big="true"]   { box-shadow: inset 0 0 0 1px var(--tile-ring), 0 0 14px var(--glow); }
+
+/* ── 애니메이션 ────────────────────────────────────────
+   타일이 미끄러지는 이동 애니메이션은 넣지 않는다(설계 결정).
+   등장/합치기 팝만으로 "입력이 처리됐다"는 피드백의 대부분을 가져간다. */
+.cell.is-new {
+  animation: pop-in 140ms ease-out;
+}
+
+.cell.is-merged {
+  animation: pop-merge 160ms ease-out;
+}
+
+@keyframes pop-in {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pop-merge {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+
+/* ── 오버레이 ─────────────────────────────────────────── */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  border-radius: calc(var(--radius) * 1.5);
+  background: var(--overlay-bg);
+  backdrop-filter: blur(2px);
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay-title {
+  margin: 0;
+  font-size: clamp(1.1rem, 5.5vw, 1.5rem);
+}
+
+.overlay-desc,
+.overlay-record {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.overlay-record {
+  color: var(--focus);
+  font-weight: 700;
+}
+
+.overlay-record[hidden] {
+  display: none;
+}
+
+.overlay-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── 안내 문구 ────────────────────────────────────────── */
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.hint p {
+  margin: 0;
+}
+
+/* 포커스가 없을 때만 "눌러서 시작" 안내를 보여준다.
+   data-focused는 game.js가 focusin/focusout으로 토글한다. */
+#game[data-focused="true"] .hint-focus,
+#game:not([data-focused="true"]) .hint-play {
+  display: none;
+}
+
+/* ── 좁은 화면 ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .hud-row {
+    align-items: center;
+  }
+  .subtitle {
+    display: none; /* 세로 공간을 보드에 양보한다. */
+  }
+}
+
+/* ── 세로가 짧은 화면(가로 모드) ───────────────────────
+   앱 전체가 스크롤 없이 한 화면에 들어가야 한다.
+   폭이 아니라 높이가 부족한 상황이므로 높이 기준으로 분기한다.
+   장식(부제·여백·글자)을 먼저 줄이고 보드 상한을 함께 낮춘다. */
+@media (max-height: 480px) {
+  #game {
+    gap: 0.3rem;
+    padding-top: 0.5rem;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+  .title {
+    font-size: 1.35rem;
+  }
+  .subtitle {
+    display: none;
+  }
+  .score-box {
+    padding: 0.25rem 0.5rem 0.3rem;
+  }
+  .btn {
+    padding: 0.35rem 0.7rem;
+  }
+  .board {
+    max-height: min(100%, 55dvh);
+    max-width: 55dvh;
+  }
+  .hint {
+    font-size: 0.75rem;
+  }
+}
+
+/* ── 접근성: 모션 최소화 ──────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

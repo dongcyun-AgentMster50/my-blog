@@ -34,9 +34,36 @@
         ></button>
       </header>
 
-      <main id="app">
-        <p class="state-message">글을 불러오는 중…</p>
-      </main>
+      <!-- 앱 카드는 정적으로 둔다. 앱 추가는 Embed 단계에서만 일어나므로
+           글처럼 manifest로 동적 로딩할 이유가 없다. -->
+      <section class="apps-section" aria-labelledby="apps-heading">
+        <h2 id="apps-heading" class="section-heading">앱</h2>
+        <article class="app-card">
+          <div class="app-card-info">
+            <h3 class="app-card-title">
+              <a href="apps/2048/index.html">2048</a>
+            </h3>
+            <p class="app-card-desc">
+              방향키(모바일은 스와이프)로 숫자 타일을 밀어 합치는 퍼즐.
+              점수판과 한 수 되돌리기를 지원합니다.
+            </p>
+            <a class="app-card-open" href="apps/2048/index.html">전체 화면으로 열기 →</a>
+          </div>
+          <iframe
+            class="app-card-frame"
+            src="apps/2048/index.html"
+            title="2048 게임"
+            loading="lazy"
+          ></iframe>
+        </article>
+      </section>
+
+      <section aria-labelledby="posts-heading">
+        <h2 id="posts-heading" class="section-heading">글</h2>
+        <main id="app">
+          <p class="state-message">글을 불러오는 중…</p>
+        </main>
+      </section>
 
       <footer class="site-footer">마크다운으로 쓰는 블로그</footer>
     </div>
