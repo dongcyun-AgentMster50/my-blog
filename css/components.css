@@ -1,24 +1,25 @@
+/* 글 목록 — 테두리 상자를 걷어내고 여백과 얇은 구분선으로만 나눈다.
+   장식이 줄어든 만큼 제목이 먼저 눈에 들어온다. */
+
 .post-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
 }
 
 .post-card {
-  display: block;
-  padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-card-bg);
-  transition: var(--transition-theme), border-color 0.15s ease, transform 0.1s ease;
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--space-8);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.post-card:hover {
-  border-color: var(--color-accent);
-  transform: translateY(-1px);
+.post-card:first-child {
+  padding-top: 0;
+}
+
+.post-card:last-child {
+  border-bottom: none;
 }
 
 .post-card-title-link {
@@ -27,24 +28,29 @@
 }
 
 .post-card-title {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-h3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-h2);
   color: var(--color-text);
+  transition: color 0.15s ease;
 }
 
-.post-card-title-link:hover .post-card-title {
+.post-card-title-link:hover .post-card-title,
+.post-card-title-link:focus-visible .post-card-title {
   color: var(--color-accent);
   text-decoration: none;
 }
 
+/* 날짜를 제목 위로 올린다. 목록을 훑을 때 시간 순서가 먼저 잡힌다. */
 .post-meta {
+  order: -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
+  margin-bottom: var(--space-2);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--space-3);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.01em;
 }
 
 .post-date {
@@ -52,8 +58,10 @@
 }
 
 .post-excerpt {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-4);
   color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
 }
 
 .tag-list {
@@ -67,9 +75,15 @@
 
 .tag-pill {
   display: inline-block;
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  border-radius: var(--radius);
   background: var(--color-tag-bg);
   color: var(--color-tag-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
+}
+
+@media (max-width: 640px) {
+  .post-card {
+    padding-block: var(--space-6);
+  }
 }
