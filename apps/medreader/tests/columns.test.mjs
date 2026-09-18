@@ -92,6 +92,25 @@ test('C3 1단 페이지 + 4열 표 6줄 → count=1 (표를 2단으로 오판하
   assert.equal(layout.columns.count, 1);
 });
 
+test('C5 [Review 추가] 거터에 폭 있는 공백 아이템이 끼어 있어도 2단으로 잡힌다', () => {
+  // spec 4-2 는 공백만 있는 아이템을 버리지 않는다. 그 공백이 거터 한가운데에
+  // 놓이면 "직전 아이템"과의 간격이 두 조각으로 쪼개져 run 분할 임계를 넘지
+  // 못한다 → 좌·우 컬럼이 한 줄로 병합(spec 4-11 P2 위반). splitRuns 가 간격을
+  // "직전 비공백 아이템" 기준으로 재는지 고정한다.
+  const items = [];
+  for (let i = 0; i < 20; i++) {
+    const y = 700 - 12 * i;
+    items.push(item('left body line number ' + (i + 1), 72, y, { width: 200 }));
+    items.push(item('   ', 280, y, { width: 50 }));          // 거터를 채우는 공백 아이템
+    items.push(item('right body line number ' + (i + 1), 340, y, { width: 200 }));
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(layout.columns.count, 2);
+  const t = textsOf(layout);
+  assert.equal(t.length, 40);
+  for (const s of t) assert.ok(!/left .* right /.test(s), '좌·우 컬럼이 한 줄로 병합되면 안 된다: ' + s);
+});
+
 test('C4 줄 7개뿐인 페이지 → count=1 (정보 부족)', () => {
   const items = [];
   for (let i = 0; i < 7; i++) {

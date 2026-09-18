@@ -129,6 +129,36 @@ test('B7 "A. Checklists to ensure" → kind=option', () => {
   assert.equal(b.kind, 'option');
 });
 
+test('B8 [Review 추가] "N. The answer is X" 는 question 이 아니라 answer', () => {
+  // isQuestionStart 와 isAnswerStart 가 둘 다 맞는 문자열이다. 5-3 파서(2단계)가
+  // kind='answer' 로 해설 섹션을 찾으므로 판정 순서가 뒤집히면 해설이 문항이 된다.
+  for (const [text, kind] of [
+    ['1. The answer is A. This patient has an acute coronary', 'answer'],
+    ['2. The answers are A and C for the reasons given below', 'answer'],
+    ['12. Which of the following can help reduce errors today', 'question']
+  ]) {
+    const items = [...bodyLines(5), item(text, 72, 640 - 25, { width: 400 })];
+    const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+    const p = layout.paragraphs.find(x => x.text.indexOf(text.slice(0, 8)) === 0);
+    assert.ok(p, '문단을 찾지 못했다: ' + text);
+    assert.equal(p.kind, kind, text);
+  }
+});
+
+test('B9 [Review 추가] 러닝 헤드 바로 아래 첫 본문 줄을 heading 으로 오판하지 않는다', () => {
+  // heading 의 "위쪽 여백" 기준을 직전 줄(역할 무관)으로 잡으면 머리말과의 간격이
+  // 항상 1.5×Lm 을 넘어 컬럼 첫 본문 줄이 heading 이 된다(spec 4-11 P4 위반).
+  const items = [
+    item('SECTION I INTRODUCTION TO CLINICAL MEDICINE', 72, 770, { fontSize: 9, width: 220 }),
+    item('the patient was admitted with chest pain', 72, 700, { width: 190 }),
+    ...bodyLines(8, 688),
+    item('23', 300, 40, { width: 10 })
+  ];
+  const layout = buildPageLayout(items, { pageNo: 23, width: W, height: H });
+  assert.equal(roleOf(layout, 'the patient was admitted'), 'body');
+  assert.equal(layout.paragraphs.length, 1);
+});
+
 test('T1 4 run × 4줄 열 정렬 → table region 1개, role=table, 문단에 미포함', () => {
   const xs = [72, 220, 300, 380];
   const ws = [100, 30, 30, 30];

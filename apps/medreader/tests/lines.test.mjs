@@ -89,6 +89,16 @@ test('L5 20pt 제목 두 줄, 행간 22pt → 두 줄 (Y 허용 상한 6pt)', ()
   assert.equal(lines.length, 2);
 });
 
+test('L5b [Review 추가] 40pt 제목 두 줄, 행간 13pt → 두 줄 (Y 허용 상한 6pt가 실제로 작동)', () => {
+  // L5(20pt·행간 22pt)는 0.35×20 = 7pt 로도 갈라지므로 상한 6pt 를 검증하지 못한다.
+  // 40pt 에서 0.35×40 = 14pt > 13pt 행간이므로, 상한이 없으면 두 줄이 하나로 합쳐진다.
+  const lines = lineOf([
+    item('Principles of Internal', 72, 700, { fontSize: 40, width: 400 }),
+    item('Medicine Nineteenth', 72, 687, { fontSize: 40, width: 380 })
+  ]);
+  assert.equal(lines.length, 2);
+});
+
 test('L6 "poses the least" / "cardiovascular risk" → 줄 2개, 문단은 공백으로 이어짐', () => {
   const layout = buildPageLayout([
     item('poses the least', 72, 700, { width: 70 }),

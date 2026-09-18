@@ -103,6 +103,9 @@ tr.outlier td { background: var(--warn); }
 
 @media (max-width: 900px) {
   .panes { flex-direction: column; }
-  .paneRight { max-height: none; width: 100%; }
+  /* 세로로 쌓일 때 .pane 의 flex:1 1 0 과 overflow:auto 가 만나면
+     자동 최소 높이가 0이 되어 줄 목록이 통째로 잘린다(높이 0).
+     내용 높이를 그대로 쓰도록 되돌린다. */
+  .paneRight { max-height: none; width: 100%; overflow: visible; flex: 0 0 auto; }
   input[type="range"] { width: 100px; }
 }
