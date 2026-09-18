@@ -1037,7 +1037,7 @@ keyPattern (gemini) = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
 
 | 스토어 | 키 | 인덱스 | 주요 필드 | Phase |
 |---|---|---|---|---|
-| `documents` | `id` (uuid) | `lastOpenedAt`, `fileHash`(unique) | `title, fileName, size, pageCount, fileHash(SHA-256 또는 FNV), addedAt, lastOpenedAt, lastPage, lastLineId, lang('en'), extraction{done:boolean, pagesDone:number, algoVersion}, columnsHint, sectionIndex[](5절 파서 결과 요약: {sectionId, title, startPage, endPage, questions, verified}), icd[]([P2])` | P1 |
+| `documents` | `id` (uuid) | `lastOpenedAt`, `fileHash`(unique) | `title, fileName, size, pageCount, fileHash(SHA-256 또는 FNV), addedAt, lastOpenedAt, lastPage, lastLineId, lang('en'), extraction{done:boolean, pagesDone:number, cursor:number, failed:number[], algoVersion}(9-4), columnsHint, sectionIndex[](5절 파서 결과 요약: {sectionId, title, startPage, endPage, questions, verified}), icd[]([P2])` | P1 |
 | `blobs` | `docId` | — | `blob` (원본 PDF `Blob`) | P1 |
 | `pages` | `[docId, pageNo]` | `docId` | `PageLayout`(3-3) + `textHash, extractedAt, roleVersion` | P1 |
 | `progress` | `[docId, sectionId]` | `docId`, `updatedAt` | `readLineCount, totalLineCount, completedAt, lastLineId, minutes` | P1(저장만)·P2(화면) |
@@ -1081,9 +1081,37 @@ extract.js 큐:
   priority 2: 나머지를 1페이지부터 순서대로
   실행: requestIdleCallback(있으면) 또는 setTimeout(0) 사이사이에 한 페이지씩. 낭독 중에는 priority 2를 초당 1페이지로 제한(메인 스레드 경합 방지)
   각 페이지: getPage → getTextContent → buildPageLayout → pages.put → page.cleanup → documents.extraction.pagesDone++
-  중단: 앱을 닫아도 pages에 저장된 것은 남는다. 다시 열면 pagesDone/pageCount에서 이어서 진행
-  완료: extraction.done = true → 5절 파서를 섹션 단위로 실행 → sectionIndex 갱신 → questions 저장
+  중단: 앱을 닫아도 pages에 저장된 것은 남는다. 재개는 아래 extraction 커서를 따른다
+  완료: failed가 비고 cursor > pageCount 이면 extraction.done = true
+        → 5절 파서를 섹션 단위로 실행 → sectionIndex 갱신 → questions 저장
 ```
+
+#### 재개 모델 — 명시적 커서 + 실패 페이지 목록 `[결정 2026-09-18]`
+
+`documents.extraction`을 다음으로 확장한다.
+
+```
+extraction: {
+  done: boolean,
+  pagesDone: number,        # 저장에 성공한 페이지 수 (진행 표시용 — 재개 판단에 쓰지 않는다)
+  cursor: number,           # priority 2 순차 스캔이 다음에 시도할 페이지 번호 (1부터)
+  failed: number[],         # 예외로 건너뛴 페이지 번호 (오름차순, 중복 없음)
+  algoVersion: number
+}
+```
+
+- **재개는 `cursor`를 따르고, `pagesDone`으로 판단하지 않는다.** `pagesDone`은 우선순위 큐가
+  순서를 건너뛰며 채우기 때문에 "어디까지 했는가"를 나타내지 못한다(사용자가 500쪽을 먼저 열면
+  `pagesDone`이 6이어도 500쪽 부근은 이미 끝나 있다). 이미 저장된 페이지는 `pages`에 있으면 건너뛴다.
+- **페이지 하나가 던져도 추출 전체를 멈추지 않는다.** 예외는 `failed`에 페이지 번호를 넣고 다음으로
+  넘어간다. `cursor`가 끝에 도달하면 `failed`를 **한 번 더** 순회하며 재시도하고, 그래도 실패한 것은
+  `failed`에 남긴 채 `done`을 세우지 않는다. 설정 > 고급에 실패 목록과 [실패한 페이지 다시 시도]를 둔다.
+- **왜 세 번째 안인가**: 마지막 저장 페이지에서 이어가는 방식(가장 싼 안)은 예외로 건너뛴 페이지가
+  **영구 구멍**으로 남아 섹션 퀴즈·검색이 조용히 불완전해진다. 열 때마다 전체를 훑어 구멍을 찾는 방식은
+  729쪽에서 매 실행 비용이 든다. 커서와 실패 목록을 명시적으로 들고 있으면 구멍이 데이터에 드러나고,
+  재개는 O(1)로 시작된다. 스토어를 늘리지 않고 `documents` 레코드 안에 두어 일관성 유지 지점을 하나로 둔다.
+- `algoVersion`이 오르면 `cursor ← 1`, `failed ← []`로 되돌려 전체를 다시 훑되, 페이지별로는
+  `pages[i].algoVersion < ALGO_VERSION`인 것만 실제로 재계산한다.
 
 - 서재 카드와 리더 상단에 "텍스트 준비 중 312/729" 진행 표시. 완료 전에도 읽기·낭독은 가능하다(현재 페이지가 우선이므로 보통 1~2초 안에 준비).
 - 첫 페이지 표시 목표: 파일 선택 후 3초 이내(pdf.js 로드 포함, 데스크톱 기준 1초).
