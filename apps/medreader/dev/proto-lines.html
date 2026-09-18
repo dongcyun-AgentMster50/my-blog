@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!--
+  MedReader — 줄 재구성 프로토타입 검증 페이지 (spec 4-11)
+
+  개발용 도구다. 앱 본체가 아니며 index.html 에서 링크하지 않는다.
+  ES modules 를 쓰므로 file:// 로 열면 동작하지 않는다.
+  저장소 루트에서  python -m http.server 8000  을 띄우고
+  http://localhost:8000/apps/medreader/dev/proto-lines.html 로 연다.
+
+  쿼리 파라미터
+    ?pdfjs=<base URL>  pdf.js 로딩 경로 교체 (예: ?pdfjs=http://localhost:8000/pdfjs/)
+    ?pdf=<URL>         PDF 를 파일 선택 없이 바로 열기 (자동 검증용)
+    ?items=<URL>       items JSON 픽스처를 바로 불러오기 (PDF 없이 검증)
+    ?page=<n>          시작 페이지
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedReader 줄 재구성 프로토타입</title>
+<link rel="stylesheet" href="proto-lines.css">
+</head>
+<body>
+
+<header class="bar">
+  <strong class="brand">줄 재구성 프로토타입</strong>
+  <label class="fileLabel">
+    PDF 열기
+    <input type="file" id="fileInput" accept="application/pdf">
+  </label>
+  <label>페이지 <input type="number" id="pageNo" value="1" min="1" step="1"></label>
+  <button type="button" id="prevPage">◀</button>
+  <button type="button" id="nextPage">▶</button>
+  <button type="button" id="exportItems">items JSON 내보내기</button>
+  <label class="fileLabel">
+    items JSON 불러오기
+    <input type="file" id="importItems" accept="application/json">
+  </label>
+  <button type="button" id="statsRun">전체 문서 통계</button>
+  <button type="button" id="statsStop" disabled>중지</button>
+</header>
+
+<section class="params" id="params">
+  <label>Y 허용 계수 <input type="range" id="pY" min="0.1" max="1" step="0.05"><output id="oY"></output></label>
+  <label>공백 계수 <input type="range" id="pS" min="0.02" max="0.6" step="0.01"><output id="oS"></output></label>
+  <label>run 계수 <input type="range" id="pR" min="0.5" max="5" step="0.1"><output id="oR"></output></label>
+  <label>거터 임계 <input type="range" id="pG" min="0.2" max="0.95" step="0.05"><output id="oG"></output></label>
+  <button type="button" id="resetParams">기본값</button>
+</section>
+
+<p class="status" id="status">PDF 파일을 열거나 items JSON 픽스처를 불러오세요.</p>
+
+<main class="panes">
+  <section class="pane paneLeft">
+    <div class="pageWrap" id="pageWrap">
+      <canvas id="canvas"></canvas>
+      <div class="hlLayer" id="hlLayer"></div>
+    </div>
+    <ul class="legend">
+      <li><span class="sw swBody"></span>본문</li>
+      <li><span class="sw swMeta"></span>헤더/푸터/페이지번호</li>
+      <li><span class="sw swTable"></span>표</li>
+      <li><span class="sw swHeading"></span>제목</li>
+      <li><span class="sw swGutter"></span>거터</li>
+      <li><span class="sw swSup"></span>위첨자 합류</li>
+    </ul>
+  </section>
+
+  <section class="pane paneRight">
+    <div class="summary" id="summary"></div>
+    <ol class="lineList" id="lineList"></ol>
+  </section>
+</main>
+
+<section class="statsBox" id="statsBox" hidden>
+  <h2>전체 문서 통계</h2>
+  <div class="statsScroll"><table id="statsTable"></table></div>
+</section>
+
+<script type="module" src="proto-lines.js"></script>
+</body>
+</html>
