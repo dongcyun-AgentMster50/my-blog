@@ -121,3 +121,91 @@ test('C4 줄 7개뿐인 페이지 → count=1 (정보 부족)', () => {
   const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
   assert.equal(layout.columns.count, 1);
 });
+
+/* ────────────────────────────────────────────────────────────
+   1b단계 회귀 — 실제 원서에서 P2(컬럼 병합)가 전면 실패한 원인 두 가지.
+   합성 픽스처의 거터는 spec 예시대로 0.5W 로 넓게 만들어져 있어서 두 결함을
+   모두 놓쳤다. 아래 세 케이스는 실측 조판(본문 10pt, 거터 15pt, 좌·우
+   baseline 어긋남)을 그대로 옮긴 것이다.
+
+   C6 = 분모 결함만 분리 (거터 25pt → RUN_GAP 2.0 에서도 run 은 쪼개진다)
+   C8 = RUN_GAP 결함만 분리 (모든 줄이 같은 baseline → 분모는 영향 없음)
+   ──────────────────────────────────────────────────────────── */
+
+test('C6 좌·우 baseline 이 어긋난 2단 문항 페이지(한쪽 컬럼에만 있는 줄이 과반) → count=2', () => {
+  // 실측(p343): 본문 54줄 중 거터를 가로지르는 줄은 18줄뿐이고 그 18줄이 전부
+  // 거터에서 끊긴다. 분모가 body.length 면 18/54 = 0.33 < 0.55 로 1단이 되고
+  // 좌·우 컬럼이 한 줄로 병합된다(spec 4-11 P2 위반).
+  // 여기서는 좌 72~281 / 우 306~515, 거터 25pt — RUN_GAP 2.0 에서도 쪼개지므로
+  // 이 케이스가 잡아내는 것은 오직 "거터 비율의 분모"다.
+  const items = [];
+  for (let i = 0; i < 20; i++) {                      // 가로지르는 줄 20개
+    const y = 700 - 14 * i;
+    items.push(item('left aligned body line ' + (i + 1), 72, y, { width: 209 }));
+    items.push(item('right aligned body line ' + (i + 1), 306, y, { width: 209 }));
+  }
+  for (let i = 0; i < 30; i++) {                      // 한쪽 컬럼에만 있는 줄 30개 (과반)
+    const y = 693 - 14 * i;
+    if (i % 2 === 0) items.push(item('left only body line ' + (i + 1), 72, y, { width: 209 }));
+    else items.push(item('right only body line ' + (i + 1), 306, y, { width: 209 }));
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(layout.columns.count, 2, '가로지르는 20줄이 전부 거터에서 끊기는데 1단으로 보면 안 된다');
+  for (const s of textsOf(layout)) {
+    assert.ok(!/left .*right /.test(s), '좌·우 컬럼이 한 줄로 병합되면 안 된다: ' + s);
+  }
+});
+
+test('C7 전폭 본문 1단 페이지(해설 구간) → count=1 (분모를 고쳐도 오탐하지 않는다)', () => {
+  // 실측(p42): 본문 47줄이 모두 전폭이고 그중 15줄이 우연히 페이지 중앙 근처에서
+  // 끊긴다 → 비율 0.33. 분모를 "가로지르는 줄"로 바꿔도 이 페이지는 모든 줄이
+  // 가로지르므로 비율이 거의 변하지 않는다(0.32 → 0.33). 임계 0.55 가 하는 일이
+  // 이것이다 — 임계를 0.30 대로 낮추면 이 케이스가 깨진다.
+  const items = [];
+  for (let i = 0; i < 30; i++) {                      // 끊김 없는 전폭 줄
+    items.push(item('full width explanation line ' + (i + 1), 72, 700 - 12 * i, { width: 468 }));
+  }
+  for (let i = 0; i < 15; i++) {                      // 중앙 근처에서 우연히 끊기는 줄
+    const y = 340 - 12 * i;
+    items.push(item('explanation fragment ' + (i + 1), 72, y, { width: 208 }));
+    items.push(item('continues after a gap ' + (i + 1), 300, y, { width: 240 }));
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(layout.columns.count, 1);
+});
+
+test('C8 거터 폭이 1.5em 인 2단 페이지 → count=2 (RUN_GAP_FACTOR 회귀 방지)', () => {
+  // 실측: 이 책의 거터는 왼쪽 컬럼이 x=306 에서 끝나고 오른쪽이 x=321 에서
+  // 시작해 15pt = 1.5em(본문 10pt)이다. RUN_GAP_FACTOR 2.0 이면 임계가 20pt 라
+  // 거터가 run 경계로 인식되지 않고, 히스토그램에 넣을 간격 자체가 생기지 않는다.
+  const items = [];
+  for (let i = 0; i < 20; i++) {
+    const y = 700 - 12 * i;
+    items.push(item('left column question text ' + (i + 1), 72, y, { width: 234 }));   // 72~306
+    items.push(item('right column question text ' + (i + 1), 321, y, { width: 219 })); // 321~540
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(layout.columns.count, 2, '거터 15pt(1.5em)가 run 경계로 인식되어야 한다');
+  const t = textsOf(layout);
+  assert.equal(t.length, 40);
+  for (let i = 0; i < 20; i++) assert.equal(t[i], 'left column question text ' + (i + 1));
+  for (let i = 0; i < 20; i++) assert.equal(t[20 + i], 'right column question text ' + (i + 1));
+});
+
+test('C9 거터를 가로지르는 줄이 3개뿐이면 그 3개가 다 끊겨도 count=1 (분모 하한)', () => {
+  // 분모를 "가로지르는 줄 수"로 바꾸면 분모가 아주 작아질 수 있다. 3/3 = 1.00 은
+  // 비율로는 완벽하지만 표본이 아니다. GUTTER_MIN_CROSSING(=8) 이 이것을 막는다.
+  const items = [];
+  for (let i = 0; i < 3; i++) {
+    const y = 700 - 14 * i;
+    items.push(item('left aligned body line ' + (i + 1), 72, y, { width: 209 }));
+    items.push(item('right aligned body line ' + (i + 1), 306, y, { width: 209 }));
+  }
+  for (let i = 0; i < 30; i++) {
+    const y = 693 - 14 * i;
+    if (i % 2 === 0) items.push(item('left only body line ' + (i + 1), 72, y, { width: 209 }));
+    else items.push(item('right only body line ' + (i + 1), 306, y, { width: 209 }));
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(layout.columns.count, 1);
+});

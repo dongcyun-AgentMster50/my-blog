@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { joinHyphen, joinParagraphText } from '../js/text/hyphen.js';
+import { KEEP_HYPHEN_PREFIXES } from '../js/config.js';
 import { buildPageLayout } from '../js/text/layout.js';
 
 function item(str, x, y, o = {}) {
@@ -68,4 +69,28 @@ test('H1~H5 문단 단위 결합과 Line.hyphenJoin 표시', () => {
   assert.equal(layout.lines[0].text, 'the patient had cardio-');
   assert.equal(layout.lines[0].hyphenJoin, true);
   assert.equal(layout.paragraphs[0].text, 'the patient had cardiovascular disease and the risk');
+});
+
+test('H6 접미사 집합으로 하이픈 보존 — 집합은 인자로 주입한다', () => {
+  // config.js 의 KEEP_HYPHEN_SUFFIXES 는 사용자가 채우는 TODO 자리이므로
+  // 그 내용에 의존하지 않는다. 배선(인자로 받은 집합을 쓰는가)만 고정한다.
+  const suffixes = new Set(['resistant']);
+  const r = joinHyphen('methicillin-', 'resistant', KEEP_HYPHEN_PREFIXES, suffixes);
+  assert.equal(r.joined, 'methicillin-resistant');
+  assert.equal(r.keptHyphen, true);
+  assert.equal(r.hyphenJoin, false);
+
+  // 접미사 집합이 비어 있으면 줄바꿈 하이픈으로 보고 결합한다(현재 기본 동작).
+  assert.equal(joinHyphen('methicillin-', 'resistant', KEEP_HYPHEN_PREFIXES, new Set()).joined,
+    'methicillinresistant');
+
+  // 접미사 집합이 H1 을 깨뜨리지 않는다.
+  assert.equal(joinHyphen('cardio-', 'vascular', KEEP_HYPHEN_PREFIXES, suffixes).joined,
+    'cardiovascular');
+
+  // 문단 단위에서도 주입한 집합이 쓰인다.
+  const p = joinParagraphText(['treated for methicillin-', 'resistant infection'],
+    KEEP_HYPHEN_PREFIXES, suffixes);
+  assert.equal(p.text, 'treated for methicillin-resistant infection');
+  assert.deepEqual(p.hyphenJoins, [true, false]);
 });

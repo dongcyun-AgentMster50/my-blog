@@ -33,7 +33,8 @@ export function bodyCandidates(lines, pageInfo, params = LAYOUT) {
 
 /**
  * spec 4-5 — run 경계 히스토그램으로 2단 여부를 판정한다.
- * "55% 이상의 본문 줄이 같은 X 대역에서 끊긴다"가 2단의 정의다.
+ * "거터를 가로지를 수 있는 본문 줄의 55% 이상이 같은 X 대역에서 끊긴다"가
+ * 2단의 정의다(분모는 body.length 가 아니다 — 아래 (c) 참조).
  * 3단 이상은 지원하지 않는다(band 가 2개 이상이면 가장 강한 것 하나 + 경고).
  *
  * @returns {{count:number, gutters:number[], warn:(string|null)}}
@@ -69,14 +70,33 @@ export function detectColumns(lines, pageInfo, params = LAYOUT) {
   }
 
   // (c) 페이지 중앙부에서 임계를 넘는 연속 bin 구간(band) 찾기
-  const need = P.GUTTER_MIN_RATIO * body.length;
+  //
+  // 분모는 body.length 가 아니라 "그 bin 의 X 를 가로지르는 본문 줄 수"다.
+  // 한쪽 컬럼에만 있는 줄은 거터를 가로지르지 않으므로 거터에서 끊길 수가
+  // 없다 — 투표할 수 없는 표를 분모에 넣으면 비율이 구조적으로 희석된다.
+  // 좌·우 baseline 이 어긋나는 문제집 조판에서는 그런 줄이 과반이라 2단
+  // 페이지가 통째로 1단으로 판정됐다(spec 4-5 [수정 2026-09-18]).
   const loBin = Math.ceil(P.GUTTER_BAND_LO * BINS);
   const hiBin = Math.floor(P.GUTTER_BAND_HI * BINS);
+  const cross = new Array(BINS).fill(0);
+  for (let b = loBin; b <= hiBin; b++) {
+    const X = (b + 0.5) * BIN;
+    let c = 0;
+    for (let i = 0; i < body.length; i++) {
+      const runs = body[i].runs || [];
+      if (!runs.length) continue;
+      if (runs[0].x0 < X && runs[runs.length - 1].x1 > X) c++;
+    }
+    cross[b] = c;
+  }
+
   const minWidth = P.GUTTER_BAND_MIN_WIDTH_FACTOR * (Fm > 0 ? Fm : 1);
   const bands = [];
   let start = -1;
   for (let b = loBin; b <= hiBin + 1; b++) {
-    const ok = b <= hiBin && hist[b] >= need;
+    // 가로지르는 줄이 너무 적으면 표본 부족 → 그 bin 은 거터 후보가 아니다
+    const ok = b <= hiBin && cross[b] >= P.GUTTER_MIN_CROSSING &&
+      hist[b] >= P.GUTTER_MIN_RATIO * cross[b];
     if (ok && start < 0) start = b;
     if (!ok && start >= 0) {
       const end = b - 1;

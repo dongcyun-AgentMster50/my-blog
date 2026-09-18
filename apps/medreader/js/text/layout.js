@@ -15,8 +15,12 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
 /**
  * 알고리즘 버전. 알고리즘을 고치면 값을 올린다.
  * pages 스토어의 값이 이보다 작은 페이지는 다시 추출한다(spec 3-3, 9절).
+ *
+ * 2 — 1b단계: run 분할 임계 2.0 → 1.2, 거터 비율의 분모를
+ *     body.length → "그 X 를 가로지르는 본문 줄 수"(spec 4-4·4-5 수정 2026-09-18).
+ *     1 로 추출된 페이지는 컬럼이 병합되어 있으므로 반드시 다시 추출해야 한다.
  */
-export const algoVersion = 1;
+export const algoVersion = 2;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {
