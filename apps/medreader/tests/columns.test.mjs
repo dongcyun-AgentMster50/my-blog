@@ -194,7 +194,7 @@ test('C8 거터 폭이 1.5em 인 2단 페이지 → count=2 (RUN_GAP_FACTOR 회�
 
 test('C9 거터를 가로지르는 줄이 3개뿐이면 그 3개가 다 끊겨도 count=1 (분모 하한)', () => {
   // 분모를 "가로지르는 줄 수"로 바꾸면 분모가 아주 작아질 수 있다. 3/3 = 1.00 은
-  // 비율로는 완벽하지만 표본이 아니다. GUTTER_MIN_CROSSING(=8) 이 이것을 막는다.
+  // 비율로는 완벽하지만 표본이 아니다. GUTTER_MIN_CROSSING(=4) 이 이것을 막는다.
   const items = [];
   for (let i = 0; i < 3; i++) {
     const y = 700 - 14 * i;
