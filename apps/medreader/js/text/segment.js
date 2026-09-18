@@ -6,19 +6,57 @@
 
 import { ABBREVIATIONS } from '../config.js';
 
-// spec 5-3 — 문항 시작 "12. Which of the following"
+/* spec 5-3 [수정 2026-09-18] — 문항 번호는 "12." 뿐 아니라 "I-42."·"IV-62." 형태를 받는다.
+ * [실측] 대상 서적(729쪽)은 섹션 로마숫자 + 하이픈 + 번호를 쓴다. 로마숫자 부분은
+ * **선택적 캡처**라 옛 "12." 형태도 그대로 걸린다. 번호 연속성 검사는 (\d{1,3}) 로 하고
+ * 로마숫자가 바뀌면 섹션 경계로 본다 — 그래서 두 부분을 나눠 돌려주는 파서를 함께 둔다.
+ */
+const QUESTION_RE = /^\s*(?:([IVXLC]{1,5})-)?(\d{1,3})\.\s+\S/;
+
+// spec 5-3 정답 정규식. 문항 정규식의 진부분집합이므로 kind 판정은 answer 를 먼저 본다(4-9).
+const ANSWER_RE = /^\s*(?:([IVXLC]{1,5})-)?(\d{1,3})\.\s+the\s+answers?\s+(?:is|are)\s+([A-E](?:\s*(?:,|and|&)\s*[A-E])*)\b/i;
+
+function str(text) { return String(text == null ? '' : text); }
+
+// spec 5-3 — 문항 시작 "12. Which of the following" / "I-42. An 18-year-old …"
 export function isQuestionStart(text) {
-  return /^\s*\d{1,3}\.\s+\S/.test(String(text == null ? '' : text));
+  return QUESTION_RE.test(str(text));
+}
+
+/**
+ * spec 5-3 — 문항 번호를 섹션과 번호로 나눠 돌려준다. 5절 파서(9단계)의 번호 연속성·
+ * 섹션 경계 판정이 쓴다.
+ * @returns {{section: string|null, number: number}|null}
+ */
+export function parseQuestionNumber(text) {
+  const m = str(text).match(QUESTION_RE);
+  if (!m) return null;
+  return { section: m[1] || null, number: Number(m[2]) };
 }
 
 // spec 5-3 — 보기 시작 "A. Checklists to ensure"
 export function isOptionStart(text) {
-  return /^\s*[A-E]\.\s+\S/.test(String(text == null ? '' : text));
+  return /^\s*[A-E]\.\s+\S/.test(str(text));
 }
 
-// spec 5-3 — 해설 "1. The answer is A. (Chap. 1)"
+// spec 5-3 — 해설 "1. The answer is A. (Chap. 1)" / "IV-62. The answer is C. (Chap. 42)"
 export function isAnswerStart(text) {
-  return /^\s*\d{1,3}\.\s+the\s+answers?\s+(is|are)\s+[A-E]\b/i.test(String(text == null ? '' : text));
+  return ANSWER_RE.test(str(text));
+}
+
+/**
+ * spec 5-3 — 정답 문단을 섹션·번호·정답 글자들로 나눠 돌려준다.
+ * "The answers are B and D." → letters ['B','D']
+ * @returns {{section: string|null, number: number, letters: string[]}|null}
+ */
+export function parseAnswerStart(text) {
+  const m = str(text).match(ANSWER_RE);
+  if (!m) return null;
+  // 구분자로 먼저 쪼갠다. 통째로 [A-E] 를 긁으면 "and" 의 A·D 가 딸려 온다.
+  const letters = m[3].split(/\s*(?:,|and|&)\s*/i)
+    .map(function (s) { return s.trim().toUpperCase(); })
+    .filter(function (s) { return /^[A-E]$/.test(s); });
+  return { section: m[1] ? m[1].toUpperCase() : null, number: Number(m[2]), letters: letters };
 }
 
 /**

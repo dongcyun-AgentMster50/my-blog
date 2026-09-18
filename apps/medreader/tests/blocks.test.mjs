@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildPageLayout } from '../js/text/layout.js';
+import { parseQuestionNumber, parseAnswerStart } from '../js/text/segment.js';
 
 const W = 612;
 const H = 792;
@@ -195,4 +196,94 @@ test('T2 run 2개짜리 줄 1개만 → 표 아님', () => {
   const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
   assert.equal(layout.regions.length, 0);
   assert.equal(layout.lines.filter(l => l.role === 'table').length, 0);
+});
+
+/* ── 1c단계 회귀 (spec 4-9 우선순위 수정, 5-3 문항 번호 형식) ───────────── */
+
+// 실측 대상 서적은 문항 번호를 "I-42." 처럼 섹션 로마숫자 + 번호로 쓴다.
+// 아래 영어 문장은 형식만 흉내 낸 것이고 원서 문장이 아니다.
+
+test('B10 "I-42. An 18-year-old …"(로마숫자 접두 문항) → kind=question', () => {
+  const stem = 'I-42. An 18-year-old student reports three weeks of dry cough';
+  const items = [
+    ...bodyLines(5),
+    item(stem, 72, 652 - 25, { width: 400 }),
+    item('and intermittent fevers with no recent travel history', 72, 615, { width: 400 }),
+    item('A. Obtain a chest radiograph before any treatment', 72, 603, { width: 300 })
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  const q = layout.paragraphs.find(p => p.text.indexOf('I-42.') === 0);
+  assert.ok(q, '문항 문단이 있어야 한다');
+  assert.equal(q.kind, 'question');
+});
+
+test('B11 "IV-62. The answer is C. (Chap. 42)" → kind=answer', () => {
+  const text = 'IV-62. The answer is C. (Chap. 42)';
+  const items = [
+    ...bodyLines(5),
+    item(text, 72, 652 - 25, { width: 300 }),
+    item('and the remaining choices do not explain the findings', 72, 615, { width: 400 })
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  const a = layout.paragraphs.find(p => p.text.indexOf('IV-62.') === 0);
+  assert.ok(a, '정답 문단이 있어야 한다');
+  assert.equal(a.kind, 'answer');
+});
+
+test('B12 "A. Primary"(짧고 마침표 없어 heading 규칙에 걸리는 보기) → kind=option', () => {
+  const items = [
+    ...bodyLines(5),
+    item('A. Primary', 72, 652 - 25, { width: 60 }),          // 위 여백 25 > 1.5×Lm(18)
+    item('B. Secondary to an underlying systemic disorder', 72, 615, { width: 300 }),
+    item('C. Unrelated to the exposure described above', 72, 603, { width: 300 })
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  const a = layout.paragraphs.find(p => p.text === 'A. Primary');
+  assert.ok(a, '"A. Primary" 문단이 있어야 한다');
+  assert.equal(a.kind, 'option');
+});
+
+test('B13 "SECTION I INTRODUCTION TO CLINICAL MEDICINE"(진짜 제목) → kind=heading', () => {
+  // 우선순위 변경의 오탐 가드: 문항·보기 패턴이 없는 제목은 그대로 heading 이어야 한다.
+  const items = [
+    ...bodyLines(5),
+    item('SECTION I INTRODUCTION TO CLINICAL MEDICINE', 72, 627, { fontSize: 13, width: 300 }),
+    ...bodyLines(4, 610)
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  const h = layout.paragraphs.find(p => p.text.indexOf('SECTION I') === 0);
+  assert.ok(h, '제목 문단이 있어야 한다');
+  assert.equal(h.kind, 'heading');
+});
+
+test('B14 "12. Which of the following"(로마숫자 없는 기존 형태) → kind=question 유지', () => {
+  const items = [
+    ...bodyLines(4),
+    item('12. Which finding best explains the laboratory results', 72, 652, { width: 400 }),
+    item('observed in this previously healthy adult patient', 72, 640, { width: 400 })
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  const q = layout.paragraphs.find(p => p.text.indexOf('12.') === 0);
+  assert.ok(q, '문항 문단이 있어야 한다');
+  assert.equal(q.kind, 'question');
+});
+
+test('B15 parseQuestionNumber — 섹션과 번호를 나눠 돌려준다 (spec 5-3, 5절 파서용)', () => {
+  assert.deepEqual(parseQuestionNumber('IV-62. A previously healthy woman is seen in clinic'),
+    { section: 'IV', number: 62 });
+  assert.deepEqual(parseQuestionNumber('12. Which laboratory value best supports the diagnosis'),
+    { section: null, number: 12 });
+  assert.equal(parseQuestionNumber('Hello.'), null);
+  assert.equal(parseQuestionNumber(null), null);
+  // 정답 문단도 문항 정규식의 부분집합이므로 번호는 읽힌다(kind 는 answer 가 우선).
+  assert.deepEqual(parseQuestionNumber('IV-62. The answer is C. (Chap. 42)'),
+    { section: 'IV', number: 62 });
+});
+
+test('B16 parseAnswerStart — 섹션·번호·정답 글자들 (spec 5-3)', () => {
+  assert.deepEqual(parseAnswerStart('IV-62. The answer is C. (Chap. 42)'),
+    { section: 'IV', number: 62, letters: ['C'] });
+  assert.deepEqual(parseAnswerStart('7. The answers are B and D. (Chap. 9)'),
+    { section: null, number: 7, letters: ['B', 'D'] });
+  assert.equal(parseAnswerStart('12. Which of the following is most likely'), null);
 });

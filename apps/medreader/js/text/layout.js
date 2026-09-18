@@ -19,8 +19,13 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  * 2 — 1b단계: run 분할 임계 2.0 → 1.2, 거터 비율의 분모를
  *     body.length → "그 X 를 가로지르는 본문 줄 수"(spec 4-4·4-5 수정 2026-09-18).
  *     1 로 추출된 페이지는 컬럼이 병합되어 있으므로 반드시 다시 추출해야 한다.
+ * 3 — 1c단계: 문단 kind 판정 수정(spec 4-9·5-3 수정 2026-09-18).
+ *     문항·정답 번호가 "I-42."·"IV-62." 형태를 받고, kind 우선순위가
+ *     answer → question → option → heading → list → body 로 바뀌었다.
+ *     2 로 추출된 페이지는 paragraphs[].kind 가 틀려 있다(question 이 거의 잡히지
+ *     않고 보기가 heading 으로 샜다). 5절 파서가 kind 를 쓰므로 다시 추출해야 한다.
  */
-export const algoVersion = 2;
+export const algoVersion = 3;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {

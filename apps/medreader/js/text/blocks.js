@@ -390,14 +390,23 @@ export function newParagraph(prev, cur, ctx, params = LAYOUT) {
   return false;
 }
 
-// spec 4-9 — 문단 kind. 더 구체적인 정답 패턴을 먼저 본다.
+/* spec 4-9 [수정 2026-09-18] — 문단 kind 우선순위:
+ *   answer → question → option → heading → list → body
+ *
+ * answer 는 question 의 진부분집합이므로 반드시 먼저 본다.
+ * heading 은 문항·보기보다 **뒤**다. 4-7 의 heading 판정은 "짧고 마침표가 없다"는
+ * 약한 신호에 기대므로, [실측] 보기 "A. Primary" 와 문항 stem "I-42. An 18-year-old …"
+ * 가 줄 role 단계에서 heading 으로 먼저 걸린다(1~60쪽에서 보기형 문단 735개 중
+ * 108개가 heading 으로 샜다). 명시적 번호·글머리 패턴이 있는 문단이 항상 우선이다.
+ * 줄 role 판정(4-7)은 건드리지 않는다 — 여기서 순서만 바꾼다.
+ */
 function paragraphKind(linesOfPara, text) {
-  let allHeading = true;
-  for (let i = 0; i < linesOfPara.length; i++) if (linesOfPara[i].role !== 'heading') allHeading = false;
-  if (allHeading && linesOfPara.length) return 'heading';
   if (isAnswerStart(text)) return 'answer';
   if (isQuestionStart(text)) return 'question';
   if (isOptionStart(text)) return 'option';
+  let allHeading = true;
+  for (let i = 0; i < linesOfPara.length; i++) if (linesOfPara[i].role !== 'heading') allHeading = false;
+  if (allHeading && linesOfPara.length) return 'heading';
   if (/^[•·▪\-–]\s/.test(text)) return 'list';
   return 'body';
 }
