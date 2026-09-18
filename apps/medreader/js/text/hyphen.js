@@ -6,7 +6,7 @@
    그대로 두어야 원본 뷰 하이라이트와 1:1이 유지된다.
    ============================================================ */
 
-import { KEEP_HYPHEN_PREFIXES } from '../config.js';
+import { KEEP_HYPHEN_PREFIXES, KEEP_HYPHEN_SUFFIXES } from '../config.js';
 
 /**
  * spec 4-10 — 앞 줄 끝의 하이픈을 보고 두 줄을 어떻게 이을지 결정한다.
@@ -18,7 +18,8 @@ import { KEEP_HYPHEN_PREFIXES } from '../config.js';
  *          hyphenJoin: 하이픈을 지우고 붙였는가 (cardio- + vascular)
  *          keptHyphen: 하이픈을 살려 붙였는가 (anti- + inflammatory)
  */
-export function joinHyphen(prevText, curText, keepSet = KEEP_HYPHEN_PREFIXES) {
+export function joinHyphen(prevText, curText, keepSet = KEEP_HYPHEN_PREFIXES,
+                           keepSuffixSet = KEEP_HYPHEN_SUFFIXES) {
   const prev = String(prevText == null ? '' : prevText);
   const cur = String(curText == null ? '' : curText);
   if (prev === '') return { joined: cur, hyphenJoin: false, keptHyphen: false };
@@ -43,6 +44,11 @@ export function joinHyphen(prevText, curText, keepSet = KEEP_HYPHEN_PREFIXES) {
   if (keepSet && keepSet.has(head)) {
     return { joined: prev + cur, hyphenJoin: false, keptHyphen: true };
   }
+  // 접미사 기준 — "methicillin-" + "resistant" 처럼 앞부분이 열거 불가능한 경우.
+  // 다음 줄의 첫 낱말이 목록에 있으면 하이픈을 살린다(spec 4-10, P3 수정).
+  if (keepSuffixSet && keepSuffixSet.has(t[1].toLowerCase())) {
+    return { joined: prev + cur, hyphenJoin: false, keptHyphen: true };
+  }
   return { joined: prev.slice(0, -1) + cur, hyphenJoin: true, keptHyphen: false };
 }
 
@@ -52,14 +58,15 @@ export function joinHyphen(prevText, curText, keepSet = KEEP_HYPHEN_PREFIXES) {
  * Line.hyphenJoin 에 그대로 들어간다(하이픈을 살린 경우도 결합으로 본다 —
  * TTS가 두 줄을 한 번에 읽어야 하는 것은 같기 때문이다, spec 4-10 각주).
  */
-export function joinParagraphText(lineTexts, keepSet = KEEP_HYPHEN_PREFIXES) {
+export function joinParagraphText(lineTexts, keepSet = KEEP_HYPHEN_PREFIXES,
+                                  keepSuffixSet = KEEP_HYPHEN_SUFFIXES) {
   const texts = Array.isArray(lineTexts) ? lineTexts : [];
   const hyphenJoins = texts.map(() => false);
   let out = '';
   for (let i = 0; i < texts.length; i++) {
     const t = String(texts[i] == null ? '' : texts[i]).trim();
     if (i === 0) { out = t; continue; }
-    const r = joinHyphen(out, t, keepSet);
+    const r = joinHyphen(out, t, keepSet, keepSuffixSet);
     out = r.joined;
     hyphenJoins[i - 1] = r.hyphenJoin || r.keptHyphen;
   }

@@ -363,7 +363,7 @@ splitRuns(line):
     for i in 1..n-1:
         prev ← cur 이전의 마지막 **비공백** 아이템 ; cur ← items[i]     # [수정 2026-09-18]
         gap ← cur.x − (prev.x + prev.w)
-        if gap > RUN_GAP_FACTOR * line.fontSize:      # RUN_GAP_FACTOR = 2.0
+        if gap > RUN_GAP_FACTOR * line.fontSize:      # RUN_GAP_FACTOR = 1.2  [수정 2026-09-18]
             runs.push([cur])
         else:
             runs.last.push(cur)
@@ -376,7 +376,8 @@ splitRuns(line):
   감지되지 않아 2단 페이지가 `count: 1`로 판정되고 좌·우 컬럼이 한 줄로 병합된다(4-11 P2 정면 위반).
   이 변경은 **run 분할에만 적용**된다. 4-6의 `joinText`는 공백 아이템을 그대로 쓴다(L7·L8·L9 무영향).
 
-- `2.0 × fontSize`(본문 10pt에서 20pt ≈ 7mm)를 넘는 간격은 단어 사이 공백이 아니라 **레이아웃 간격**(컬럼 거터, 표 셀 경계, 탭 정렬)이다. 단어 간격은 보통 0.25~0.5 × fontSize이고 양쪽 정렬로 늘어나도 1.0을 넘는 일은 드물다.
+- `1.2 × fontSize`를 넘는 간격은 단어 사이 공백이 아니라 **레이아웃 간격**(컬럼 거터, 표 셀 경계, 탭 정렬)이다. 단어 간격은 보통 0.25~0.5 × fontSize이고 양쪽 정렬로 늘어나도 1.0을 넘는 일은 드물다.
+- **`[수정 2026-09-18]` 초판은 `2.0`이었고 이 값이 대상 서적에서 2단 검출을 전면 실패시켰다.** `[실측]` 이 책의 거터는 왼쪽 컬럼이 x≈306에서 끝나고 오른쪽이 x≈321에서 시작해 **15pt**다. 본문이 10pt이므로 `2.0`의 임계는 20pt — **거터가 run 경계로 인식되지 않는다.** 그 결과 4-5의 히스토그램에 넣을 간격 자체가 생기지 않아 모든 페이지가 1단으로 판정되고, 좌·우 컬럼이 한 줄로 합쳐져 `examinat`+`rocardiographic` 같은 손상이 문단 텍스트에 나타났다(P2·P3 동시 실패). 초판의 "본문 10pt에서 20pt ≈ 7mm"라는 근거는 실제 조판보다 느슨한 추정이었다. `1.2`는 단어 간격 상한(1.0)과 실측 거터(1.5em) 사이에 있으며, 729쪽 표본에서 단어 간격이 run으로 잘못 쪼개지는 사례 없이 거터만 잡아냈다.
 - run은 컬럼 판별(4단계)과 표 감지(8단계)의 공통 입력이다.
 
 ### 4-5. 4단계 — 다단 컬럼 판별과 5단계 — 읽기 순서
@@ -397,7 +398,9 @@ detectColumns(lines, pageWidth):
     # (b) 페이지 폭을 BIN = pageWidth/100 크기 구간으로 나눈 히스토그램에 gap 구간을 투영
     hist[bin] ← 해당 bin이 gap 구간에 완전히 포함되는 줄 수 (한 줄은 bin당 최대 1회)
 
-    # (c) 페이지 중앙부(0.30W ~ 0.70W)에서 hist ≥ 0.55 * body.length 인 연속 bin 구간을 찾는다
+    # (c) 페이지 중앙부(0.30W ~ 0.70W)에서 hist >= GUTTER_MIN_RATIO * crossing(bin) 인 연속 bin 구간을 찾는다
+    #     crossing(bin) = 그 bin 의 X 를 **가로지르는** 본문 줄 수 (runs[0].x0 < X < runs[last].x1)
+    #     [수정 2026-09-18] 초판은 분모가 body.length 였다 — 아래 근거 참조
     bands ← 연속 구간들; 각 band의 폭 ≥ 1.2 * medianFontSize 이어야 유효
     if 유효 band 없음: return { count: 1 }
     band ← 가장 높은 hist 합을 가진 band
@@ -410,7 +413,8 @@ detectColumns(lines, pageWidth):
     return { count: 2, gutters: [gutterX] }
 ```
 
-- **"55% 이상의 본문 줄이 같은 X 대역에서 끊긴다"**가 2단의 정의다. 표는 여러 줄이 끊기지만 끊기는 X가 열마다 다르고 페이지 전체가 아니라 국소적이므로 (c)의 임계를 넘지 못한다. 넘더라도 (d)에서 좌변 정렬 검사로 걸러진다.
+- **"거터를 가로지를 수 있는 본문 줄의 55% 이상이 같은 X 대역에서 끊긴다"**가 2단의 정의다.
+- **`[수정 2026-09-18]` 분모는 `body.length`가 아니라 "그 X 를 가로지르는 줄 수"다.** 초판의 분모는 **한쪽 컬럼에만 존재하는 줄까지 포함**했는데, 그런 줄은 거터를 가로지르지 않으므로 **끊길 수가 없다** — 투표할 수 없는 표를 분모에 넣은 셈이다. 대상 서적처럼 좌·우 컬럼의 baseline 이 어긋나는 문제집 조판에서는 그런 줄이 절반을 넘어 비율이 구조적으로 희석된다. `[실측]` 분모를 고치면 같은 페이지의 비율이 0.29→1.00, 0.26→1.00, 0.44→1.00 으로 올라가고, **진짜 1단 페이지**(해설 구간, 본문이 전폭)는 0.32→0.33, 0.07→0.07 로 거의 변하지 않는다. 결과가 `1.00` 과 `≤0.35` 로 뚜렷이 갈리므로 **임계 0.55 는 그대로 둔다**. 임계를 낮추는 방식은 오탐만 늘고 단어 붙음은 줄지 않았다(실측). 표는 여러 줄이 끊기지만 끊기는 X가 열마다 다르고 페이지 전체가 아니라 국소적이므로 (c)의 임계를 넘지 못한다. 넘더라도 (d)에서 좌변 정렬 검사로 걸러진다.
 - 3단 이상은 지원하지 않는다(의학 교과서·문제집에 드물다). band가 2개 이상 나오면 가장 강한 것 하나만 쓰고 `stats.warn = 'multi-gutter'`를 남긴다.
 - **1단 페이지에서 폭이 넓은 제목·표**가 있어도 오탐하지 않도록, hist 계산 대상은 본문 크기 줄로 제한한다.
 - `MAD` = 중앙값 절대편차.
@@ -574,6 +578,7 @@ joinHyphen(prevText, curText):
     head ← m[1]; tail ← curText.match(/^([a-z][a-z]*)/)?.[1]
     if not tail: return 공백 결합                                                 # 다음 줄이 대문자·숫자로 시작 → 하이픈은 원래 있던 것일 가능성
     if KEEP_HYPHEN_PREFIXES.has(head.toLowerCase()): return { joined: prevText + curText, keptHyphen: true }   # "anti-" + "inflammatory" → "anti-inflammatory"
+    if KEEP_HYPHEN_SUFFIXES.has(tail.toLowerCase()): return { joined: prevText + curText, keptHyphen: true }   # [신규 2026-09-18] "methicillin-" + "resistant"
     return { joined: prevText.slice(0, -1) + curText, hyphenJoin: true }          # "cardio-" + "vascular" → "cardiovascular"
 
 KEEP_HYPHEN_PREFIXES = { anti, non, self, post, pre, pro, co, re, intra, inter, sub, semi, multi, pseudo,
@@ -583,6 +588,7 @@ KEEP_HYPHEN_PREFIXES = { anti, non, self, post, pre, pro, co, re, intra, inter, 
 - 결합은 **문단 `text`에서만** 적용한다. 줄 `text`는 원본 그대로("cardio-") 유지해 원본 뷰·하이라이트와 1:1을 지킨다.
 - TTS는 줄 단위로 읽으므로 "cardio-" 뒤에 "vascular"가 따로 발음되는 문제가 남는다. **`speaker.js`는 `hyphenJoin: true`인 줄을 만나면 그 줄과 다음 줄을 한 utterance로 합쳐 읽고, 하이라이트는 onend 시점이 아닌 예상 시간 비율로 두 줄에 걸쳐 옮긴다**(6절). 문장 낭독 모드에서는 자연히 해결된다.
 - `gram`·`x`·`t`·`b`는 "gram-negative", "X-linked", "T-cell", "B-cell"을 지키기 위한 예외다.
+- **`KEEP_HYPHEN_SUFFIXES` (신규 2026-09-18)** — 접두사만으로는 막을 수 없는 경우가 있다. `[실측]` 729쪽에서 `angiotensin-converting`, `methicillin-resistant`, `chloroquine-resistant`, `antibiotic-associated`, `glycopeptide-susceptible`, `piperacillin-tazobactam`, `granulocyte-macrophage` 가 하이픈을 잃었다. 앞부분이 약물명·병원체명이라 **열거가 불가능**한 반면 **뒷부분은 열거된다**. 그래서 다음 줄의 첫 낱말이 이 집합에 있으면 하이픈을 살린다. 집합이 너무 넓으면 4-11의 H1(`cardio-`+`vascular`)이 깨지므로, "X-<낱말>" 형태에서 하이픈이 거의 항상 진짜인 낱말만 넣는다.
 
 ### 4-11. 이 모듈의 별도 수용 기준과 프로토타입 검증 절차
 

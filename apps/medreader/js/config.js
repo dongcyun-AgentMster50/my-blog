@@ -154,6 +154,27 @@ export const KEEP_HYPHEN_PREFIXES = new Set([
   'high', 'low', 'first', 'second', 'well', 'x', 't', 'b', 'gram', 'de', 'ex'
 ]);
 
+/* 접미사 기준 하이픈 보존 — 실기기 P3 검증에서 드러난 결함의 수정 (spec 4-10)
+ *
+ * 앞부분(접두사)으로는 막을 수 없는 경우가 있다. 729쪽 전수 검사에서 나온 것들:
+ *   "angiotensin-" + "converting"   → angiotensinconverting   (틀림)
+ *   "methicillin-" + "resistant"    → methicillinresistant    (틀림)
+ *   "piperacillin-" + "tazobactam"  → piperacillintazobactam  (틀림)
+ * 앞부분이 약물명·병원체명이라 열거가 불가능하다. 반면 **뒷부분**은 열거된다.
+ *
+ * 여기에 든 낱말로 다음 줄이 시작하면 하이픈을 살린다.
+ */
+export const KEEP_HYPHEN_SUFFIXES = new Set([
+  // TODO(human): 뒤에 올 때 하이픈을 살려야 하는 낱말을 채운다.
+  //
+  // 판단 기준: "X-<낱말>" 형태에서 하이픈이 **거의 항상 진짜**인가?
+  //   살려야 함  — "resistant" ("methicillin-resistant"에서 하이픈은 진짜)
+  //   살리면 안 됨 — "vascular" ("cardio-vascular"는 줄바꿈 하이픈, 4-11 H1이 결합을 요구)
+  //
+  // 전부 소문자로 적는다(비교 전에 toLowerCase 한다).
+  // 너무 넓게 잡으면 H1(cardio- + vascular)이 깨지고, 너무 좁게 잡으면 P3가 남는다.
+]);
+
 /* ────────────────────────────────────────────────────────
    4-9 / 5절 문장 종결 판정 예외 (소문자 + 마침표 포함 형태로 보관)
    segment.js 와 blocks.js 가 공유한다.
