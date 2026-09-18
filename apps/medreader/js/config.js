@@ -12,7 +12,11 @@
    같은 상수에서 조립해야 버전 불일치 예외가 생기지 않는다.
    ──────────────────────────────────────────────────────── */
 
-export const PDFJS_VERSION = '6.3.289';
+// 고정 기준은 "가장 최신"이 아니라 "목표 기기에서 도는 가장 최신"이다(spec 2-3·18).
+// 6.3.289 는 Map.prototype.getOrInsertComputed(TC39 Stage 3)를 17곳에서 호출해
+// 사용자 데스크톱 Chrome 에서 로드 즉시 TypeError 로 죽었다(2026-09-18 실측).
+// 5.4.149 는 그 메서드를 쓰지 않으며 같은 기기에서 729쪽 전수 추출을 통과했다.
+export const PDFJS_VERSION = '5.4.149';
 
 // spec 2-3 — 1순위 jsDelivr
 export function PDFJS_CDN_PRIMARY(v = PDFJS_VERSION) {

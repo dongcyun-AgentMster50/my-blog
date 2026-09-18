@@ -144,7 +144,7 @@ apps/medreader/
 | 항목 | 결정 |
 |---|---|
 | 배포판 | **ESM 빌드** `pdf.min.mjs` + `pdf.worker.min.mjs`. 레거시 빌드(`legacy/build/pdf.min.mjs`)는 구형 브라우저용이며 Android 15 Chrome에 불필요 |
-| 버전 | **고정**. `config.js`의 `PDFJS_VERSION` 상수 한 곳에만 적는다. **`6.3.289`** (2026-09-18 npm `dist-tags.latest`로 확인. `TextItem`의 `str/dir/transform/width/height/fontName/hasEOL`과 `getTextContent({includeMarkedContent, disableNormalization})` 시그니처는 5.x와 동일함을 `types/src/display/api.d.ts`에서 확인). 이후 버전 변경은 `config.js` 상수만 바꾼다. `latest` 태그 사용 금지(API가 바뀌면 앱이 조용히 깨진다) |
+| 버전 | **고정**. `config.js`의 `PDFJS_VERSION` 상수 한 곳에만 적는다. **`5.4.149`** `[수정 2026-09-18]` (초판은 npm `dist-tags.latest`인 `6.3.289`로 고정했으나 **고정 기준이 틀렸다** — 기준은 "가장 최신"이 아니라 **"목표 기기에서 도는 가장 최신"**이다. 6.3.289는 `Map.prototype.getOrInsertComputed`(TC39 Stage 3)를 17곳에서 호출해 사용자 데스크톱 Chrome에서 `TypeError: … getOrInsertComputed is not a function`으로 **로드 즉시 죽는다**(실측). 주 기기가 Android Chrome인 이상 Stage 3 제안에 의존하는 빌드는 쓸 수 없다. 5.4.149는 그 메서드를 쓰지 않고 `Promise.withResolvers`(Chrome 119+)까지만 요구하며, 같은 기기에서 729쪽 전수 추출·글리프 검사를 통과했다. 파일 구조(`build/pdf.min.mjs`·`build/pdf.worker.min.mjs`)는 동일하다. `TextItem`의 `str/dir/transform/width/height/fontName/hasEOL`과 `getTextContent({includeMarkedContent, disableNormalization})` 시그니처는 5.x와 동일함을 `types/src/display/api.d.ts`에서 확인). 이후 버전 변경은 `config.js` 상수만 바꾼다. `latest` 태그 사용 금지(API가 바뀌면 앱이 조용히 깨진다) |
 | CDN | 1순위 jsDelivr `https://cdn.jsdelivr.net/npm/pdfjs-dist@{v}/build/pdf.min.mjs`, 2순위 cdnjs `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/{v}/pdf.min.mjs`. `loader.js`가 1순위 실패(네트워크 오류·타임아웃 15초) 시 2순위를 시도한다 |
 | worker | `pdfjsLib.GlobalWorkerOptions.workerSrc = <같은 CDN, 같은 버전의 pdf.worker.min.mjs>`. 본체와 worker의 버전이 다르면 pdf.js가 예외를 던지므로 두 URL을 **같은 상수에서 조립**한다 |
 | 로딩 시점 | 앱 부팅 시가 아니라 **PDF를 열거나 원본 뷰를 요청할 때** 동적 `import()`. 이미 추출된 텍스트로 읽는 동안은 pdf.js가 필요 없다(→ 오프라인 읽기 가능) |
@@ -1557,7 +1557,7 @@ article.reflow[dir=ltr][lang=en]
 | 쟁점 | 결정 | 이유 |
 |---|---|---|
 | 리더 기본 뷰 | **리플로우 텍스트 뷰 기본**, 원본 canvas 뷰는 토글 + 표/그림 폴백 크롭 | 눈 피로·작은 글씨가 핵심 문제이고 주 기기가 6인치대 휴대폰이다. 원본 뷰는 확대하면 가로 스크롤이 생겨 낭독 따라가기가 어렵다. 표·그림은 크롭 이미지와 [원본으로 보기]로 보완 |
-| pdf.js 버전·빌드·worker | ESM `pdf.min.mjs`, 버전 고정(`6.3.289`, npm에서 확인), worker는 같은 CDN·같은 버전 URL을 `GlobalWorkerOptions.workerSrc`에 지정, jsDelivr → cdnjs 폴백, 동적 `import()` | 레거시 빌드는 불필요. `latest`는 API 변경 시 조용한 파손. worker 없이(main thread) 25MB 처리는 UI를 멈춘다 |
+| pdf.js 버전·빌드·worker | ESM `pdf.min.mjs`, 버전 고정(**`5.4.149`** — `latest`가 아니라 **목표 기기에서 도는 가장 최신**. 2-3 참조), worker는 같은 CDN·같은 버전 URL을 `GlobalWorkerOptions.workerSrc`에 지정, jsDelivr → cdnjs 폴백, 동적 `import()` | 레거시 빌드는 불필요. `latest`는 API 변경 시 조용한 파손. worker 없이(main thread) 25MB 처리는 UI를 멈춘다 |
 | 텍스트 해시 | `crypto.subtle` SHA-256 우선, 비보안 컨텍스트에서 FNV-1a 64 폴백, 접두사로 구분 | LAN http 테스트에서 `subtle`이 없다. 캐시 키는 보안 목적이 아니라 동일성 판별이므로 FNV로 충분. 두 알고리즘 키는 접두사로 분리 |
 | 요약 단위·자동 트리거 | 표시 단위 문단, 병합 단위 페이지. 자동 호출 없음(문단 끝 칩만 표시). "자동 요약" 설정은 기본 OFF + 경고 | 자동 호출 금지 원칙. 문단 끝에 칩이 나타나는 것만으로 "문단을 읽고 나면 설명" 요구를 만족하며 호출은 사용자 선택 |
 | 하이라이트 방식 | **둘 다**: 리플로우는 `span.line.is-current` 클래스 토글, 원본은 단일 오버레이 div 이동 | 뷰마다 자연스러운 방식이 다르고, 순수 계층이 주는 `lineId`·`bbox` 하나로 둘 다 구동된다 |

@@ -47,7 +47,7 @@ apps/medreader/dev/proto-extract.html  신규 — 2단계 확인용 페이지 (+
 - 레포 루트 `D:\01_claude_my-blog` (Windows). Bash 도구에서는 `/d/01_claude_my-blog`.
 - Node **v24.14.0**. Python은 `python` (`python3` 없음).
 - **테스트 실행은 `node --test "apps/medreader/tests/*.test.mjs"`.** 디렉터리 인자(`node --test apps/medreader/tests/`)는 Node 24 + Windows에서 디렉터리를 모듈로 해석해 **실패한다**. 글로브 형태를 쓰고, 문서에도 그렇게 적어라.
-- jsDelivr·cdnjs **모두 열려 있다**(HTTP 200). pdf.js `6.3.289` 고정.
+- jsDelivr·cdnjs **모두 열려 있다**(HTTP 200). pdf.js **`5.4.149`** 고정(`config.js`의 `PDFJS_VERSION`). 6.3.289는 목표 기기에서 죽는다 — spec 2-3·18 참조.
 - 브라우저 확인: `preview_start {name:"blog"}`(기존 `python -m http.server 8000`) → `http://localhost:8000/apps/medreader/dev/proto-extract.html`. **launch.json 수정 금지.** 끝나면 `preview_stop`.
 - 스크래치패드: `C:\Users\YDC\AppData\Local\Temp\claude\D--01-claude-my-blog\ba4903bd-caaf-4b72-9d02-05694b9269f5\scratchpad`
 - **실제 원서 PDF는 이 기기에 없다.** 합성 PDF로 검증하고, 실제 PDF 검증 절차는 사용자에게 넘긴다.
