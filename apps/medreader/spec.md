@@ -312,16 +312,43 @@ sameLine(line, item):
     tol ← clamp(0.35 * ref, 1.0, 6.0)          # 포인트 단위
     dy  ← |line.baseline − item.y|
     if dy <= tol: return true
-    # 위첨자/아래첨자 예외: 작은 글씨가 baseline 위로 올라간 경우
-    if item.fontSize <= 0.75 * line.fontSize and dy <= 0.6 * line.fontSize: return true
     return false
 ```
+
+**위첨자 예외는 `sameLine` 안에 두지 않는다.** `[수정 2026-09-18]` 초판은 여기에
+`if item.fontSize <= 0.75 * line.fontSize and dy <= 0.6 * line.fontSize: return true`를
+두었으나 **이 자리에서는 원리적으로 발동하지 않는다.** items를 y 내림차순으로 훑으므로
+baseline이 위에 있는 위첨자가 본문보다 **먼저** 나와 홀로 새 줄을 열고, 뒤따르는 본문
+아이템은 `ref = min(...)`이 위첨자 폰트라 좁아진 `tol`을 넘지 못해 합류하지 못한다.
+결과적으로 위첨자가 별도 줄로 남아 4-11의 L4가 실패한다. 따라서 예외는 **클러스터링이
+끝난 뒤 2차 통과**로 처리한다.
+
+```
+absorbSmallLines(lines, params):        # 클러스터링 직후 1회, X 정렬 전
+    for line in lines:
+        neighbor ← line의 위·아래 줄 중 baseline이 더 가까운 쪽
+        if neighbor == null: continue
+        # line 전체가 "위첨자 조각"일 때만 흡수한다 (아이템 하나라도 어긋나면 흡수 안 함)
+        if 모든 item in line.items 에 대해
+               item.fontSize <= SUPERSCRIPT_SIZE_RATIO  * neighbor.fontSize    # 0.75
+           and item.w        <= SUPERSCRIPT_WIDTH_RATIO * neighbor.fontSize    # 0.35
+           and |line.baseline − neighbor.baseline| <= SUPERSCRIPT_DY_RATIO * neighbor.fontSize   # 0.6
+           and (line.bbox.x1 − line.bbox.x0) <= SUPERSCRIPT_MAX_WIDTH_EM * neighbor.fontSize     # 2.5
+        then neighbor에 line.items를 흡수하고 line 제거
+```
+
+- **`SUPERSCRIPT_WIDTH_RATIO 0.35`·`SUPERSCRIPT_MAX_WIDTH_EM 2.5`는 신규 파라미터다.**
+  크기 비율(0.75)만으로는 14pt 제목 옆에 있는 10pt 본문 줄이 통째로 위첨자로 빨려 들어가
+  4-11의 C2가 실패한다. **위첨자는 "조각"이라는 정의를 폭으로 명시**한 것이다. 상한
+  2.5em은 6pt 폰트에서 15pt ≈ 8자이므로 `12,13`·`a,b` 같은 긴 참고문헌 번호도 놓치지 않는다.
+- 흡수된 아이템은 **baseline 가중평균에서 가중치 0**이고, **줄 bbox의 `y1` 계산에서 제외**한다
+  (4-6). 줄 박스가 위첨자 때문에 위로 튀지 않게 하기 위한 것이며 L4가 이것까지 검사한다.
 
 근거:
 - **고정값(예: 3pt)의 문제**: 이 책은 본문 9~10pt, 각주·표 7pt, 장 제목 18~24pt가 섞여 있다. 각주 영역의 행간(leading)은 8pt 남짓이라 고정 3pt는 괜찮지만, 큰 제목에서 자간 조정용으로 잘게 쪼개진 아이템의 baseline이 0.5~1pt 흔들리는 것은 3pt로 흡수된다. 반대로 위첨자(`CO2`의 2, 참고문헌 번호)는 baseline이 3~4pt 위로 올라가 있어 고정 3pt로는 별도 줄로 떨어진다. 비례식이면 본문 10pt에서 3.5pt, 각주 7pt에서 2.45pt, 제목 20pt에서 6pt(상한)로 자연히 맞춰진다.
 - **하한 1.0pt**: 극단적으로 작은 폰트(5pt 미만은 사실상 워터마크·기호)에서 0.35배가 너무 작아져 부동소수 오차로 줄이 갈라지는 것을 막는다.
 - **상한 6.0pt**: 거대 제목(36pt)에서 12.6pt 허용은 실제 두 줄 제목을 하나로 합쳐 버린다. 제목의 행간은 보통 폰트의 1.1배 이상이므로 6pt 상한이면 안전하다.
-- **위첨자 예외**: 폰트가 본문의 75% 이하이면서 baseline이 0.6×본문 폰트 이내로 올라간 아이템은 같은 줄. 각주 번호·이온 표기가 줄에서 떨어져 나가 "2"만 낭독되는 문제를 막는다. 아래첨자(H2O의 2)는 dy가 작아 기본 규칙으로 이미 잡힌다.
+- **위첨자 예외**: 폰트가 본문의 75% 이하, 폭이 본문 폰트의 0.35배 이하, 줄 전체 폭이 2.5em 이하이면서 baseline이 0.6×본문 폰트 이내로 올라간 **줄**은 이웃 줄에 흡수한다(위의 `absorbSmallLines`). 각주 번호·이온 표기가 줄에서 떨어져 나가 "2"만 낭독되는 문제를 막는다. 아래첨자(H2O의 2)는 dy가 작아 기본 규칙으로 이미 잡힌다.
 - 줄의 `baseline`은 아이템 폰트 크기를 가중치로 한 가중평균으로 갱신하되, **위첨자 예외로 합류한 아이템은 가중치 0**(baseline을 끌어올리지 않는다). `line.fontSize`는 가중 중앙값 대신 "가장 넓은 아이템(`w` 최대)의 fontSize"로 둔다 — 계산이 싸고 대표성이 충분하다.
 
 #### 줄 내 X 정렬
@@ -334,14 +361,20 @@ sameLine(line, item):
 splitRuns(line):
     runs ← [[items[0]]]
     for i in 1..n-1:
-        prev ← items[i-1]; cur ← items[i]
+        prev ← cur 이전의 마지막 **비공백** 아이템 ; cur ← items[i]     # [수정 2026-09-18]
         gap ← cur.x − (prev.x + prev.w)
         if gap > RUN_GAP_FACTOR * line.fontSize:      # RUN_GAP_FACTOR = 2.0
             runs.push([cur])
         else:
             runs.last.push(cur)
-    line.runs ← runs (각 run에 x0,x1 저장)
+    line.runs ← runs (각 run에 x0,x1 저장 — x0/x1도 공백 아이템을 제외해 계산)
 ```
+
+- **`[수정 2026-09-18]` `items[i-1]`이 아니라 "직전 비공백 아이템"이다.** 4-2가 공백만 있는
+  아이템을 버리지 않고 남기기 때문에, 거터나 표 셀 경계에 **폭을 가진 공백 아이템**이 끼면
+  하나의 큰 간격이 두 개의 작은 간격으로 쪼개져 `RUN_GAP_FACTOR`를 넘지 못한다. 그러면 거터가
+  감지되지 않아 2단 페이지가 `count: 1`로 판정되고 좌·우 컬럼이 한 줄로 병합된다(4-11 P2 정면 위반).
+  이 변경은 **run 분할에만 적용**된다. 4-6의 `joinText`는 공백 아이템을 그대로 쓴다(L7·L8·L9 무영향).
 
 - `2.0 × fontSize`(본문 10pt에서 20pt ≈ 7mm)를 넘는 간격은 단어 사이 공백이 아니라 **레이아웃 간격**(컬럼 거터, 표 셀 경계, 탭 정렬)이다. 단어 간격은 보통 0.25~0.5 × fontSize이고 양쪽 정렬로 늘어나도 1.0을 넘는 일은 드물다.
 - run은 컬럼 판별(4단계)과 표 감지(8단계)의 공통 입력이다.
@@ -520,7 +553,14 @@ endsSentence(t) = /[.!?…]["”')\]]*$/.test(t) and not endsWithAbbrev(t)
 
 - `endsWithAbbrev`는 `e.g.`, `i.e.`, `vs.`, `Dr.`, `Fig.`, `et al.`, `approx.`, `No.` 및 단일 대문자+마침표(`A.`는 보기 시작이므로 `isOptionStart`가 먼저 처리)를 예외로 둔다. 이 목록은 `text/segment.js`와 공유한다.
 - `Lm`(행간 중앙값)이 계산 불가(줄 1개)면 `1.2 × Fm`을 쓴다.
-- 문단 `kind`: `heading`(제목 줄만으로 구성), `question`(`isQuestionStart`), `option`(`isOptionStart`), `answer`(5절의 정답 패턴), `list`(글머리표), 그 외 `body`. `table` 줄은 문단에 넣지 않고 Region으로만 존재한다.
+- 문단 `kind`는 **아래 우선순위대로** 판정한다 `[수정 2026-09-18]` — 나열 순서가 곧 검사 순서다:
+  `heading`(제목 줄만으로 구성) → **`answer`(5절의 정답 패턴)** → `question`(`isQuestionStart`) →
+  `option`(`isOptionStart`) → `list`(글머리표) → 그 외 `body`.
+  **`answer`를 `question`보다 먼저 보아야 한다.** 정답 정규식
+  `/^(\d{1,3})\.\s+the answers? (is|are)\s+([A-E]...)/i`는 문항 정규식 `/^(\d{1,3})\.\s+\S/`의
+  **진부분집합**이므로, 순서를 뒤집으면 `"1. The answer is A."`가 항상 `question`으로 먼저 걸려
+  `answer` kind가 **영원히 생성되지 않는다**. 5절 파서는 이 우선순위를 전제한다.
+  `table` 줄은 문단에 넣지 않고 Region으로만 존재한다.
 - 문단 `text`는 줄 `text`들을 공백으로 잇되, 하이픈 결합 규칙(4-10)을 적용한다.
 - **페이지 경계 문단 연결**: 페이지의 마지막 본문 문단이 문장 종결 부호로 끝나지 않으면 `continuesNext = true`, 다음 페이지 첫 본문 문단이 소문자로 시작하거나 앞 페이지가 `continuesNext`면 `continuesPrev = true`로 표시한다. 두 문단을 물리적으로 합치지는 않는다(페이지 단위 저장 유지). 요약·번역 요청 시 파이프라인이 `continuesNext` 문단을 다음 페이지 첫 문단과 함께 보낸다(7절).
 
