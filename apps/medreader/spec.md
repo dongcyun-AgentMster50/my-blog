@@ -495,10 +495,23 @@ y1 ← max(item.y + item.ascent  * item.fontSize)
 | `pageno` | y가 상단 10% 또는 하단 10% 영역 AND `text`가 `/^\s*\d{1,4}\s*$/` 또는 `/^(page\s*)?\d{1,4}$/i` | 낭독·문단 제외 |
 | `header` | y가 상단 8% 영역 AND (길이 ≤ 80자) AND (fontSize ≤ 1.1×Fm) AND [ 이웃 페이지에 같은 정규화 텍스트 존재 OR 텍스트가 대문자 비율 ≥ 60% OR `/^(SECTION|CHAPTER|PART)\b/i` ] | 러닝 헤드 "SECTION I Introduction to Clinical Medicine" 등 |
 | `footer` | y가 하단 8% 영역 AND 길이 ≤ 120자 AND (이웃 페이지 반복 OR `/^(©|copyright|harrison|mcgraw)/i` OR fontSize ≤ 0.85×Fm) | |
-| `heading` | fontSize ≥ 1.15×Fm OR (길이 ≤ 60자 AND 문장 종결 부호 없음 AND 위쪽 여백 ≥ 1.5×Lm AND 다음 줄이 본문) | 문단 kind='heading', 낭독은 함 |
+| `heading` | fontSize ≥ 1.15×Fm OR (길이 ≤ 60자 AND 문장 종결 부호 없음 AND 위쪽 여백 ≥ 1.5×Lm AND 다음 줄이 본문 AND **`isQuestionStart`·`isOptionStart`·`isAnswerStart` 중 어느 것도 아님**) | 문단 kind='heading', 낭독은 함 |
 | `figure-caption` | `/^(FIGURE|FIG\.|TABLE)\s*\d/i`로 시작 | 표 제목은 표 영역 힌트로 사용 |
 | `rotated` | 1단계에서 분리 | 제외 |
 | `body` | 나머지 | |
+
+- **`[수정 2026-09-18]` 짧은 줄 규칙에 문항·보기·정답 패턴 가드를 둔다.** 이 규칙은
+  "짧다 + 마침표가 없다 + 위 여백이 있다"는 **약한 신호 세 개**로만 제목을 판정한다.
+  `[실측]` 문항 stem의 첫 줄(`"I-42. An 18-year-old boy presents to"`)과 보기(`"A. Primary"`)가
+  정확히 그 모양이라 `heading`으로 잡히고, 이어서 4-9의 `newParagraph`가 `prev.role === 'heading'`
+  조건으로 **다음 줄을 새 문단으로 떼어낸다.** 그 결과 문항 stem이 두 문단으로 쪼개진다 —
+  `question` 문단 1,393개 중 1,012개가 줄 1개짜리였고 그중 953개가 첫 줄 role `heading`이었다.
+  이것이 4-11 P7 실패의 주된 원인이다(977/1,191건).
+
+  **명시적 번호·글머리 패턴은 약한 신호를 이긴다.** 4-9의 kind 우선순위와 같은 원칙이며,
+  `[실측]` 이 가드 하나로 P7이 14.5% → 66.2%가 되고 `heading` 총수·2단 판정·표 region·
+  손상 건수·성능은 모두 변하지 않는다. `fontSize ≥ 1.15×Fm` 경로는 **건드리지 않는다** —
+  진짜 큰 제목은 계속 `heading`이다.
 
 - "이웃 페이지 반복" 검사는 `neighborLayouts`(앞·뒤 최대 2페이지, 이미 추출된 것만) 안의 `header/footer` 후보와 텍스트를 **숫자를 `#`로 치환한 정규화 문자열**로 비교한다(페이지 번호가 헤더에 섞인 "CHAPTER 3 · 45" 대응). 이웃이 아직 없으면 나머지 조건만으로 판정하고, 이웃이 추출된 뒤 `extract.js`가 해당 페이지의 역할만 재계산해 저장한다(`pages.roleVersion` 증가). 전체 재추출은 하지 않는다.
 - 헤더·푸터로 판정된 줄은 데이터에 남기되(`role`), 리플로우 뷰에서 옅게 접어 표시하고 낭독·문단·번역·퀴즈 대상에서 제외한다. 사용자가 접힌 줄을 탭하면 펼쳐 볼 수 있다(오판 복구 수단).
