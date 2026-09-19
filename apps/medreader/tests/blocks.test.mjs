@@ -384,3 +384,95 @@ test('B22 큰 폰트 + 보기 형태 → role=heading 이어도 kind=option (4-9
   assert.ok(p, '문단이 있어야 한다');
   assert.equal(p.kind, 'option', 'heading 보다 option 이 먼저다');
 });
+
+/* ── 1e단계 회귀 (spec 4-8 [신규 2026-09-19] 라벨 가드) ─────────────────────
+   보기 라벨("A.") 뒤의 행잡이 들여쓰기가 run 을 둘로 쪼개면 보기 목록이
+   표 감지의 최소 조건(runs >= 2, alignedColumns >= 2, block.length >= 3)을
+   전부 아슬아슬하게 충족한다. 그러면 보기 줄이 role='table' 이 되어 문단에서
+   **사라지고**(파서가 복원할 수 없다) 한 문항의 보기가 찢어진다.
+   아래 영어 문장은 형식만 흉내 낸 것이고 원서 문장이 아니다.                */
+
+test('T3 보기 4줄(라벨 run + 행잡이 들여쓰기, 같은 x 정렬) → 표가 아니다', () => {
+  const opts = [
+    'Increased renal sodium excretion overnight',
+    'Reduced hepatic clearance of the drug',
+    'Delayed gastric emptying after the meal',
+    'Enhanced pulmonary gas exchange at rest'
+  ];
+  const items = bodyLines(6);                       // y 700..640, Fm=10, Lm=12
+  for (let i = 0; i < opts.length; i++) {
+    const y = 620 - 12 * i;
+    // 라벨 run: x 72..80. 본문 run: x 93 → 간격 13 > 1.2×10 이라 run 이 쪼개진다.
+    items.push(item('ABCD'[i] + '.', 72, y, { width: 8 }));
+    items.push(item(opts[i], 93, y, { width: 200 }));
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+
+  // 조건이 실제로 최소치로 충족되는 상황인지부터 확인한다(가드가 없으면 표가 된다).
+  const optLine = layout.lines.find(l => l.text.indexOf('A.') === 0);
+  assert.ok(optLine, '보기 줄이 있어야 한다');
+  assert.equal(optLine.runs.length, 2, '행잡이 들여쓰기로 run 이 둘이어야 테스트가 의미 있다');
+
+  assert.equal(layout.regions.length, 0, '보기 목록은 표가 아니다');
+  for (const l of layout.lines) assert.notEqual(l.role, 'table');
+  // 보기 줄은 문단에 남아 있어야 한다(파서가 볼 수 있어야 한다).
+  const kinds = layout.paragraphs.filter(p => /^[A-D]\./.test(p.text)).map(p => p.kind);
+  assert.equal(kinds.length, 4, '보기 4개가 모두 문단으로 남아야 한다');
+  for (const k of kinds) assert.equal(k, 'option');
+});
+
+test('T4 첫 run 이 실제 셀 텍스트인 4 run × 4줄 → 여전히 표로 감지', () => {
+  // 가드가 진짜 표를 죽이지 않는다는 고정. 첫 run 이 라벨이 아니다.
+  const xs = [72, 220, 300, 380];
+  const ws = [100, 30, 30, 30];
+  const rows = [
+    ['Loxifenamide sodium', '250', 'PO', 'q8h'],
+    ['Torvasetin calcium', '125', 'IV', 'q12h'],
+    ['Belmuridine sulfate', '500', 'PO', 'q6h'],
+    ['Cavertrone acetate', '750', 'IM', 'q24h']
+  ];
+  const items = bodyLines(6);
+  for (let r = 0; r < rows.length; r++) {
+    // 첫 행을 y=628 에 둔다: 640 과의 간격 12 가 1.5×Lm 미만이라 4-7 의 짧은 줄
+    // heading 규칙에 걸리지 않는다(T1 과 같은 배치).
+    const y = 628 - 12 * r;
+    for (let c = 0; c < 4; c++) items.push(item(rows[r][c], xs[c], y, { width: ws[c] }));
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+
+  assert.equal(layout.regions.length, 1);
+  assert.equal(layout.regions[0].kind, 'table');
+  assert.equal(layout.lines.filter(l => l.role === 'table').length, 4);
+  for (const p of layout.paragraphs) assert.ok(p.text.indexOf('Torvasetin') < 0);
+});
+
+test('T5 첫 열이 라벨 전용 run 인 표 → 표로 잡지 않되 줄은 문단에 남는다', () => {
+  /* spec 4-8 의 가드 문구("첫 run 의 텍스트가 라벨 자체로만 이루어진 줄")를
+     문자 그대로 따르면 이 줄들은 후보에서 빠진다. 셀이 3개 더 있어도 마찬가지다.
+     이 자리는 가드의 **비용**이다. 비용을 이 모양으로 받는 이유:
+       · 표로 오탐하면 줄이 문단에서 사라져 5절 파서가 복원할 수 없다.
+       · 표로 못 잡으면 줄은 문단에 남고(아래 assert), 원본 뷰로도 볼 수 있다.
+     즉 두 오류의 손해가 대칭이 아니다. [실측] 729쪽에서 이 비용의 실제 크기는
+     0이었다 — TABLE 캡션이 있는 150쪽의 표 감지 수가 101 → 101 로 불변이다. */
+  const labels = ['A', 'B', 'C', 'D'];
+  const cells = [
+    ['Elevated', 'Low', 'Normal'],
+    ['Reduced', 'High', 'Normal'],
+    ['Normal', 'Low', 'Elevated'],
+    ['Reduced', 'Low', 'Reduced']
+  ];
+  const items = bodyLines(6);
+  for (let r = 0; r < labels.length; r++) {
+    const y = 620 - 12 * r;
+    items.push(item(labels[r] + '.', 72, y, { width: 8 }));
+    items.push(item(cells[r][0], 93, y, { width: 50 }));
+    items.push(item(cells[r][1], 250, y, { width: 40 }));
+    items.push(item(cells[r][2], 380, y, { width: 40 }));
+  }
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+
+  assert.equal(layout.regions.length, 0, '라벨 전용 첫 run 은 후보에서 빠진다');
+  const kept = layout.paragraphs.filter(p => /^[A-D]\./.test(p.text));
+  assert.equal(kept.length, 4, '줄이 문단에 남아 파서가 복원할 수 있어야 한다');
+  for (const p of kept) assert.equal(p.kind, 'option');
+});

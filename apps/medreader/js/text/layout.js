@@ -29,8 +29,13 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  *     그 때문에 4-9 의 newParagraph 가 stem 을 두 문단으로 쪼개 놓았다
  *     (question 문단의 72.6%가 줄 1개짜리). lines[].role 과 paragraphs 경계가
  *     모두 달라지므로 다시 추출해야 한다.
+ * 5 — 1e단계: 4-8 표 감지 후보에 번호·글머리 라벨 가드(spec 4-8 신규 2026-09-19).
+ *     4 로 추출된 페이지는 보기 라벨 뒤 행잡이 들여쓰기 때문에 보기 목록이 표로
+ *     오탐되어 그 줄들이 role='table' 로 문단 밖에 있다(729쪽 13쪽 46줄). 줄이
+ *     문단에 없으면 5절 파서가 복원할 수 없으므로 lines[].role·regions·paragraphs
+ *     가 모두 달라진다 — 다시 추출해야 한다.
  */
-export const algoVersion = 4;
+export const algoVersion = 5;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {

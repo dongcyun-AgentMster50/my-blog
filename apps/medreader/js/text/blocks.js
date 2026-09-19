@@ -262,6 +262,50 @@ function hasUnitTokens(block) {
   return hit >= Math.ceil(block.length / 2);
 }
 
+/* spec 4-8 [신규 2026-09-19] — 번호·글머리 라벨 가드.
+ * "명시적 번호·글머리 패턴은 약한 신호를 이긴다"의 세 번째 적용이다(4-7·4-9 에 이어).
+ * [실측] 보기 라벨("A.") 뒤에 행잡이 들여쓰기가 있으면 그 공백이 run 을 둘로 쪼개
+ * runs.length >= 2 를 만들고, 보기들이 같은 x 에서 시작하니 alignedColumns >= 2 도
+ * 성립해, 보기 3개만 연속되면 표 감지의 최소 조건이 전부 아슬아슬하게 충족된다.
+ * 그러면 그 줄들이 role='table' 이 되어 **문단에서 사라진다** — 4-7·4-9 의 오분류와
+ * 달리 파서가 복원할 수 없는 손실이다.
+ *
+ * 판정은 좁게 유지한다: 줄 전체가 문항·보기·정답 패턴이고 **첫 run 의 텍스트가
+ * 라벨 자체**("A.", "I-42.", "12.")일 때만 후보에서 뺀다. "문항·보기 패턴이면 무조건
+ * 제외"로 넓히면 진짜 표에서 행 라벨이 셀 텍스트와 한 run 에 묶여 있는 경우까지
+ * 놓친다(spec 4-8).
+ */
+
+// 첫 run 의 텍스트. detectTables 는 publicLine 변환 전에 돌므로 run 은 items 를 들고 있다.
+function firstRunText(line) {
+  const run = (line.runs || [])[0];
+  if (!run) return '';
+  if (typeof run.text === 'string') return run.text.trim();
+  const items = run.items || [];
+  let out = '';
+  for (let i = 0; i < items.length; i++) out += items[i].str == null ? '' : items[i].str;
+  return out.trim();
+}
+
+/* 라벨 전용 run 인가.
+ * 정규식은 segment.js 의 패턴 함수를 그대로 쓴다 — 여기에 복제하지 않는다.
+ * 그 함수들은 "라벨 + 공백 + 비공백"을 요구하므로 최소 토큰을 붙여 본다. 라벨 전용
+ * run 은 공백을 품지 않으므로, 공백이 있으면(= 셀 텍스트가 붙어 있으면) 라벨이 아니다.
+ */
+function isLabelOnly(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (!t || /\s/.test(t)) return false;
+  const probe = t + ' x';
+  return isOptionStart(probe) || isQuestionStart(probe);
+}
+
+// 줄이 문항·보기·정답 패턴이면서 첫 run 이 라벨뿐인가 (spec 4-8 가드)
+function hasLabelOnlyFirstRun(line) {
+  const text = line.text || '';
+  if (!(isQuestionStart(text) || isOptionStart(text) || isAnswerStart(text))) return false;
+  return isLabelOnly(firstRunText(line));
+}
+
 /**
  * spec 4-8 — 컬럼별로 표 영역을 찾는다.
  * 감지된 줄의 role 을 'table' 로 바꾸고 Region 배열을 돌려준다.
@@ -285,13 +329,13 @@ export function detectTables(lines, pageInfo, params = LAYOUT, stats = null) {
 
   for (let g = 0; g < groups.length; g++) {
     const colLines = groups[g];
-    // 후보: run 2개 이상인 본문 줄
+    // 후보: run 2개 이상인 본문 줄. 단 첫 run 이 번호·글머리 라벨뿐인 줄은 제외한다(4-8 가드).
     const blocks = [];
     let cur = null;
     let prevCand = null;
     for (let i = 0; i < colLines.length; i++) {
       const l = colLines[i];
-      const isCand = l.role === 'body' && (l.runs || []).length >= 2;
+      const isCand = l.role === 'body' && (l.runs || []).length >= 2 && !hasLabelOnlyFirstRun(l);
       if (!isCand) { cur = null; prevCand = null; continue; }
       if (cur && prevCand && (prevCand.baseline - l.baseline) <= P.TABLE_LEADING_FACTOR * Lm) {
         cur.push(l);
