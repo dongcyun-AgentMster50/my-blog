@@ -11,7 +11,7 @@
 ## 목차
 
 1. 요약(위 문단)
-2. 파일 구조
+2. 파일 구조 (2-4 책별 프로파일 `BOOK_PROFILE` 포함)
 3. 모듈 책임과 의존 방향
 4. 줄 재구성 알고리즘 상세 ★
 5. 문제/보기/정답/해설 구조 파서
@@ -131,6 +131,115 @@ apps/medreader/
 [P3] js/lang/test.js, js/lang/tutor.js, js/lang/planner.js, js/ui/conceptmap.js, js/voice/commands.js,
      js/ext/openi.js, js/ext/pubmed.js, js/ext/europepmc.js, js/ext/openfda.js
 ```
+
+### 2-4. 책별 프로파일 (`BOOK_PROFILE`) `[신설 2026-09-20]`
+
+#### 왜 필요한가
+
+`[실측]` 729쪽 검증에서 드러난 결함의 **절반 이상이 알고리즘이 아니라 "이 책의 관례"를
+코드에 박아둔 것**이었다. 대상 PDF가 곧 다른 자료(7000쪽)로 교체되므로, 그런 값은
+**코드가 아니라 데이터**여야 한다. 새 책을 받으면 **프로파일 하나를 추가할 뿐 코드는 바뀌지 않는다.**
+
+박혀 있던 값과 그 대가:
+
+| 위치 | 박힌 값 | 실측 피해 |
+|---|---|---|
+| `isOptionStart` | `[A-E]\.` | 이 책은 6지선다가 있다 — `F.` 보기 **5건 누락** |
+| `ANSWER_RE` | `the answers? (is\|are)` 영어 고정 | `The answer is F` **3건 누락** |
+| `QUESTION_RE` | 로마 접두, `\d{1,3}` | 4자리 문항 번호 2건. **7000쪽에서 증가** |
+| `classifyRoles` pageno | `\d{1,4}` | **7000쪽에서 깨진다** |
+| `classifyRoles` footer | `/^(©\|copyright\|harrison\|mcgraw)/i` | **서적명·출판사 하드코딩** |
+| `classifyRoles` header | `/^(SECTION\|CHAPTER\|PART)\b/i` | 영어 고정 |
+| `figure-caption` | `/^(FIGURE\|FIG\.\|TABLE)\s*\d/i` | 이 책은 `TABLE II-9` 형식 — **362줄이 있는데 감지 0건**, 4-8의 캡션 가점·완화 경로·bbox 합치기가 **전부 죽은 코드** |
+| `hasUnitTokens` | `mg\|PO\|IV\|q\d+h` | 미국 임상 처방 관례 |
+| `KEEP_HYPHEN_SUFFIXES` | 의학 영어 수식어 | 분야·언어 종속 |
+
+**캡션 사례가 이 절의 존재 이유를 가장 잘 보여준다** — 합성 픽스처는 코드의 정규식에 맞춰
+만들어지므로 단위 테스트가 전부 통과하면서도 실제 문서에서는 한 번도 발동하지 않았다.
+**실물 통계 없이는 보이지 않는 결함**이고, 그래서 프로파일과 측정 도구는 한 쌍이다.
+
+#### 구조 상수 vs 책별 관례
+
+```
+LAYOUT        (config.js)          구조 상수 — 어떤 책이든 의미가 같다
+                                   Y_TOL_*, SPACE_GAP_FACTOR, GUTTER_* , TABLE_* , 영역 비율 …
+BOOK_PROFILE  (profiles/*.js)      책별 관례 — 책이 바뀌면 값이 바뀐다
+```
+
+판별 기준: **"다른 책에서 이 값이 달라질 수 있는가?"** 달라질 수 있으면 프로파일이다.
+`RUN_GAP_FACTOR`는 경계 사례다 — 계수 자체는 구조적이지만 **적정값이 조판(거터 폭)에 따라
+달라지므로 프로파일이 덮어쓸 수 있게** 둔다(`LAYOUT`에 기본값, 프로파일에 선택적 오버라이드).
+
+#### 필드
+
+```
+BOOK_PROFILE = {
+  id, title,                       // 식별용
+  lang: 'en',                      // 본문 언어 (RTL 판정·토큰 추정과 별개)
+
+  question: {
+    sectionPrefix: /[IVXLC]{1,5}/ | null,   // "IV-62." 의 IV, 없으면 null
+    numberMax: 4,                           // 번호 자릿수 상한
+    optionLetters: 'A-F',                   // 보기 글자 범위 (6지선다·7지선다 대응)
+    answerPhrase: /the answers? (is|are)/i, // 정답 문구 (언어 종속)
+    answerSeparators: /,|and|&|or/i
+  },
+
+  roles: {
+    headerPrefixes: /^(SECTION|CHAPTER|PART)\b/i,
+    footerPatterns: /^(©|copyright)/i,       // 서적명은 profile 에서 추가
+    pageNoMax: 5,                            // 쪽번호 자릿수 상한 (7000쪽 → 4자리 필요)
+    captionPrefixes: /^(FIGURE|FIG\.|TABLE)/i,
+    captionNumber: /\s*(?:[IVXLC]{1,5}-)?\d/ // "TABLE II-9" / "TABLE 9" 모두 수용
+  },
+
+  text: {
+    keepHyphenPrefixes: Set,
+    keepHyphenSuffixes: Set,
+    abbreviations: Set,
+    unitTokens: /mg|mcg|mL|PO|IV|IM|SC|%/i,  // 표 가점 신호
+    bulletChars: /[•·▪\-–]/
+  },
+
+  layoutOverrides: { RUN_GAP_FACTOR?: number, … }   // LAYOUT 일부만 덮어쓴다
+}
+```
+
+- **순수 계층은 프로파일을 인자로 받는다.** `buildPageLayout(items, pageInfo, params, profile)`.
+  전역을 읽지 않는 3-2 규칙은 그대로다. 프로파일을 주지 않으면 `DEFAULT_PROFILE`을 쓴다.
+- **기본 프로파일은 "아무 책에나 무난한" 값**이어야 한다(넓은 글자 범위, 접두 선택적, 넉넉한 자릿수).
+  특정 서적 값을 기본으로 삼지 않는다.
+- 프로파일은 `profiles/` 아래 JS 모듈 한 개. 사용자 PDF 텍스트를 담지 않는다(패턴과 수치만).
+
+#### 측정 도구 `dev/profile.mjs` — 프로파일의 짝
+
+프로파일을 **추측으로 쓰지 않는다.** 새 PDF를 받으면 먼저 측정한다.
+
+```
+node apps/medreader/dev/profile.mjs <pdf> [--pages 200] [--json out.js]
+```
+
+출력(사람이 읽는 요약 + `BOOK_PROFILE` 초안):
+
+| 항목 | 측정 방법 |
+|---|---|
+| 본문 폰트·행간 중앙값, 쪽 크기 | 전 페이지 통계 |
+| **거터 폭 분포** | run 간격 히스토그램의 중앙부 피크 → `RUN_GAP_FACTOR` 권장값 |
+| 2단/1단 쪽 비율 | `detectColumns` 결과 |
+| **문항 번호 형식** | `\d+\.` / `[IVXLC]+-\d+\.` / `Q\d+` / 기타 빈도 |
+| **보기 글자 범위** | 줄 머리 `[A-Z]\.` 글자 빈도 → 실제 최대 글자 |
+| **정답 문구** | 문항 번호 뒤 상용구 n-gram 빈도 |
+| **캡션 접두어·번호 문법** | `FIGURE\|FIG\|TABLE\|표\|그림` 뒤 토큰 형태 빈도 |
+| 쪽번호 자릿수, 머리말·꼬리말 반복 문자열 | 상·하단 영역 정규화 텍스트 빈도 |
+| 글리프 손상·빈 페이지 | `[a-z][A-Z]`·20자 이상 낱말·텍스트 0인 쪽 |
+| **컬럼 탐지 실패 후보** | run 2개의 x 간격이 페이지 폭 1/3 초과인 줄 수 |
+| 예상 저장 용량·처리 시간 | 쪽당 저장본 바이트 × 쪽수, ms/쪽 |
+
+- **Node 전용**(`pdfjs-dist` legacy 빌드). 브라우저 없이 돈다. 앱 본체는 이 파일을 import 하지 않는다.
+- `--json` 으로 `BOOK_PROFILE` 초안을 파일로 뽑아 `profiles/` 에 넣고 손으로 다듬는다.
+- **PDF·원서 텍스트를 레포에 쓰지 않는다.** 출력은 패턴·빈도·수치만 담는다.
+
+---
 
 ### 2-2. 왜 ES modules인가 (2048은 클래식 스크립트였다)
 
