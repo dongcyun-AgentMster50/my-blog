@@ -351,3 +351,36 @@ test('B20 번호·글머리 패턴 없는 짧은 제목은 여전히 heading', (
   assert.ok(h, '제목 문단이 있어야 한다');
   assert.equal(h.kind, 'heading');
 });
+
+/* ── Review 추가: 4-9 kind 우선순위에 이빨 주기 ─────────────────────────────
+   1d 의 role 가드가 들어온 뒤로는 문항·보기 줄이 더 이상 role 'heading' 이
+   아니어서, B12·B13 은 paragraphKind 의 순서를 1c 이전(heading 이 맨 앞)으로
+   되돌려도 그대로 통과한다(Review 가 의도적 파손으로 확인). 순서 규칙이
+   아직 실제로 발동하는 자리는 **bigger 경로로 role='heading' 이 된 줄**뿐이다.
+   B21·B22 가 그 자리를 고정한다.                                        */
+
+test('B21 큰 폰트 + 문항 번호 형태 → role=heading 이어도 kind=question (4-9 우선순위)', () => {
+  const items = [
+    ...bodyLines(5),
+    item('I-5. Disorders of the Cardiovascular System', 72, 627, { fontSize: 13, width: 300 }),
+    ...bodyLines(4, 610)
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(roleOf(layout, 'I-5.'), 'heading', 'bigger 경로는 그대로 heading');
+  const p = layout.paragraphs.find(x => x.text.indexOf('I-5.') === 0);
+  assert.ok(p, '문단이 있어야 한다');
+  assert.equal(p.kind, 'question', 'heading 보다 question 이 먼저다');
+});
+
+test('B22 큰 폰트 + 보기 형태 → role=heading 이어도 kind=option (4-9 우선순위)', () => {
+  const items = [
+    ...bodyLines(5),
+    item('A. Disorders of the Respiratory System', 72, 627, { fontSize: 13, width: 300 }),
+    ...bodyLines(4, 610)
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(roleOf(layout, 'A. Disorders'), 'heading', 'bigger 경로는 그대로 heading');
+  const p = layout.paragraphs.find(x => x.text.indexOf('A. Disorders') === 0);
+  assert.ok(p, '문단이 있어야 한다');
+  assert.equal(p.kind, 'option', 'heading 보다 option 이 먼저다');
+});
