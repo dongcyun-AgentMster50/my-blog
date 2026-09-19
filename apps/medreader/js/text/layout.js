@@ -24,8 +24,13 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  *     answer → question → option → heading → list → body 로 바뀌었다.
  *     2 로 추출된 페이지는 paragraphs[].kind 가 틀려 있다(question 이 거의 잡히지
  *     않고 보기가 heading 으로 샜다). 5절 파서가 kind 를 쓰므로 다시 추출해야 한다.
+ * 4 — 1d단계: 4-7 짧은 줄 heading 규칙에 문항·보기·정답 가드(spec 4-7 수정 2026-09-18).
+ *     3 으로 추출된 페이지는 문항 stem 첫 줄과 보기 줄의 role 이 'heading' 이고,
+ *     그 때문에 4-9 의 newParagraph 가 stem 을 두 문단으로 쪼개 놓았다
+ *     (question 문단의 72.6%가 줄 1개짜리). lines[].role 과 paragraphs 경계가
+ *     모두 달라지므로 다시 추출해야 한다.
  */
-export const algoVersion = 3;
+export const algoVersion = 4;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {

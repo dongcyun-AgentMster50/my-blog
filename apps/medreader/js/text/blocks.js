@@ -194,7 +194,19 @@ export function classifyRoles(lines, pageInfo, params = LAYOUT, neighborLayouts 
 
     // heading
     const bigger = line.fontSize >= P.HEADING_SIZE_RATIO * Fm;
-    const shortNoStop = text.length > 0 && text.length <= P.HEADING_MAX_LEN &&
+    /* spec 4-7 [수정 2026-09-18] — 짧은 줄 규칙의 문항·보기·정답 가드.
+     * 이 경로는 "짧다 + 종결 부호 없다 + 위 여백이 크다"는 약한 신호 셋으로만
+     * 제목을 판정한다. [실측] 문항 stem 첫 줄 "I-42. An 18-year-old boy presents to"
+     * 와 보기 "A. Primary" 가 정확히 그 모양이라 heading 으로 새고, 이어서 4-9 의
+     * newParagraph 가 prev.role === 'heading' 으로 다음 줄을 떼어내 stem 이 두
+     * 문단으로 쪼개졌다(question 문단 1,393개 중 1,012개가 줄 1개, 그중 953개가
+     * 첫 줄 role heading — 4-11 P7 실패 1,191건 중 977건).
+     * 명시적 번호·글머리 패턴은 약한 신호를 이긴다(4-9 kind 우선순위와 같은 원칙).
+     * 정규식은 segment.js 의 것을 그대로 쓴다 — 여기에 복제하지 않는다.
+     * bigger 경로는 건드리지 않는다: 진짜 큰 제목은 계속 heading 이다. */
+    const numbered = isQuestionStart(text) || isOptionStart(text) || isAnswerStart(text);
+    const shortNoStop = !numbered &&
+      text.length > 0 && text.length <= P.HEADING_MAX_LEN &&
       !/[.!?…]["”')\]]*$/.test(text) &&
       gapAbove >= P.HEADING_GAP_FACTOR * Lm &&
       !!next && next.fontSize <= P.HEADING_SIZE_RATIO * Fm &&

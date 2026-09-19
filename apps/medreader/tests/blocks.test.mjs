@@ -287,3 +287,67 @@ test('B16 parseAnswerStart — 섹션·번호·정답 글자들 (spec 5-3)', () 
     { section: null, number: 7, letters: ['B', 'D'] });
   assert.equal(parseAnswerStart('12. Which of the following is most likely'), null);
 });
+
+/* ── 1d단계 회귀 (spec 4-7 짧은 줄 규칙의 문항·보기·정답 가드) ───────────── */
+
+// 4-7 의 짧은 줄 규칙은 "짧다 + 종결 부호 없다 + 위 여백이 크다"는 약한 신호 셋뿐이다.
+// 문항 stem 첫 줄과 보기가 정확히 그 모양이라 heading 으로 새고, 4-9 의 newParagraph 가
+// prev.role === 'heading' 으로 다음 줄을 떼어내 stem 이 두 문단으로 쪼개졌다.
+// 아래 영어 문장은 형식만 흉내 낸 것이고 원서 문장이 아니다.
+
+test('B17 문항 stem 첫 줄(짧고·마침표 없고·위 여백 큼) → role=body, 다음 줄이 같은 문단', () => {
+  const stem = 'I-88. A 52-year-old presents with';   // 33자, 종결 부호 없음
+  const items = [
+    ...bodyLines(5),                                   // y 700..652, Lm = 12
+    item(stem, 72, 627, { width: 300 }),               // 위 여백 25 > 1.5×Lm(18)
+    item('sudden shortness of breath after a long flight', 72, 615, { width: 400 }),
+    item('A. Obtain a ventilation perfusion scan right away', 72, 603, { width: 300 })
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(roleOf(layout, 'I-88.'), 'body', '문항 stem 은 heading 이 아니다');
+  const q = layout.paragraphs.find(p => p.text.indexOf('I-88.') === 0);
+  assert.ok(q, '문항 문단이 있어야 한다');
+  assert.equal(q.kind, 'question');
+  assert.ok(q.lineIds.length >= 2, 'stem 다음 줄이 같은 문단에 남아야 한다 (줄 ' + q.lineIds.length + '개)');
+  assert.ok(q.text.indexOf('sudden shortness') > 0, '문단 text 에 다음 줄이 이어져야 한다');
+});
+
+test('B18 보기 첫 줄 "A. Primary"(짧고 마침표 없음) → role=body, kind=option', () => {
+  const items = [
+    ...bodyLines(5),
+    item('A. Primary', 72, 627, { width: 60 }),        // 위 여백 25 > 1.5×Lm(18)
+    item('B. Secondary to an underlying systemic disorder', 72, 615, { width: 300 }),
+    item('C. Unrelated to the exposure described above', 72, 603, { width: 300 })
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(roleOf(layout, 'A. Primary'), 'body', '보기 줄은 heading 이 아니다');
+  const a = layout.paragraphs.find(p => p.text === 'A. Primary');
+  assert.ok(a, '"A. Primary" 문단이 있어야 한다');
+  assert.equal(a.kind, 'option');
+});
+
+test('B19 큰 폰트 제목은 문항 번호처럼 생겨도 heading 유지 (bigger 경로 불변)', () => {
+  // 가드는 약한 신호 경로에만 건다. fontSize >= 1.15×Fm 는 그대로 heading 이다.
+  const title = 'I-5. Disorders of the Cardiovascular System';
+  const items = [
+    ...bodyLines(5),
+    item(title, 72, 627, { fontSize: 13, width: 300 }),   // 13 >= 1.15 × 10
+    ...bodyLines(4, 610)
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(roleOf(layout, 'I-5.'), 'heading');
+});
+
+test('B20 번호·글머리 패턴 없는 짧은 제목은 여전히 heading', () => {
+  // 가드가 일반 제목을 망가뜨리지 않는다.
+  const items = [
+    ...bodyLines(5),
+    item('Clinical Manifestations', 72, 627, { width: 120 }),   // 위 여백 25 > 18
+    ...bodyLines(4, 615)
+  ];
+  const layout = buildPageLayout(items, { pageNo: 1, width: W, height: H });
+  assert.equal(roleOf(layout, 'Clinical Manifestations'), 'heading');
+  const h = layout.paragraphs.find(p => p.text === 'Clinical Manifestations');
+  assert.ok(h, '제목 문단이 있어야 한다');
+  assert.equal(h.kind, 'heading');
+});
