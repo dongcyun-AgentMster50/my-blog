@@ -63,18 +63,33 @@ function cleanStr(s) {
 }
 
 /**
- * spec 4-2 — pdf.js getTextContent().items 를 TextItem[] 으로 정규화한다.
+ * spec 4-2 `[수정 2026-09-20]` — pdf.js getTextContent().items 를 TextItem[] 으로 정규화한다.
  * 회전 아이템은 본문 파이프라인에서 분리해 따로 돌려준다.
+ *
+ * 폭 위생: `[실측]` pdf.js 가 주는 item.width 의 2.13%(97,127개 중 2,069개)가
+ * 페이지 폭을 넘거나 음수다. 그 값이 그대로 흘러가면
+ *   (a) splitRuns 의 gap = cur.x − (prev.x + prev.w) 가 거대한 음수가 되어 run 분할이 무너지고,
+ *   (b) 4-5 거터 히스토그램의 간격 구간이 오염되며,
+ *   (c) lineBBox 가 깨져 줄 4.7% 의 bbox 가 페이지 밖으로 나간다(최대 9,337pt, 페이지 폭 612pt).
+ * (c)는 4-12 의 하이라이트 오버레이가 페이지 폭의 15배짜리 사각형을 그린다는 뜻이다.
+ * **원본 str 은 건드리지 않는다** — 위생은 좌표·폭에만 적용한다.
  *
  * @param {Array} rawItems getTextContent().items
  * @param {Object} styles  getTextContent().styles
- * @returns {{items:Array, rotated:Array}}
+ * @param {Object} params  알고리즘 파라미터(기본 LAYOUT)
+ * @param {Object} [pageInfo] { width } — 페이지 폭. 선택 인자이며, 주지 않으면
+ *                 "폭 초과" 판정을 건너뛴다(판단 근거가 없는 값을 추측으로 바꾸지 않는다).
+ * @returns {{items:Array, rotated:Array, stats:Object}}
  */
-export function normalizeItems(rawItems, styles, params = LAYOUT) {
+export function normalizeItems(rawItems, styles, params = LAYOUT, pageInfo = null) {
   const P = params || LAYOUT;
   const st = styles || {};
   const list = Array.isArray(rawItems) ? rawItems : [];
   const kept = [];
+
+  const pw = pageInfo ? Number(pageInfo.width) : NaN;
+  const pageWidth = Number.isFinite(pw) && pw > 0 ? pw : 0;
+  let widthNegative = 0, widthNaN = 0, widthOverflow = 0;
 
   for (let i = 0; i < list.length; i++) {
     const raw = list[i];
@@ -85,8 +100,7 @@ export function normalizeItems(rawItems, styles, params = LAYOUT) {
     const a = num(tr[0]), b = num(tr[1]), c = num(tr[2]), d = num(tr[3]);
     const x = num(tr[4]), y = num(tr[5]);
 
-    let w = num(raw.width);
-    if (!(w > 0)) w = 0;                       // spec 4-2: w < 0 이면 0
+    const rawW = Number(raw.width);
     const h = num(raw.height);
 
     // spec 4-0: 폰트 크기는 hypot(b, d). 회전·스큐가 있어도 안전하다.
@@ -94,6 +108,24 @@ export function normalizeItems(rawItems, styles, params = LAYOUT) {
     if (!(fontSize > 0)) fontSize = Math.hypot(a, c);
 
     const str = cleanStr(raw.str);
+
+    // spec 4-2 폭 위생 — 순서: 음수 → 0, NaN·페이지 폭 초과 → 추정 대체.
+    // 추정치 str.length × fontSize × 0.5 의 0.5em 은 라틴 문자 평균 자폭이다.
+    // fontSize 가 아직 0 이면(페이지 전체가 병적) 후처리 중앙값 대체 뒤에
+    // 고칠 수 없으므로 여기서는 FALLBACK_FONT_SIZE 로 추정한다.
+    let w;
+    if (!Number.isFinite(rawW)) {
+      widthNaN++;
+      w = str.length * (fontSize > 0 ? fontSize : P.FALLBACK_FONT_SIZE) * 0.5;
+    } else if (rawW < 0) {
+      widthNegative++;
+      w = 0;
+    } else if (pageWidth > 0 && rawW > pageWidth) {
+      widthOverflow++;
+      w = str.length * (fontSize > 0 ? fontSize : P.FALLBACK_FONT_SIZE) * 0.5;
+    } else {
+      w = rawW;
+    }
 
     // spec 4-2: 빈 아이템은 줄 끝 힌트만 직전 아이템에 옮기고 버린다
     if (str === '' && (w === 0 || !Number.isFinite(x) || !Number.isFinite(y))) {
@@ -137,7 +169,18 @@ export function normalizeItems(rawItems, styles, params = LAYOUT) {
     if (!(it.fontSize > 0)) it.fontSize = fallback;
     (it.rotated ? rotated : items).push(it);
   }
-  return { items: items, rotated: rotated };
+  return {
+    items: items,
+    rotated: rotated,
+    // spec 4-2 — 몇 개를 고쳤는지 센다. 7000쪽 실자료에서 이 수가 튀면
+    // 새 자료의 폭 정보가 더 심하게 깨져 있다는 신호다.
+    stats: {
+      widthFixed: widthNegative + widthNaN + widthOverflow,
+      widthNegative: widthNegative,
+      widthNaN: widthNaN,
+      widthOverflow: widthOverflow
+    }
+  };
 }
 
 /* ────────────────────────────────────────────────────────

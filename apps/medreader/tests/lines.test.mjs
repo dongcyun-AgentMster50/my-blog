@@ -159,3 +159,69 @@ test('L11 회전 아이템(transform b≠0) → role rotated, 본문·문단에�
     if (l.role !== 'rotated') assert.ok(!l.text.includes('Y axis label'));
   }
 });
+
+/* ────────────────────────────────────────────────────────
+   폭 위생 — spec 4-2 `[수정 2026-09-20]`
+   pdf.js 가 주는 item.width 의 2.13% 가 페이지 폭을 넘거나 음수다.
+   그 값이 그대로 흐르면 splitRuns 의 gap, 거터 히스토그램, lineBBox 가
+   모두 오염된다. 위생은 좌표·폭에만 적용하고 str 은 건드리지 않는다.
+   ──────────────────────────────────────────────────────── */
+
+test('L12 w 위생 — 페이지 폭 초과·NaN 은 추정 대체, 음수는 0', () => {
+  const raw = [
+    item('wide', 72, 700, { width: 9337 }),    // 페이지 폭 612 초과
+    item('nanw', 200, 700, { width: NaN }),
+    item('negw', 300, 700, { width: -50 })
+  ];
+  const out = normalizeItems(raw, {}, undefined, { width: 612 });
+  const items = out.items;
+  assert.equal(items.length, 3);
+  // 추정치 = str.length × fontSize × 0.5
+  assert.equal(items[0].w, 4 * 10 * 0.5);
+  assert.equal(items[1].w, 4 * 10 * 0.5);
+  assert.equal(items[2].w, 0);
+  // 원본 str 은 건드리지 않는다
+  assert.deepEqual(items.map(i => i.str), ['wide', 'nanw', 'negw']);
+  // 몇 개를 고쳤는지 셀 수 있어야 한다 (7000쪽에서 이 수가 튀면 새 자료가 더 심하다는 신호)
+  assert.equal(out.stats.widthFixed, 3);
+  assert.equal(out.stats.widthOverflow, 1);
+  assert.equal(out.stats.widthNaN, 1);
+  assert.equal(out.stats.widthNegative, 1);
+});
+
+test('L12b w 위생 — 페이지 폭을 모르면 초과 판정을 하지 않는다 (음수·NaN 만)', () => {
+  const out = normalizeItems([
+    item('wide', 72, 700, { width: 9337 }),
+    item('nanw', 200, 700, { width: NaN })
+  ], {});
+  assert.equal(out.items[0].w, 9337);          // 판단 근거가 없으면 건드리지 않는다
+  assert.equal(out.items[1].w, 4 * 10 * 0.5);  // NaN 은 페이지 폭 없이도 고친다
+  assert.equal(out.stats.widthFixed, 1);
+});
+
+test('L13 w 위생 — 깨진 폭이 줄 bbox 를 페이지 밖으로 내보내지 않는다', () => {
+  const layout = buildPageLayout([
+    item('Acetylsalicylic', 72, 700, { width: 9337 }),
+    item('acid', 160, 700, { width: 20 }),
+    item('Second body line of the page', 72, 688, { width: 180 })
+  ], { pageNo: 1, width: 612, height: 792 });
+
+  for (const l of layout.lines) {
+    assert.ok(l.bbox.x1 <= 612 + 1, '줄 bbox 가 페이지 오른쪽 밖으로 나갔다: ' + l.bbox.x1);
+    assert.ok(l.bbox.x0 >= -1, '줄 bbox 가 페이지 왼쪽 밖으로 나갔다: ' + l.bbox.x0);
+  }
+  assert.equal(layout.stats.widthFixed, 1);
+});
+
+test('L13b w 위생 — 깨진 폭이 run 분할을 무너뜨리지 않는다', () => {
+  // 폭 9337 을 그대로 쓰면 gap = 160 - (72 + 9337) 이 거대한 음수가 되어
+  // 두 번째 아이템이 언제나 같은 run 에 붙는다. 실제로는 멀리 떨어진
+  // 표 셀 경계(gap = 13 > 1.2 × 10)이므로 run 이 둘로 나뉘어야 한다.
+  const { items } = normalizeItems([
+    item('Acetylsalicylic', 72, 700, { width: 9337 }),
+    item('650', 160, 700, { width: 15 })
+  ], {}, undefined, { width: 612 });
+  const lines = clusterLines(items);
+  const runs = splitRuns(lines[0]);
+  assert.equal(runs.length, 2);
+});

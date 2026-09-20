@@ -34,8 +34,16 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  *     오탐되어 그 줄들이 role='table' 로 문단 밖에 있다(729쪽 13쪽 46줄). 줄이
  *     문단에 없으면 5절 파서가 복원할 수 없으므로 lines[].role·regions·paragraphs
  *     가 모두 달라진다 — 다시 추출해야 한다.
+ * 6 — 2b단계: 4-2 아이템 폭 위생(spec 4-2 수정 2026-09-20).
+ *     pdf.js item.width 의 2.13% 가 페이지 폭을 넘거나 음수인데, 5 까지는
+ *     음수만 0 으로 접고 초과·NaN 을 그대로 흘려보냈다. 그 값이
+ *     splitRuns 의 gap·4-5 거터 히스토그램·lineBBox 에 모두 들어가므로
+ *     5 로 추출된 페이지는 (a) 줄 4.7% 의 bbox 가 페이지 밖(최대 9,337pt,
+ *     페이지 폭 612pt)이고 (b) 깨진 폭이 낀 줄의 run 경계가 틀려 있다.
+ *     (a)는 4-12 하이라이트가 페이지 폭의 15배짜리 사각형을 그린다는 뜻이고,
+ *     (b)는 컬럼·표 판정까지 바꾼다 — 다시 추출해야 한다.
  */
-export const algoVersion = 5;
+export const algoVersion = 6;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {
@@ -92,8 +100,8 @@ export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT) {
     neighborLayouts: pageInfo.neighborLayouts || []
   };
 
-  // 1단계 — 정규화 (회전 아이템 분리)
-  const norm = normalizeItems(rawItems, pageInfo.styles || {}, P);
+  // 1단계 — 정규화 (회전 아이템 분리, 폭 위생 — spec 4-2 수정 2026-09-20)
+  const norm = normalizeItems(rawItems, pageInfo.styles || {}, P, info);
 
   // 2·3단계 — Y 클러스터링 → run 분할
   let lines = clusterLines(norm.items, P);
@@ -149,7 +157,10 @@ export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT) {
       medianFontSize: metrics.medianFontSize,
       medianLeading: metrics.medianLeading,
       bodyLeft: bodyLeft,
-      warn: columns.warn || null
+      warn: columns.warn || null,
+      // spec 4-2 — 폭 위생이 고친 아이템 수. 새 책을 넣었을 때 이 수가 튀면
+      // pdf.js 가 주는 폭 정보가 그 책에서 더 심하게 깨져 있다는 신호다.
+      widthFixed: norm.stats.widthFixed
     }
   };
 }
