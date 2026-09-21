@@ -90,8 +90,8 @@ MEDREADER_PDFJS=<pdfjs-dist 경로> node apps/medreader/dev/profile.mjs <pdf> --
 | 문단 | question 1392 · option 6264 · answer 1187 · heading 1009 |
 | P7(문항→보기 2~5개) | 66.3% (완화 기준 84%) |
 | `buildPageLayout` | 0.6 ms/쪽 |
-| 저장본 | **9.35 KB/쪽 (IndexedDB 실측)** — JSON 바이트의 **0.40배** |
-| **7000쪽 환산** | **≈ 64MB** — quota 6.1GB의 1.0% |
+| 저장본 | **9.35 KB/쪽**(깨끗한 DB) · **12.32 KB/쪽**(재추출 후, 사용자 실기기) — JSON 바이트의 **0.40배** |
+| **7000쪽 환산** | **≈ 84MB**(보수적) — 사용자 기기 quota 285GB 의 **0.03%**. 용량 위험 없음 |
 
 ## spec 수정 이력 — 전부 실물을 만나고 나서 드러났다
 
