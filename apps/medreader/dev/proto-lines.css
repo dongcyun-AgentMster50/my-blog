@@ -1,0 +1,111 @@
+/* ============================================================
+   MedReader 프로토타입 페이지 스타일 (spec 4-11)
+   데스크톱 도구지만 휴대폰에서도 열려야 한다.
+   ============================================================ */
+
+:root {
+  --bg: #ffffff;
+  --fg: #16202b;
+  --muted: #667085;
+  --line: #d8dee6;
+  --body: #2563eb;
+  --meta: #98a2b3;
+  --table: #ea8c00;
+  --heading: #16a34a;
+  --gutter: #dc2626;
+  --warn: #fde68a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.bar, .params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { margin-right: 6px; }
+
+.bar label, .params label { display: inline-flex; align-items: center; gap: 6px; }
+
+button {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+button:disabled { opacity: .5; cursor: default; }
+
+input[type="number"] { width: 5em; font: inherit; padding: 2px 4px; }
+input[type="range"] { width: 120px; }
+output { min-width: 3em; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.fileLabel input[type="file"] { max-width: 180px; font-size: 12px; }
+
+.status { margin: 0; padding: 8px 12px; color: var(--muted); }
+.status.err { color: #b42318; }
+
+.panes { display: flex; gap: 12px; padding: 0 12px 24px; align-items: flex-start; }
+.pane { flex: 1 1 0; min-width: 0; }
+.paneRight { max-height: 80vh; overflow: auto; }
+
+.pageWrap { position: relative; display: inline-block; max-width: 100%; }
+#canvas { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); }
+.hlLayer { position: absolute; inset: 0; pointer-events: none; }
+
+.hl { position: absolute; border: 1px solid var(--body); background: rgba(37, 99, 235, .07); }
+.hl.role-header, .hl.role-footer, .hl.role-pageno { border-color: var(--meta); background: rgba(152, 162, 179, .12); }
+.hl.role-table { border-color: var(--table); background: rgba(234, 140, 0, .10); }
+.hl.role-heading { border-color: var(--heading); background: rgba(22, 163, 74, .08); }
+.hl.role-rotated { border-style: dashed; border-color: var(--muted); }
+.hlGutter { position: absolute; top: 0; bottom: 0; border-left: 2px dashed var(--gutter); }
+.hlSup { position: absolute; border: 1px solid #7c3aed; background: rgba(124, 58, 237, .18); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; padding: 8px 0 0; margin: 0; color: var(--muted); }
+.sw { display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; border: 1px solid; }
+.swBody { border-color: var(--body); background: rgba(37, 99, 235, .15); }
+.swMeta { border-color: var(--meta); background: rgba(152, 162, 179, .2); }
+.swTable { border-color: var(--table); background: rgba(234, 140, 0, .2); }
+.swHeading { border-color: var(--heading); background: rgba(22, 163, 74, .2); }
+.swGutter { border: none; border-left: 2px dashed var(--gutter); width: 2px; }
+.swSup { border-color: #7c3aed; background: rgba(124, 58, 237, .25); }
+
+.summary { padding: 8px 0; color: var(--muted); }
+
+.lineList { list-style: none; margin: 0; padding: 0; }
+.lineList li { padding: 3px 6px; border-top: 1px solid transparent; }
+.lineList li.paraStart { border-top: 2px solid var(--fg); margin-top: 4px; }
+.lineList .meta { color: var(--muted); font-size: 12px; margin-right: 8px; font-variant-numeric: tabular-nums; }
+.lineList li.role-header .txt, .lineList li.role-footer .txt, .lineList li.role-pageno .txt { color: var(--meta); }
+.lineList li.role-table .txt { color: var(--table); }
+.lineList li.role-heading .txt { color: var(--heading); font-weight: 600; }
+.lineList li.eolMismatch { background: var(--warn); }
+.lineList .hy { font-weight: 700; }
+
+.statsBox { padding: 0 12px 32px; }
+.statsScroll { max-height: 50vh; overflow: auto; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 2px 8px; text-align: right; }
+th:first-child, td:first-child { text-align: center; }
+tr.outlier td { background: var(--warn); }
+
+@media (max-width: 900px) {
+  .panes { flex-direction: column; }
+  /* 세로로 쌓일 때 .pane 의 flex:1 1 0 과 overflow:auto 가 만나면
+     자동 최소 높이가 0이 되어 줄 목록이 통째로 잘린다(높이 0).
+     내용 높이를 그대로 쓰도록 되돌린다. */
+  .paneRight { max-height: none; width: 100%; overflow: visible; flex: 0 0 auto; }
+  input[type="range"] { width: 100px; }
+}

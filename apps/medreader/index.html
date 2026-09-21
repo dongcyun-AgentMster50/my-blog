@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  MedReader — 단일 진입점 (spec 2-1 · 12-1)
+
+  ★ `file://` 로 열면 동작하지 않는다. 의도된 제약이다(spec 18 · 20절).
+    이 앱은 ES modules 로 되어 있고 `file://` 에서는 브라우저가 모듈
+    import 를 CORS 로 막는다. IndexedDB 도 origin 이 없어 쓸 수 없다.
+    반드시 http:// 또는 https:// 로 열어라. 개발 중에는 레포 루트에서
+
+        python -m http.server 8000
+        → http://localhost:8000/apps/medreader/index.html
+
+    빈 서재 화면에 같은 안내가 사용자 언어로 뜬다(20절).
+
+  ★ 모든 화면이 이 한 파일 안에 `<section data-screen>` 으로 있다(12-1).
+    라우터가 `hidden` 을 토글할 뿐 페이지 이동은 없다.
+
+  ★ 문자열을 여기에 하드코딩하지 않는다. 전부 `data-i18n` / `data-i18n-aria`
+    를 거쳐 `js/i18n/` 에서 온다. `<noscript>` 만 예외다 — JS 가 꺼져 있으면
+    i18n 이 돌 수 없으므로 폴백 언어(en)로 한 줄 적는다.
+  ============================================================
+-->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<!-- 16-G — user-scalable=no 를 쓰지 않는다. 본문 핀치 줌은 막지 않는다. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>MedReader</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/screens.css">
+<link rel="stylesheet" href="css/reader.css">
+</head>
+<body>
+
+<noscript>MedReader needs JavaScript, and must be opened over http:// or https:// — not from a file.</noscript>
+
+<!-- 14절 상태 바. 토스트가 아니라 배너다. main.js 가 채운다. -->
+<div class="banners" id="banners" role="status" aria-live="polite"></div>
+
+<main id="main">
+
+  <!-- ════ 온보딩 (12-2) — 3화면 ════════════════════════ -->
+  <section class="screen" data-screen="onboarding" hidden>
+    <p class="onboard-progress" id="onboardProgress"></p>
+
+    <!-- 1. 언어 -->
+    <div class="onboard-step" data-step="1">
+      <h1 data-i18n="onboarding.lang.title"></h1>
+      <p class="muted" data-i18n="onboarding.lang.desc"></p>
+      <div class="lang-grid" id="langGrid">
+        <!-- 각 언어는 자국어 표기다. lang 속성이 폰트·발음을 맞춘다. -->
+        <button type="button" data-lang="ar" lang="ar" dir="rtl" data-i18n="onboarding.lang.ar" aria-pressed="false"></button>
+        <button type="button" data-lang="en" lang="en" dir="ltr" data-i18n="onboarding.lang.en" aria-pressed="false"></button>
+        <button type="button" data-lang="fr" lang="fr" dir="ltr" data-i18n="onboarding.lang.fr" aria-pressed="false"></button>
+        <button type="button" data-lang="ko" lang="ko" dir="ltr" data-i18n="onboarding.lang.ko" aria-pressed="false"></button>
+      </div>
+      <div class="row" style="margin-block-start: var(--sp-5)">
+        <button type="button" class="primary big" id="langNext" data-i18n="common.continue"></button>
+      </div>
+    </div>
+
+    <!-- 2. 고지 2종 + 동의 -->
+    <div class="onboard-step" data-step="2" hidden>
+      <h1 data-i18n="onboarding.consent.title"></h1>
+
+      <div class="card">
+        <h2 data-i18n="onboarding.consent.education.title"></h2>
+        <p data-i18n="onboarding.consent.education.body"></p>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="onboarding.consent.privacy.title"></h2>
+        <p data-i18n="onboarding.consent.privacy.body"></p>
+      </div>
+
+      <div class="consent-row">
+        <input type="checkbox" id="consentCheck">
+        <label for="consentCheck" data-i18n="onboarding.consent.check"></label>
+      </div>
+      <p class="muted" id="consentHint" hidden data-i18n="onboarding.consent.needCheck"></p>
+
+      <div class="row">
+        <button type="button" id="consentBack" data-i18n="nav.back"></button>
+        <button type="button" class="primary" id="consentNext" data-i18n="common.continue"></button>
+      </div>
+    </div>
+
+    <!-- 3. PDF 가져오기 -->
+    <div class="onboard-step" data-step="3" hidden>
+      <h1 data-i18n="onboarding.start.title"></h1>
+      <p data-i18n="onboarding.start.desc"></p>
+      <p class="muted" data-i18n="onboarding.start.noKey"></p>
+      <div class="stack">
+        <button type="button" class="primary big" id="onboardImport" data-i18n="onboarding.start.import"></button>
+        <button type="button" class="link" id="onboardLater" data-i18n="onboarding.start.later"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════ 서재 (12-6 최소) ═════════════════════════════ -->
+  <section class="screen" data-screen="library" hidden>
+    <div class="row" style="justify-content: space-between">
+      <h1 data-i18n="library.title" style="flex: 1 1 auto"></h1>
+      <button type="button" data-i18n="nav.about" data-nav="#/about"></button>
+    </div>
+
+    <button type="button" class="primary big" id="libraryImport" data-i18n="library.import"></button>
+
+    <!-- 파일 선택은 감춘 input 으로. 버튼이 대신 연다(12-6). -->
+    <input type="file" class="file-input" id="fileInput" accept="application/pdf,.pdf">
+
+    <p class="muted" id="importStatus" role="status" aria-live="polite"></p>
+
+    <!-- 문서 카드가 여기에 들어간다. -->
+    <div id="docList"></div>
+
+    <!-- 빈 서재 — 20절의 file:// 안내가 여기 있다. -->
+    <div class="placeholder" id="libraryEmpty" hidden>
+      <h2 data-i18n="library.empty.title"></h2>
+      <p data-i18n="library.empty.body"></p>
+      <p class="muted" id="fileProtoNote" hidden data-i18n="library.empty.fileProtocol"></p>
+    </div>
+
+    <p class="storage-line" id="storageLine"></p>
+  </section>
+
+  <!-- ════ 리더 — 리플로우 뷰 (12-3 · 12-4) ═══════════ -->
+  <!--
+    본문은 `#readerMount` 안에 `js/ui/reader.js` 가 그린다. 그 안의
+    `article.reflow` 는 **`dir="ltr" lang="en"` 고정**이다 — UI 가
+    아랍어여도 원서 본문은 LTR 이다(11-3). 줄은 전부
+    `span.line[data-line-id]` 이고 5단계 하이라이트가 그것을 잡는다(6-5).
+  -->
+  <section class="screen" data-screen="reader" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" id="readerTitle"></h1>
+      <button type="button" class="aa" id="typesetBtn" aria-expanded="false"
+              aria-controls="typesetPanel" data-i18n="reader.typeset.aa"
+              data-i18n-aria="reader.typeset.open"></button>
+    </div>
+
+    <!-- 추출 진행 띠 — 아직 준비 중인 쪽이 있을 때만 보인다(12-3). -->
+    <div class="reader-progress" id="readerProgress" role="status" aria-live="polite" hidden>
+      <span class="progress-label" id="readerProgressLabel"></span>
+      <div class="progress-track"><div class="progress-fill" id="readerProgressFill"></div></div>
+    </div>
+
+    <!-- Aa 팝오버 (12-3 · 16-F). 값은 9-3 의 키에 그대로 저장된다. -->
+    <div class="typeset-panel" id="typesetPanel" role="dialog" aria-modal="false"
+         data-i18n-aria="reader.typeset.title" hidden>
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label for="tsFontSize" data-i18n="reader.typeset.fontSize"></label>
+          <span class="typeset-out" id="tsFontSizeOut"></span>
+        </div>
+        <input type="range" id="tsFontSize" data-i18n-aria="reader.typeset.fontSize">
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label for="tsLineHeight" data-i18n="reader.typeset.lineHeight"></label>
+          <span class="typeset-out" id="tsLineHeightOut"></span>
+        </div>
+        <input type="range" id="tsLineHeight" data-i18n-aria="reader.typeset.lineHeight">
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label for="tsLetterSpacing" data-i18n="reader.typeset.letterSpacing"></label>
+          <span class="typeset-out" id="tsLetterSpacingOut"></span>
+        </div>
+        <input type="range" id="tsLetterSpacing" data-i18n-aria="reader.typeset.letterSpacing">
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label data-i18n="reader.typeset.font"></label>
+        </div>
+        <div class="typeset-choices" id="tsFontRow">
+          <button type="button" data-font="sans" aria-pressed="false" data-i18n="reader.typeset.font.sans"></button>
+          <button type="button" data-font="serif" aria-pressed="false" data-i18n="reader.typeset.font.serif"></button>
+        </div>
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label data-i18n="reader.typeset.theme"></label>
+        </div>
+        <div class="typeset-choices" id="tsThemeRow">
+          <button type="button" data-theme-value="system" aria-pressed="false" data-i18n="reader.theme.system"></button>
+          <button type="button" data-theme-value="light" aria-pressed="false" data-i18n="reader.theme.light"></button>
+          <button type="button" data-theme-value="dark" aria-pressed="false" data-i18n="reader.theme.dark"></button>
+          <button type="button" data-theme-value="sepia" aria-pressed="false" data-i18n="reader.theme.sepia"></button>
+          <button type="button" data-theme-value="contrast" aria-pressed="false" data-i18n="reader.theme.contrast"></button>
+        </div>
+      </div>
+
+      <button type="button" class="primary" id="tsClose" data-i18n="common.close"></button>
+    </div>
+
+    <!-- 한 번에 한 쪽만 여기 들어간다(7000쪽 메모리). -->
+    <div id="readerMount"></div>
+
+    <!-- 쪽 이동 — 라우트가 정본이라 뒤로가기가 그대로 동작한다(12-1). -->
+    <nav class="pager" id="readerPager" data-i18n-aria="reader.page.nav">
+      <button type="button" id="pagePrev" data-i18n="reader.page.prev" data-i18n-aria="reader.page.prev"></button>
+      <input type="number" class="page-input" id="pageInput" inputmode="numeric"
+             data-i18n-aria="reader.page.input" value="1" min="1" step="1">
+      <span class="page-total" id="pageTotal"></span>
+      <button type="button" id="pageNext" data-i18n="reader.page.next" data-i18n-aria="reader.page.next"></button>
+    </nav>
+  </section>
+
+  <!-- ════ 퀴즈 — 자리표시자. 9단계. ════════════════════ -->
+  <section class="screen" data-screen="quiz" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" data-i18n="quiz.placeholder.title"></h1>
+    </div>
+    <div class="placeholder">
+      <p data-i18n="quiz.placeholder.body"></p>
+    </div>
+  </section>
+
+  <!-- ════ 설정 — 자리표시자. 7단계. ════════════════════ -->
+  <section class="screen" data-screen="settings" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" data-i18n="settings.placeholder.title"></h1>
+    </div>
+    <div class="placeholder">
+      <p data-i18n="settings.placeholder.body"></p>
+    </div>
+  </section>
+
+  <!-- ════ 사용량 — 자리표시자. 8단계. ══════════════════ -->
+  <section class="screen" data-screen="usage" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" data-i18n="usage.placeholder.title"></h1>
+    </div>
+    <div class="placeholder">
+      <p data-i18n="usage.placeholder.body"></p>
+    </div>
+  </section>
+
+  <!-- ════ 정보 (12-1) ══════════════════════════════════ -->
+  <section class="screen" data-screen="about" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" data-i18n="about.title"></h1>
+    </div>
+    <div class="card">
+      <p data-i18n="about.body"></p>
+      <p data-i18n="about.rights"></p>
+      <!-- 11-2: 문자열 안에 HTML 을 넣지 않는다. {link} 자리에 앵커를 JS 가 꽂는다. -->
+      <p id="aboutOpenSource"></p>
+      <p class="muted" id="aboutVersion"></p>
+    </div>
+  </section>
+
+</main>
+
+<!-- 12-7 — 모든 화면 위에 고정. 숨길 수 없다. -->
+<footer class="notice-bar" data-i18n="notice.educationOnly"></footer>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

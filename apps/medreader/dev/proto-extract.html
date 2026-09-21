@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<!--
+  MedReader — 추출·저장 프로토타입 (spec 9-2 · 9-4)
+
+  개발용 도구다. 앱 본체가 아니며 index.html 에서 링크하지 않는다.
+  ES modules 를 쓰므로 file:// 로 열면 동작하지 않는다.
+  저장소 루트에서  python -m http.server 8000  을 띄우고
+  http://localhost:8000/apps/medreader/dev/proto-extract.html 로 연다.
+
+  두 가지를 한다.
+    A. 가져오기 → 백그라운드 추출 → 저장 → **중단 후 새로고침 재개**(9-4)
+    B. IndexedDB 실제 점유량 측정 — spec 9-2 의 용량 수치는 JSON.stringify
+       바이트이고 `[미확정]` 이다. 구조화 복제는 인코딩이 다르므로 저장 방식
+       그대로 재야 한다.
+
+  쿼리 파라미터
+    ?pdf=<URL>    PDF 를 파일 선택 없이 바로 열기 (자동 검증용)
+    ?auto=1       열자마자 추출 시작 / ?auto=measure 면 용량 측정
+    ?fail=3,9     그 쪽에서 강제로 예외를 던진다 (재시도 경로 검증)
+    ?pages=<n>    측정할 쪽 수 (기본 250)
+    ?stride=<n>   측정 표본을 책 전체에 흩어 뽑는다
+    ?pdfjs=<base> pdf.js 로딩 경로 교체
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedReader 추출·저장 프로토타입</title>
+<link rel="stylesheet" href="proto-extract.css">
+</head>
+<body>
+
+<header class="bar">
+  <strong class="brand">추출·저장 프로토타입</strong>
+  <label class="fileLabel">
+    PDF 열기
+    <input type="file" id="fileInput" accept="application/pdf">
+  </label>
+  <button type="button" id="startBtn" disabled>추출 시작</button>
+  <button type="button" id="pauseBtn" disabled>일시정지</button>
+  <button type="button" id="speakBtn" disabled>낭독 중 가정</button>
+  <button type="button" id="reimportBtn" disabled>같은 파일 다시 가져오기</button>
+  <button type="button" id="delBtn" disabled>이 문서 삭제</button>
+  <button type="button" id="wipeBtn">DB 비우기</button>
+</header>
+
+<p class="status" id="status">PDF 를 여세요.</p>
+<div class="progress"><div class="progressFill" id="progressFill"></div></div>
+
+<main>
+  <section class="box">
+    <h2>문서 · 추출 상태 (spec 9-4)</h2>
+    <dl class="kv" id="docBox"></dl>
+  </section>
+
+  <section class="box">
+    <h2>저장소</h2>
+    <dl class="kv" id="storageBox"></dl>
+  </section>
+
+  <section class="box wide">
+    <h2>저장본 들여다보기</h2>
+    <p class="note">
+      쪽 번호를 넣으면 <code>pages</code> 에서 읽은 **저장본 그대로**를 보여준다.
+      <code>items</code> 가 없다는 것과 <code>fromStored</code> 왕복이 실제로 도는지를 여기서 증명한다.
+    </p>
+    <label>쪽 <input type="number" id="peekNo" value="1" min="1" step="1"></label>
+    <button type="button" id="peekBtn">보기</button>
+    <dl class="kv" id="peekBox"></dl>
+    <pre class="log" id="peekText"></pre>
+  </section>
+
+  <section class="box wide">
+    <h2>용량 측정 (0단계)</h2>
+    <p class="note" id="variantNote">
+      변형별로 같은 쪽들을 저장하고 <code>navigator.storage.estimate()</code> 증가분을 잰다.
+    </p>
+    <label>측정 쪽 수 <input type="number" id="pageCount" value="250" min="10" step="10"></label>
+    <button type="button" id="measureBtn" disabled>측정 시작</button>
+    <div class="tableScroll"><table id="resultTable"></table></div>
+    <div class="tableScroll"><table id="effectTable"></table></div>
+    <div class="tableScroll"><table id="scaleTable"></table></div>
+  </section>
+
+  <section class="box">
+    <h2>자기 점검</h2>
+    <ul class="checks" id="checks"></ul>
+  </section>
+
+  <section class="box">
+    <h2>로그</h2>
+    <pre class="log" id="log"></pre>
+  </section>
+</main>
+
+<script type="module" src="proto-extract.js"></script>
+</body>
+</html>

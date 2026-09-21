@@ -1,0 +1,897 @@
+{
+ "note": "합성 픽스처. 원서 텍스트가 아니라 지어낸 영어 문장이다 (저작권).",
+ "source": "medreader/proto-lines",
+ "pageNo": 23,
+ "width": 612,
+ "height": 792,
+ "styles": {
+  "g_d0_f1": {
+   "ascent": 0.9,
+   "descent": -0.25,
+   "vertical": false,
+   "fontFamily": "serif"
+  }
+ },
+ "items": [
+  {
+   "str": "SECTION I PRINCIPLES OF CLINICAL MEDICINE",
+   "dir": "ltr",
+   "transform": [
+    9,
+    0,
+    0,
+    9,
+    72,
+    770
+   ],
+   "width": 240,
+   "height": 9,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "23",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    300,
+    40
+   ],
+   "width": 10,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Errors in the delivery of health care are",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    700
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "12. Which of the following can help reduce",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    700
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "common and most of them arise from system",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    688
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "errors in the delivery of health care?",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    688
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "failures rather than from individual clinicians",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    676
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "A. Checklists to ensure important steps",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    676
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "who act in good faith throughout the day",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    664
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "B. Clinician honor code and peer review",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    664
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "poses the least",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    652
+   ],
+   "width": 70,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "C. Punitive measures for repeated errors",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    652
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "cardiovascular risk",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    640
+   ],
+   "width": 90,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "D. Longer training for junior clinicians",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    640
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "cardio-",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    628
+   ],
+   "width": 35,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "E. All of the above are equally useful",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    628
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "vascular disease remains the leading cause",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    616
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "The answer and the discussion appear in a",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    616
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "of death in this population and the burden",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    604
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "later section of this chapter, and the reader",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    604
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "continues to grow in every age group that",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    592
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "should attempt every item before reading it.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    592
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "the survey covered over the last decade.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    580
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Systems thinking helps teams design better",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    580
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "The table below lists common analgesics.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    568
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "processes that tolerate human error without",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    568
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "harming the patient in front of them today.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    556
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Checklists are one small part of that work,",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    544
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "and they are not a substitute for judgement",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    532
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "or for the culture that supports the team.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    520
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "The next chapter takes up decision support",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    508
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "and the ways it can fail in daily practice.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    496
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "A short summary closes the present chapter",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    484
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "and points to the references listed below.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    340,
+    472
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Aspirin",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    556
+   ],
+   "width": 45,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "650",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    145,
+    556
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "PO",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    200,
+    556
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "q4h",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    250,
+    556
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Ibuprofen",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    544
+   ],
+   "width": 45,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "400",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    145,
+    544
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "PO",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    200,
+    544
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "q6h",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    250,
+    544
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Naproxen",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    532
+   ],
+   "width": 45,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "250",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    145,
+    532
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "PO",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    200,
+    532
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "q12h",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    250,
+    532
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Ketorolac",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    520
+   ],
+   "width": 45,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "10",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    145,
+    520
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "PO",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    200,
+    520
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "q6h",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    250,
+    520
+   ],
+   "width": 20,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "Dosing must be adjusted for renal function",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    508
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "and for the age of the patient in question,",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    496
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "and the prescriber should check interactions",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    484
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "before the first dose is given on the ward.",
+   "dir": "ltr",
+   "transform": [
+    10,
+    0,
+    0,
+    10,
+    72,
+    472
+   ],
+   "width": 200,
+   "height": 10,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  },
+  {
+   "str": "1",
+   "dir": "ltr",
+   "transform": [
+    6,
+    0,
+    0,
+    6,
+    272,
+    668
+   ],
+   "width": 3,
+   "height": 6,
+   "fontName": "g_d0_f1",
+   "hasEOL": false
+  }
+ ]
+}

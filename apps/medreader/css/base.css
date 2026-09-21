@@ -1,0 +1,195 @@
+/* ============================================================
+   MedReader — 리셋·타이포·공통 컴포넌트 (spec 2-1)
+
+   ★ 논리 속성만 쓴다(spec 11-3 · 16-H). 이 파일과 나머지 CSS 에
+     margin-inline-start / padding-inline-end / inset-inline-start /
+     text-align: start 만 나오고 물리 방향 속성은 0건이어야 한다.
+     (6단계 원본 뷰 오버레이의 좌표만 예외이고 그건 이 단계에 없다.)
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  /* 12-7 고정 고지가 화면 맨 아래에 붙으므로 그만큼 비워 둔다. */
+  padding-block-end: calc(var(--notice-h) + env(safe-area-inset-bottom, 0px));
+  min-block-size: 100vh;
+  overflow-wrap: break-word;
+}
+
+/* 11-3 — UI 가 아랍어면 UI 폰트도 아랍어 스택으로. */
+html[lang="ar"] body { font-family: var(--font-ar); }
+
+h1, h2, h3, p, ul, ol, figure, dl { margin-block: 0 var(--sp-3); }
+h1 { font-size: var(--fs-xl); line-height: 1.25; }
+h2 { font-size: var(--fs-lg); line-height: 1.3; }
+h3 { font-size: var(--fs-base); }
+ul, ol { padding-inline-start: var(--sp-5); }
+
+a { color: var(--c-accent); }
+
+/* 아랍어를 포함한 모든 언어에서 텍스트는 논리 시작 쪽 정렬 */
+h1, h2, h3, p, li, dt, dd, label { text-align: start; }
+
+/* ── 버튼 (16-G: 최소 48×48) ───────────────────────────── */
+button {
+  font: inherit;
+  color: inherit;
+  min-block-size: var(--tap);
+  min-inline-size: var(--tap);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  cursor: pointer;
+  /* 16-G — 버튼에서 더블탭 확대가 일어나지 않게. 본문 핀치 줌은 막지 않는다. */
+  touch-action: manipulation;
+  text-align: center;
+}
+
+button:disabled { opacity: 0.5; cursor: default; }
+
+button.primary {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+  font-weight: 600;
+}
+
+button.big {
+  min-block-size: var(--tap-lg);
+  font-size: var(--fs-lg);
+  inline-size: 100%;
+}
+
+button.danger { color: var(--c-danger); }
+
+button.link {
+  border: none;
+  background: none;
+  color: var(--c-accent);
+  text-decoration: underline;
+  padding-inline: 0;
+  min-inline-size: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+input[type="checkbox"] {
+  inline-size: 24px;
+  block-size: 24px;
+  accent-color: var(--c-accent);
+  flex: 0 0 auto;
+}
+
+/* ── 접근성 ────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 16-C — prefers-reduced-motion 에서 전이를 끈다. */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+}
+
+/* ── 12-7 고정 고지 — 모든 화면. 숨길 수 없다. ──────────── */
+.notice-bar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 40;
+  min-block-size: var(--notice-h);
+  padding: var(--sp-1) var(--sp-3);
+  padding-block-end: calc(var(--sp-1) + env(safe-area-inset-bottom, 0px));
+  background: var(--c-notice-bg);
+  color: var(--c-notice-text);
+  font-size: var(--fs-sm);
+  text-align: center;
+  line-height: 1.35;
+}
+
+/* ── 14절 상태 바(배너) — 토스트가 아니다. ─────────────── */
+.banners {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
+}
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-warn-bg);
+  color: var(--c-warn-text);
+  border-block-end: 1px solid var(--c-border);
+}
+
+.banner[data-tone="error"] {
+  background: var(--c-danger);
+  color: var(--c-accent-text);
+}
+
+.banner .banner-text { flex: 1 1 auto; margin: 0; }
+
+.banner button {
+  min-block-size: var(--tap);
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+  flex: 0 0 auto;
+}
+
+/* ── 공통 레이아웃 조각 ───────────────────────────────── */
+.screen {
+  padding: var(--sp-4);
+  padding-block-end: var(--sp-7);
+  max-inline-size: 760px;
+  margin-inline: auto;
+}
+
+.screen[hidden] { display: none; }
+
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  margin-block-end: var(--sp-4);
+}
+
+.muted { color: var(--c-text-dim); font-size: var(--fs-sm); }
+
+.row {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.stack > * + * { margin-block-start: var(--sp-3); }
+
+.placeholder {
+  text-align: center;
+  padding: var(--sp-7) var(--sp-4);
+  color: var(--c-text-dim);
+}
