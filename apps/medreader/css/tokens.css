@@ -58,6 +58,11 @@
   --c-focus: #0b5c8a;
   --c-progress: #0b5c8a;
   --c-progress-track: #ddd8d0;
+
+  /* 6-5 하이라이트 — 5단계가 `.is-current` 로 켠다. 테마마다 다시 정의한다. */
+  --hl-bg: #ffef9e;
+  --hl-text: var(--c-text);
+  --hl-done: #efece4;
 }
 
 /* system 테마 — 사용자가 명시적으로 고르지 않았을 때만 OS 를 따른다. */
@@ -79,6 +84,9 @@
     --c-focus: #6fb6e8;
     --c-progress: #6fb6e8;
     --c-progress-track: #333941;
+    --hl-bg: #1d3f66;
+    --hl-text: #f2f6fa;
+    --hl-done: #252b33;
   }
 }
 
@@ -99,4 +107,58 @@
   --c-focus: #6fb6e8;
   --c-progress: #6fb6e8;
   --c-progress-track: #333941;
+  --hl-bg: #1d3f66;
+  --hl-text: #f2f6fa;
+  --hl-done: #252b33;
+}
+
+/* ── 세피아 (12-3 · 16-F) ─────────────────────────────────
+   종이색 배경 + 따뜻한 먹색 글자. 본문 대비 #3a2f1e / #f5ecd8 ≈ 10:1.
+   ──────────────────────────────────────────────────────── */
+:root[data-theme="sepia"] {
+  --c-bg: #f5ecd8;
+  --c-surface: #fbf4e4;
+  --c-surface-2: #ece0c4;
+  --c-text: #3a2f1e;
+  --c-text-dim: #63523a;
+  --c-border: #d8c7a3;
+  --c-accent: #7a4310;
+  --c-accent-text: #fbf4e4;
+  --c-danger: #8c2016;
+  --c-warn-bg: #f2e2b4;
+  --c-warn-text: #53400c;
+  --c-notice-bg: #3a2f1e;
+  --c-notice-text: #f5ecd8;
+  --c-focus: #7a4310;
+  --c-progress: #7a4310;
+  --c-progress-track: #ddcda9;
+  --hl-bg: #e5cf94;
+  --hl-text: #2a2114;
+  --hl-done: #ece2c9;
+}
+
+/* ── 고대비 (16-F: 7:1 이상) ──────────────────────────────
+   검정 배경 + 흰 글자(21:1). 강조는 노랑(#ffe600, 검정 위 16.6:1),
+   하이라이트는 6-5 가 지정한 노랑 바탕 + 검정 글자다.
+   ──────────────────────────────────────────────────────── */
+:root[data-theme="contrast"] {
+  --c-bg: #000000;
+  --c-surface: #000000;
+  --c-surface-2: #1a1a1a;
+  --c-text: #ffffff;
+  --c-text-dim: #ffffff;
+  --c-border: #ffffff;
+  --c-accent: #ffe600;
+  --c-accent-text: #000000;
+  --c-danger: #ff8a80;
+  --c-warn-bg: #000000;
+  --c-warn-text: #ffe600;
+  --c-notice-bg: #000000;
+  --c-notice-text: #ffffff;
+  --c-focus: #ffe600;
+  --c-progress: #ffe600;
+  --c-progress-track: #4d4d4d;
+  --hl-bg: #ffe600;
+  --hl-text: #000000;
+  --hl-done: #3d3d00;
 }

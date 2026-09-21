@@ -1,0 +1,287 @@
+/* ============================================================
+   MedReader — 리플로우 뷰 · Aa 팝오버 (spec 12-3 · 12-4 · 16-F · 16-G)
+
+   ★ 논리 속성만 쓴다(16-H). 물리 방향 속성(가로 방향 여백·테두리·정렬)이
+     이 파일에 한 글자도 없어야 하고, 16-H 의 grep 이 그것을 센다. 물리
+     좌표가 필요한 곳은 6단계 원본 뷰의 오버레이뿐이고 그건 이 단계에 없다.
+
+   ★ 본문 조판은 `:root` 의 변수 네 개로만 한다(ui/typeset.js).
+     값이 바뀌면 브라우저가 알아서 다시 그린다 — 요소를 순회하지 않는다.
+   ============================================================ */
+
+:root {
+  /* typeset.js 가 덮어쓴다. 여기 값은 JS 가 돌기 전의 한 프레임용이다. */
+  --reader-fs: 22px;
+  --reader-lh: 1.7;
+  --reader-ls: 0em;
+  --reader-font: var(--font-body-sans);
+}
+
+/* ── 상단 바의 Aa 버튼 ────────────────────────────────── */
+.topbar .aa {
+  flex: 0 0 auto;
+  font-weight: 700;
+  /* 16-G — 48×48. screens.css 의 `.topbar button` 은 40px 이라 여기서 되돌린다. */
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+}
+
+/* ── 추출 진행 띠 (12-3) ──────────────────────────────── */
+.reader-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--c-surface-2);
+  border-block-end: 1px solid var(--c-border);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+.reader-progress[hidden] { display: none; }
+
+.reader-progress .progress-label {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Aa 팝오버 (12-3) ─────────────────────────────────── */
+.typeset-panel {
+  position: fixed;
+  inset-block-start: calc(var(--bar-top) + var(--sp-2));
+  inset-inline: var(--sp-2);
+  z-index: 25;
+  max-inline-size: 520px;
+  margin-inline: auto;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+  max-block-size: 70vh;
+  overflow-y: auto;
+}
+
+.typeset-panel[hidden] { display: none; }
+
+.typeset-row { margin-block-end: var(--sp-4); }
+
+.typeset-row > .typeset-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-1);
+}
+
+.typeset-row label { font-size: var(--fs-sm); color: var(--c-text-dim); }
+
+.typeset-out {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+/* 16-G — 슬라이더도 손가락으로 잡을 수 있어야 한다. */
+.typeset-panel input[type="range"] {
+  inline-size: 100%;
+  block-size: var(--tap);
+  accent-color: var(--c-accent);
+  touch-action: manipulation;
+}
+
+.typeset-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.typeset-choices button {
+  flex: 1 1 auto;
+  min-inline-size: 96px;
+  min-block-size: var(--tap);
+}
+
+.typeset-choices button[aria-pressed="true"] {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+  font-weight: 600;
+}
+
+.typeset-choices button[data-font="serif"] { font-family: var(--font-body-serif); }
+.typeset-choices button[data-font="sans"] { font-family: var(--font-body-sans); }
+
+/* ── 리플로우 본문 (12-4) ─────────────────────────────── */
+.reflow {
+  font-family: var(--reader-font);
+  font-size: var(--reader-fs);
+  line-height: var(--reader-lh);
+  letter-spacing: var(--reader-ls);
+  max-inline-size: 42em;
+  margin-inline: auto;
+  padding-block: var(--sp-4) var(--sp-6);
+  /* 16-F — 글자 40px 에서도 가로 스크롤이 생기지 않는다. */
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: manual;
+}
+
+.reflow .page-label {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--c-text-dim);
+  letter-spacing: normal;
+  margin-block-end: var(--sp-4);
+  text-align: center;
+}
+
+.reflow .para {
+  margin-block: 0 0.75em;
+  text-align: start;
+}
+
+/* 12-4 — 줄은 inline 이다. 화면 폭에 따라 다시 접히는 것이 리플로우다. */
+.reflow .line { display: inline; }
+
+/* 하이픈 결합 줄의 끝 `-` 는 시각에서만 사라진다. 텍스트는 원본 그대로다. */
+.reflow .hy { display: none; }
+
+/* 6-5 — 5단계 하이라이트가 이 클래스를 토글한다. */
+.reflow .line.is-current {
+  background: var(--hl-bg);
+  color: var(--hl-text);
+  box-shadow: 0 0 0 4px var(--hl-bg);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  border-radius: 2px;
+  transition: background-color 120ms linear;
+}
+
+.reflow .line.is-done { background: var(--hl-done); }
+
+/* ── 문단 kind 별 (4-9) ───────────────────────────────── */
+.reflow .para[data-kind="heading"] {
+  font-weight: 700;
+  font-size: 1.1em;
+  margin-block: 1.2em 0.5em;
+  color: var(--c-text);
+}
+
+.reflow .para[data-kind="question"] {
+  font-weight: 600;
+  border-inline-start: 4px solid var(--c-accent);
+  padding-inline-start: var(--sp-3);
+  margin-block-start: 1em;
+}
+
+.reflow .para[data-kind="option"] {
+  padding-inline-start: var(--sp-5);
+  margin-block-end: 0.35em;
+}
+
+.reflow .para[data-kind="answer"] {
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+  margin-block: 0.75em;
+}
+
+.reflow .para[data-kind="list"] {
+  padding-inline-start: var(--sp-5);
+  margin-block-end: 0.35em;
+}
+
+/* ── 표 자리표시자 (6단계가 채운다) ───────────────────── */
+.reflow .table-fallback {
+  margin: 1em 0;
+  padding: var(--sp-4);
+  border: 1px dashed var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  text-align: center;
+  font-size: var(--fs-base);
+  letter-spacing: normal;
+}
+
+.reflow .table-fallback figcaption {
+  color: var(--c-text-dim);
+  margin-block-end: var(--sp-2);
+}
+
+/* ── 접힌 줄: 머리말·꼬리말·쪽번호·회전 (4-7 복구 수단) ── */
+.reflow .folded {
+  margin-block: 1em;
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  letter-spacing: normal;
+}
+
+.reflow .folded summary {
+  min-block-size: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.reflow .folded .folded-lines {
+  margin-block: var(--sp-2) 0;
+  padding-inline-start: var(--sp-4);
+}
+
+/* ── 아직 추출되지 않은 쪽 (12-3) ─────────────────────── */
+.page-preparing {
+  padding: var(--sp-7) var(--sp-4);
+  text-align: center;
+  color: var(--c-text-dim);
+}
+
+.page-preparing .preparing-label {
+  font-variant-numeric: tabular-nums;
+  margin-block-end: var(--sp-3);
+  text-align: center;
+}
+
+.page-preparing .progress-track {
+  max-inline-size: 320px;
+  margin-inline: auto;
+}
+
+.page-notice { text-align: center; }
+
+/* ── 쪽 이동 (12-3) ───────────────────────────────────── */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  border-block-start: 1px solid var(--c-border);
+  background: var(--c-surface);
+  position: sticky;
+  inset-block-end: calc(var(--notice-h) + env(safe-area-inset-bottom, 0px));
+}
+
+.pager .page-input {
+  inline-size: 5em;
+  min-block-size: var(--tap);
+  font: inherit;
+  text-align: center;
+  padding: var(--sp-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager .page-total {
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 리더 화면은 본문이 화면 폭을 다 쓴다 — .screen 의 기본 여백을 줄인다. */
+.screen[data-screen="reader"] { padding-inline: var(--sp-3); }

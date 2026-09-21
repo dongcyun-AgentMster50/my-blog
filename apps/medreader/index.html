@@ -31,6 +31,7 @@
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/screens.css">
+<link rel="stylesheet" href="css/reader.css">
 </head>
 <body>
 
@@ -126,22 +127,92 @@
     <p class="storage-line" id="storageLine"></p>
   </section>
 
-  <!-- ════ 리더 — 자리표시자. 4단계가 채운다. ═══════════ -->
+  <!-- ════ 리더 — 리플로우 뷰 (12-3 · 12-4) ═══════════ -->
   <!--
-    4단계 메모: 이 섹션 안의 `#readerMount` 를 비우고 12-4 의
-    `article.reflow[dir=ltr][lang=en]` 을 그 자리에 넣으면 된다.
-    `data-doc-id`·`data-page` 가 현재 라우트를 들고 있다.
+    본문은 `#readerMount` 안에 `js/ui/reader.js` 가 그린다. 그 안의
+    `article.reflow` 는 **`dir="ltr" lang="en"` 고정**이다 — UI 가
+    아랍어여도 원서 본문은 LTR 이다(11-3). 줄은 전부
+    `span.line[data-line-id]` 이고 5단계 하이라이트가 그것을 잡는다(6-5).
   -->
   <section class="screen" data-screen="reader" hidden>
     <div class="topbar">
       <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
       <h1 class="title" id="readerTitle"></h1>
+      <button type="button" class="aa" id="typesetBtn" aria-expanded="false"
+              aria-controls="typesetPanel" data-i18n="reader.typeset.aa"
+              data-i18n-aria="reader.typeset.open"></button>
     </div>
-    <div id="readerMount" class="placeholder">
-      <h2 data-i18n="reader.placeholder.title"></h2>
-      <p data-i18n="reader.placeholder.body"></p>
-      <p class="muted" id="readerDocLine"></p>
+
+    <!-- 추출 진행 띠 — 아직 준비 중인 쪽이 있을 때만 보인다(12-3). -->
+    <div class="reader-progress" id="readerProgress" role="status" aria-live="polite" hidden>
+      <span class="progress-label" id="readerProgressLabel"></span>
+      <div class="progress-track"><div class="progress-fill" id="readerProgressFill"></div></div>
     </div>
+
+    <!-- Aa 팝오버 (12-3 · 16-F). 값은 9-3 의 키에 그대로 저장된다. -->
+    <div class="typeset-panel" id="typesetPanel" role="dialog" aria-modal="false"
+         data-i18n-aria="reader.typeset.title" hidden>
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label for="tsFontSize" data-i18n="reader.typeset.fontSize"></label>
+          <span class="typeset-out" id="tsFontSizeOut"></span>
+        </div>
+        <input type="range" id="tsFontSize" data-i18n-aria="reader.typeset.fontSize">
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label for="tsLineHeight" data-i18n="reader.typeset.lineHeight"></label>
+          <span class="typeset-out" id="tsLineHeightOut"></span>
+        </div>
+        <input type="range" id="tsLineHeight" data-i18n-aria="reader.typeset.lineHeight">
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label for="tsLetterSpacing" data-i18n="reader.typeset.letterSpacing"></label>
+          <span class="typeset-out" id="tsLetterSpacingOut"></span>
+        </div>
+        <input type="range" id="tsLetterSpacing" data-i18n-aria="reader.typeset.letterSpacing">
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label data-i18n="reader.typeset.font"></label>
+        </div>
+        <div class="typeset-choices" id="tsFontRow">
+          <button type="button" data-font="sans" aria-pressed="false" data-i18n="reader.typeset.font.sans"></button>
+          <button type="button" data-font="serif" aria-pressed="false" data-i18n="reader.typeset.font.serif"></button>
+        </div>
+      </div>
+
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label data-i18n="reader.typeset.theme"></label>
+        </div>
+        <div class="typeset-choices" id="tsThemeRow">
+          <button type="button" data-theme-value="system" aria-pressed="false" data-i18n="reader.theme.system"></button>
+          <button type="button" data-theme-value="light" aria-pressed="false" data-i18n="reader.theme.light"></button>
+          <button type="button" data-theme-value="dark" aria-pressed="false" data-i18n="reader.theme.dark"></button>
+          <button type="button" data-theme-value="sepia" aria-pressed="false" data-i18n="reader.theme.sepia"></button>
+          <button type="button" data-theme-value="contrast" aria-pressed="false" data-i18n="reader.theme.contrast"></button>
+        </div>
+      </div>
+
+      <button type="button" class="primary" id="tsClose" data-i18n="common.close"></button>
+    </div>
+
+    <!-- 한 번에 한 쪽만 여기 들어간다(7000쪽 메모리). -->
+    <div id="readerMount"></div>
+
+    <!-- 쪽 이동 — 라우트가 정본이라 뒤로가기가 그대로 동작한다(12-1). -->
+    <nav class="pager" id="readerPager" data-i18n-aria="reader.page.nav">
+      <button type="button" id="pagePrev" data-i18n="reader.page.prev" data-i18n-aria="reader.page.prev"></button>
+      <input type="number" class="page-input" id="pageInput" inputmode="numeric"
+             data-i18n-aria="reader.page.input" value="1" min="1" step="1">
+      <span class="page-total" id="pageTotal"></span>
+      <button type="button" id="pageNext" data-i18n="reader.page.next" data-i18n-aria="reader.page.next"></button>
+    </nav>
   </section>
 
   <!-- ════ 퀴즈 — 자리표시자. 9단계. ════════════════════ -->

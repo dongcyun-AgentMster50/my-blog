@@ -15,7 +15,8 @@ import * as i18n from './i18n/index.js';
 import { PDFJS_VERSION } from './config.js';
 import { startRouter, parseRoute, go, replace, libraryHash, onboardingHash } from './router.js';
 import { initOnboarding, showOnboarding, persistState } from './ui/onboarding.js';
-import { initLibrary, showLibrary, openFilePicker, openDoc, relabel } from './ui/library.js';
+import { initLibrary, showLibrary, openFilePicker, relabel } from './ui/library.js';
+import { initReader, showReader, leaveReader } from './ui/reader.js';
 
 /* ────────────────────────────────────────────────────────
    14절 배너 — 서비스 계층이 낸 **코드**를 여기서 문장으로 바꾼다(3-2).
@@ -118,6 +119,7 @@ async function boot() {
   /* 4. 화면 배선 */
   initLibrary();
   initOnboarding({ onImport: openFilePicker });
+  initReader();
 
   // 정적 이동 버튼 — 해시만 바꾼다(뒤로가기가 그대로 동작한다).
   document.addEventListener('click', (ev) => {
@@ -166,6 +168,9 @@ function resolveRoute(route) {
 }
 
 function onRoute(route) {
+  // 리더를 떠나면 그 쪽 DOM 을 버린다(7000쪽 메모리 — 4단계).
+  if (route.name !== 'reader') leaveReader();
+
   switch (route.name) {
     case 'onboarding':
       showOnboarding();
@@ -174,33 +179,12 @@ function onRoute(route) {
       showLibrary();
       break;
     case 'reader':
-      showReaderPlaceholder(route.params);
+      // 4단계 — 리플로우 뷰. `ui/reader.js` 가 한 쪽을 그린다(12-4).
+      showReader(route.params);
       break;
     default:
       break;
   }
-}
-
-/**
- * 4단계 인계 지점 — 리더 자리표시자.
- *
- * 지금은 docId·page 만 보여 준다. 4단계는 이 함수를 `ui/reader.js` 로
- * 옮기고 `#readerMount` 안에 12-4 의 `article.reflow` 를 그리면 된다.
- * 추출기는 `library.openDoc(docId)` 가 돌려주고, 쪽 내용은
- * `db.get('pages', [docId, pageNo])` → `fromStored(rec)` 로 읽는다.
- */
-function showReaderPlaceholder(params) {
-  const title = document.getElementById('readerTitle');
-  const line = document.getElementById('readerDocLine');
-  if (line) line.textContent = i18n.t('reader.placeholder.doc', { docId: params.docId, page: params.page });
-  db.get('documents', params.docId).then((doc) => {
-    if (title) title.textContent = doc ? (doc.title || doc.fileName || '') : '';
-    if (!doc) { go(libraryHash()); return; }
-    // 백그라운드 추출을 되살린다(9-4). 이미 돌고 있으면 그대로 쓴다.
-    openDoc(params.docId).then((ex) => {
-      if (ex) ex.setCurrentPage(params.page);
-    }).catch((e) => showBanner({ code: (e && e.code) || 'ERR_UNKNOWN', tone: 'error' }));
-  }).catch((e) => showBanner({ code: (e && e.code) || db.ERR.OPEN, tone: 'error' }));
 }
 
 /** 11-2 — 문자열 안에 HTML 을 넣지 않는다. `{link}` 자리에 앵커를 꽂는다. */
