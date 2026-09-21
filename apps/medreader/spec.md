@@ -1229,6 +1229,22 @@ keyPattern (gemini) = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
 
   **같은 글자가 최대 세 벌 저장된다** — 줄 text, run text, 문단 text.
 
+  **`[신설 2026-09-21]` 파생 규칙 지문 `derivedHash`** — 규칙 1이 문단 text 를 저장하지 않고
+  **읽을 때 조립**하기로 했으므로, **하이픈 집합(4-10)이 바뀌면 같은 저장본이 다른 문단 텍스트를 낸다**
+  (`"methicillin-resistant"` → `"methicillinresistant"`). `storeVersion` 은 "그릇의 모양"만 보므로 이것을
+  잡지 못하고, 저장된 `paragraphs[].kind` 는 **옛 텍스트로 판정된 채** 남는다. **2-4 가 하이픈 집합을
+  책별 프로파일로 옮기기로 이미 정했으므로 이 변화는 반드시 일어난다.**
+
+  따라서 `pages` 레코드에 **`derivedHash`** 를 둔다 — 파생에 실제로 쓰이는 값
+  (`KEEP_HYPHEN_PREFIXES` + `KEEP_HYPHEN_SUFFIXES`)을 정렬해 FNV-1a 32 로 만든 짧은 지문이다.
+  `documents.extraction` 에도 같은 값을 둔다. **읽을 때 다르면 그 쪽은 `algoVersion` 이 낮은 것과
+  같은 취급으로 재추출 대상**이며 9-4 의 재개 모델이 그대로 처리한다(`cursor ← 1`, `failed ← []`).
+  `derivedHash` 가 **없는 옛 레코드도 되감는다** — 그때 어떤 규칙이었는지 알 수 없으므로 같다고
+  가정하면 안 된다. 순수 계층이 `crypto` 를 모르므로(3-2) FNV 를 `text/store.js` 안에 둔다.
+
+  대안을 물리친 근거: 프로파일이 바뀔 때 `storeVersion` 을 **손으로** 올리는 안은 사람이 잊는다.
+  문단 text 를 **다시 저장**하는 안은 규칙 1 로 아낀 15.3% 를 도로 뱉는다.
+
   **줄이는 규칙 (결정):**
   1. **`paragraphs[].text`를 저장하지 않는다.** `lineIds`와 4-10 하이픈 규칙으로 읽을 때 조립한다
      (`joinParagraphText`가 이미 순수 함수다). −3.7KB.

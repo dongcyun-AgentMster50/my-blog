@@ -18,11 +18,16 @@
 
 import { PDF_TEXT_CONTENT_OPTIONS, EXTRACT } from '../config.js';
 import { buildPageLayout, algoVersion as ALGO_VERSION } from '../text/layout.js';
-import { toStored } from '../text/store.js';
+import { toStored, derivedHash as computeDerivedHash } from '../text/store.js';
 import { hashHex } from '../hash.js';
 import * as db from '../db.js';
 
 export { ALGO_VERSION };
+
+// spec 9-2 — 현재 파생 규칙 지문(하이픈 집합). 저장본의 값과 다르면 재추출 대상이다.
+// 저장본에 문단 text 가 없고 읽을 때 조립되므로, 규칙이 바뀌면 같은 저장본이
+// 다른 문단 텍스트를 낸다. storeVersion 은 그릇의 모양만 보므로 잡지 못한다.
+export const DERIVED_HASH = computeDerivedHash();
 
 /** 역할 재계산 경로의 시작값. 이웃이 생겨 다시 돌 때마다 +1 한다. */
 export const ROLE_VERSION_BASE = 1;
@@ -57,6 +62,9 @@ export function normalizeExtraction(ex) {
     cursor: Math.max(1, Math.floor(Number(e.cursor) || 1)),
     failed: dedupSorted(failed),
     algoVersion: Number(e.algoVersion) || 0,
+    // spec 9-2 — 파생 규칙 지문. 옛 레코드에는 없다(그때는 null 이 되고
+    // planResume 이 "규칙을 알 수 없다"로 보아 되감는다).
+    derivedHash: typeof e.derivedHash === 'string' ? e.derivedHash : null,
     roleDirty: dedupSorted(roleDirty),
     status: e.status || STATUS.IDLE
   };
@@ -90,15 +98,21 @@ export function removeFrom(list, pageNo) {
  * @param {number} [algo] 현재 알고리즘 버전
  * @returns {Object} 정상화 + 필요하면 되감긴 extraction (`reextract` 표시 포함)
  */
-export function planResume(ex, algo = ALGO_VERSION) {
+export function planResume(ex, algo = ALGO_VERSION, derived = DERIVED_HASH) {
   const e = normalizeExtraction(ex);
-  if (e.algoVersion < algo) {
+  // spec 9-2 — 파생 규칙(하이픈 집합)이 바뀌면 저장본은 그대로여도 읽을 때
+  // 조립되는 문단 텍스트가 달라지고, 저장된 kind 는 옛 텍스트로 판정된 채 남는다.
+  // algoVersion 과 같은 취급으로 되감는다. derivedHash 가 아예 없는 옛 레코드도
+  // 되감는다 — 그때의 규칙을 알 수 없으므로 같다고 가정하면 안 된다.
+  const derivedChanged = e.derivedHash !== derived;
+  if (e.algoVersion < algo || derivedChanged) {
     return Object.assign(e, {
       cursor: 1, failed: [], roleDirty: [], done: false,
-      algoVersion: algo, reextract: true
+      algoVersion: algo, derivedHash: derived, reextract: true,
+      reextractReason: e.algoVersion < algo ? 'algo' : 'derived'
     });
   }
-  return Object.assign(e, { reextract: false });
+  return Object.assign(e, { reextract: false, reextractReason: null });
 }
 
 /**

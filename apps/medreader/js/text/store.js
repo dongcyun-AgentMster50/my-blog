@@ -34,6 +34,37 @@ import { joinParagraphText } from './hyphen.js';
  */
 export const storeVersion = 1;
 
+/**
+ * spec 9-2 — 파생 규칙 지문(derived-rule fingerprint).
+ *
+ * 저장본에는 `paragraphs[].text` 가 없다. 읽을 때 `lineIds` + 4-10 하이픈 규칙으로
+ * **매번 다시 조립**한다. 그래서 **하이픈 집합이 바뀌면 같은 저장본이 다른 문단
+ * 텍스트를 낸다** — `"methicillin-resistant"` 가 `"methicillinresistant"` 로 조용히
+ * 바뀐다. `storeVersion` 은 "그릇의 모양"만 보므로 이것을 잡지 못하고, 저장된
+ * `paragraphs[].kind` 는 **옛 텍스트로 판정된 채** 남는다.
+ *
+ * spec 2-4 가 하이픈 집합을 책별 프로파일로 옮기기로 이미 정했으므로 이 변화는
+ * **반드시 일어난다.** 따라서 파생에 실제로 쓰이는 값만 지문으로 만들어 레코드에
+ * 넣고, 읽을 때 다르면 그 쪽을 재추출 대상으로 본다(9-4 가 그대로 처리한다).
+ *
+ * 값 자체가 아니라 **정렬된 목록의 해시**다 — 순서가 달라도 같은 지문이 나오고,
+ * 7000쪽 × 한 문자열이 아니라 짧은 16진수 한 개만 저장된다.
+ */
+export function derivedHash(keepPrefixes = KEEP_HYPHEN_PREFIXES,
+                            keepSuffixes = KEEP_HYPHEN_SUFFIXES) {
+  const pre = Array.from(keepPrefixes || []).map(String).sort().join(',');
+  const suf = Array.from(keepSuffixes || []).map(String).sort().join(',');
+  // FNV-1a 32. 암호학적 용도가 아니라 "같은 규칙인가" 판별이므로 충분하다.
+  // hash.js 를 import 하지 않는 이유: 순수 계층은 crypto 를 모른다(3-2).
+  const src = 'h1|' + pre + '|' + suf;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < src.length; i++) {
+    h ^= src.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return 'd1:' + h.toString(16).padStart(8, '0');
+}
+
 /* spec 9-2 규칙 3 — 소수 둘째 자리 반올림.
    결정적이어야 한다(같은 입력 → 같은 출력). Math.round 는 결정적이고,
    -0 은 0 으로 접어 JSON·구조화 복제에서 표현이 갈리지 않게 한다. */
@@ -136,6 +167,8 @@ export function toStored(pageLayout) {
     height: round2(L.height),
     algoVersion: L.algoVersion,
     storeVersion: storeVersion,
+    // 9-2 — 읽을 때 문단 텍스트를 조립하는 규칙의 지문. 다르면 재추출 대상이다.
+    derivedHash: derivedHash(),
     lines: outLines,
     paragraphs: outParas,
     regions: outRegions,

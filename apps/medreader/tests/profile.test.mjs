@@ -224,10 +224,14 @@ test('addPage: 2단 쪽에서 거터 폭을 실측한다', () => {
 });
 
 test('slimLayout/jsonBytes: 저장본에서 items 가 빠진다 (spec 9-2)', () => {
-  const l = layoutOf([line({ items: [{ str: 'x', x: 1, y: 2, w: 3, h: 4 }] })]);
+  // 아이템을 여러 개 둔다 — 한 개짜리 픽스처는 저장본의 고정 필드(derivedHash 등)
+  // 때문에 부등식이 뒤집혀 "아이템 제거가 이득인가"를 주장하지 못한다.
+  const many = [];
+  for (let i = 0; i < 40; i++) many.push({ str: 'word' + i, x: i * 10, y: 700, w: 9, h: 10 });
+  const l = layoutOf([line({ items: many })]);
   const slim = slimLayout(l);
   assert.equal(slim.lines[0].items, undefined);
-  assert.equal(l.lines[0].items.length, 1);             // 원본을 훼손하지 않는다
+  assert.equal(l.lines[0].items.length, 40);            // 원본을 훼손하지 않는다
   assert.ok(jsonBytes(slim) < jsonBytes(l));
 });
 

@@ -12,8 +12,10 @@ import assert from 'node:assert/strict';
 
 import {
   normalizeExtraction, planResume, priorityTargets, advanceCursor,
-  nextPage, isComplete, addSorted, removeFrom, ALGO_VERSION, STATUS, ROLE_VERSION_BASE
+  nextPage, isComplete, addSorted, removeFrom, ALGO_VERSION, STATUS, ROLE_VERSION_BASE,
+  DERIVED_HASH
 } from '../js/pdf/extract.js';
+import { derivedHash } from '../js/text/store.js';
 
 /** 저장된 쪽 집합을 흉내낸다. */
 const setOf = (...ns) => {
@@ -55,7 +57,9 @@ test('E4 planResume — algoVersion 이 오르면 cursor ← 1, failed ← [] (9
 });
 
 test('E5 planResume — 같은 algoVersion 이면 그대로 이어간다', () => {
-  const saved = { done: false, pagesDone: 312, cursor: 318, failed: [7], algoVersion: ALGO_VERSION };
+  // [2026-09-21] derivedHash 가 계약에 들어왔다 — 없으면 "규칙을 알 수 없다"로 되감긴다(E23).
+  const saved = { done: false, pagesDone: 312, cursor: 318, failed: [7],
+                  algoVersion: ALGO_VERSION, derivedHash: DERIVED_HASH };
   const p = planResume(saved);
   assert.equal(p.reextract, false);
   assert.equal(p.cursor, 318);
@@ -159,7 +163,7 @@ test('E16 ★ 전체 흐름 시뮬레이션 — 중간에 끊고 다시 시작�
   const PAGES = 40;
   const stored = new Set();
   const has = (n) => stored.has(n);
-  let ex = normalizeExtraction({ algoVersion: ALGO_VERSION });
+  let ex = normalizeExtraction({ algoVersion: ALGO_VERSION, derivedHash: DERIVED_HASH });
   let current = 20;          // 사용자가 20쪽을 열어 두었다
   const failAt = new Set([13, 27]);
   const retriedPages = new Set();
@@ -289,4 +293,51 @@ test('E22 실패가 셋 이상 흩어져 있어도 전부 한 번씩 재시도�
     tried.add(t.pageNo);
   }
   assert.deepEqual(seen, [3, 14, 21, 29], '네 쪽 전부 한 번씩, 그 뒤로는 멈춘다');
+});
+
+/* ────────────────────────────────────────────────────────
+   spec 9-2 — 파생 규칙 지문(derivedHash)
+   저장본에 문단 text 가 없고 읽을 때 조립되므로, 하이픈 집합이 바뀌면
+   같은 저장본이 다른 문단 텍스트를 낸다. storeVersion 은 그릇의 모양만
+   보므로 잡지 못한다. spec 2-4 가 하이픈 집합을 프로파일로 옮기기로
+   정했으므로 이 변화는 반드시 일어난다.
+   ──────────────────────────────────────────────────────── */
+
+test('E23 ★ 파생 규칙이 바뀌면 재추출한다 (derivedHash)', () => {
+  const saved = {
+    done: true, pagesDone: 729, cursor: 730, failed: [],
+    algoVersion: ALGO_VERSION, derivedHash: 'd1:deadbeef'   // 다른 하이픈 집합으로 저장됨
+  };
+  const p = planResume(saved);
+  assert.equal(p.reextract, true, '파생 규칙이 다르면 되감아야 한다');
+  assert.equal(p.reextractReason, 'derived');
+  assert.equal(p.cursor, 1);
+  assert.equal(p.done, false);
+  assert.deepEqual(p.failed, []);
+  assert.equal(p.derivedHash, DERIVED_HASH, '되감을 때 현재 지문으로 갱신한다');
+});
+
+test('E24 derivedHash 가 없는 옛 레코드도 재추출한다 (규칙을 알 수 없다)', () => {
+  const saved = { done: true, pagesDone: 729, cursor: 730, failed: [], algoVersion: ALGO_VERSION };
+  const p = planResume(saved);
+  assert.equal(p.reextract, true);
+  assert.equal(p.reextractReason, 'derived');
+});
+
+test('E25 algoVersion 이 낮으면 이유는 algo 다 (둘 다 다를 때 우선순위)', () => {
+  const saved = { cursor: 300, algoVersion: ALGO_VERSION - 1, derivedHash: 'd1:deadbeef' };
+  const p = planResume(saved);
+  assert.equal(p.reextract, true);
+  assert.equal(p.reextractReason, 'algo');
+});
+
+test('E26 derivedHash 는 집합의 순서에 의존하지 않는다', () => {
+  const a = derivedHash(new Set(['x', 'y']), new Set(['p', 'q']));
+  const b = derivedHash(new Set(['y', 'x']), new Set(['q', 'p']));
+  assert.equal(a, b, '정렬 후 해시하므로 순서가 달라도 같다');
+  const c = derivedHash(new Set(['x', 'y']), new Set(['p']));
+  assert.notEqual(a, c, '내용이 다르면 달라야 한다');
+  // 접두사/접미사 자리가 바뀌면 다른 지문이어야 한다(구분자가 실제로 구분하는가)
+  assert.notEqual(derivedHash(new Set(['a']), new Set(['b'])),
+                  derivedHash(new Set(['b']), new Set(['a'])));
 });
