@@ -53,7 +53,10 @@ const stubTx = (db) => ({ objectStore: (n) => db.stores.get(n) });
 
 test('D1 DB 이름·버전은 spec 9-1 그대로', () => {
   assert.equal(DB_NAME, 'medreader');
-  assert.equal(DB_VERSION, 1);
+  // [2026-09-21] spec 9-1 이 1 → 2 로 수정되었다. pages.docId_algoVersion 인덱스를
+  // 더했고 IndexedDB 는 인덱스 추가에 버전 증가를 요구한다. 이 단언은 "spec 과
+  // 코드가 같은 값을 말하는가"를 고정하는 것이므로 spec 이 바뀌면 함께 바뀐다.
+  assert.equal(DB_VERSION, 2);
 });
 
 test('D2 spec 9-2 의 스토어가 전부 있다 (Phase 2·3 포함 — 9-1 결정)', () => {

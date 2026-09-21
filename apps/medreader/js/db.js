@@ -13,7 +13,11 @@
    ============================================================ */
 
 export const DB_NAME = 'medreader';
-export const DB_VERSION = 1;
+// [2026-09-21] 1 → 2. v1 로 만들어진 DB 에는 pages.docId_algoVersion 인덱스가 없다.
+// 인덱스 추가는 IndexedDB 에서 버전 증가가 필요하다(9-1). 배포 후에는 되돌릴 수
+// 없으므로 배포 전인 지금 올린다. MIGRATIONS[2] 가 기존 스토어에 빠진 인덱스만
+// 보충하며 데이터는 건드리지 않는다.
+export const DB_VERSION = 2;
 
 /* ────────────────────────────────────────────────────────
    spec 9-2 스토어 정의 — 선언으로 둔다.
@@ -90,24 +94,39 @@ export const STORE_NAMES = Object.freeze(SCHEMA_V1.map((s) => s.name));
    각 fn 은 멱등이어야 한다. `objectStoreNames.contains` /
    `indexNames.contains` 로만 판단하고, 이미 있으면 건드리지 않는다.
    ──────────────────────────────────────────────────────── */
+/**
+ * SCHEMA_V1 표대로 스토어와 인덱스를 맞춘다. 멱등이다 —
+ * 이미 있는 스토어는 만들지 않고, 이미 있는 인덱스는 건드리지 않는다.
+ * 데이터는 읽지도 쓰지도 않는다.
+ */
+function reconcileSchema(db, tx) {
+  for (let i = 0; i < SCHEMA_V1.length; i++) {
+    const s = SCHEMA_V1[i];
+    let store;
+    if (db.objectStoreNames.contains(s.name)) {
+      store = tx ? tx.objectStore(s.name) : null;
+      if (!store) continue;
+    } else {
+      store = db.createObjectStore(s.name, { keyPath: s.keyPath });
+    }
+    for (let k = 0; k < s.indexes.length; k++) {
+      const ix = s.indexes[k];
+      if (store.indexNames.contains(ix.name)) continue;
+      store.createIndex(ix.name, ix.keyPath, { unique: !!ix.unique });
+    }
+  }
+}
+
 export const MIGRATIONS = {
   1(db, tx) {
-    for (let i = 0; i < SCHEMA_V1.length; i++) {
-      const s = SCHEMA_V1[i];
-      let store;
-      if (db.objectStoreNames.contains(s.name)) {
-        // 멱등: 이미 있으면 만들지 않고 인덱스만 맞춘다.
-        store = tx ? tx.objectStore(s.name) : null;
-        if (!store) continue;
-      } else {
-        store = db.createObjectStore(s.name, { keyPath: s.keyPath });
-      }
-      for (let k = 0; k < s.indexes.length; k++) {
-        const ix = s.indexes[k];
-        if (store.indexNames.contains(ix.name)) continue;
-        store.createIndex(ix.name, ix.keyPath, { unique: !!ix.unique });
-      }
-    }
+    reconcileSchema(db, tx);
+  },
+  // [2026-09-21] v1 로 만들어진 DB 에 pages.docId_algoVersion 을 더한다.
+  // 같은 조정 함수를 다시 부르면 된다 — 없는 인덱스만 만들고 데이터는
+  // 건드리지 않는다. 새로 만드는 DB 에서는 1 이 이미 다 만들어 두었으므로
+  // 2 는 아무 일도 하지 않는다(멱등).
+  2(db, tx) {
+    reconcileSchema(db, tx);
   }
 };
 

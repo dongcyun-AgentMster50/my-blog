@@ -1190,7 +1190,7 @@ keyPattern (gemini) = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
 - `onupgradeneeded`는 버전이 오를 때만 실행되고, 빈 스토어는 비용이 없다. Phase 2·3 스토어를 미리 만들어 두면 나중 단계에서 버전 증가·마이그레이션 코드가 필요 없다.
 - 필드 추가는 IndexedDB가 스키마리스라 버전 변경 없이 가능하다. **인덱스 추가·키 변경만** 버전 증가가 필요하다. 그래서 인덱스는 지금 필요한 것 + 예상되는 것을 함께 정의한다.
 - 마이그레이션 정책: `db.js`는 `MIGRATIONS = { 1: fn, 2: fn, … }` 사다리를 두고 `oldVersion+1 … newVersion`을 순서대로 실행한다. 각 fn은 멱등이어야 한다(`objectStoreNames.contains` 검사).
-- DB 이름 `medreader`, 버전 `1`. `blocked`/`versionchange` 이벤트에서 다른 탭에 닫기 요청 후 안내.
+- DB 이름 `medreader`, 버전 **`2`** `[수정 2026-09-21]`. 초판은 `1`이었다. `pages`에 **`docId_algoVersion` 복합 인덱스**를 더했고 IndexedDB는 **인덱스 추가에 버전 증가가 필요**하다. 이 인덱스가 없으면 9-4 재개 때 "`algoVersion`이 최신인 쪽" 집합을 구하려고 **7000쪽 × 9KB를 전부 역직렬화**해야 한다. 배포 후에는 되돌릴 수 없으므로 **배포 전인 지금** 올린다. `MIGRATIONS[2]`는 기존 스토어에 빠진 인덱스만 보충하고 데이터는 건드리지 않는다(멱등). `blocked`/`versionchange` 이벤트에서 다른 탭에 닫기 요청 후 안내.
 
 ### 9-2. 스토어 정의
 
