@@ -263,3 +263,60 @@ export const EXTRACT = Object.freeze({
   // requestIdleCallback 이 계속 밀릴 때의 강제 실행 시한
   IDLE_TIMEOUT_MS: 1000
 });
+
+/* ────────────────────────────────────────────────────────
+   6절 낭독 — 5단계에서 추가. 숫자의 출처는 전부 spec 6-1·6-2·6-4·6-5 다.
+
+   ★ 여기 상수들은 **Android Chrome 버그 대응**이다. 기능 감지로 분기하지
+     않는다 — 데스크톱에서도 같은 코드가 돈다(6-4 머리말).
+   ──────────────────────────────────────────────────────── */
+export const TTS = Object.freeze({
+  /* 6-1 속도 */
+  RATE_MIN: 0.5,
+  RATE_MAX: 2.0,
+  RATE_STEP: 0.1,
+
+  /* 6-1 [수정 2026-09-21] 기본 낭독 단위는 **문장**이다.
+   * `settings.js` 의 `DEFAULTS['tts.unit']` 은 초판 값('line')에 머물러 있고
+   * 그 파일은 이 단계의 수정 범위 밖이다. 저장된 값이 없을 때는 이 상수를
+   * 쓴다(`ui/controls.js` 가 `settings` 스토어의 행 존재를 직접 본다). */
+  UNIT_DEFAULT: 'sentence',
+
+  /* 6-4 "긴 utterance 잘림" — 약 200~300자에서 끊기고 onend 가 안 온다. */
+  MAX_UTTER_CHARS: 300,
+
+  /* 6-2 워치독. 영어 약 14자/초 @rate 1.0, 여유 3초, 그 2배에서 발동. */
+  CHARS_PER_SEC: 14,
+  WATCHDOG_PAD_MS: 3000,
+  WATCHDOG_FACTOR: 2,
+
+  /* 6-4 "cancel() 직후 speak() 무시" */
+  CANCEL_DELAY_MS: 60,
+
+  /* 6-3 "getVoices() 초기 빈 배열" */
+  VOICES_TIMEOUT_MS: 1500,
+
+  /* 6-1 "다음 페이지가 미추출이면 추출을 우선 요청하고 최대 5초 대기" */
+  PAGE_WAIT_MS: 5000,
+  PAGE_POLL_MS: 200,
+
+  /* 6-5 자동 스크롤 "편안 영역" 과 사용자 스크롤 구분 창 */
+  COMFORT_TOP: 0.30,
+  COMFORT_BOTTOM: 0.65,
+  USER_SCROLL_MS: 800
+});
+
+/* 6-1 — 기호 소수(少數)만 읽기 쉬운 낱말로. 연속 대문자 약어는 건드리지 않는다.
+ * 키는 **한 글자**이거나 짧은 기호 문자열이고, 치환은 앞뒤에 공백을 붙여 들어간다
+ * ("≥4" → "greater than or equal to 4"). 원서 텍스트 자체는 바뀌지 않는다 —
+ * 낭독용 사본에서만 갈아 낀다.
+ */
+export const TTS_SYMBOLS = Object.freeze({
+  '≥': 'greater than or equal to',
+  '≤': 'less than or equal to',
+  '±': 'plus or minus',
+  'µ': 'micro',
+  'μ': 'micro',
+  '→': 'to',
+  '%': 'percent'
+});

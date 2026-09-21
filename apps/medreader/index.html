@@ -205,6 +205,49 @@
     <!-- 한 번에 한 쪽만 여기 들어간다(7000쪽 메모리). -->
     <div id="readerMount"></div>
 
+    <!-- 6-5 — 사용자가 직접 스크롤하면 자동 스크롤을 쉬고 이 칩을 띄운다. -->
+    <button type="button" class="back-to-line" id="backToLine"
+            data-i18n="reader.tts.backToLine" data-i18n-aria="reader.tts.backToLine" hidden></button>
+
+    <!-- 12-3 하단 컨트롤 바. 쪽 이동 바 바로 위에 앉는다(겹치지 않는다).
+         ★ 방향을 가리키는 아이콘을 쓰지 않는다 — RTL 에서 뒤집을 수 없다(16-H).
+         낱말은 전부 i18n 이고 순서는 논리 순서라 아랍어에서 저절로 거울이 된다. -->
+    <div class="tts-bar" id="ttsBar" role="group" data-i18n-aria="reader.tts.bar">
+      <button type="button" class="tts-btn" id="ttsPrev"
+              data-i18n="reader.tts.prev" data-i18n-aria="reader.tts.prev"></button>
+      <button type="button" class="tts-btn tts-play" id="ttsPlay" aria-pressed="false"
+              data-i18n-aria="reader.tts.play"><span class="tts-glyph" id="ttsGlyph">▶</span></button>
+      <button type="button" class="tts-btn" id="ttsNext"
+              data-i18n="reader.tts.next" data-i18n-aria="reader.tts.next"></button>
+      <button type="button" class="tts-btn tts-rate" id="ttsRate" aria-expanded="false"
+              aria-controls="ttsRatePanel" data-i18n-aria="reader.tts.rate"></button>
+      <!-- 12-3 — 본문을 다시 읽지 않는다. "줄 12/58" 만 알린다. -->
+      <span class="tts-progress" id="ttsProgress" role="status" aria-live="polite"></span>
+    </div>
+
+    <!-- 속도 팝오버 (12-3) — 0.5~2.0, 0.1 단계 -->
+    <div class="tts-rate-panel" id="ttsRatePanel" role="dialog" aria-modal="false"
+         data-i18n-aria="reader.tts.rate" hidden>
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label for="ttsRateInput" data-i18n="reader.tts.rate"></label>
+          <span class="typeset-out" id="ttsRateOut"></span>
+        </div>
+        <input type="range" id="ttsRateInput" min="0.5" max="2" step="0.1" value="1"
+               data-i18n-aria="reader.tts.rate">
+      </div>
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label data-i18n="reader.tts.unit"></label>
+        </div>
+        <div class="typeset-choices" id="ttsUnitRow">
+          <button type="button" data-unit="sentence" aria-pressed="false" data-i18n="reader.tts.unit.sentence"></button>
+          <button type="button" data-unit="line" aria-pressed="false" data-i18n="reader.tts.unit.line"></button>
+        </div>
+      </div>
+      <button type="button" class="primary" id="ttsRateClose" data-i18n="common.close"></button>
+    </div>
+
     <!-- 쪽 이동 — 라우트가 정본이라 뒤로가기가 그대로 동작한다(12-1). -->
     <nav class="pager" id="readerPager" data-i18n-aria="reader.page.nav">
       <button type="button" id="pagePrev" data-i18n="reader.page.prev" data-i18n-aria="reader.page.prev"></button>

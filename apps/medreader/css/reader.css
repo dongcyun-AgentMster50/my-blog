@@ -15,6 +15,13 @@
   --reader-lh: 1.7;
   --reader-ls: 0em;
   --reader-font: var(--font-body-sans);
+
+  /* 12-3 하단 컨트롤 바가 **실제로 차지하는** 높이. 쪽 이동 바(--pager-h)
+     위에 얹히므로 본문 아래 여백과 팝오버 띄우기가 이 값을 함께 쓴다.
+     [실측] 재생 버튼 64px + 위아래 패딩 + 테두리 = 81px. --pager-h(72px)도
+     실제 렌더는 73px 이라 --sp-1 만큼 띄워 두 바가 1px 겹치지 않게 한다. */
+  --tts-h: 88px;
+  --tts-gap: var(--sp-1);
 }
 
 /* ── 상단 바의 Aa 버튼 ────────────────────────────────── */
@@ -54,7 +61,7 @@
      (b) Close 가 스크롤 안쪽 맨 끝에 있어 잘렸다 — 아래로 끌어야 보였다.
          패널을 하단 시트로 두고 Close 를 sticky 로 붙인다. */
   position: fixed;
-  inset-block-end: calc(var(--pager-h) + var(--notice-total) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  inset-block-end: calc(var(--pager-h) + var(--tts-h) + var(--notice-total) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
   inset-inline: var(--sp-2);
   z-index: 25;
   max-inline-size: 520px;
@@ -66,7 +73,7 @@
   padding-block-end: 0;          /* sticky Close 가 자기 여백을 갖는다 */
   box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
   /* 상단바를 덮지 않도록 남은 높이 안에서만 커진다. */
-  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--notice-total) - var(--sp-6));
+  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--tts-h) - var(--notice-total) - var(--sp-6));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -170,7 +177,12 @@
 .reflow .line.is-current {
   background: var(--hl-bg);
   color: var(--hl-text);
-  box-shadow: 0 0 0 4px var(--hl-bg);
+  /* [수정 5단계] 6-5 의 "줄 사이 틈 메움"은 **세로 방향만**이다.
+     `0 0 0 4px` 은 사방으로 퍼지는데, 문장 모드에서는 한 문장이 걸친 줄
+     span 이 여럿이라 **뒤 span 의 그림자가 앞 span 의 마지막 글자를 덮는다**
+     ("cardiovascular" 가 "cardic vascular" 로 보였다 — 실측). 가로 퍼짐을
+     0 으로 두면 줄 사이는 그대로 메우면서 글자를 먹지 않는다. */
+  box-shadow: 0 -4px 0 0 var(--hl-bg), 0 4px 0 0 var(--hl-bg);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   border-radius: 2px;
@@ -316,6 +328,145 @@
   padding-inline: var(--sp-3);
   /* 고정된 .pager 뒤로 본문 마지막 줄이 숨지 않게 한다.
      base.css 가 이미 --notice-h 만큼 body 에 여백을 주므로 여기서는
-     pager 높이만 더한다. --tap(48) + 위아래 패딩. */
-  padding-block-end: var(--pager-h);
+     pager 높이와 컨트롤 바 높이를 더한다. --tap(48) + 위아래 패딩. */
+  padding-block-end: calc(var(--pager-h) + var(--tts-h) + var(--tts-gap));
 }
+
+/* ── 하단 컨트롤 바 (12-3 · 16-G) ─────────────────────
+   쪽 이동 바(.pager) 바로 **위**에 앉는다. 둘이 겹치면 한 손 조작에서
+   쪽이 넘어가 버린다 — 실기기에서 가장 치명적인 오조작이다.
+
+   ★ 방향을 가리키는 아이콘을 쓰지 않는다(16-H). 버튼 순서는 논리 순서라
+     아랍어(RTL)에서 저절로 거울이 된다 — 뒤집는 CSS 가 필요 없다. */
+.tts-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  flex-wrap: nowrap;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-surface);
+  border-block-start: 1px solid var(--c-border);
+
+  position: fixed;
+  inset-inline: 0;
+  /* 고지 바 → 쪽 이동 바 → 컨트롤 바 순으로 쌓인다. */
+  inset-block-end: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+}
+
+/* 16-G — 모든 조작 버튼이 48×48 이상. */
+.tts-bar .tts-btn {
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  padding-block: var(--sp-2);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  /* 더블탭 확대가 버튼에서 일어나지 않게(16-G). 본문 핀치 줌은 막지 않는다. */
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+/* 12-3 — 재생 버튼은 64px. 엄지가 제일 자주 닿는 곳이다. */
+.tts-bar .tts-play {
+  min-inline-size: var(--tap-lg);
+  min-block-size: var(--tap-lg);
+  border-radius: 50%;
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+  font-size: var(--fs-lg);
+  flex: 0 0 auto;
+}
+
+.tts-bar .tts-glyph { line-height: 1; }
+
+.tts-bar .tts-rate {
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.tts-bar .tts-progress {
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  font-variant-numeric: tabular-nums;
+  /* 진행 표시가 길어져도 버튼을 밀어내지 않는다(375px 가로 스크롤 0). */
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* 낭독 중인지 한눈에 — 색만으로 구분하지 않는다(글리프가 ▶/⏸ 로 바뀐다). */
+.tts-bar[data-state="waiting-page"] .tts-play { opacity: 0.6; }
+
+/* 속도·낭독 단위 팝오버 — Aa 팝오버와 같은 하단 시트 방식(12-3) */
+.tts-rate-panel {
+  position: fixed;
+  inset-block-end: calc(var(--pager-h) + var(--tts-h) + var(--notice-total) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  inset-inline: var(--sp-2);
+  z-index: 35;
+  max-inline-size: 520px;
+  margin-inline: auto;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+}
+
+.tts-rate-panel[hidden] { display: none; }
+
+.tts-rate-panel input[type="range"] {
+  inline-size: 100%;
+  block-size: var(--tap);
+  accent-color: var(--c-accent);
+  touch-action: manipulation;
+}
+
+.tts-rate-panel > .primary {
+  inline-size: 100%;
+  margin-block-start: var(--sp-2);
+}
+
+/* ── 6-5 [현재 줄로 돌아가기] 칩 ──────────────────────
+   사용자가 낭독 중에 직접 스크롤하면 자동 스크롤을 쉬고 이것을 띄운다.
+   컨트롤 바 위에 떠서 본문을 거의 가리지 않는다. */
+.back-to-line {
+  position: fixed;
+  inset-block-end: calc(var(--notice-total) + var(--pager-h) + var(--tts-h) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  inset-inline: 0;
+  z-index: 28;
+  margin-inline: auto;
+  inline-size: fit-content;
+  max-inline-size: calc(100% - var(--sp-6));
+  min-block-size: var(--tap);
+  padding-block: var(--sp-2);
+  padding-inline: var(--sp-4);
+  font: inherit;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--c-accent);
+  border-radius: 999px;
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.back-to-line[hidden] { display: none; }
+
+/* 16-F · 6-5 — 움직임을 줄이라고 한 사용자에게는 전이를 주지 않는다. */
+@media (prefers-reduced-motion: reduce) {
+  .reflow .line.is-current { transition: none; }
+}
+
+/* 낭독 중 줄을 탭하면 그 줄부터 이동한다(6-5). 손가락이 닿을 곳임을 알린다. */
+.reflow .line { touch-action: manipulation; }

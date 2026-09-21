@@ -42,6 +42,8 @@ import { joinHyphen } from '../text/hyphen.js';
 import { go, replace, readerHash, libraryHash } from '../router.js';
 import { openDoc, extractorFor } from './library.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
+import { initControls, leaveControls } from './controls.js';
+import { TTS } from '../config.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
@@ -201,8 +203,26 @@ const state = {
   wired: { docId: null, ex: null, off: [] },
   progress: null,
   /** 렌더 경쟁 방지 — 늦게 끝난 옛 렌더가 새 쪽을 덮어쓰지 않는다. */
-  renderToken: 0
+  renderToken: 0,
+
+  /* ── 6-5 자동 스크롤 ─────────────────────────────── */
+  /** 지금 하이라이트된 줄들(문장 모드에서는 여럿). */
+  currentLineIds: [],
+  /** 마지막으로 **우리가** 스크롤한 시각 — 사용자 스크롤과 구분한다(최근 800ms). */
+  programScrollAt: 0,
+  /** 사용자가 직접 스크롤해 자동 스크롤을 쉬는 중인가. */
+  scrollPaused: false,
+  /** 자동 스크롤 복구 판정용 — 문단이 바뀌면 되살린다. */
+  lastParaId: null
 };
+
+/** 줄 탭 구독자(`ui/controls.js`). 리더가 `speaker` 를 직접 import 하지 않는다. */
+const lineTapListeners = new Set();
+/** 쪽이 새로 그려졌다는 알림 구독자. */
+const pageListeners = new Set();
+
+export function onLineTap(fn) { lineTapListeners.add(fn); return () => lineTapListeners.delete(fn); }
+export function onPageRender(fn) { pageListeners.add(fn); return () => pageListeners.delete(fn); }
 
 export function initReader() {
   const root = document.querySelector('[data-screen="reader"]');
@@ -218,10 +238,13 @@ export function initReader() {
     prev: root.querySelector('#pagePrev'),
     next: root.querySelector('#pageNext'),
     input: root.querySelector('#pageInput'),
-    total: root.querySelector('#pageTotal')
+    total: root.querySelector('#pageTotal'),
+    backToLine: root.querySelector('#backToLine')
   };
 
   initTypeset();
+  // 12-3 하단 컨트롤 바. 이 화면 안에서만 산다 — `main.js` 를 건드리지 않는다.
+  initControls();
 
   els.prev.addEventListener('click', () => goPage(state.page - 1));
   els.next.addEventListener('click', () => goPage(state.page + 1));
@@ -232,8 +255,45 @@ export function initReader() {
     if (ev.key === 'Enter') { ev.preventDefault(); goPage(els.input.value); }
   });
 
+  /* ── 6-5 줄 탭 ──────────────────────────────────────
+     낭독 중이면 **그 줄부터 이동**. 낭독 중이 아니면 이 단계는 아무 것도
+     하지 않는다 — 인라인 번역은 7단계 몫이다(6-5). 구독자가 판단한다.
+
+     `click` 이 아니라 `pointerup` 을 쓰는 이유는 12-3 이 길게 누르기(번역)를
+     예고하기 때문이다. 지금은 길게 누르기를 잡지 않는다(7단계). */
+  els.mount.addEventListener('pointerup', (ev) => {
+    const span = ev.target && ev.target.closest ? ev.target.closest('span.line[data-flow="1"]') : null;
+    if (!span) return;
+    // 글자를 드래그해 선택하는 중이면 탭이 아니다.
+    const sel = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
+    if (sel && String(sel).length > 0) return;
+    const id = span.getAttribute('data-line-id');
+    for (const fn of lineTapListeners) { try { fn(id); } catch (e) { /* 구독자 예외가 리더를 막지 않는다 */ } }
+  });
+
+  /* ── 6-5 사용자 스크롤 감지 ────────────────────────
+     프로그램 스크롤과 사용자 스크롤을 **최근 800ms** 로 가른다. 우리가
+     `scrollIntoView` 를 부르면 `scroll` 이벤트가 줄줄이 따라오는데, 그것을
+     사용자 스크롤로 읽으면 자동 스크롤이 자기 자신 때문에 꺼진다. */
+  window.addEventListener('scroll', onAnyScroll, { passive: true });
+
+  els.backToLine.addEventListener('click', () => {
+    state.scrollPaused = false;
+    hideBackChip();
+    scrollToCurrent(true);
+  });
+
   // 언어가 바뀌면 이 화면의 동적 문장도 다시 만든다(16-H — 새로고침 없이).
   onLangChange(() => relabelReader());
+}
+
+function onAnyScroll() {
+  if (!els || els.root.hidden) return;
+  if (!state.currentLineIds.length) return;
+  if (Date.now() - state.programScrollAt < TTS.USER_SCROLL_MS) return;   // 우리가 굴린 것
+  if (state.scrollPaused) return;
+  state.scrollPaused = true;
+  showBackChip();
 }
 
 /**
@@ -285,9 +345,15 @@ export async function showReader(params) {
 /** 리더를 떠날 때 — 팝오버를 닫고 DOM 을 비운다(7000쪽 메모리). */
 export function leaveReader() {
   closeTypeset();
+  // 리더를 떠나면 낭독도 멈춘다 — 서재에서 소리가 계속 나면 안 된다.
+  leaveControls();
   if (els && els.mount) clear(els.mount);
   state.desc = null;
   state.currentLineId = null;
+  state.currentLineIds = [];
+  state.lastParaId = null;
+  state.scrollPaused = false;
+  hideBackChip();
 }
 
 /* ────────────────────────────────────────────────────────
@@ -311,6 +377,7 @@ async function renderPage() {
 
   clear(els.mount);
   state.currentLineId = null;
+  state.currentLineIds = [];
 
   if (!rec) {
     // 아직 추출되지 않은 쪽 — **빈 화면을 보여주지 않는다**(12-3).
@@ -330,6 +397,14 @@ async function renderPage() {
   }
   state.desc = desc;
   els.mount.appendChild(renderDescription(desc));
+  notifyPage();
+}
+
+/** 새 쪽이 그려졌다 — 낭독 큐가 이 쪽 것으로 갈아탄다(`ui/controls.js`). */
+function notifyPage() {
+  for (const fn of pageListeners) {
+    try { fn({ docId: state.docId, page: state.page }); } catch (e) { /* 구독자 예외 */ }
+  }
 }
 
 /** 12-4 의 DOM 을 만든다. 문서 텍스트는 전부 `textContent` 다(13절 XSS). */
@@ -624,6 +699,7 @@ export function setCurrent(lineId) {
   if (!next) return false;
   next.classList.add('is-current');
   state.currentLineId = String(lineId);
+  state.currentLineIds = [String(lineId)];
   return true;
 }
 
@@ -635,6 +711,122 @@ export function markDone(lineId, on) {
 }
 
 export function currentPage() { return { docId: state.docId, page: state.page, pageCount: state.pageCount }; }
+
+/**
+ * ★ 5단계 낭독 큐의 입력. 지금 쪽의 **문단**을 읽기 순서로 준다.
+ * `lines[i].hyphen` 이 "다음 줄과 어떻게 잇는가"이고, `tts/text.js` 가 그것으로
+ * `cardio-` 의 `-` 를 털어 한 발화로 묶는다.
+ */
+export function flowParas() {
+  const blocks = (state.desc && state.desc.blocks) || [];
+  const out = [];
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].type !== 'para') continue;
+    out.push({ id: blocks[i].id, kind: blocks[i].kind, lines: blocks[i].lines });
+  }
+  return out;
+}
+
+/**
+ * 6-5 — 문장이 걸친 **모든 줄**에 하이라이트를 준다. 문장 모드가 기본이라
+ * 한 발화가 원본 줄 3~4개에 걸친다(2단 조판이라 줄이 8~10낱말로 짧다).
+ * @returns {boolean} 그 줄들이 지금 쪽에 있었는가
+ */
+export function setCurrentLines(lineIds) {
+  if (!els || !els.mount) return false;
+  const ids = Array.isArray(lineIds) ? lineIds : [lineIds];
+
+  const prev = els.mount.querySelectorAll('span.line.is-current');
+  for (let i = 0; i < prev.length; i++) prev[i].classList.remove('is-current');
+
+  let first = null;
+  for (let i = 0; i < ids.length; i++) {
+    const node = lineElement(ids[i]);
+    if (!node) continue;
+    node.classList.add('is-current');
+    if (!first) first = node;
+  }
+  if (!first) return false;
+  state.currentLineIds = ids.map(String);
+  state.currentLineId = String(ids[0]);
+  return true;
+}
+
+/**
+ * 낭독이 한 발화로 옮겨 갈 때 화면이 하는 일 전부: 하이라이트 + 자동 스크롤.
+ * @param {{lineIds: string[], paraId: string|null}} unit
+ */
+export function showSpoken(unit) {
+  const u = unit || {};
+  const ok = setCurrentLines(u.lineIds || []);
+  if (!ok) return false;
+
+  // 6-5 — 문단이 바뀌면 자동 스크롤을 되살린다(사용자가 딴 데를 보다가도
+  // 새 문단에서는 따라가고 싶어 한다).
+  if (u.paraId != null && u.paraId !== state.lastParaId) {
+    state.lastParaId = u.paraId;
+    if (state.scrollPaused) { state.scrollPaused = false; hideBackChip(); }
+  }
+
+  if (!state.scrollPaused && settings.get('reader.autoScroll') !== false) scrollToCurrent(false);
+  return true;
+}
+
+/**
+ * 6-5 자동 스크롤. **편안 영역(상단 30%~하단 65%) 밖일 때만** 움직인다.
+ * 줄마다 스크롤하면 화면이 계속 흔들려 눈 피로가 되레 나빠진다.
+ */
+function scrollToCurrent(force) {
+  const node = state.currentLineIds.length ? lineElement(state.currentLineIds[0]) : null;
+  if (!node || typeof node.getBoundingClientRect !== 'function') return;
+  const vh = window.innerHeight || 0;
+  if (!vh) return;
+  const r = node.getBoundingClientRect();
+  const inComfort = r.top >= vh * TTS.COMFORT_TOP && r.bottom <= vh * TTS.COMFORT_BOTTOM;
+  if (inComfort && !force) return;
+
+  state.programScrollAt = Date.now();
+  try {
+    node.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+  } catch (e) {
+    node.scrollIntoView(true);        // 옛 브라우저 — 옵션 객체를 모른다
+  }
+}
+
+function reducedMotion() {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+}
+
+function showBackChip() { if (els && els.backToLine) els.backToLine.hidden = false; }
+function hideBackChip() { if (els && els.backToLine) els.backToLine.hidden = true; }
+
+/**
+ * 6-1 — 낭독이 쪽 끝에 닿았다. 다음 쪽으로 옮기고 **그 쪽이 그려질 때까지**
+ * 기다린다(최대 5초). 미추출 쪽이면 `wireExtractor` 가 우선순위를 올려 두었고
+ * 추출이 끝나는 순간 `renderPage` 가 돈다.
+ *
+ * @returns {Promise<boolean>} 5초 안에 낭독할 것이 생겼는가
+ */
+export function goToPageForSpeech(pageNo) {
+  const target = clampPage(pageNo, state.pageCount);
+  if (state.pageCount > 0 && Number(pageNo) > state.pageCount) return Promise.resolve(false);
+  if (state.page === target && state.desc) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    let timer = null;
+    let poll = null;
+    const done = (v) => {
+      if (timer !== null) { clearTimeout(timer); timer = null; }
+      if (poll !== null) { clearInterval(poll); poll = null; }
+      resolve(v);
+    };
+    timer = setTimeout(() => done(false), TTS.PAGE_WAIT_MS);
+    poll = setInterval(() => {
+      if (state.page === target && state.desc) done(true);
+    }, TTS.PAGE_POLL_MS);
+    go(readerHash(state.docId, target));
+  });
+}
 
 /* ────────────────────────────────────────────────────────
    7. 작은 도구들

@@ -39,7 +39,10 @@ export const DEFAULTS = Object.freeze({
 
   /* 낭독 (5단계) */
   'tts.rate': 1.0,
-  'tts.unit': 'line',
+  // spec 6-1 [수정 2026-09-21] 기본은 **문장**이다. 초판은 'line' 이었는데,
+  // 실기기에서 실제 원서를 읽어 본 사용자 판단으로 뒤집혔다 — 2단 조판이라
+  // 원본 줄이 8~10단어로 짧아 줄 단위로 읽으면 다시 거꾸로 읽게 된다.
+  'tts.unit': 'sentence',
   'tts.voice.en': '',
   'tts.voice.ar': '',
   'tts.voice.fr': '',
