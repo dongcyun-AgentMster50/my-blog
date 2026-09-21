@@ -1,0 +1,102 @@
+/* ============================================================
+   MedReader — 색·간격·글꼴 토큰 (spec 2-1 · 11-4 · 16-F)
+
+   논리 속성만 쓴다(11-3 · 16-H). 이 파일에는 left/right 계열이
+   한 글자도 없어야 한다. 테마 변수 재정의는 :root[data-theme=…].
+
+   4단계(리플로우·Aa·테마)가 여기에 세피아·고대비를 더한다.
+   지금은 light / dark / system 셋만 실제로 쓰인다.
+   ============================================================ */
+
+:root {
+  /* 11-4 — 웹폰트 다운로드 없음. 시스템 스택뿐이다. */
+  --font-ui: system-ui, "Roboto", "Segoe UI", sans-serif;
+  --font-ar: "Noto Naskh Arabic", "Noto Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+  --font-body-sans: system-ui, "Roboto", "Segoe UI", sans-serif;
+  --font-body-serif: Georgia, "Noto Serif", serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* 간격 — 4px 배수 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  /* 16-G — 터치 타깃 최소 48px, 주 버튼 64px */
+  --tap: 48px;
+  --tap-lg: 64px;
+
+  /* 12-3 — 바 높이 */
+  --bar-top: 44px;
+  --notice-h: 24px;
+
+  --fs-sm: 13px;
+  --fs-base: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 26px;
+
+  /* 라이트 테마 기본값. 대비는 16-F 기준 4.5:1 이상. */
+  --c-bg: #fdfcfa;
+  --c-surface: #ffffff;
+  --c-surface-2: #f2efea;
+  --c-text: #1a1a1a;
+  --c-text-dim: #5a5550;
+  --c-border: #d9d3cb;
+  --c-accent: #0b5c8a;
+  --c-accent-text: #ffffff;
+  --c-danger: #a3231f;
+  --c-warn-bg: #fdf3d8;
+  --c-warn-text: #5a4408;
+  --c-notice-bg: #2d2a26;
+  --c-notice-text: #f5f1ea;
+  --c-focus: #0b5c8a;
+  --c-progress: #0b5c8a;
+  --c-progress-track: #ddd8d0;
+}
+
+/* system 테마 — 사용자가 명시적으로 고르지 않았을 때만 OS 를 따른다. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-bg: #15181c;
+    --c-surface: #1e2227;
+    --c-surface-2: #272c33;
+    --c-text: #eceff3;
+    --c-text-dim: #a8b0ba;
+    --c-border: #39404a;
+    --c-accent: #6fb6e8;
+    --c-accent-text: #0a1017;
+    --c-danger: #ef8f8b;
+    --c-warn-bg: #3a3320;
+    --c-warn-text: #f4e2b0;
+    --c-notice-bg: #0c0e11;
+    --c-notice-text: #e6eaf0;
+    --c-focus: #6fb6e8;
+    --c-progress: #6fb6e8;
+    --c-progress-track: #333941;
+  }
+}
+
+:root[data-theme="dark"] {
+  --c-bg: #15181c;
+  --c-surface: #1e2227;
+  --c-surface-2: #272c33;
+  --c-text: #eceff3;
+  --c-text-dim: #a8b0ba;
+  --c-border: #39404a;
+  --c-accent: #6fb6e8;
+  --c-accent-text: #0a1017;
+  --c-danger: #ef8f8b;
+  --c-warn-bg: #3a3320;
+  --c-warn-text: #f4e2b0;
+  --c-notice-bg: #0c0e11;
+  --c-notice-text: #e6eaf0;
+  --c-focus: #6fb6e8;
+  --c-progress: #6fb6e8;
+  --c-progress-track: #333941;
+}

@@ -341,3 +341,35 @@ test('E26 derivedHash 는 집합의 순서에 의존하지 않는다', () => {
   assert.notEqual(derivedHash(new Set(['a']), new Set(['b'])),
                   derivedHash(new Set(['b']), new Set(['a'])));
 });
+
+test('E27 ★ 저장한 extraction 을 그대로 다시 읽으면 되감지 않는다 (저장 누락 회귀)', () => {
+  // 2026-09-21: _saveMeta 가 derivedHash 를 저장하지 않아 앱을 열 때마다
+  // 되감겼다. 읽는 쪽(normalizeExtraction·planResume)만 배선하고 쓰는 쪽을
+  // 빠뜨린 것이다. 이 테스트는 "저장 → 재개" 왕복을 고정한다.
+  const saved = {
+    done: true, pagesDone: 729, cursor: 730, failed: [], roleDirty: [],
+    algoVersion: ALGO_VERSION,
+    derivedHash: DERIVED_HASH,          // ← _saveMeta 가 실제로 쓰는 값
+    status: STATUS.DONE
+  };
+  const p = planResume(saved);
+  assert.equal(p.reextract, false, '방금 저장한 것을 다시 읽었는데 되감으면 안 된다');
+  assert.equal(p.cursor, 730);
+  assert.equal(p.done, true);
+});
+
+test('E28 _saveMeta 가 쓰는 키 집합에 derivedHash 가 있다', async () => {
+  // 소스를 읽어 확인한다 — 저장 경로는 IndexedDB 의존이라 node --test 에서
+  // 통으로 못 돌린다. 키 하나가 빠지는 종류의 결함은 소스 검사로 충분히 잡힌다.
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../js/pdf/extract.js', import.meta.url), 'utf8');
+  const at = src.indexOf('doc.extraction = {');
+  assert.ok(at >= 0, 'doc.extraction 저장 블록을 찾지 못했다');
+  const end = src.indexOf('};', at);
+  assert.ok(end > at, '저장 블록의 끝을 찾지 못했다');
+  const block = src.slice(at, end);
+  for (const key of ['done', 'pagesDone', 'cursor', 'failed', 'algoVersion',
+                     'derivedHash', 'roleDirty', 'status']) {
+    assert.ok(block.includes(key + ':'), `저장 블록에 ${key} 가 없다`);
+  }
+});

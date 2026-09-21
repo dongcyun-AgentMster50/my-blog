@@ -570,6 +570,10 @@ export class Extractor extends EventTarget {
       cursor: this.ex.cursor,
       failed: this.ex.failed.slice(),
       algoVersion: ALGO_VERSION,
+      // spec 9-2 — 파생 규칙 지문. 이것을 빼면 planResume 이 매번
+      // "규칙을 알 수 없다"로 보아 되감고, 진짜 규칙 변경을 감지하는
+      // 기능이 죽는다(항상 울리는 경보).
+      derivedHash: DERIVED_HASH,
       roleDirty: this.ex.roleDirty.slice(),
       status: this.ex.status
     };

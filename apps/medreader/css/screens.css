@@ -1,0 +1,142 @@
+/* ============================================================
+   MedReader — 온보딩·서재·자리표시자 화면 (spec 12-2 · 12-6)
+
+   논리 속성만. left/right 계열 0건(16-H).
+   4단계가 reader.css 를 따로 더한다 — 이 파일은 건드리지 않아도 된다.
+   ============================================================ */
+
+/* ── 상단 바 (12-3) ───────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--bar-top);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--c-surface);
+  border-block-end: 1px solid var(--c-border);
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+}
+
+.topbar .title {
+  flex: 1 1 auto;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar button { min-block-size: 40px; padding-inline: var(--sp-3); }
+
+/* ── 온보딩 (12-2) ────────────────────────────────────── */
+.onboard-steps { display: block; }
+.onboard-step[hidden] { display: none; }
+
+.onboard-progress {
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  margin-block-end: var(--sp-3);
+}
+
+/* 언어 버튼 — 큰 터치 타깃, 각 언어 자국어 표기 */
+.lang-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
+}
+
+.lang-grid button {
+  min-block-size: var(--tap-lg);
+  font-size: var(--fs-lg);
+}
+
+.lang-grid button[aria-pressed="true"] {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+}
+
+/* 각 언어 이름은 그 언어의 글자로 쓴다 — 아랍어만 아랍어 폰트로. */
+.lang-grid button[lang="ar"] { font-family: var(--font-ar); }
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-block-size: var(--tap);
+  padding-block: var(--sp-2);
+}
+
+.consent-row label { cursor: pointer; }
+
+/* ── 서재 (12-6) ─────────────────────────────────────── */
+.doc-card { position: relative; }
+
+.doc-card .doc-title {
+  margin-block-end: var(--sp-1);
+  font-size: var(--fs-lg);
+}
+
+.doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  margin-block-end: var(--sp-3);
+}
+
+/* 추출 진행 — "312/7000" 이 여기에 그려진다 (9-4) */
+.extract-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-3);
+}
+
+.extract-label {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  flex: 0 0 auto;
+}
+
+.progress-track {
+  flex: 1 1 auto;
+  block-size: 8px;
+  border-radius: 4px;
+  background: var(--c-progress-track);
+  overflow: hidden;
+}
+
+.progress-fill {
+  block-size: 100%;
+  inline-size: 0%;
+  background: var(--c-progress);
+  transition: inline-size 200ms linear;
+}
+
+.doc-actions {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.doc-actions button { flex: 1 1 auto; }
+
+.storage-line {
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  margin-block-start: var(--sp-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 파일 입력은 버튼으로 대신 연다 — 기본 컨트롤은 화면에서 감춘다. */
+.file-input { display: none; }
+
+/* ── 자리표시자 (4~9단계가 채운다) ───────────────────── */
+.placeholder h2 { text-align: center; }
+.placeholder p { text-align: center; }
