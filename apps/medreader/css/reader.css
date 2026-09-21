@@ -260,8 +260,17 @@
   padding: var(--sp-3) var(--sp-4);
   border-block-start: 1px solid var(--c-border);
   background: var(--c-surface);
-  position: sticky;
-  inset-block-end: calc(var(--notice-h) + env(safe-area-inset-bottom, 0px));
+
+  /* [2026-09-21] sticky → fixed.
+     sticky 는 콘텐츠 흐름을 따라가므로 본문이 짧은 쪽에서는 본문 바로 뒤에
+     붙고(화면 중간), 긴 쪽에서는 화면 하단에 붙어 쪽을 넘길 때마다 버튼이
+     위아래로 움직였다. 화면 하단에 고정한다.
+     고지 바(z-index 40) 바로 위에 앉히고, 본문이 뒤에 가리지 않도록
+     .screen[data-screen="reader"] 에 같은 높이만큼 아래 여백을 준다. */
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: calc(var(--notice-total) + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
 }
 
 .pager .page-input {
@@ -284,4 +293,10 @@
 }
 
 /* 리더 화면은 본문이 화면 폭을 다 쓴다 — .screen 의 기본 여백을 줄인다. */
-.screen[data-screen="reader"] { padding-inline: var(--sp-3); }
+.screen[data-screen="reader"] {
+  padding-inline: var(--sp-3);
+  /* 고정된 .pager 뒤로 본문 마지막 줄이 숨지 않게 한다.
+     base.css 가 이미 --notice-h 만큼 body 에 여백을 주므로 여기서는
+     pager 높이만 더한다. --tap(48) + 위아래 패딩. */
+  padding-block-end: var(--pager-h);
+}

@@ -35,6 +35,12 @@
   /* 12-3 — 바 높이 */
   --bar-top: 44px;
   --notice-h: 24px;
+  /* 고지 바가 실제로 차지하는 높이 = min-block-size + 위아래 패딩(--sp-1 × 2).
+     --notice-h 는 최소 높이일 뿐이라 그 값으로 띄우면 2px 겹친다(실측).
+     하단에 고정되는 요소는 전부 이 값을 기준으로 띄운다. */
+  --notice-total: calc(var(--notice-h) + var(--sp-1) * 2);
+  /* 리더 하단 고정 쪽이동 바의 높이 — 본문 아래 여백이 이 값을 쓴다. */
+  --pager-h: 72px;
 
   --fs-sm: 13px;
   --fs-base: 16px;
