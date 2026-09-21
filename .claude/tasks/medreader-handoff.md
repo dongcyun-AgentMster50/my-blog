@@ -1,12 +1,15 @@
 # MedReader 인계 문서
 
 > **새 세션에서 이어받을 때 이 파일을 가장 먼저 읽는다.**
-> 마지막 갱신: 2026-09-21 (3단계 진행 중)
+> 마지막 갱신: 2026-09-21 (1~4단계 완료, 5단계 착수 전)
 
 ## 한 줄 요약
 
-의학 원서 PDF 리더·학습 웹앱. **spec 19절 10단계 중 1·2단계 완료, 3단계 진행 중.**
-브랜치 `claude/medreader-spec-planning-i8ge24`. 테스트 **144개 전부 통과**.
+의학 원서 PDF 리더·학습 웹앱. **spec 19절 10단계 중 1·2·3·4단계 완료. 다음은 5단계(TTS).**
+브랜치 `claude/medreader-spec-planning-i8ge24`. 테스트 **205개 전부 통과**.
+
+**지금 실제로 되는 것**: PDF 가져오기 → 729쪽 추출·저장 → 리플로우로 읽기 → `Aa`(글자·행간·글꼴·테마 5종) → 4개 언어·RTL.
+`[사용자 실기기 확인]` 729쪽 전수 추출 완료(`done`·`cursor 730`·`failed []`), 중복 방지 동작, `derivedHash` 저장 확인.
 
 ## 새 세션 시작 프롬프트 (그대로 붙여넣기)
 
@@ -47,8 +50,8 @@ my-blog 레포, 브랜치 claude/medreader-spec-planning-i8ge24 에서 MedReader
 apps/medreader/
 ├─ spec.md              승인된 설계. 실측으로 12군데 수정됨(아래 "spec 수정 이력")
 ├─ review.md            1·1b·1c·1d·2a·2b·2c 검증 보고서
-├─ index.html           [3단계 진행 중]
-├─ css/                 [3단계 진행 중] tokens·base·screens
+├─ index.html           화면 골격 — 모든 <section data-screen>
+├─ css/                 tokens(테마 5종)·base·screens·reader
 ├─ js/
 │  ├─ config.js         pdf.js 버전, LAYOUT 파라미터, KEEP_HYPHEN_*, EXTRACT
 │  ├─ text/             ★ 순수 계층 — 브라우저 API를 모른다. Review 통과
@@ -63,8 +66,15 @@ apps/medreader/
 │  ├─ hash.js           fileHash(8MB 초과는 표본), 캐시 키
 │  ├─ pdf/loader.js     pdf.js 동적 로드, jsDelivr→cdnjs 폴백
 │  ├─ pdf/extract.js    Extractor. 9-4 커서 재개, 우선순위 큐
-│  ├─ router.js         [3단계] i18n/  [3단계]  settings.js [3단계]
-├─ tests/               144개
+│  ├─ router.js         해시 라우터 (parseRoute 는 순수)
+│  ├─ settings.js       settings 스토어 래퍼 (9-3 키)
+│  ├─ i18n/             index + ar·en·fr·ko (ar·en 은 실제 번역)
+│  └─ ui/
+│     ├─ onboarding.js  3화면 + requestPersist()
+│     ├─ library.js     서재·가져오기·중복방지(pageCount 2차 비교)
+│     ├─ reader.js      ★ 리플로우 뷰. 5단계 계약(flowLineIds·setCurrent·lineElement)
+│     └─ typeset.js     Aa 팝오버
+├─ tests/               205개
 └─ dev/
    ├─ proto-lines.html  줄·컬럼·표를 눈으로 확인하는 도구
    ├─ proto-extract.*   추출·저장을 눈으로 확인하는 도구 (배선 예제로도 쓸 것)
@@ -136,22 +146,28 @@ MEDREADER_PDFJS=<pdfjs-dist 경로> node apps/medreader/dev/profile.mjs <pdf> --
 
 ## 다음 할 일
 
-### 지금 (3단계 — 진행 중)
-`.claude/tasks/medreader-build-3.md` — `index.html` 골격 + `router.js` + i18n 4언어 + 온보딩 + 서재.
-**완료 조건**: 온보딩 3화면 → 동의 → 서재 → 실제 PDF 가져오기 → 추출 진행 표시.
-반드시 포함: `db.requestPersist()` 호출, `pageCount` 2차 비교, CSS 논리 속성 grep 0건.
-
-### 그 다음 (4단계)
-리플로우 뷰(`ui/reflow.js`) + `Aa` 설정 + 테마. spec 12-3·12-4·16-F.
-`fromStored`로 읽은 문단을 `<span class="line" data-line-id>`로 그린다(6절 하이라이트가 이 클래스를 토글한다).
-본문 컨테이너는 **`dir="ltr" lang="en"` 고정**(아랍어 UI에서도 영어 본문은 LTR — 11-3).
-
-### 그 다음 (5단계)
+### 지금 (5단계 — 다음 차례)
 `tts/*` + 하단 컨트롤 바 + 하이라이트 + 자동 스크롤. **실기기 확인을 여기서 즉시**(16-C).
 Android Chrome 제약이 spec 6-4에 정리되어 있다 — `onboundary` 없음, `pause()` 후 재개 불가, utterance GC로 `onend` 유실.
 
+**4단계가 만들어 둔 계약 — 그대로 쓰라:**
+```js
+import { flowLineIds, lineElement, setCurrent, markDone, currentPage } from './ui/reader.js';
+```
+- `flowLineIds()` — **지금 DOM 에 있는 그 한 쪽**의 낭독 대상 줄 id 를 읽기 순서로 준다.
+  `span.line[data-flow="1"]` 이고, 머리말·꼬리말·쪽번호·회전 줄은 `data-flow="0"`(접힌 `details` 안)이라 **낭독에서 빼야 한다.** 표 줄은 아예 DOM 에 없다.
+- `setCurrent(lineId)` — `.is-current` 를 옮긴다. **그 줄이 현재 쪽에 없으면 `false`** 를 돌려준다 → 쪽을 먼저 넘기고(`location.hash`) 그다음 부른다.
+- **`span.line.textContent` 를 그대로 음성 엔진에 넣지 마라.** 하이픈 결합 줄은 끝의 `-` 를 `span.hy`(`display:none`)로 **감췄을 뿐 텍스트에는 남아 있다** — 그대로 읽히면 "cardio 대시"가 된다. `describePage()` 의 `lines[i].hyphen !== 'none'` 이 "다음 줄과 이어진다"를 뜻하니 **두 줄을 한 발화로 묶는 쪽**이 낫다.
+- **쪽이 바뀌면 DOM 이 통째로 갈린다.** 요소 참조를 들고 있지 말고 `lineId` 를 들고 매번 다시 찾아라.
+- 색은 테마별 `--hl-bg`/`--hl-text`/`--hl-done`(`tokens.css`). **자동 스크롤(6-5)은 아직 없다 — 5단계 몫이다.**
+
 ### 이후
 6 원본 뷰 · 7 AI 프로바이더 · 8 번역·요약 파이프라인 · 9 퀴즈 파서 · 10 마감.
+
+### 이월된 결함 (차단 아님, 기록만)
+- **`documents` 갱신 경합** — `Extractor._saveMeta` 와 리더의 마지막 위치 저장이 각각 `get → 수정 → put` 이라 한쪽 필드가 덮인다. 이어 읽기가 드물게 한 쪽 뒤로 갈 수 있다. 부분 갱신 헬퍼가 있으면 깔끔하다.
+- **`library.js` 의 `openDoc`** 이 `blobs` 없을 때 조용히 `null` 을 돌려준다 — 사용자에게는 "영원히 멈춘 문서"로 보인다.
+- 상단바 뒤로 버튼이 40px 로 16-G(48px)에 미달(`screens.css`).
 
 ### 보류 중인 것
 - **`BOOK_PROFILE` 분리(2-4)** — 형식이 유사하다고 확인돼 우선순위를 낮췄다. 새 자료 특성이 실제로 다르면 그때 한다.
