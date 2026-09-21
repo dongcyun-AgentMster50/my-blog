@@ -47,8 +47,14 @@
 
 /* ── Aa 팝오버 (12-3) ─────────────────────────────────── */
 .typeset-panel {
+  /* [2026-09-21] 실기기 피드백 두 가지를 고친다.
+     (a) 접은 상태에서 패널이 상단바의 Aa 버튼을 반쯤 덮었다 — --bar-top(44px)은
+         제목이 길어 상단바가 커지면 맞지 않는다. 위가 아니라 **아래**에 붙여
+         상단바 높이와 무관하게 만든다(휴대폰에서는 엄지에도 가깝다).
+     (b) Close 가 스크롤 안쪽 맨 끝에 있어 잘렸다 — 아래로 끌어야 보였다.
+         패널을 하단 시트로 두고 Close 를 sticky 로 붙인다. */
   position: fixed;
-  inset-block-start: calc(var(--bar-top) + var(--sp-2));
+  inset-block-end: calc(var(--pager-h) + var(--notice-total) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
   inset-inline: var(--sp-2);
   z-index: 25;
   max-inline-size: 520px;
@@ -57,9 +63,22 @@
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
   padding: var(--sp-4);
+  padding-block-end: 0;          /* sticky Close 가 자기 여백을 갖는다 */
   box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
-  max-block-size: 70vh;
+  /* 상단바를 덮지 않도록 남은 높이 안에서만 커진다. */
+  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--notice-total) - var(--sp-6));
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 패널 안에서 항상 보이는 닫기 버튼 — 스크롤해서 찾을 필요가 없다. */
+.typeset-panel > .primary {
+  position: sticky;
+  inset-block-end: 0;
+  inline-size: 100%;
+  margin-block-start: var(--sp-2);
+  /* 위쪽 내용이 비쳐 보이지 않게 패널 배경으로 덮는다. */
+  box-shadow: 0 -8px 12px -8px rgb(0 0 0 / 25%);
 }
 
 .typeset-panel[hidden] { display: none; }

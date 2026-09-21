@@ -29,7 +29,15 @@
   white-space: nowrap;
 }
 
-.topbar button { min-block-size: 40px; padding-inline: var(--sp-3); }
+.topbar button {
+  /* [2026-09-21] 실기기(Fold 7 접은 상태)에서 "Back" 이 "Ba"/"ck" 으로 줄바꿈됐다.
+     제목이 길면 flex 가 버튼을 짜내기 때문이다. 줄바꿈을 막고 줄어들지 않게 한다.
+     40px → 48px 은 16-G 의 터치 타깃 기준을 맞춘 것이다. */
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
 
 /* ── 온보딩 (12-2) ────────────────────────────────────── */
 .onboard-steps { display: block; }
