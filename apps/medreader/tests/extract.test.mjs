@@ -240,3 +240,53 @@ test('E19 ★ 실패한 쪽은 우선순위 창에서도 건너뛴다 — 무한
   const st3 = { ...st, has: done, cursor: 730 };
   assert.deepEqual(nextPage(st3), { pageNo: 5, priority: 3 });
 });
+
+/* ────────────────────────────────────────────────────────
+   Review 2 회귀 — 재개 모델의 구멍 3건
+   E16·E19 와 같은 종류의 결함이 세 자리 더 있었다. 브라우저에서 실측하고
+   여기에 고정한다(Extractor 내부 상태가 필요한 부분은 review.md 에 기록).
+   ──────────────────────────────────────────────────────── */
+
+test('E20 ★ isComplete 는 cursor 를 믿지 않는다 — 1쪽부터 실제로 훑는다', () => {
+  // cursor 가 pageCount 를 넘었지만 저장된 쪽이 하나도 없다.
+  // cursor 부터 훑으면 "다 끝났다"가 되고, 5절 파서가 빈 문서 위를 돈다.
+  // (실측: cursor 99999 인 20쪽 문서에서 pages 행 0개인데 done = true)
+  assert.equal(isComplete({ cursor: 99999, pageCount: 20, has: setOf(), failed: [] }), false);
+  // 앞쪽에 구멍 하나만 있어도 완료가 아니다
+  const most = setOf(...Array.from({ length: 20 }, (_, i) => i + 1).filter((n) => n !== 7));
+  assert.equal(isComplete({ cursor: 21, pageCount: 20, has: most, failed: [] }), false);
+  // 정상 완료는 그대로 true
+  const all = setOf(...Array.from({ length: 20 }, (_, i) => i + 1));
+  assert.equal(isComplete({ cursor: 21, pageCount: 20, has: all, failed: [] }), true);
+});
+
+test('E21 ★ failed 에 "이미 저장된 쪽"이 들어가면 영원히 빠지지 않는다 — 넣지 마라', () => {
+  // nextPage 의 재시도 경로는 !has(f) 로 거른다. 저장돼 있으면 재시도되지 않고,
+  // 재시도되지 않으면 성공으로 지워질 기회도 없다 → done 이 끝내 서지 않는다.
+  // 그래서 **넣지 않는 것**이 계약이다(Extractor._tick 이 stored 를 먼저 본다).
+  const all = setOf(...Array.from({ length: 10 }, (_, i) => i + 1));
+  const st = {
+    current: null, pageCount: 10, cursor: 11, failed: [4],
+    has: all, inFlight: new Set(), retriedPages: new Set(), roleQueue: []
+  };
+  assert.equal(nextPage(st), null, '저장된 쪽은 재시도 대상이 아니다');
+  assert.equal(isComplete({ cursor: 11, pageCount: 10, has: all, failed: [4] }), false,
+    '그런데 failed 가 비지 않아 done 도 서지 않는다 — 빠져나갈 길이 없는 상태다');
+});
+
+test('E22 실패가 셋 이상 흩어져 있어도 전부 한 번씩 재시도된다', () => {
+  const stored = setOf(...Array.from({ length: 30 }, (_, i) => i + 1).filter((n) => ![3, 14, 21, 29].includes(n)));
+  const base = {
+    current: null, pageCount: 30, cursor: 31, failed: [3, 14, 21, 29],
+    has: stored, inFlight: new Set(), roleQueue: []
+  };
+  const seen = [];
+  const tried = new Set();
+  for (let i = 0; i < 10; i++) {
+    const t = nextPage({ ...base, retriedPages: tried });
+    if (!t) break;
+    seen.push(t.pageNo);
+    tried.add(t.pageNo);
+  }
+  assert.deepEqual(seen, [3, 14, 21, 29], '네 쪽 전부 한 번씩, 그 뒤로는 멈춘다');
+});

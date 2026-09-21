@@ -23,7 +23,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { buildPageLayout, algoVersion } from '../js/text/layout.js';
-import { LAYOUT, PDF_TEXT_CONTENT_OPTIONS } from '../js/config.js';
+import { LAYOUT, PDF_TEXT_CONTENT_OPTIONS, PDFJS_VERSION } from '../js/config.js';
 import { createAcc, addPage, finalize, formatReport, renderBookProfile, slimLayout, jsonBytes } from './profile-lib.mjs';
 
 /* ────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ const PDFJS_HELP = [
   '작업용 임시 폴더에 설치하고 그 위치를 알려주면 된다:',
   '',
   '  mkdir -p /tmp/medreader-tools && cd /tmp/medreader-tools',
-  '  npm install pdfjs-dist@5.4.149',
+  '  npm install pdfjs-dist@' + PDFJS_VERSION,
   '  node <repo>/apps/medreader/dev/profile.mjs <pdf> --pdfjs /tmp/medreader-tools',
   '',
   '또는 환경변수로:',

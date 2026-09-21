@@ -13,6 +13,7 @@ import {
   tallyScripts, createAcc, addPage, finalize, renderBookProfile, slimLayout, jsonBytes,
   robustMaxKey, quantileOf, CURRENT_CODE_RE
 } from '../dev/profile-lib.mjs';
+import { toStored } from '../js/text/store.js';
 
 /* ── 히스토그램 ─────────────────────────────────────────── */
 
@@ -228,6 +229,33 @@ test('slimLayout/jsonBytes: 저장본에서 items 가 빠진다 (spec 9-2)', () 
   assert.equal(slim.lines[0].items, undefined);
   assert.equal(l.lines[0].items.length, 1);             // 원본을 훼손하지 않는다
   assert.ok(jsonBytes(slim) < jsonBytes(l));
+});
+
+/* ────────────────────────────────────────────────────────
+   Review 2 회귀 — 이 도구가 재는 "저장본"이 **실제로 저장되는 것**이어야 한다.
+   2a 의 slimLayout 은 items 만 떼어낸 것이라 2b 의 축소 규칙 1·2·3 을 반영하지
+   못했고, 729쪽에서 34.0KB/쪽(진짜 21.9KB)을 출력했다. 7000쪽 환산이 238MB 대
+   64MB 로 갈리는 차이다. 정의가 다시 갈라지면 여기서 잡힌다.
+   ──────────────────────────────────────────────────────── */
+test('★ 도구가 재는 저장본은 toStored 와 같은 것이다 (spec 9-2 축소 규칙 1·2·3)', () => {
+  const l = layoutOf([
+    line({ id: '1:0', text: 'body line', runs: [{ x0: 1.234567, x1: 99.87654, text: 'body line' }],
+           bbox: { x0: 1.234567, y0: 2, x1: 99.87654, y1: 12 }, items: [{ str: 'body line' }] }),
+    line({ id: '1:1', text: 'A  B', role: 'table', regionId: '1:t0',
+           runs: [{ x0: 10, x1: 20, text: 'A' }, { x0: 40, x1: 50, text: 'B' }], items: [] })
+  ], {
+    paragraphs: [{ id: '1:p0', lineIds: ['1:0'], kind: 'body', text: 'body line',
+                   bbox: { x0: 1.234567, y0: 2, x1: 99.87654, y1: 12 }, continuesNext: false, continuesPrev: false }],
+    regions: [{ id: '1:t0', kind: 'table', bbox: { x0: 10, y0: 0, x1: 50, y1: 10 }, lineIds: ['1:1'], pageNo: 1 }]
+  });
+  const slim = slimLayout(l);
+  assert.equal(slim.paragraphs[0].text, undefined, '규칙 1 — 문단 text 를 세면 안 된다');
+  assert.equal(slim.lines[0].runs[0].text, undefined, '규칙 2 — 표 밖 run text 를 세면 안 된다');
+  assert.equal(slim.lines[1].runs[0].text, 'A', '규칙 2 — 표 안 run text 는 센다');
+  assert.equal(slim.lines[0].bbox.x0, 1.23, '규칙 3 — 좌표는 소수 2자리');
+  assert.equal(slim.storeVersion, toStored(l).storeVersion);
+  assert.equal(JSON.stringify(slim), JSON.stringify(toStored(l)), '★ toStored 와 바이트 단위로 같아야 한다');
+  assert.equal(l.paragraphs[0].text, 'body line', '원본을 훼손하지 않는다');
 });
 
 test('renderBookProfile: 유효한 JS 이고, 못 정한 값은 TODO 로 남는다', () => {

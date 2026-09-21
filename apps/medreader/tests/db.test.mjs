@@ -161,3 +161,40 @@ test('D10 오류 코드는 문자열 상수다 — UI 문자열이 아니다 (3-
   assert.equal(ERR.QUOTA, 'ERR_DB_QUOTA');
   for (const k of Object.keys(ERR)) assert.match(ERR[k], /^ERR_[A-Z_]+$/);
 });
+
+/* ────────────────────────────────────────────────────────
+   Review 2 회귀 — v1 → v2 마이그레이션에 테스트가 **없었다**.
+   MIGRATIONS[2] 를 빈 함수로 바꿔도 134개 중 한 개도 실패하지 않았다.
+   버전을 올린 유일한 이유가 이 인덱스이므로 여기서 고정한다.
+   (실제 IndexedDB 에서의 데이터 보존은 브라우저로 확인했다 — review.md §D)
+   ──────────────────────────────────────────────────────── */
+
+test('D11 ★ MIGRATIONS[2] 는 v1 DB 에 빠진 pages.docId_algoVersion 을 채운다', () => {
+  // docId_algoVersion 이 없던 v1 DB 를 흉내낸다
+  const db = new StubDb();
+  for (const s of SCHEMA_V1) {
+    const store = db.createObjectStore(s.name, { keyPath: s.keyPath });
+    for (const ix of s.indexes) {
+      if (s.name === 'pages' && ix.name === 'docId_algoVersion') continue;   // ← v1 에는 없었다
+      store.createIndex(ix.name, ix.keyPath, { unique: !!ix.unique });
+    }
+  }
+  const pages = db.stores.get('pages');
+  assert.equal(pages._indexes.has('docId_algoVersion'), false, '전제: v1 에는 없다');
+
+  MIGRATIONS[2](db, stubTx(db));
+
+  assert.ok(pages._indexes.has('docId_algoVersion'), '★ v2 가 인덱스를 채워야 한다');
+  assert.deepEqual(pages._indexes.get('docId_algoVersion').keyPath, ['docId', 'algoVersion']);
+  assert.equal(db.createCalls, SCHEMA_V1.length, '스토어를 새로 만들지 않았다(데이터를 건드리지 않는다)');
+});
+
+test('D12 MIGRATIONS[2] 는 멱등하다 — 이미 v2 인 DB 에서는 아무 일도 하지 않는다', () => {
+  const db = new StubDb();
+  MIGRATIONS[1](db, stubTx(db));
+  const before = [...db.stores.values()].reduce((a, s) => a + s.created, 0);
+  assert.doesNotThrow(() => MIGRATIONS[2](db, stubTx(db)));
+  assert.doesNotThrow(() => MIGRATIONS[2](db, stubTx(db)));
+  assert.equal([...db.stores.values()].reduce((a, s) => a + s.created, 0), before, '인덱스를 다시 만들지 않았다');
+  assert.equal(db.createCalls, SCHEMA_V1.length, '스토어를 다시 만들지 않았다');
+});

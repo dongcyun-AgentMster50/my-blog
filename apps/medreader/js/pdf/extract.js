@@ -191,9 +191,19 @@ export function nextPage(st) {
   return null;
 }
 
-/** spec 9-4 완료 조건 — `failed` 가 비고 `cursor > pageCount`. */
+/**
+ * spec 9-4 완료 조건 — `failed` 가 비고 모든 쪽이 저장돼 있다.
+ *
+ * **1쪽부터** 훑는다. `st.cursor` 부터 훑으면 "cursor 아래는 전부 저장됐거나
+ * 실패했다"는 불변식을 저장본이 지켜 준다고 **믿는** 것이 된다. 그 믿음이
+ * 깨지면(같은 docId 의 pageCount 가 줄었다 · 레코드가 손상됐다) `cursor` 하나
+ * 때문에 `done` 이 선다 — `[Review 2 실측]` `cursor: 99999` 인 20쪽 문서에서
+ * 저장된 쪽이 **0개인데** `done = true` 가 됐다. 그러면 5절 파서가 빈 문서 위를
+ * 돌고 사용자에게는 "완료"가 보인다.
+ * 비용은 `pageCount` 번의 Set 조회뿐이고 완료 판정은 문서당 몇 번뿐이다.
+ */
 export function isComplete(st) {
-  const c = advanceCursor(st.cursor, st.pageCount, st.has || (() => false), []);
+  const c = advanceCursor(1, st.pageCount, st.has || (() => false), []);
   return c > st.pageCount && (st.failed || []).length === 0;
 }
 
@@ -288,6 +298,12 @@ export class Extractor extends EventTarget {
     await this._loadStoredSet();
     this.roleQueue = this.ex.roleDirty.slice();
     this.ex.pagesDone = this.stored.size;
+    // 9-4 의 불변식 검산 — "cursor 아래는 전부 저장됐거나 실패했다".
+    // 건강한 저장본이면 아래 값은 cursor 와 **정확히 같아** 아무 일도 하지 않는다.
+    // 작으면 저장본이 불변식을 깬 것이므로(pageCount 가 바뀐 문서·손상된 레코드)
+    // 구멍의 첫 쪽으로 되감는다. 이미 메모리에 있는 Set 조회라 7000쪽에서도 공짜다.
+    const firstGap = advanceCursor(1, this.pageCount, (n) => this.stored.has(n), this.ex.failed);
+    if (firstGap < this.ex.cursor) this.ex.cursor = firstGap;
     this._emitProgress();
     return this.ex;
   }
@@ -356,8 +372,22 @@ export class Extractor extends EventTarget {
         this._emitProgress();
         return;
       }
-      // 한 쪽이 던져도 전체를 멈추지 않는다 (9-4)
-      this.ex.failed = addSorted(this.ex.failed, target.pageNo);
+      // 한 쪽이 던져도 전체를 멈추지 않는다 (9-4). 다만 두 가지를 함께 해야 한다.
+      //
+      // ① **역할 큐에서 뺀다.** 빼지 않으면 priority 4 가 같은 쪽을 영원히 다시
+      //    잡는다 — E19 가 우선순위 창에서 고친 병이 역할 재계산 경로에 그대로
+      //    다시 나 있었다. `[Review 2 실측]` `_recomputeRoles` 가 던지게 했더니
+      //    1.5초에 298회를 다시 잡고 `pageerror` 를 298번 쏘았다.
+      // ② **이미 저장된 쪽은 `failed` 에 넣지 않는다.** 역할 재계산(4-7) 실패나
+      //    `_saveMeta` 실패는 "그 쪽이 없다"는 뜻이 아니다. 넣으면 nextPage 의
+      //    재시도 경로가 `!has(f)` 로 걸러 **영원히 빼내지 못하고**(저장돼 있으니
+      //    성공으로 지워질 기회도 없다) `done` 이 끝내 서지 않는다 —
+      //    `[Review 2 실측]` 저장된 4쪽을 failed 에 넣자 재시작해도 그대로였다.
+      this.ex.roleDirty = removeFrom(this.ex.roleDirty, target.pageNo);
+      this.roleQueue = this.roleQueue.filter((n) => n !== target.pageNo);
+      if (!this.stored.has(target.pageNo)) {
+        this.ex.failed = addSorted(this.ex.failed, target.pageNo);
+      }
       this.dispatchEvent(new CustomEvent('pageerror', {
         detail: { pageNo: target.pageNo, message: e && e.message ? e.message : String(e) }
       }));

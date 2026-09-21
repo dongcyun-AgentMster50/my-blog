@@ -11,6 +11,7 @@
 
 import { LAYOUT } from '../js/config.js';
 import { normalizeRepeatKey } from '../js/text/blocks.js';
+import { toStored } from '../js/text/store.js';
 
 /* ────────────────────────────────────────────────────────
    작은 집계 유틸 — 전부 순수 함수
@@ -395,26 +396,19 @@ export function quantileOf(values, q) {
 }
 
 /**
- * 저장본 추정 — spec 9-2 "아이템 배열은 저장하지 않는다".
- * 줄에서 items 를 떼어낸 얕은 복사본을 돌려준다(원본을 훼손하지 않는다).
+ * 저장본 — spec 9-2. **`text/store.js` 의 `toStored` 를 그대로 쓴다.**
+ *
+ * `[Review 2]` 이 함수는 2a 단계에서 "items 만 떼어낸 얕은 복사본"이었다.
+ * 2b 가 9-2 의 축소 규칙 1·2·3(문단 text 제거 · 표 밖 run text 제거 · 좌표
+ * 반올림)을 `toStored` 로 구현한 뒤에도 그대로 남아 있어, 이 도구가 **실제로
+ * 저장되지 않는 것까지 세고 있었다** — 729쪽에서 34.0KB/쪽로 나왔지만 진짜
+ * 저장본은 21.9KB/쪽(JSON)·9.35KB/쪽(IndexedDB)이다. 7000쪽 환산이 238MB 대
+ * 64MB 로 갈리는 차이라 새 자료 판단이 통째로 틀어진다. 정의를 하나로 묶는다.
+ *
+ * 원본 `layout` 은 훼손하지 않는다(`toStored` 의 계약).
  */
 export function slimLayout(layout) {
-  const lines = [];
-  const src = Array.isArray(layout.lines) ? layout.lines : [];
-  for (let i = 0; i < src.length; i++) {
-    const l = src[i];
-    lines.push({
-      id: l.id, text: l.text, bbox: l.bbox, baseline: l.baseline, fontSize: l.fontSize,
-      col: l.col, role: l.role, hyphenJoin: l.hyphenJoin, paraId: l.paraId,
-      regionId: l.regionId, runs: l.runs
-    });
-  }
-  return {
-    pageNo: layout.pageNo, width: layout.width, height: layout.height,
-    algoVersion: layout.algoVersion, lines: lines,
-    paragraphs: layout.paragraphs, regions: layout.regions,
-    columns: layout.columns, stats: layout.stats
-  };
+  return toStored(layout || {});
 }
 
 const ENC = new TextEncoder();
@@ -826,12 +820,15 @@ export function finalize(acc) {
     add('DEAD', 'blocks.js hasUnitTokens 의 임상 단위 정규식 일치 0건 — 이 책에서는 표 가점 신호가 죽은 코드다.');
   }
   const bytesMean = bytes.mean;
-  if (bytesMean != null && bytesMean / 1024 > 10) {
-    add('WARN', 'spec 9-2 의 "쪽당 5~10KB" 추정이 실측과 어긋난다 — 아이템을 뺀 저장본이 쪽당 평균 ' +
-      (bytesMean / 1024).toFixed(1) + 'KB(p90 ' + (bytes.p90 / 1024).toFixed(1) + 'KB)다. ' +
-      '문단 text 가 줄 text 를 그대로 한 번 더 들고 있는 것이 큰 몫이다(문단 ' +
-      (byteParts.paragraphs / 1024).toFixed(1) + 'KB / 줄 ' + (byteParts.lines / 1024).toFixed(1) +
-      'KB / 영역 ' + (byteParts.regions / 1024).toFixed(1) + 'KB per page).');
+  // 기준값은 spec 9-2 `[수정 2026-09-20]` 의 실측치다 — 축소 규칙 1·2·3 을 적용한
+  // 저장본이 쪽당 20.6KB(JSON). 초판의 "5~10KB" 는 아이템을 뺀 것만 센 추정이었고
+  // 이미 철회됐다. 여유를 1.5배 두고, 넘을 때만 "이 책이 더 무겁다"고 알린다.
+  if (bytesMean != null && bytesMean / 1024 > 31) {
+    add('WARN', 'spec 9-2 실측(축소 규칙 적용 후 쪽당 20.6KB JSON)보다 이 책이 무겁다 — 저장본이 쪽당 평균 ' +
+      (bytesMean / 1024).toFixed(1) + 'KB(p90 ' + (bytes.p90 / 1024).toFixed(1) + 'KB)다(줄 ' +
+      (byteParts.lines / 1024).toFixed(1) + 'KB / 문단 ' + (byteParts.paragraphs / 1024).toFixed(1) +
+      'KB / 영역 ' + (byteParts.regions / 1024).toFixed(1) + 'KB per page). ' +
+      'IndexedDB 실점유는 JSON 바이트의 약 0.40배다(9-2).');
   }
   if (acc.pagesEmpty > 0) {
     add('WARN', '텍스트가 0인 쪽 ' + acc.pagesEmpty + '개 — 스캔 이미지 쪽일 수 있다(OCR 없음).');
@@ -1124,10 +1121,11 @@ export function formatReport(s, meta = {}) {
     ['저장본/쪽', kb(s.perf.bytes.mean) + ' (p50 ' + kb(s.perf.bytes.p50) + ', p90 ' + kb(s.perf.bytes.p90) + ', max ' + kb(s.perf.bytes.max) + ')'],
     ['items 포함/쪽', kb(s.perf.itemBytes.mean) + ' — spec 9-2 가 저장하지 말라는 쪽'],
     ['저장본 내역/쪽', 'lines ' + kb(s.perf.parts.lines) + '  paragraphs ' + kb(s.perf.parts.paragraphs) +
-      '  regions ' + kb(s.perf.parts.regions) + '   ※ paragraphs.text 는 lines.text 의 사본이다'],
-    ['전체 예상 용량', (proj / 1048576).toFixed(1) + 'MB  (' + (s.docPages || s.pagesSeen) + '쪽 × 평균)'],
-    ['spec 9-2 목표', '쪽당 5~10KB → ' + (s.perf.bytes.mean == null ? 'n/a' :
-      (s.perf.bytes.mean / 1024 <= 10 ? '충족' : '초과(' + kb(s.perf.bytes.mean) + ')'))],
+      '  regions ' + kb(s.perf.parts.regions) + '   ※ 축소 규칙 1·2·3 적용 후(toStored)'],
+    ['전체 예상 용량', (proj / 1048576).toFixed(1) + 'MB JSON / 약 ' + (proj * 0.40 / 1048576).toFixed(1) +
+      'MB IndexedDB  (' + (s.docPages || s.pagesSeen) + '쪽 × 평균, 9-2 의 0.40배 실측)'],
+    ['spec 9-2 실측 대비', '기준 쪽당 20.6KB(JSON) → ' + (s.perf.bytes.mean == null ? 'n/a' :
+      (s.perf.bytes.mean / 1024 <= 20.6 ? '이 책이 더 가볍다' : '이 책이 더 무겁다(' + kb(s.perf.bytes.mean) + ')'))],
     ['전체 예상 시간', (s.perf.projectedMs / 1000).toFixed(1) + '초 (레이아웃 계산만, PDF 파싱 제외)']
   ], [16, 0]));
 

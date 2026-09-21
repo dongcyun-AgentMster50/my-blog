@@ -1352,3 +1352,543 @@ Build의 분류(구조적 229 / 진짜 241, 완화 P7 83.5%)를 받아쓰지 않
 2. **9단계 파서는 `question` 문단 하나를 stem으로 보면 안 된다.** 전수에서 246건이 `question > body > … > option` 형태다(§1cd-8). spec 5-2의 `stemParaIds`(배열)와 5-3의 "첫 보기 직전까지"를 문자 그대로 구현하면 손실이 없고, `question` 문단 1개만 집으면 P7 66.2%가 그대로 파서 정확도가 된다.
 
 3. **`role: 'table'` 줄은 파서에게 보이지 않는다.** 표로 오탐된 보기 46줄(13쪽)이 문단 밖에 있다(§1cd-3). 파서가 보기 문자 연속성(A,B,C…)이 끊긴 문항을 만나면 **오류가 아니라 `unverified`로 강등**하고 해당 쪽의 `regions`를 함께 기록해 두면, 4-8을 고친 뒤 재파싱만으로 복구된다.
+
+---
+---
+
+# Review — MedReader 2a·2b·2c단계 (서비스 계층: 측정 도구 · 저장본 · db · hash · loader · extract)
+
+- 검증일: 2026-09-21
+- 검증 대상: `cc803af`(2a 측정 도구) · `d70433c`(2b 폭 위생·저장본) · `44a2a40`(2c db·hash·loader·extract) · `59ab762`(DB_VERSION 1→2). 브랜치 `claude/medreader-spec-planning-i8ge24`
+- 검증 환경: Windows 10 Pro 19045 / Node **v24.14.0** / Chromium(내장 브라우저 패널, `python -m http.server 8000`) / `pdfjs-dist@5.4.149` legacy
+- 기준 문서: `spec.md` 2-4 · 3-1~3-3 · 4-2 · 7-5 · 9-1·9-2·9-4 · 13절 · 14절 · 16-B·16-K · 18절, `.claude/tasks/medreader-build-2a.md`·`-2b.md`·`-2c.md`
+
+---
+
+## 종합 판정 (2a·2b·2c)
+
+**조건부 통과** — 차단 0건, **중간 5건(그중 4건은 내가 고쳤다)**, 경미 7건, 제안 8건.
+
+→ **3단계(spec 19절 3번)로 진행해도 되는가: 예.** 단, 아래 §10ec의 조건 2개를 3단계 착수와 **같은 커밋 안에서** 처리할 것.
+
+근거:
+
+- **재개 모델에서 새 결함 3건을 찾았고 전부 실기(브라우저)로 재현했다**(§2c-3). 2c가 스스로 고친 E16·E19와 **같은 종류**의 병이 세 자리 더 남아 있었다. 셋 다 고쳤고, 고치기 전/후를 같은 하네스로 재측정했다(298회 → 1회 / `done=true` 오판 → 20쪽 정상 추출).
+- **v1 → v2 마이그레이션이 실제 IndexedDB에서 데이터를 보존한다**(§2c-6). 스텁이 아니라 진짜 v1 DB를 만들어 확인했고, `docId_algoVersion` 인덱스가 **기존 레코드를 소급해 담는 것**까지 봤다.
+- **`QuotaExceededError` 경로가 실제로 돈다**(§2c-6). 2c가 `×`(미검증)로 신고한 자리다. `put` 스텁 → `DbError(ERR_DB_QUOTA)` → `STATUS.QUOTA` + `fatal` 이벤트 → `documents` 영속화까지 한 줄로 이어진다.
+- **해시 충돌을 실제로 만들었다**(§2c-5). 대상 PDF의 표본 밖 4,096바이트를 바꾼 파일이 **같은 `fileHash`** 를 낸다. 목적(동일성 판별)에 비추면 수용 가능하지만, 코드 주석이 약속한 2차 방벽(`pageCount` 비교)이 **아직 구현돼 있지 않다** — 3단계 조건으로 넘긴다.
+- **2a 측정 도구가 틀린 숫자를 내고 있었다**(§2c-7). `slimLayout`이 2b의 축소 규칙을 반영하지 못해 저장본을 **34.0KB/쪽**(진짜 21.9KB)으로 재고 있었다. 7000쪽 환산이 **238MB 대 64MB**로 갈리는 차이다. 고쳤고, 고친 뒤 도구가 내는 6.2MB/729쪽이 오케스트레이터의 브라우저 실측 6.65MB와 7% 안에서 만난다.
+- 의도적 파손 18종 중 14종이 테스트를 깨뜨린다(§2c-8). 빈 칸 4개는 전부 근거와 함께 남긴다.
+- 순수성·의존 방향·버전 문자열·`config.js` 불변·기존 테스트 기대값 무변경 전부 확인(§2c-2).
+
+**단, 7000쪽 실자료로는 아무것도 검증되지 않았다.** 이 Review가 만진 모든 규모 수치는 729쪽 × 22.7MB에서 나온 것이고, 자료가 바뀌면 §2c-7의 측정을 **가장 먼저 다시 돌려야 한다.**
+
+---
+
+## 2c-1. 재현하지 않은 것과 재현한 것
+
+오케스트레이터가 이미 확인한 것(134/134 pass, 729쪽 종단 `usage 29.34MB`·쪽당 `9.35KB`, 343쪽 저장본 왕복, 2b 전수 지표)은 **다시 세지 않았다.** 대신 그 숫자들이 **거짓일 수 있는 자리**를 팠다.
+
+내가 독립적으로 돌린 것:
+
+| 무엇 | 방법 |
+|---|---|
+| 재개 모델 적대적 시뮬레이션 11종 | 순수 함수만으로 루프를 재구성 |
+| `Extractor` 실동작 9종 | 브라우저에서 가짜 `pdfDoc` + 진짜 `db.js`/IndexedDB |
+| `toStored`/`fromStored` 경계 8종 | Node, 합성 + 실 픽스처 |
+| 해시 충돌 합성 | 실제 22.7MB PDF의 바이트를 고쳐 만든 두 파일 |
+| v1→v2 마이그레이션·`blocked`·`versionchange`·중단된 upgrade·쿼터 | 브라우저 실 IndexedDB |
+| `profile.mjs` 출력 교차 검증 | `buildPageLayout`·`profile-lib`을 **전혀 쓰지 않는** 별도 집계기 |
+| 의도적 파손 18종 | 파일 변형 → 전체 테스트 → 원복 |
+
+시작 시점 테스트 **134 / 134 pass**(재확인). 내 회귀 테스트 6개를 더한 뒤 **140 / 140 pass**.
+
+---
+
+## 2c-2. 구조 · 순수성 · 회귀 (F)
+
+| 확인 | 결과 |
+|---|---|
+| `text/*` 브라우저 전역 (`document`·`window`·`fetch`·`indexedDB`·`pdfjsLib`·`navigator`·`localStorage`·`sessionStorage`·`crypto`) | **0건** ○ |
+| `db.js`·`pdf/*` 의 DOM 조작 | **0건** ○ (`navigator.storage`·`IDBKeyRange`·`EventTarget`·`requestIdleCallback`만 — 서비스 계층 허용) |
+| `ui/` import | **0건**(주석 2줄뿐) ○ |
+| `apps/medreader/` 경계 이탈 (`../../`) | **0건** ○ |
+| `hash.js` 전역 | `globalThis.crypto` **존재 검사**(16-K 예외)와 `TextEncoder`뿐 ○ |
+| 오류가 UI 문자열이 아니라 코드인가 | `db.ERR.{QUOTA,BLOCKED,OPEN}` · `loader.ERR_PDFJS_{LOAD,OFFLINE}` · `extract.STATUS.*` 전부 상수. 서비스 계층에 사용자용 영어 문장 **0건** ○ |
+| pdf.js 버전 문자열 | **2곳이었다** — `config.js:19`(정본)과 `dev/profile.mjs:90`(설치 안내 문자열). 16-K 위반이라 고쳤다(§9ec (3)). 지금은 정본 1곳 |
+| `config.js` 불변 (`git diff cc803af~1..HEAD`) | `EXTRACT` 블록 **추가만**. `KEEP_HYPHEN_SUFFIXES`(사용자가 채운 23개)·`LAYOUT`·`KEEP_HYPHEN_PREFIXES`·`ABBREVIATIONS` **한 글자도 안 바뀜** ○ |
+| 기존 테스트 기대값 (`--numstat`) | 6파일 **1,114줄 추가 / 0줄 삭제** ○ |
+| `dev/proto-extract.html` 콘솔 (16-K) | 새 탭 로드 → **에러·경고 0건** ○ |
+| 모바일 375px | `scrollWidth === clientWidth === 375`, 넘치는 요소 **0개** ○ |
+| `.nojekyll` | 존재 ○ |
+
+**D1(`DB_VERSION` 단언 1→2) 변경은 정당하다.** `59ab762`가 `spec.md` 9-1의 "버전 **1**"을 "버전 **2**"로 **먼저** 고치고 테스트를 따라 고쳤다. D1이 주장하는 것은 "코드 값"이 아니라 **"spec과 코드가 같은 값을 말하는가"** 이므로, spec이 움직이면 함께 움직이는 것이 옳다. 게다가 이 파일 자체가 `44a2a40`에서 새로 생긴 것이라 **2a 이전의 기대값은 하나도 건드려지지 않았다.**
+
+---
+
+## 2c-3. A. 재개 모델의 구멍 사냥 ★ — 이번 Review의 핵심
+
+### 결론: **새 결함 3건. 전부 E16·E19와 같은 종류다. 셋 다 고쳤다.**
+
+2c의 자기 신고 2건은 우연이 아니었다. 같은 병(집합이어야 할 것을 불리언으로 관리 / 한쪽 경로가 `failed`를 보지 않음)이 **다른 세 자리에 그대로 남아 있었다.**
+
+### 구멍 ① — 역할 재계산(priority 4)이 던지면 **같은 쪽을 무한히 다시 잡는다** 〔중간〕
+
+`_tick`의 `catch`는 `roleQueue`를 정리하지 않는다. `_recomputeRoles`가 던지면 `roleQueue`에 그 쪽이 그대로 남고, `nextPage`의 마지막 루프가 그것을 다시 돌려준다.
+
+```js
+for (const r of rq) if (!busy.has(r)) return { pageNo: r, priority: 4 };
+```
+
+**실측(브라우저. 숨은 탭 스로틀을 없애려 `requestIdleCallback`을 `setTimeout(0)`으로 치환):**
+
+```
+_recomputeRoles 가 던지게 한 뒤 1.5초
+  호출 횟수 298 · pageerror 이벤트 298 · running=true · 종료 이벤트 없음
+```
+
+E19가 우선순위 창에서 고친 바로 그 병이다(그때는 99회, 이번은 298회). 실기기에서는 탭이 영원히 idle 시간을 태우고 `done`이 서지 않으며 UI에 `pageerror`가 초당 수백 번 꽂힌다.
+
+### 구멍 ② — **이미 저장된 쪽이 `failed`에 들어가면 영원히 빠지지 않는다** 〔중간〕
+
+`catch`는 `target.pageNo`를 무조건 `failed`에 넣는다. 그런데 `nextPage`의 재시도 경로는
+
+```js
+if (!busy.has(f) && !has(f) && !tried.has(f)) return { pageNo: f, priority: 3 };
+```
+
+`!has(f)`로 거른다. **저장돼 있으면 재시도되지 않고, 재시도되지 않으면 `_processPage`의 성공 경로(`removeFrom(failed, …)`)를 탈 기회도 없다.** `isComplete`는 `failed.length === 0`을 요구하므로 `done`이 **영구히** 서지 않는다 → 5절 파서·`sectionIndex`가 영영 돌지 않는다.
+
+도달 경로가 둘이다. 둘 다 이미 저장된 쪽에서만 난다.
+
+1. **구멍 ①** — `_recomputeRoles`는 정의상 저장된 쪽만 다시 돈다.
+2. `_processPage`가 `db.put('pages')`에 **성공한 뒤** `_saveMeta`가 던지는 경우(`documents` 쓰기 실패).
+
+**실측:** 6쪽 문서를 정상 완료(`done=true`)시킨 뒤 저장된 4쪽을 `failed`에 넣고 재시작 →
+`failed=[4]` · `stored.has(4)=true` · `done=false` · `status=paused`. 몇 번을 재시작해도 같다.
+
+### 구멍 ③ — `cursor`가 `pageCount`를 넘으면 **저장된 쪽이 0개여도 `done=true`** 〔중간〕
+
+`isComplete`가 `st.cursor`부터 훑는다. 이것은 "`cursor` 아래는 전부 저장됐거나 실패했다"는 불변식을 **저장본이 지켜 준다고 믿는 것**이다. 그 믿음이 깨지면 `cursor` 하나로 완료가 선다.
+
+**실측(브라우저, 진짜 IndexedDB):**
+
+```
+documents.extraction = { cursor: 99999, pagesDone: 0, failed: [], algoVersion: 6 } · pageCount 20
+→ prepare() → start()
+   done = true · status = done · 'done' 이벤트 발생 · 실제 pages 행수 = 0 / 20
+```
+
+순수 함수만으로도 재현된다 — `normalizeExtraction`은 `cursor`의 **하한만** 1로 묶고 상한은 없다.
+
+도달 경로: 같은 `docId`의 `pageCount`가 줄어든 경우. **§2c-5의 해시 충돌과 직결된다** — 표본 해시가 같은 더 짧은 파일을 열면 `findByFileHash`가 기존 문서 레코드를 돌려주고, 그 레코드의 `cursor`가 새 파일의 `pageCount`를 넘는다. 두 결함이 만나면 "빈 문서가 완료 상태로 서재에 앉는다".
+
+### 그 밖에 판 것 — 구멍이 아니었던 자리
+
+| 시나리오 | 결과 |
+|---|---|
+| 실패 4개가 서로 떨어져 있고 2차 시도에 성공 | 64스텝에 60쪽 전부, `failed=[]`, `done=true` ○ |
+| 영구 실패 3개 | 구멍 3개가 `failed`에 **그대로 드러나고** `done`이 서지 않는다 ○ (9-4가 의도한 동작) |
+| 중단 → 재개 × 3 (실패 섞음) | 124스텝, 영구 실패 1쪽만 남고 나머지 119쪽 구멍 0 ○ |
+| `algoVersion`이 오른 상태 + 일부만 저장 | `cursor←1` · `failed←[]`, 구버전 쪽은 `docId_algoVersion` 인덱스가 걸러 `stored`에 없다 → 50쪽 전부 재추출 ○ |
+| 손상된 `extraction` (문자열·음수·`null`·배열·`NaN`·`Infinity`) | `normalizeExtraction`이 전부 안전한 기본값으로 접는다. 던지지 않는다 ○ |
+| `advanceCursor` 종료성 (7000쪽) | 0ms, 무한 루프 없음 ○ |
+| **같은 문서를 두 탭에서 동시에 추출** | 24쪽 문서에 Extractor 2개 → `pages` 24행(중복 없음), `extraction`도 일치하게 수렴. **다만 build를 91회** 했다(필요 24회) 〔경미〕 |
+
+**두 탭 동시 추출**은 손상을 내지 않는다 — 키가 `[docId,pageNo]`라 `put`이 멱등이다. 위험은 `documents.extraction`의 read-modify-write가 마지막 쓰는 쪽을 이긴다는 것이고, 최악이 "`failed` 한 건이 지워져 그 쪽을 한 번 더 뽑는다"라 자기 치유된다. 3단계에서 `Web Locks` 또는 `BroadcastChannel`로 한 탭만 추출하게 하는 편이 낫다(제안 3).
+
+---
+
+## 2c-4. B. `toStored`/`fromStored` 계약의 경계
+
+**깨지는 입력은 찾지 못했다. 다만 계약에 구멍이 하나 있다.**
+
+| 입력 | 결과 |
+|---|---|
+| 빈 문단(`lineIds: []`) | `text: ''`. 던지지 않는다 ○ |
+| `lineIds`가 없는 줄을 가리킴 | 그 줄을 조용히 건너뛰고 나머지로 조립 ○ (설계대로. 다만 **신호가 전혀 없다** — 경미 10) |
+| 표 줄만으로 이루어진 문단 | `groupParagraphs`가 `role='table'`·`regionId` 줄을 흐름에서 빼므로 **만들어질 수 없다.** 억지로 만들어도 왕복은 성립 ○ |
+| 하이픈으로 끝나는 줄이 문단 **마지막** | `"… had cardio-"` → 왕복 후 바이트 동일 ○ (`joinHyphen`은 뒤 줄이 있을 때만 발동) |
+| 회전 줄(`role: 'rotated'`)이 섞인 페이지 | role 보존, run text 미저장(표 밖), 문단에 미포함 ○ |
+| 손상 저장본 (`null`·`undefined`·`'x'`·`42`·`{lines:'no'}`·`{lineIds:'x'}`) | 6종 전부 **던지지 않고** 빈 결과 ○ |
+| `toStored` 입력 훼손 / 결정성 | 입력 불변 ○, 2회 결과 `JSON.stringify` 동일 ○ |
+| 실 픽스처 8문단 왕복 | 불일치 **0건** ○ |
+
+### ★ `KEEP_HYPHEN_SUFFIXES`를 바꾼 뒤 기존 저장본을 읽으면 — **문단 text가 달라진다. `storeVersion`은 이것을 잡지 못한다** 〔중간〕
+
+2b 보고가 경고한 자리다. 실측:
+
+```
+저장본(lines: ["methicillin-", "resistant Staphylococcus"])
+  저장 당시 집합으로 읽으면 : "methicillin-resistant Staphylococcus"
+  접미사 집합이 바뀐 뒤     : "methicillinresistant Staphylococcus"
+  storeVersion             : 1 → 1  (바뀌지 않는다)
+```
+
+축소 규칙 1은 문단 text를 **파생값**으로 만들었는데, 그 파생의 입력(`config.js`의 두 집합)이 저장본 어디에도 기록되지 않는다. spec 2-4가 이 값들을 **책별 프로파일로 옮기겠다고 이미 결정했으므로 이 변경은 반드시 일어난다.**
+
+구체적 피해는 텍스트가 예뻐지고 말고가 아니다. **`paragraphs[].kind`는 저장되는데 그 kind는 옛 text로 판정된 것이다.** 집합이 바뀌면 `kind`와 `text`가 서로 다른 세계를 가리키고, 5절 파서는 둘 다 믿는다.
+
+또 하나: **쓰는 쪽에 프로파일을 줄 길이 없다.** `groupParagraphs`는 `joinParagraphText(texts)`를 **인자 없이** 부른다(`blocks.js:510`). `fromStored`만 `opts.keepSuffixes`를 받는다. spec 2-4가 약속한 `buildPageLayout(items, pageInfo, params, profile)`이 오면 **읽기만 프로파일을 알고 쓰기는 모르는** 비대칭이 된다.
+
+고치지 않은 이유: 어떤 방식(집합 해시를 `storeVersion`에 접기 / `algoVersion`을 올리기 / 프로파일 id를 레코드에 넣기)을 고를지는 **spec 9-2와 2-4가 함께 정할 문제**다. 제안 1·2로 넘긴다.
+
+### `regionId` — spec 3-3 `Line`에 없다 〔경미, spec 쪽 결함〕
+
+저장본 줄 키: `id, text, bbox, baseline, fontSize, col, role, hyphenJoin, paraId, regionId, runs`.
+spec 3-3의 `Line`: `id, items, text, bbox, baseline, fontSize, col, runs, role, hyphenJoin, paraId`.
+
+**계약 위반이 아니라 spec 누락이다.** `regionId`는 죽은 필드가 아니라 **세 곳에서 일한다**: (a) `groupParagraphs`가 표에 흡수된 캡션 줄을 흐름에서 뺀다(`blocks.js:486`), (b) `toStored` 규칙 2의 run text 보존 판정(`store.js:79`), (c) 4-12 하이라이트가 표 영역을 알아야 한다. 빼면 세 기능이 죽는다. **spec 3-3에 `regionId: string|null`을 더하는 것이 맞다**(제안 4). `Review 1 §2-3`도 같은 관찰을 "spec 본문이 요구하는 추가 필드"로 적어 두었다.
+
+---
+
+## 2c-5. C. 해시 전략의 실제 안전성 ★
+
+### 충돌하는 두 파일을 **만들었다.**
+
+대상 PDF(22.69MB) 기준 표본 구간은 18개 / 3,145,728바이트 = **13.22%**. **86.78%는 해시에 전혀 들어가지 않는다.**
+
+```
+표본 밖 오프셋 7,181,711 부터 4,096바이트를 XOR 0xff
+  두 파일이 실제로 다른가 : true   (4,096바이트 차이)
+  크기가 같은가           : true   (23,787,348 바이트)
+
+  fileIdentityHash(A) = s256:p:23787348:d5294c9b…8853a
+  fileIdentityHash(B) = s256:p:23787348:d5294c9b…8853a
+  ★ 충돌 : true            (전체 SHA-256 은 1e5be99c… / 8d02dd72… 로 다르다)
+```
+
+해시가 죽어 있는 것은 아니다 — 표본 **안** 1바이트를 바꾸면 갈리고, 크기가 1바이트 달라도 갈린다(둘 다 확인).
+
+### 난이도 판정: **목적에 비추면 수용 가능. 다만 주석이 약속한 2차 방벽이 없다.**
+
+- **우연히 부딪칠 확률은 사실상 0이다.** 서로 다른 두 PDF가 바이트 단위로 같은 크기 + 같은 앞 1MB(헤더·초기 객체) + 같은 뒤 1MB(trailer·startxref) + 같은 중간 16구간이어야 한다.
+- **의도하면 쉽다.** 위 실험이 30초 걸렸다. 다만 spec 9-2의 목적은 **"이 파일을 전에 가져왔는가"** 이고 파일은 사용자 자신의 것이다. 악의적 충돌을 방어할 이유가 없다는 `hash.js` 주석의 판단에 **동의한다**.
+- **현실적으로 남는 위험**은 "같은 책의 두 파일인데 크기가 같고 작은 영역만 다른 경우" — 같은 도구가 같은 길이로 다시 쓴 워터마크·양식 필드·in-place 수정. 7000쪽 자료가 판본 여러 개로 올 수 있다면 실제로 일어날 수 있다.
+- **문제는 코드 주석이 이미 있다고 쓴 2차 방벽이 없다는 것이다.** `hash.js:156-158`:
+
+  > 그래서 **키에 size 를 문자열로 박아 넣고**, 가져오기 단계에서 `pageCount` 를 함께 비교한다(같은 해시인데 쪽수가 다르면 다른 파일로 취급한다).
+
+  `pageCount` 비교는 **레포 어디에도 없다**(가져오기 코드 자체가 3단계 몫이다). 그리고 §2c-3 구멍 ③이 보여주듯 "기존 레코드를 잘못 여는 것"의 대가는 **"빈 문서가 완료 상태로 앉는 것"** 이다. 3단계 조건 1로 올린다.
+
+### FNV-1a 64 폴백 경로 — **실제로 탄다** ○
+
+`globalThis.crypto`를 `{}`로 덮어 비보안 컨텍스트를 흉내냈다.
+
+```
+hasSubtle()                 true → false
+hashHex('hello')            fnv:a430d84680aabd0b:5
+fileIdentityHash(A) [폴백]  fnv:p:23787348:8c3122a6dbbac3c2:3145740
+복원 후 hasSubtle()         true
+```
+
+분기가 죽어 있지 않다. `hashHexSync`도 같은 값을 낸다(`fnv:a430d84680aabd0b:5`).
+
+**다만 JSDoc과 실제 형식이 다르다** 〔경미 9〕. 주석은 표본 폴백을 `fnv:p:<size>:<hex16>`이라 적었는데 실제는 뒤에 표본 길이 `:3145740`이 더 붙는다. 표본 길이는 `size`의 결정적 함수라 정보 손실은 없다. 주석만 틀렸다.
+
+### spec 7-5의 접두사 `s:`/`f:` 대 구현 `s256:`/`fnv:` — **구현이 맞다. spec을 고쳐라**
+
+- spec 7-5가 요구한 것은 **"두 알고리즘의 키가 섞이지 않게 한다"** 이고, `s256:`/`fnv:`는 그 요구를 더 명확히 만족한다(알고리즘 이름이 드러나 나중에 SHA-512나 다른 폴백이 와도 자리가 있다).
+- 캐시 키 형식(`kind|lang|docId|hash|extra`)의 구분자 `|`가 접두사에 들어 있지 않아 파싱도 그대로다.
+- spec 7-5는 폴백을 "hex 16자 + 길이"라 했고 구현도 그렇다(`fnv:<hex16>:<len>`). **불일치는 접두사 글자뿐이다.**
+- → **spec 7-5의 `s:`/`f:`를 `s256:`/`fnv:`로 고칠 것**(제안 5). 코드를 spec에 맞추면 오히려 나빠진다.
+
+---
+
+## 2c-6. D. `db.js` — 버전 2 마이그레이션 ★
+
+**전부 브라우저의 진짜 IndexedDB로 확인했다.** 노드 테스트는 스텁이라 이 절의 어느 것도 증명하지 못한다.
+
+### v1 → v2 — **인덱스가 생기고 데이터가 남는다** ○
+
+`docId_algoVersion`이 **없고** 스토어도 4개뿐인(중단된 upgrade를 겸한) v1 DB를 손으로 만들고 데이터를 넣은 뒤 `db.openDb()`로 열었다.
+
+```
+v1 생성            스토어 blobs,documents,pages,settings  /  pages 인덱스: docId 뿐
+v1 데이터          documents 1건(extraction 포함) · pages 5건 · settings 1건
+
+db.openDb()  →  열림 v2 / 스토어 13개 / 빠져 있던 9개 스토어 전부 생성
+★ pages 인덱스    docId, docId_algoVersion          ← 생겼다
+★ documents 보존  {"done":false,"pagesDone":3,"cursor":4,"failed":[2],"algoVersion":6}
+★ pages 보존      5건 전부, 본문까지 그대로 (1:쪽 1 | … | 5:쪽 5)
+★ settings 보존   {"key":"ui.lang","value":"ko"}
+```
+
+**새 인덱스가 기존 레코드를 소급해 담는가** — 담는다(IndexedDB `createIndex`가 기존 레코드를 훑어 채운다). 이것이 안 되면 9-4 재개가 첫 실행에서 전부 재추출한다.
+
+```
+keysOf('pages','docId_algoVersion', bound([doc-A,6],[doc-A,∞]))
+  → [["doc-A",1],["doc-A",2],["doc-A",3]]        (algoVersion 6 인 세 쪽의 **주 키**)
+인덱스 전체 키 → [["doc-A",4],["doc-A",5],["doc-A",1],["doc-A",2],["doc-A",3]]
+```
+
+인덱스 `getAllKeys`가 **인덱스 키가 아니라 주 키**를 돌려준다는 점이 미묘한데, `_loadStoredSet`의 `this.stored.add(k[1])`은 주 키 `[docId, pageNo]`의 `[1]`을 집으므로 **맞다.**
+
+### upgrade 도중 중단되면 — **통째로 롤백된다** ○
+
+`onupgradeneeded`에서 스토어를 하나 만든 뒤 던지게 했다.
+
+```
+결과              error: AbortError
+그 뒤 db.openDb()  v2 / 스토어 13개 / __halfBaked 남았나: false
+데이터 보존         {"id":"doc-Q","fileHash":"s256:q","pageCount":3}
+```
+
+버전도 오르지 않고 반쯤 만들어진 스토어도 남지 않는다. IndexedDB가 버전 변경 트랜잭션을 원자적으로 다루기 때문이며, `reconcileSchema`가 멱등이라 다음 시도가 이어서 채운다.
+
+### `blocked` / `versionchange` — **둘 다 실제로 발동한다** ○
+
+| 상황 | 결과 |
+|---|---|
+| 다른 연결이 v3으로 올리려 함 | `db.js`의 `onversionchange` 발동 → 이벤트 `["versionchange"]` → 스스로 `close()` → **상대가 막히지 않고** `success v3` |
+| `versionchange`를 무시하는 고집스런 v1 연결이 있을 때 `openDb()`(v2) | 이벤트 `["blocked"]`, 2초 동안 열리지 않음 |
+| 그 연결을 닫자 | **같은 `dbPromise`가 스스로 풀린다** → `열림 v2`, 스토어 13개, 인덱스 정상 |
+
+`blocked` 동안 `dbPromise`가 미결 상태로 남아 모든 `get`/`put`이 멈추는데 타임아웃이 없다 〔경미 11〕. 설계상 UI가 `blocked` 이벤트를 받아 "다른 탭을 닫아 주세요"를 띄우는 것이 전제이고, 닫으면 자기 치유되는 것을 확인했다. 다만 **`ERR.BLOCKED`(`'ERR_DB_BLOCKED'`) 상수는 아무도 쓰지 않는다** — `emit('blocked')`는 이벤트 **타입** 문자열을 보낸다. 죽은 상수다 〔경미 8〕.
+
+### `QuotaExceededError` 경로 — **2c가 `×`로 신고한 자리. 실제로 돈다** ○
+
+`IDBObjectStore.prototype.put`을 `pages`에 대해서만 `DOMException('quota','QuotaExceededError')`를 던지게 스텁하고 **끝까지** 태웠다.
+
+```
+Q1 isQuotaError(DOMException QuotaExceededError)   true   (name=QuotaExceededError, code=22)
+Q2 db.put('pages', …)  →  DbError  code=ERR_DB_QUOTA   ERR.QUOTA 와 일치   cause.name 보존
+Q3 Extractor  →  이벤트 ["fatal:{\"code\":\"ERR_DB_QUOTA\",\"pageNo\":1}"]
+                 status = quota · running = false
+                 documents.extraction.status = "quota"   (영속화됨)
+put 원복 확인  true
+```
+
+`withTx`의 `catch`(동기 throw) → `tx.abort()` → `onabort`에서 `isQuotaError` 판별 → `DbError(ERR.QUOTA)` → `_tick`의 `e.code === db.ERR.QUOTA` → `STATUS.QUOTA` + `fatal` 이벤트 + 강제 메타 저장. **한 줄로 이어진다.** `isQuotaError`가 Firefox의 `NS_ERROR_DOM_QUOTA_REACHED`와 legacy `code === 22`도 본다.
+
+남은 경계: **비동기 abort 경로**(요청이 성공 콜백 없이 쿼터로 죽고 트랜잭션이 나중에 abort)는 6.1GB 쿼터를 실제로 채워야 재현되어 확인하지 못했다. `withTx`의 `tx.onabort`가 `failed || tx.error`를 보고 같은 판별을 하므로 코드 읽기로는 같은 결론에 닿는다 〔실기기 검증 항목으로 남긴다〕.
+
+---
+
+## 2c-7. E. 2a 측정 도구의 신뢰성 ★
+
+### ★ 도구가 **틀린 숫자를 내고 있었다** 〔중간 — 고쳤다〕
+
+`profile-lib.mjs`의 `slimLayout`은 2a에서 **`items`만 떼어낸 얕은 복사본**이었다. 2b가 spec 9-2의 축소 규칙 1·2·3을 `toStored`로 구현한 뒤에도 그대로 남아 있었다. 즉 **도구가 실제로 저장되지 않는 것까지 세고 있었다.**
+
+| | 고치기 전 | 고친 뒤 | 진실(2b·2c 실측) |
+|---|---:|---:|---:|
+| 저장본/쪽 | **34.0KB** | **21.9KB** | 21.9KB (JSON) |
+| 내역 lines / paragraphs | 26.5 / 7.3KB | 18.8 / 2.8KB | — |
+| 729쪽 전체 | 24.2MB | 15.6MB JSON / **6.2MB IDB** | 브라우저 실측 **6.65MB** |
+| 7000쪽 환산 | ≈ 238MB | ≈ **60MB** | 2c 보고 64MB |
+
+고친 뒤 도구가 내는 6.2MB가 오케스트레이터의 브라우저 실측 6.65MB와 **7% 안에서** 만난다. 고치기 전에는 4배 틀렸다.
+
+도구는 그 위에 **이미 철회된 spec 초판 수치를 근거로 경고까지 찍고 있었다**:
+
+> `[WARN] spec 9-2 의 "쪽당 5~10KB" 추정이 실측과 어긋난다 … 문단 text 가 줄 text 를 그대로 한 번 더 들고 있는 것이 큰 몫이다(문단 7.3KB / 줄 26.5KB)`
+
+**2b가 이미 제거한 중복을 경고하고 있었다.** 새 자료를 받아 이 도구를 처음 돌리는 사람은 "7000쪽 238MB, 문단 text가 중복된다"는 **두 번 틀린 진단**을 받는다. 7000쪽 자료가 곧 오는 상황에서 이것이 가장 값비싼 결함이었다. §9ec (2)에서 고쳤다.
+
+### 출력을 **다른 방법으로** 세어 대조했다
+
+`buildPageLayout`·`profile-lib`을 **전혀 쓰지 않고** pdf.js 원시 아이템만으로(줄 만들기는 y를 0.5pt로 양자화하는 전혀 다른 방식) 다시 셌다.
+
+| 항목 | `profile.mjs` | 독립 측정 | 판정 |
+|---|---|---|---|
+| **캡션 줄** | 후보 382 / `FIGURE+roman-dash 206` + `TABLE+roman-dash 156` = **362** | 접두어 전체 **379** / `FIGURE·FIG·TABLE` **365** | **일치**(±1%). 지침이 말한 "362"는 `FIGURE`+`TABLE`의 roman-dash 형태 합이고 지금 값도 같다 |
+| **보기 글자 범위** | **A-F** (연속성 판정: F=5, G=1은 비연속) | **A-F** (F=5, G=1, H=4 …) — 희소 사건이 **정확히 일치** | **일치** |
+| 보기 글자 빈도 | A=1272 B=1274 … | A=1105 B=1118 … (−13%) | 줄 만들기 방식 차이(내 0.5pt 양자화가 더 촘촘해 한 줄이 갈린다). **범위 판정은 방법에 무관** |
+| **거터 폭** | **17.0pt**(최빈 16.0, 표본 226쪽) | **17.7pt**(최빈 18, 표본 346쪽) | **일치** |
+| **2단 쪽** | **232** | 기준 강도별 356 / 297 / 275 / 256 / **247** / **220** | **반증 없음** — 232가 "양쪽 ≥20줄"(247)과 "≥25줄"(220) 사이에 놓인다. 내 기준이 거칠어 정확히 고정하지는 못했다 |
+| 정답 줄 | 1190 (`ANSWER_RE` 1187) | 1237 | **일치**(내 정규식이 줄 머리 번호를 요구하지 않아 더 느슨하다) |
+
+**네 지표 중 세 개가 독립적으로 재현됐고, 2단 쪽수는 반증되지 않았다.** 도구의 분류·집계는 믿을 만하다 — 틀린 것은 용량 측정 하나였다.
+
+### `--stride` 표본 모드가 "신뢰 불가"라고 신고한 항목 — **맞다**
+
+`profile.mjs:210`의 `prevSlim = args.stride === 1 ? slim : null;` 가 근거다. `stride > 1`이면 **이웃 페이지를 넘기지 않는다.** `classifyRoles`의 머리말 확정(4-7)은 이웃 페이지의 같은 자리 문자열을 비교해야 성립하므로, 표본 모드에서는
+
+- 반복 머리말·꼬리말 집계가 구조적으로 낮게 나오고(이웃이 없으니 `header` 확정이 안 된다),
+- `continuesPrev`(4-9)가 항상 `false` 쪽으로 기운다.
+
+즉 **"희소 사건·이웃 의존"이라는 신고는 정확하다.** 더해서 캡션·6지선다 `F`·4자리 문항 번호처럼 **729쪽에 5건 안팎인 사건**은 `--stride 10`이면 기대값이 0.5건이라 있고 없고가 운에 좌우된다. 도구가 `--stride`일 때 리포트 머리에 `(--stride N 표본, 배율 ×N)`을 찍는 것은 옳은 최소 방어다. **7000쪽 실자료의 1차 측정은 `--stride` 없이 돌릴 것**(주의사항 1).
+
+### `profile-lib.mjs` 순수 함수 테스트 21개가 **실제로 무엇을 주장하는가** — 읽었다
+
+거의 전부 **"코드가 틀렸다는 것"을 주장한다.** 이 도구의 존재 이유와 일치한다.
+
+| 테스트 | 실제 주장 |
+|---|---|
+| `classifyCaption: "TABLE II-9" 는 잡고 현재 코드 정규식은 못 잡는다` | 도구의 분류기 ≠ `blocks.js`의 정규식. **불일치 자체를 단언한다** |
+| `classifyQuestionNumber: 코드의 \d{1,3} 상한을 넘는 번호도 잰다` | 측정기가 코드 한계를 **넘어서** 재야 한다 |
+| `addPage/finalize: 캡션 죽은 코드가 경고로 드러난다` | `[DEAD]` 경고 생성 자체 |
+| `addPage/finalize: 보기 글자가 F 까지면 [A-E] 누락이 경고로 나온다` | `[MISS]` 경고 생성 |
+| `보기 글자 범위는 빈도가 아니라 연속성으로 정한다 (F 는 살리고 머리글자는 버린다)` | **판정 알고리즘의 핵심.** 빈도로 정하면 `S=8`이 `F=5`를 이긴다 |
+| `robustMaxKey: 1~2건짜리 이상치가 자릿수 상한을 끌어올리지 못한다` | 6자리 1건이 `pageNoMax`를 6으로 만들지 않는다 |
+| `histStats: 빈 히스토그램은 null 을 돌려준다(추측하지 않는다)` | **측정 없는 값을 지어내지 않는다** |
+| `topEntries: 동률이면 키 사전순` · `quantileOf: 입력 배열을 훼손하지 않는다` | 결정성·순수성 |
+| `tallyScripts: 문자열을 보관하지 않는다` | 13절 — 원서 문장을 레포에 남기지 않는다 |
+| `renderBookProfile: 못 정한 값은 TODO 로 남는다` + `new Function` 문법 검사 | 초안이 **유효한 JS**이고 빈칸이 빈칸으로 보인다 |
+
+**빈 칸이 하나 있었다**: 저장본 측정이 `toStored`와 같은지를 아무도 주장하지 않았다(§2c-8 G14). 메웠다.
+
+---
+
+## 2c-8. G. 의도적 파손 ★
+
+18종을 하나씩 걸고 전체 테스트를 돌린 뒤 **매번 원본 바이트로 되돌렸다.**
+
+| # | 바꾼 것 | 파일 | 실패한 테스트 |
+|---|---|---|---|
+| G1 | `toStored` 규칙 2 끄기 (run text를 모든 줄에) | `text/store.js` | **S3** |
+| G2 | `toStored` 규칙 1 끄기 (문단 text를 저장) | `text/store.js` | **S2** |
+| G3 | `toStored` 규칙 3 끄기 (좌표 반올림 없음) | `text/store.js` | **S4** |
+| G4 | `fromStored`의 하이픈 접미사 집합 비우기 | `text/store.js` | **없음** ← §2c-4 |
+| G5 | `reconcileSchema`의 인덱스 루프 삭제 | `db.js` | **D6, D7** |
+| G6 | `MIGRATIONS[2]`를 빈 함수로 | `db.js` | **없음** → **D11 추가 후 D11** |
+| G7 | 재개 커서를 `pagesDone` 기반으로 되돌리기(`c = 1`) | `pdf/extract.js` | **E8, E9, E10** |
+| G8 | 해시의 `size` 결합 빼기 | `hash.js` | **없음**(무해 — 아래) |
+| G9 | [E16 회귀] 재시도를 불리언 하나로 (첫 쪽만) | `pdf/extract.js` | **E13, E16, E22** |
+| G10 | [E19 회귀] 우선순위 창에서 `failed`를 보지 않기 | `pdf/extract.js` | **E19** |
+| G11 | [Review2 고침 되돌리기] `isComplete`를 `cursor`부터 훑기 | `pdf/extract.js` | **E20** |
+| G12 | [Review2 고침 되돌리기] 저장된 쪽도 `failed`에 넣기 | `pdf/extract.js` | **없음**(브라우저 전용 — 아래) |
+| G13 | 4-2 폭 위생 끄기 (페이지 폭 초과를 그대로) | `text/lines.js` | **L12, L13, L13b** |
+| G14 | [Review2 고침 되돌리기] profile 저장본을 `toStored` 아닌 것으로 | `dev/profile-lib.mjs` | **없음** → **테스트 추가 후 실패** |
+| G15 | [Review2 고침 되돌리기] `prepare`의 불변식 검산 제거 | `pdf/extract.js` | **없음**(브라우저 전용 — 아래) |
+| G16 | `advanceCursor`가 `failed`를 건너뛰지 않게 | `pdf/extract.js` | **E9, E13, E19** |
+| G17 | `normalizeExtraction`의 `cursor` 하한(1) 제거 | `pdf/extract.js` | **E3** |
+| G18 | `planResume`의 `algoVersion` 되감기 제거 | `pdf/extract.js` | **E4** |
+
+### 빈 칸 4개의 사정
+
+- **G4 — 메우지 않았다(의도).** 하이픈 집합이 바뀌었을 때 기존 저장본을 지킬 **장치가 없다**(§2c-4). "집합을 바꾸면 text가 달라진다"를 테스트로 박으면 **결함을 명세로 굳히는 것**이 된다. 장치(제안 1)를 먼저 정하고 그 장치를 테스트해야 한다.
+- **G8 — 무해하다.** 내 변형은 `size`를 **해시 입력**에서만 뺐다. `fileIdentityHash`는 키 문자열에 `p:<size>:`를 **따로** 박으므로(`H13`이 그것을 단언한다) 크기가 다른 두 파일은 여전히 갈린다. 이중으로 들어 있던 것 중 하나를 뺀 셈이라 테스트가 안 깨지는 것이 옳다.
+- **G12·G15 — `Extractor` 내부 상태라 Node가 볼 수 없다.** 브라우저로 대체 측정했다(§2c-3, §9ec). G12를 되돌리면 "저장된 4쪽이 `failed`에 영구히 남고 `done`이 안 선다"가 재현되고, G15를 되돌리면 "`cursor 99999` → 20쪽 중 0쪽 추출"이 재현된다.
+
+### 원상복구 확인
+
+```
+$ git status --porcelain
+ M apps/medreader/dev/profile-lib.mjs
+ M apps/medreader/dev/profile.mjs
+ M apps/medreader/js/pdf/extract.js
+ M apps/medreader/tests/db.test.mjs
+ M apps/medreader/tests/extract.test.mjs
+ M apps/medreader/tests/profile.test.mjs
+?? .codex/
+?? AGENTS.md
+```
+
+남은 6개는 **전부 §9ec에 적은 내 고침**이다. `js/text/*`·`js/config.js`·`js/db.js`·`js/hash.js`·`js/pdf/loader.js`·`dev/proto-extract.*`는 **한 글자도 바뀌지 않았다**(`git diff`로 확인). `.codex/`·`AGENTS.md`는 세션 시작부터 있던 미추적 파일이다.
+
+최종 `node --test "apps/medreader/tests/*.test.mjs"` → **tests 140 / pass 140 / fail 0**.
+
+---
+
+## 8ec. 발견한 문제 (2a·2b·2c)
+
+### 차단 — 없음
+
+### 중간
+
+1. **역할 재계산(priority 4)이 던지면 같은 쪽을 무한히 다시 잡는다**(§2c-3 구멍 ①). 실측 1.5초에 298회. E19와 같은 병이 다른 자리에 있었다. → **내가 고쳤다.**
+2. **이미 저장된 쪽이 `failed`에 들어가면 영원히 빠지지 않고 `done`이 서지 않는다**(§2c-3 구멍 ②). 도달 경로 둘 — 역할 재계산 실패, `_saveMeta` 실패. → **내가 고쳤다.**
+3. **`cursor`가 `pageCount`를 넘으면 저장된 쪽이 0개여도 `done=true`**(§2c-3 구멍 ③). 해시 충돌과 겹치면 "빈 문서가 완료 상태로 서재에 앉는다". → **내가 고쳤다.**
+4. **하이픈 집합이 바뀌면 기존 저장본의 문단 text가 달라지고 `storeVersion`이 잡지 못한다**(§2c-4). `kind`는 옛 text로 판정된 채 남는다. spec 2-4가 이 값들을 프로파일로 옮기기로 **이미 결정**했으므로 반드시 일어난다. → **고치지 않았다.** 어느 장치를 쓸지는 spec 9-2·2-4가 함께 정할 문제다(제안 1·2). **잔존 중간 1건이 이것이다.**
+5. **2a 측정 도구가 저장본을 34.0KB/쪽으로 재고 있었다**(진짜 21.9KB, §2c-7). 7000쪽 환산이 238MB 대 64MB로 갈린다. → **내가 고쳤다.**
+
+### 경미
+
+6. **두 탭 동시 추출에 잠금이 없다**(§2c-3). 손상은 없지만(24쪽에 `pages` 24행) build를 91회 한다. `documents.extraction`은 마지막 쓰는 쪽이 이긴다.
+7. **`pageerror` 이벤트가 코드가 아니라 원시 예외 메시지를 싣는다**(`detail: {pageNo, message}`). spec 3-2는 서비스가 **코드**를 돌려주라고 한다. 진단용으로는 유용하니 `code: 'ERR_PAGE_EXTRACT'`를 더하고 `message`는 진단 필드로 남기면 된다.
+8. **`ERR.BLOCKED`(`'ERR_DB_BLOCKED'`)가 죽은 상수다** — `emit('blocked')`는 이벤트 타입 문자열을 보낸다(§2c-6).
+9. **`fileIdentityHash`의 JSDoc 형식이 실제와 다르다** — 폴백 표본 키에 표본 길이가 더 붙는다(§2c-5). 정보 손실은 없다.
+10. **`fromStored`가 없는 줄을 조용히 건너뛰고 아무 신호도 남기지 않는다**(§2c-4). 손상 저장본에서 문단이 짧아지는데 드러나지 않는다. `stats.missingLines` 한 줄이면 된다.
+11. **`blocked` 동안 `dbPromise`가 미결로 남고 타임아웃이 없다**(§2c-6). 막던 연결이 닫히면 자기 치유되는 것은 확인했다. UI가 `blocked` 이벤트를 반드시 받아 처리해야 한다.
+12. **`_tick` 바깥으로 새는 예외가 잡히지 않는다.** `idle(() => this._tick())`에 `.catch()`가 없다. `_finish()`나 쿼터 분기의 `_saveMeta(true)`가 던지면 unhandled rejection이 되고 16-K의 "콘솔 에러 0건"을 깬다. (`running`이 먼저 `false`가 되므로 재시작은 가능하다.)
+
+### 제안
+
+1. **저장본이 자기 파생 규칙을 기술하게 할 것**(§2c-4). `storeVersion`에 하이픈 두 집합의 해시를 접거나, 프로파일 id를 `pages` 레코드에 넣고 `planResume`이 `algoVersion`처럼 다루게 한다. spec 9-2에 한 줄, 2-4에 한 줄이면 된다.
+2. **`groupParagraphs`에도 프로파일을 흘릴 것**(§2c-4). 지금은 `joinParagraphText(texts)`를 인자 없이 부른다. spec 2-4의 `buildPageLayout(items, pageInfo, params, profile)`이 오면 읽기만 프로파일을 아는 비대칭이 된다.
+3. **한 문서에 추출기는 하나여야 한다**(§2c-3). `navigator.locks.request('medreader-extract:' + docId, …)` 또는 `BroadcastChannel`. spec 9-4에 한 줄을 더할 값어치가 있다 — 7000쪽에서 두 배 일은 두 배 시간이다.
+4. **spec 3-3의 `Line`에 `regionId: string|null`을 더할 것**(§2c-4). 세 기능이 이 필드에 매달려 있는데 계약에 없다.
+5. **spec 7-5의 해시 접두사를 `s:`/`f:` → `s256:`/`fnv:`로 고칠 것**(§2c-5). 구현이 옳다.
+6. **spec 9-2의 `fileHash` 칸에 "표본 해시 + `size`"임을 명시할 것**(§2c-5). 지금 표만 보면 전체 해시로 읽힌다. 13.22%만 읽는다는 사실과 `pageCount` 2차 비교 요구를 표에 박아 두면 3단계가 놓치지 않는다.
+7. **`profile.mjs`에 `--pdfjs` 없이도 도는 길을 둘 것**(선택). 지금은 경로를 손으로 주지 않으면 즉시 실패한다. 7000쪽 자료를 받은 사람이 가장 먼저 부딪칠 벽이다.
+8. **spec 9-4의 `extraction`에 `roleDirty`·`status`를 명시할 것.** 구현이 두 필드를 저장하는데 9-4의 목록에는 `done`·`pagesDone`·`cursor`·`failed`·`algoVersion` 다섯뿐이다. 실제로 쓰이고 `normalizeExtraction`이 정상화하므로 계약에 올려야 한다.
+
+---
+
+## 9ec. 내가 고친 것 (2a·2b·2c)
+
+### (1) `apps/medreader/js/pdf/extract.js` — 재개 모델 구멍 3건 (+34줄)
+
+**`_tick`의 `catch`** — 실패한 쪽을 `roleQueue`·`roleDirty`에서 빼고, **이미 저장된 쪽은 `failed`에 넣지 않는다**(구멍 ①②).
+
+```js
+this.ex.roleDirty = removeFrom(this.ex.roleDirty, target.pageNo);
+this.roleQueue = this.roleQueue.filter((n) => n !== target.pageNo);
+if (!this.stored.has(target.pageNo)) {
+  this.ex.failed = addSorted(this.ex.failed, target.pageNo);
+}
+```
+
+**`isComplete`** — `st.cursor`가 아니라 **1쪽부터** 훑는다(구멍 ③). 비용은 `pageCount`번의 Set 조회뿐이고 완료 판정은 문서당 몇 번뿐이다.
+
+**`prepare()`** — 9-4 불변식("`cursor` 아래는 전부 저장됐거나 실패했다")을 **한 번 검산**한다. 건강한 저장본이면 값이 정확히 같아 아무 일도 하지 않고, 깨져 있으면 구멍의 첫 쪽으로 되감는다. `_loadStoredSet`이 이미 만들어 둔 Set을 읽으므로 7000쪽에서도 공짜다.
+
+**고치기 전/후 실측(브라우저, 같은 하네스):**
+
+| | 전 | 후 |
+|---|---|---|
+| 역할 재계산이 던질 때 1.5초 호출 수 | **298** (`running` 계속 true) | **1** (`failed=[]`, `roleQueue=[]`, `'done'` 발생) |
+| 저장된 4쪽을 `failed`에 넣고 재시작 | `failed=[4]` 영구, `done=false` | `failed`에서 빠지고 `done=true` |
+| `cursor 99999` / 20쪽 / 저장 0쪽 | `done=true`, `pages` **0행** | `cursor`가 1로 되감기고 **20/20** 추출, `done=true` |
+| 건강한 재개(30·40쪽) | `cursor 41`, 40/40 | **`cursor 41`, 40/40 — 무변경** |
+
+### (2) `apps/medreader/dev/profile-lib.mjs` — 저장본 측정을 `toStored`로 (−27/+27줄)
+
+`slimLayout`이 `toStored`를 그대로 부르게 했다. 정의가 하나여야 도구와 앱이 같은 것을 센다. 함께 (a) 이미 철회된 "쪽당 5~10KB" 경고를 spec 9-2의 실측 기준(20.6KB JSON, 여유 1.5배)으로 고치고, (b) 리포트에 IndexedDB 환산(×0.40)을 병기했다.
+
+실행 결과: `저장본/쪽 34.0KB → 21.9KB`, `전체 24.2MB → 15.6MB JSON / 6.2MB IndexedDB`, 철회된 `[WARN]` 소멸. 나머지 출력(캡션·보기·거터·2단·경고 11종)은 **한 줄도 바뀌지 않았다**(전수 재실행 diff로 확인).
+
+### (3) `apps/medreader/dev/profile.mjs` — pdf.js 버전 문자열 중복 제거 (2줄)
+
+`'npm install pdfjs-dist@5.4.149'`가 `config.js`의 `PDFJS_VERSION`과 **따로** 박혀 있었다(16-K 위반이고, 갈릴 수 있다). `PDFJS_VERSION`을 import해 조립한다. 이제 리터럴은 `config.js:19` 한 곳뿐이다.
+
+### (4) 테스트 6개 추가 (`extract.test.mjs` +50, `db.test.mjs` +37, `profile.test.mjs` +28줄)
+
+| 테스트 | 메우는 빈 칸 |
+|---|---|
+| `E20 isComplete 는 cursor 를 믿지 않는다 — 1쪽부터 실제로 훑는다` | G11 |
+| `E21 failed 에 "이미 저장된 쪽"이 들어가면 영원히 빠지지 않는다 — 넣지 마라` | 구멍 ②의 계약을 순수 함수 쪽에서 고정 |
+| `E22 실패가 셋 이상 흩어져 있어도 전부 한 번씩 재시도된다` | E13이 2건만 보던 것을 4건으로 (G9가 이것도 깬다) |
+| `D11 ★ MIGRATIONS[2] 는 v1 DB 에 빠진 pages.docId_algoVersion 을 채운다` | **G6** — 버전을 올린 유일한 이유에 테스트가 없었다 |
+| `D12 MIGRATIONS[2] 는 멱등하다` | 9-1의 멱등 요구를 2에도 |
+| `★ 도구가 재는 저장본은 toStored 와 같은 것이다` | **G14** — 7000쪽 판단의 근거가 되는 숫자 |
+
+기존 케이스는 **한 줄도 건드리지 않았다.** `134 → 140 pass`.
+
+그 밖에는 아무것도 고치지 않았다. **`config.js`의 `KEEP_HYPHEN_SUFFIXES`는 손대지 않았다** — §2c-4의 결함은 집합의 *값*이 아니라 *버전 관리의 부재*이고, 그 장치는 spec이 먼저 정해야 한다.
+
+---
+
+## 10ec. 3단계(spec 19절 3번)로 가도 되는가 — **예. 조건 2개.**
+
+**가도 되는 이유.** 3단계가 딛고 설 토대가 실제로 단단한지를 확인했다: v1→v2 마이그레이션이 **진짜 IndexedDB에서** 데이터를 보존하고, 쿼터 경로가 **끝까지 이어지고**, 재개 모델이 중단·실패·되감기·동시 실행을 견딘다(구멍 3건을 고친 뒤). 저장본 왕복은 내가 던진 8종의 경계 입력을 전부 버텼다. 의존 방향·순수성·버전 문자열·`config.js` 불변이 전부 확인됐다. 남은 중간 1건(하이픈 집합 버전)은 **3단계가 진행되는 동안에는 발동하지 않는다** — 프로파일을 실제로 도입하는 순간 발동한다.
+
+**조건 1 — 문서 가져오기에 `pageCount` 2차 비교를 넣을 것.** `hash.js`가 이미 있다고 쓴 방벽이다(§2c-5). 없으면 §2c-3 구멍 ③과 맞물려 "빈 문서가 완료 상태로 앉는다". 구멍 ③은 고쳤지만 두 겹이어야 한다는 것이 `hash.js`의 원래 설계다. `findByFileHash`로 찾은 레코드의 `pageCount`가 새 파일과 다르면 **다른 문서로 취급**하면 된다(세 줄).
+
+**조건 2 — 프로파일(2-4)을 실제로 도입하기 전에 제안 1·2를 먼저 처리할 것.** `KEEP_HYPHEN_SUFFIXES`를 프로파일로 옮기는 그 커밋이 기존 저장본을 조용히 다른 텍스트로 만든다(§2c-4). 순서를 뒤집으면 이미 추출된 쪽의 `kind`와 `text`가 어긋난 채 남는다.
+
+### 3단계에 넘길 주의사항
+
+1. **7000쪽 자료가 오면 `profile.mjs`를 `--stride` 없이 가장 먼저 돌릴 것.** 캡션·6지선다 `F`·4자리 문항 번호는 729쪽에 5건 안팎인 **희소 사건**이라 표본 모드에서 있고 없고가 운에 좌우된다(§2c-7). 이웃 의존 항목(반복 머리말·`continuesPrev`)도 표본 모드에서 구조적으로 낮게 나온다. 22.7MB·729쪽에 **7초**밖에 안 걸렸으니 전수를 돌릴 여유는 충분하다.
+
+2. **`algoVersion`은 이제 6이고 재추출 경로는 네 번 필요했다. `DB_VERSION`도 2다.** 3단계가 `pages` 스키마를 또 건드리면 **인덱스 추가만** 버전 3이 필요하고 필드 추가는 필요 없다(9-1). `MIGRATIONS[3]`도 `reconcileSchema` 한 줄이면 되지만, **D11 같은 테스트를 반드시 함께 쓸 것** — G6이 보여주듯 그것 없이는 사다리 한 칸이 통째로 비어 있어도 아무도 모른다.
+
+3. **`Extractor`의 이벤트 계약은 `progress`·`page`·`pageerror`·`done`·`stalled`·`fatal`·`reextract` 일곱이다.** `stalled`(완료 못 하고 멈춤)와 `reextract`(algoVersion 되감기)는 9-4 본문에 없지만 UI가 반드시 처리해야 한다 — 전자는 설정>고급의 실패 목록, 후자는 "텍스트를 다시 추출합니다" 안내다. `fatal`은 지금 `ERR_DB_QUOTA` 하나뿐이다.
+
+4. **`pages` 저장본에는 `items`가 없다.** 아이템이 필요한 소비자(4-12 원본 뷰의 정밀 하이라이트 등)는 PDF에서 다시 뽑아야 한다. `_neighborLayouts`가 이미 저장본을 이웃으로 넘기고 그것으로 4-7이 성립하는 것을 확인했다(기준선 30쪽에서 `recomputed 29`, `roleDirty` 최종 `[]`).
+
+5. **회전 줄(729쪽에 1,995줄)의 `bbox`를 그리지 마라.** 2b가 신고한 그대로다 — `lineBBox`가 `width`를 수평 폭으로 더하는데 90도 회전 아이템의 `width`는 세로 진행량이라 설계상 틀린다. 4-12 하이라이트는 `role === 'rotated'`를 건너뛰어야 한다.
+
+6. **`storeVersion`은 지금 `1`이고 "그릇의 모양"만 뜻한다.** 파생 규칙(하이픈 집합)은 담고 있지 않다(§2c-4). 3단계가 저장본 형식을 바꾸면 이 값을 올리되, **무엇을 뜻하는 값인지 먼저 정하고** 올려야 한다.
