@@ -237,3 +237,29 @@ export const ABBREVIATIONS = new Set([
   'vol.', 'vols.', 'p.', 'pp.', 'dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'st.',
   'jr.', 'sr.', 'inc.', 'ltd.', 'min.', 'max.', 'wt.', 'mg.', 'kg.'
 ]);
+
+/* ────────────────────────────────────────────────────────
+   9-4 백그라운드 추출 파라미터 — 2c 단계에서 추가
+   숫자의 근거는 7000쪽(실자료 예정) 규모다. 729쪽에서는 어느 값이든
+   차이가 없지만 10배에서는 전부 비용으로 돌아온다.
+   ──────────────────────────────────────────────────────── */
+export const EXTRACT = Object.freeze({
+  // getTextContent 결과(아이템 배열)를 몇 쪽분 들고 있을 것인가.
+  // 역할 재계산(4-7)이 이웃 쪽의 아이템을 곧바로 다시 쓰므로 0 은 안 된다.
+  // 3 이면 현재 쪽과 앞뒤 한 쪽이 캐시에 남는다. 7000쪽 × 아이템을 쌓으면 죽는다.
+  ITEMS_CACHE_MAX: 3,
+
+  // documents.extraction 을 쪽마다 쓰지 않는다. 7000쪽이면 7000번의
+  // documents 쓰기이고 그 비용이 추출 자체보다 커진다.
+  META_SAVE_EVERY_PAGES: 10,
+  META_SAVE_EVERY_MS: 2000,
+
+  // 9-4 "낭독 중에는 priority 2 를 초당 1페이지로 제한"
+  SPEAKING_PAGE_MS: 1000,
+
+  // pdfDoc.cleanup() 주기(쪽). worker 쪽 폰트·이미지 캐시를 턴다.
+  PDFDOC_CLEANUP_EVERY: 100,
+
+  // requestIdleCallback 이 계속 밀릴 때의 강제 실행 시한
+  IDLE_TIMEOUT_MS: 1000
+});

@@ -1,0 +1,116 @@
+/* MedReader — 추출·저장 프로토타입 스타일 (개발 도구) */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #16181d;
+  background: #f5f6f8;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff;
+  border-bottom: 1px solid #d7dae0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.brand { font-size: 15px; }
+.bar label { display: inline-flex; align-items: center; gap: 6px; }
+.bar input[type="number"] { width: 6em; padding: 3px 5px; }
+
+.fileLabel {
+  border: 1px solid #b9bec7;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  background: #fbfbfc;
+}
+.fileLabel input { max-width: 11em; }
+
+button {
+  font: inherit;
+  padding: 5px 12px;
+  border: 1px solid #b9bec7;
+  border-radius: 6px;
+  background: #fbfbfc;
+  cursor: pointer;
+}
+button:disabled { opacity: .5; cursor: default; }
+
+.status { margin: 10px 12px 4px; }
+.status.err { color: #a11; font-weight: 600; }
+
+.progress {
+  height: 6px;
+  margin: 0 12px 10px;
+  background: #e3e5ea;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progressFill { height: 100%; width: 0; background: #3b6fd4; transition: width .15s linear; }
+
+main {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}
+
+.box {
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #d7dae0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.box h2 { font-size: 13px; margin: 0 0 8px; text-transform: none; letter-spacing: .02em; color: #444a55; }
+
+.note { margin: 0 0 8px; color: #5b6270; font-size: 12px; }
+
+.tableScroll { overflow-x: auto; }
+
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { border-bottom: 1px solid #e6e8ed; padding: 4px 6px; text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { background: #f0f2f5; position: sticky; top: 0; }
+tbody tr.base td { background: #eef4ff; font-weight: 600; }
+
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 0; }
+.kv dt { color: #5b6270; }
+/* fileHash·textHash 는 끊을 데가 없는 긴 토큰이다. anywhere 가 없으면
+   grid 가 min-content 로 부풀어 375px 에서 가로 스크롤이 생긴다. */
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+
+.checks { margin: 0; padding-left: 18px; }
+.checks li.ok::marker { content: "○ "; }
+.checks li.bad::marker { content: "× "; }
+.checks li.bad { color: #a11; }
+
+.log {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  font: 12px/1.45 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 560px) {
+  main { grid-template-columns: 1fr; }
+  .bar { gap: 6px; }
+}
+
+.box.wide { grid-column: 1 / -1; }
+.box label { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
+.box input[type="number"] { width: 6em; padding: 3px 5px; }
+code { font: 12px ui-monospace, Consolas, monospace; background: #eef0f4; padding: 0 3px; border-radius: 3px; }
+.box table + table { margin-top: 10px; }
