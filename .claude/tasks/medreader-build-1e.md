@@ -62,10 +62,10 @@ apps/medreader/tests/blocks.test.mjs   T3~ 추가 (기존 케이스 수정 금�
 
 ## 실제 PDF 하네스
 
-`C:\Users\YDC\AppData\Local\Temp\claude\D--01-claude-my-blog\ba4903bd-caaf-4b72-9d02-05694b9269f5\scratchpad\diag\` 에 `pdfjs-dist@5.4.149` 와 스크립트(`v1d2.mjs`, `cmp1d.mjs`, `p7cat.mjs`, `verify.mjs`, `diag.mjs`, `look.mjs`)가 있다.
+`<스크래치패드>` 에 `pdfjs-dist@5.4.149` 와 스크립트(`v1d2.mjs`, `cmp1d.mjs`, `p7cat.mjs`, `verify.mjs`, `diag.mjs`, `look.mjs`)가 있다.
 - **Node 에서는 `pdfjs-dist/legacy/build/pdf.mjs` 를 import 하라**(일반 빌드는 `DOMMatrix` 없음으로 죽는다).
 - 레포 모듈은 `import(pathToFileURL('D:/01_claude_my-blog/apps/medreader/js/...').href)`.
-- 대상 PDF: `C:\Users\YDC\Downloads\ILMA_2021_20th_ed_Harrison.pdf` (1회 순회 약 30초).
+- 대상 PDF: `<다운로드>\ILMA_2021_20th_ed_Harrison.pdf` (1회 순회 약 30초).
 - **하네스와 PDF는 스크래치패드/원래 위치에만 둔다.**
 
 ## 스모크 테스트

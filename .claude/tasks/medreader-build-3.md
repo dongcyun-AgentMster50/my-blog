@@ -105,7 +105,7 @@ apps/medreader/tests/*.test.mjs        신규 추가
 
 1. `node --test "apps/medreader/tests/*.test.mjs"` 전부 통과.
 2. 온보딩 3화면 → 동의 → 서재 도달. 새로고침하면 **온보딩을 다시 묻지 않는다.**
-3. **실제 PDF 가져오기**(`C:\Users\YDC\Downloads\ILMA_2021_20th_ed_Harrison.pdf`) → 추출 진행이 서재 카드에 보인다 → 같은 파일 다시 가져오면 **중복 생성 안 됨.**
+3. **실제 PDF 가져오기**(`<다운로드>\ILMA_2021_20th_ed_Harrison.pdf`) → 추출 진행이 서재 카드에 보인다 → 같은 파일 다시 가져오면 **중복 생성 안 됨.**
 4. 4개 언어 전환 — 아랍어에서 `dir="rtl"` 이 되고 레이아웃이 깨지지 않는다.
 5. **CSS 에 `left`/`right`/`margin-left`/`margin-right` grep 0건**(16-H).
 6. 브라우저 뒤로가기로 화면이 되돌아간다.

@@ -15,7 +15,7 @@
 
 ## 진단 결과 (오케스트레이터가 실제 PDF로 확인 완료 — 재조사 불필요)
 
-대상 PDF `C:\Users\YDC\Downloads\ILMA_2021_20th_ed_Harrison.pdf` (729쪽). 결함은 **둘이 연달아** 작용한다.
+대상 PDF `<다운로드>\ILMA_2021_20th_ed_Harrison.pdf` (729쪽). 결함은 **둘이 연달아** 작용한다.
 
 **① `RUN_GAP_FACTOR 2.0`이 크다.** 이 책 거터는 **15pt**(왼쪽 x≈306 끝, 오른쪽 x≈321 시작), 본문 10pt이므로 임계 20pt > 15pt → **거터가 run 경계로 인식되지 않는다.** 히스토그램에 넣을 간격 자체가 안 생긴다.
 
@@ -71,7 +71,7 @@ apps/medreader/tests/fixtures/*.json   실제 페이지 items 픽스처 추가
 
 ## 실제 PDF로 검증하는 방법 (하네스가 준비되어 있다)
 
-스크래치패드에 Node 하네스가 있다: `C:\Users\YDC\AppData\Local\Temp\claude\D--01-claude-my-blog\ba4903bd-caaf-4b72-9d02-05694b9269f5\scratchpad\diag\`
+스크래치패드에 Node 하네스가 있다: `<스크래치패드>`
 - `pdfjs-dist@5.4.149` 설치 완료. **Node에서는 `legacy/build/pdf.mjs`를 써라**(일반 빌드는 `DOMMatrix` 없음으로 죽는다).
 - `diag.mjs`(페이지별 줄 덤프), `sweep2.mjs`(파라미터 스윕), `denom.mjs`(분모 비교), `look.mjs`(줄 확인)가 있다. 참고하거나 고쳐 써라.
 - 레포 모듈은 `import(pathToFileURL('D:/01_claude_my-blog/apps/medreader/js/...').href)`로 불러온다.

@@ -133,7 +133,7 @@ apps/medreader/dev/proto-extract.html  신규 (+ .js/.css)
 ## 스모크 테스트
 
 1. `node --test "apps/medreader/tests/*.test.mjs"` 전부 통과.
-2. **실제 PDF**(`C:\Users\YDC\Downloads\ILMA_2021_20th_ed_Harrison.pdf`, 729쪽)로:
+2. **실제 PDF**(`<다운로드>\ILMA_2021_20th_ed_Harrison.pdf`, 729쪽)로:
    - 가져오기 → 추출 → `pages` 저장
    - **추출 도중 새로고침 → `cursor`에서 이어짐** ← 핵심
    - 저장본에 `items` 없음, **표 region 줄에만** `runs[].text` 있음

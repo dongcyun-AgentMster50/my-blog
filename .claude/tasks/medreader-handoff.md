@@ -27,7 +27,7 @@ my-blog 레포, 브랜치 claude/medreader-spec-planning-i8ge24 에서 MedReader
 
 ## 프로젝트 맥락 — 반드시 알아야 할 것
 
-- **대상 PDF는 임시본이다.** 지금 검증에 쓰는 `C:\Users\YDC\Downloads\ILMA_2021_20th_ed_Harrison.pdf`(729쪽, 22.7MB)는 임시고, **7000쪽 실제 자료**가 곧 온다. `[사용자 확인]` **형식은 유사하다**(같은 계열 조판, 텍스트 PDF·스캔본 아님).
+- **대상 PDF는 임시본이다.** 지금 검증에 쓰는 `<다운로드>\ILMA_2021_20th_ed_Harrison.pdf`(729쪽, 22.7MB)는 임시고, **7000쪽 실제 자료**가 곧 온다. `[사용자 확인]` **형식은 유사하다**(같은 계열 조판, 텍스트 PDF·스캔본 아님).
 - 따라서 위험은 "미지의 형식"이 아니라 **10배 규모**다. 저장 용량·추출 재개·메모리.
 - **사용자는 빨리 전달 가능한 물건을 원한다.** 3·4·5단계까지가 "쓸 수 있는 물건"(PDF 열기 → 리플로우 읽기 → 낭독). 6~10은 그 위에 얹는 기능이다.
 - **특정 서적 지표를 소수점까지 끌어올리는 작업은 하지 않는다.**
@@ -42,7 +42,7 @@ my-blog 레포, 브랜치 claude/medreader-spec-planning-i8ge24 에서 MedReader
 | 브라우저 | `preview_start {name:"blog"}` (`python -m http.server 8000`) → `http://localhost:8000/apps/medreader/...`. **새 탭**으로 열 것(모듈 캐시). `launch.json` 수정 금지 |
 | pdf.js | **`5.4.149` 고정.** 6.3.289는 `Map.prototype.getOrInsertComputed`(TC39 Stage 3)를 써서 사용자 Chrome에서 **로드 즉시 죽는다** |
 | Node용 pdf.js | **`pdfjs-dist/legacy/build/pdf.mjs`** 를 import 할 것 — 일반 빌드는 `DOMMatrix is not defined`로 죽는다 |
-| 하네스 | `C:\Users\YDC\AppData\Local\Temp\claude\D--01-claude-my-blog\ba4903bd-caaf-4b72-9d02-05694b9269f5\scratchpad\diag\` 에 `pdfjs-dist@5.4.149` 설치본과 측정 스크립트들 |
+| 하네스 | `<스크래치패드>` 에 `pdfjs-dist@5.4.149` 설치본과 측정 스크립트들 |
 
 ## 지금까지 만든 것
 

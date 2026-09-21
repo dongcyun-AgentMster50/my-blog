@@ -47,7 +47,7 @@ node apps/medreader/dev/profile.mjs <pdf 경로> [옵션]
 
 - **Node 전용.** `pdfjs-dist` 는 **legacy 빌드**를 써야 한다(`pdfjs-dist/legacy/build/pdf.mjs`) — 일반 빌드는 Node 에서 `DOMMatrix is not defined` 로 죽는다.
 - `pdfjs-dist` 가 레포에 없으므로 **스크래치패드 설치본을 찾아 쓰거나**, 없으면 **명확한 안내 메시지**와 함께 종료하라(설치 명령을 알려주는 형태). 레포에 `node_modules` 를 만들지 마라.
-  스크래치패드 설치본: `C:\Users\YDC\AppData\Local\Temp\claude\D--01-claude-my-blog\ba4903bd-caaf-4b72-9d02-05694b9269f5\scratchpad\diag\node_modules\pdfjs-dist`
+  스크래치패드 설치본: `<스크래치패드>`
   경로를 하드코딩하지 말고 **환경변수(`MEDREADER_PDFJS`)나 인자로 받고**, 못 찾으면 안내하라.
 - 진행 표시를 내라(7000쪽은 오래 걸린다). 중간에 `Ctrl+C` 해도 그때까지 집계를 출력하면 더 좋다.
 
@@ -79,7 +79,7 @@ node apps/medreader/dev/profile.mjs <pdf 경로> [옵션]
 ## 스모크 테스트 (네가 직접 수행)
 
 1. `node --test "apps/medreader/tests/*.test.mjs"` — 기존 59개 + (네가 추가했다면) 신규 전부 통과.
-2. 실제 PDF 로 돌려라: `C:\Users\YDC\Downloads\ILMA_2021_20th_ed_Harrison.pdf` (729쪽).
+2. 실제 PDF 로 돌려라: `<다운로드>\ILMA_2021_20th_ed_Harrison.pdf` (729쪽).
    - 전체 1회 + `--stride 10` 표본 1회 → **표본 모드가 전체와 비슷한 결론**을 내는지 확인(7000쪽에서는 표본을 쓸 것이다).
    - `--json` 출력이 **유효한 JS 모듈**인지(`node -e "import(...)"` 로 실제 import 해 보라).
 3. **검증 지점**: 아래가 측정으로 드러나야 한다. 안 나오면 도구가 부실한 것이다.
