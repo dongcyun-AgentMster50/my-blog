@@ -1,15 +1,24 @@
 # MedReader 인계 문서
 
 > **새 세션에서 이어받을 때 이 파일을 가장 먼저 읽는다.**
-> 마지막 갱신: 2026-09-21 (1~4단계 완료, 5단계 착수 전)
+> 마지막 갱신: 2026-09-22 (1~5단계 완료·배포됨. 다음은 6단계)
 
 ## 한 줄 요약
 
-의학 원서 PDF 리더·학습 웹앱. **spec 19절 10단계 중 1·2·3·4단계 완료. 다음은 5단계(TTS).**
-브랜치 `claude/medreader-spec-planning-i8ge24`. 테스트 **205개 전부 통과**.
+의학 원서 PDF 리더·학습 웹앱. **spec 19절 10단계 중 1~5단계 완료. 다음은 6단계(원본 뷰).**
+**작업 브랜치는 `main` 이다**(4단계에서 머지, 이후 main 에서 직접 작업·배포). 테스트 **261개 전부 통과**.
 
-**지금 실제로 되는 것**: PDF 가져오기 → 729쪽 추출·저장 → 리플로우로 읽기 → `Aa`(글자·행간·글꼴·테마 5종) → 4개 언어·RTL.
-`[사용자 실기기 확인]` 729쪽 전수 추출 완료(`done`·`cursor 730`·`failed []`), 중복 방지 동작, `derivedHash` 저장 확인.
+**배포됨**: https://dongcyun-agentmster50.github.io/my-blog/apps/medreader/index.html
+HTTPS 라 Wake Lock·`crypto.subtle`·`persist()` 가 동작한다. **5단계부터는 배포가 기능 요구다.**
+
+**지금 실제로 되는 것**: PDF 가져오기 → 729쪽 추출·저장 → 리플로우로 읽기 → `Aa`(글자·행간·글꼴·테마 5종) → **낭독(문장 단위·하이라이트·자동 스크롤)** → 4개 언어·RTL.
+
+`[사용자 실기기 확인 — 갤럭시 Z Fold 7]`
+- 729쪽 전수 추출(`done`·`cursor 730`·`failed []`), 중복 방지, `derivedHash` 저장
+- 저장 `pages` 8.77MB = 12.32KB/쪽 → **7000쪽 ≈ 84MB**(quota 285GB 의 0.03%)
+- 접은/편 화면 모두 텍스트 정상, **22px 기본값 적절**, 테마 5종 전부 만족(세피아 선호)
+- **Wake Lock 동작** — 화면 시간 제한 30초로 두고 2분 방치해도 안 꺼지고 낭독 지속
+- **백그라운드 전환** — 끊겼다가 [재생] 한 번으로 재개
 
 ## 새 세션 시작 프롬프트 (그대로 붙여넣기)
 
@@ -72,9 +81,14 @@ apps/medreader/
 │  └─ ui/
 │     ├─ onboarding.js  3화면 + requestPersist()
 │     ├─ library.js     서재·가져오기·중복방지(pageCount 2차 비교)
-│     ├─ reader.js      ★ 리플로우 뷰. 5단계 계약(flowLineIds·setCurrent·lineElement)
-│     └─ typeset.js     Aa 팝오버
-├─ tests/               205개
+│     ├─ reader.js      ★ 리플로우 뷰 + 하이라이트 수신·자동 스크롤
+│     ├─ typeset.js     Aa 팝오버
+│     └─ controls.js    하단 낭독 컨트롤 바
+│  └─ tts/
+│     ├─ speaker.js     ★ 상태 기계·onend 체이닝·워치독 (6-1·6-2·6-4)
+│     ├─ voices.js      loadVoices·pickVoice·availability (6-3)
+│     └─ text.js        낭독용 텍스트 정규화(하이픈·기호·300자 분할)
+├─ tests/               261개
 └─ dev/
    ├─ proto-lines.html  줄·컬럼·표를 눈으로 확인하는 도구
    ├─ proto-extract.*   추출·저장을 눈으로 확인하는 도구 (배선 예제로도 쓸 것)
@@ -146,11 +160,21 @@ MEDREADER_PDFJS=<pdfjs-dist 경로> node apps/medreader/dev/profile.mjs <pdf> --
 
 ## 다음 할 일
 
-### 지금 (5단계 — 다음 차례)
+### 지금 (6단계 — 다음 차례)
+원본 canvas 뷰 + 하이라이트 오버레이 + 표 크롭 폴백. spec 4-12·12-5·4-8.
+**주의: 회전 줄(`role==='rotated'`)의 `bbox` 는 설계상 틀린다**(아래 함정 5번). 오버레이가 그리면 안 된다.
+`--pager-h`·`--notice-total`·`--tts-gap` 토큰으로 하단 바들이 이미 쌓여 있으니 겹치지 않게 배치할 것.
+
+### 끝난 것 (5단계)
 `tts/*` + 하단 컨트롤 바 + 하이라이트 + 자동 스크롤. **실기기 확인을 여기서 즉시**(16-C).
 Android Chrome 제약이 spec 6-4에 정리되어 있다 — `onboundary` 없음, `pause()` 후 재개 불가, utterance GC로 `onend` 유실.
 
-**4단계가 만들어 둔 계약 — 그대로 쓰라:**
+**5단계가 만든 것 — 6단계가 이어받을 계약:**
+`speaker` 의 `linechange` 를 `ui/reader.js` 가 받아 `setCurrent(lineId)` 로 위임한다.
+원본 뷰를 붙이면 **같은 이벤트를 `original.setCurrent(lineId)` 로도 위임**하면 된다(6-5).
+`speaker` 는 코드·이벤트만 내고 UI 문자열을 만들지 않는다(3-2).
+
+**4단계가 만들어 둔 계약:**
 ```js
 import { flowLineIds, lineElement, setCurrent, markDone, currentPage } from './ui/reader.js';
 ```
