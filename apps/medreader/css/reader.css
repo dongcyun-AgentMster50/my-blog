@@ -197,7 +197,13 @@
    실기기 피드백: 세피아에서 둘 다 따뜻한 갈색이라 "어디를 읽고 있는지"가
    묻혔다. 배경으로 칠하지 않고 **글자를 옅게** 해서, 현재 줄의 배경
    하이라이트와 아예 다른 축으로 구분한다. */
-.reflow .line.is-done { color: var(--hl-done); }
+/* [수정 2026-09-22] `:not(.is-current)` 가 핵심이다.
+   PDF 한 줄에 두 문장이 걸치면 그 줄은 **앞 문장으로 is-done**, **뒤 문장으로
+   is-current** 를 동시에 갖는다. 선언 순서상 is-done 의 글자색이 이겨서,
+   지금 읽고 있는 하이라이트 안에 옅은 글자와 진한 글자가 뒤섞였다
+   ("past medical his|tory goes to" — 실기기 캡처).
+   현재 줄일 때는 읽음 표시를 적용하지 않는다. */
+.reflow .line.is-done:not(.is-current) { color: var(--hl-done); }
 
 /* ── 문단 kind 별 (4-9) ───────────────────────────────── */
 .reflow .para[data-kind="heading"] {
@@ -408,12 +414,26 @@
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 5b — 반복 중에는 "반복 2/3 · 6중 3번째 줄" 두 토막이 들어온다. 접은
+     화면(375px)에서 이 칸은 100px 남짓이라 한 줄로는 뒤가 잘린다. 두 줄까지
+     허용하되 바 높이(--tts-h)를 밀어내지 않게 잘라 둔다. */
+  white-space: normal;
+  line-height: 1.25;
+  max-block-size: 2.5em;
   text-align: center;
 }
 
 /* 낭독 중인지 한눈에 — 색만으로 구분하지 않는다(글리프가 ▶/⏸ 로 바뀐다). */
 .tts-bar[data-state="waiting-page"] .tts-play { opacity: 0.6; }
+
+/* 5b 반복 — 팝업을 닫아도 켜져 있음이 보여야 한다. 컨트롤 바에 버튼을
+   더하면 375px 에서 넘치므로, 속도 버튼에 테두리 표시를 얹고 남은 횟수는
+   진행 표시("줄 12/58 · 반복 2/3")가 말한다. 색만으로 구분하지 않는다. */
+.tts-bar[data-repeat="unit"] .tts-rate,
+.tts-bar[data-repeat="range"] .tts-rate {
+  border-color: var(--c-accent);
+  box-shadow: inset 0 0 0 1px var(--c-accent);
+}
 
 /* 속도·낭독 단위 팝오버 — Aa 팝오버와 같은 하단 시트 방식(12-3) */
 .tts-rate-panel {
@@ -432,11 +452,20 @@
 
 .tts-rate-panel[hidden] { display: none; }
 
-.tts-rate-panel input[type="range"] {
-  inline-size: 100%;
-  block-size: var(--tap);
-  accent-color: var(--c-accent);
-  touch-action: manipulation;
+/* 5b — 속도 계단 6개 + 반복 3줄이 들어오면서 시트가 길어졌다. 접은 화면
+   (375×~800)에서 잘리지 않도록 스스로 스크롤한다. */
+.tts-rate-panel {
+  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--tts-h) - var(--notice-total) - var(--sp-6));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 5b — 한 줄에 6개(속도)·4개(횟수)가 들어가야 한다. 기본 96px 은 너무 넓어
+   접은 화면에서 3줄이 된다. 48px 터치 높이(16-G)는 그대로 지킨다. */
+.tts-rate-panel .tts-steps button {
+  min-inline-size: 64px;
+  padding-inline: var(--sp-2);
+  font-variant-numeric: tabular-nums;
 }
 
 .tts-rate-panel > .primary {

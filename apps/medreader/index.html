@@ -225,16 +225,20 @@
       <span class="tts-progress" id="ttsProgress" role="status" aria-live="polite"></span>
     </div>
 
-    <!-- 속도 팝오버 (12-3) — 0.5~2.0, 0.1 단계 -->
+    <!-- 속도·낭독 단위·반복 팝오버 (12-3 · 5b)
+         ★ 5b — 속도는 **계단**이다(연속 슬라이더를 걷어냈다). 단계 목록은
+           `config.js` 의 `TTS.RATE_STEPS` 하나뿐이고 버튼은 `controls.js` 가
+           그것을 읽어 만든다 — HTML 에 숫자를 두면 두 곳이 어긋난다.
+         ★ 반복 조작을 컨트롤 바에 버튼으로 더하지 않고 여기 넣는다.
+           접은 화면(375px)에서 하단 바가 넘치기 때문이다. -->
     <div class="tts-rate-panel" id="ttsRatePanel" role="dialog" aria-modal="false"
          data-i18n-aria="reader.tts.rate" hidden>
       <div class="typeset-row">
         <div class="typeset-head">
-          <label for="ttsRateInput" data-i18n="reader.tts.rate"></label>
+          <label data-i18n="reader.tts.rate"></label>
           <span class="typeset-out" id="ttsRateOut"></span>
         </div>
-        <input type="range" id="ttsRateInput" min="0.5" max="2" step="0.1" value="1"
-               data-i18n-aria="reader.tts.rate">
+        <div class="typeset-choices tts-steps" id="ttsRateSteps"></div>
       </div>
       <div class="typeset-row">
         <div class="typeset-head">
@@ -245,6 +249,36 @@
           <button type="button" data-unit="line" aria-pressed="false" data-i18n="reader.tts.unit.line"></button>
         </div>
       </div>
+
+      <!-- 반복 재생 (5b) -->
+      <div class="typeset-row">
+        <div class="typeset-head">
+          <label data-i18n="reader.tts.repeat"></label>
+          <span class="typeset-out" id="ttsRepeatOut"></span>
+        </div>
+        <div class="typeset-choices" id="ttsRepeatRow">
+          <button type="button" data-repeat="off" aria-pressed="true" data-i18n="reader.tts.repeat.off"></button>
+          <button type="button" data-repeat="unit" aria-pressed="false" data-i18n="reader.tts.repeat.unit"></button>
+          <button type="button" data-repeat="range" aria-pressed="false" data-i18n="reader.tts.repeat.range"></button>
+        </div>
+      </div>
+      <div class="typeset-row" id="ttsCountRow" hidden>
+        <div class="typeset-head">
+          <label data-i18n="reader.tts.repeat.count"></label>
+        </div>
+        <div class="typeset-choices tts-steps" id="ttsCountChoices"></div>
+      </div>
+      <div class="typeset-row" id="ttsSpanRow" hidden>
+        <div class="typeset-head">
+          <label data-i18n="reader.tts.repeat.span.label"></label>
+          <span class="typeset-out" id="ttsSpanOut"></span>
+        </div>
+        <div class="typeset-choices" id="ttsSpanChoices">
+          <button type="button" data-edge="from" data-i18n="reader.tts.repeat.from"></button>
+          <button type="button" data-edge="to" data-i18n="reader.tts.repeat.to"></button>
+        </div>
+      </div>
+
       <button type="button" class="primary" id="ttsRateClose" data-i18n="common.close"></button>
     </div>
 

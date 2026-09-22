@@ -276,6 +276,18 @@ export const TTS = Object.freeze({
   RATE_MAX: 2.0,
   RATE_STEP: 0.1,
 
+  /* 6-1 [수정 2026-09-22 · 실기기 피드백] 속도는 **계단식**이다.
+   * 연속 슬라이더(0.1 단계)는 걷거나 누운 자세에서 엄지로 값을 맞출 수 없다.
+   * 사용자가 직접 고른 여섯 단계 — "0.5, 0.75, 1, 1.25, 1.5, 1.8 이렇게 있음 충분해".
+   * `RATE_MIN/MAX/STEP` 은 남긴다 — `tts/text.js` 의 `clampRate` 가 아직 쓰고,
+   * 그 함수는 이 단계의 수정 범위 밖이다. 새 코드는 `snapRate`(speaker.js)를 쓴다. */
+  RATE_STEPS: Object.freeze([0.5, 0.75, 1.0, 1.25, 1.5, 1.8]),
+
+  /* 반복 재생 (5b) — 사용자 요구 "횟수도 정할 수 있게".
+   * **0 은 무한**이다(사용자가 끌 때까지). 숫자로 두어 settings 에 그대로 저장된다. */
+  REPEAT_COUNTS: Object.freeze([2, 3, 5, 0]),
+  REPEAT_COUNT_DEFAULT: 3,
+
   /* 6-1 [수정 2026-09-21] 기본 낭독 단위는 **문장**이다.
    * `settings.js` 의 `DEFAULTS['tts.unit']` 은 초판 값('line')에 머물러 있고
    * 그 파일은 이 단계의 수정 범위 밖이다. 저장된 값이 없을 때는 이 상수를

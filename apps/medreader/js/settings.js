@@ -43,6 +43,9 @@ export const DEFAULTS = Object.freeze({
   // 실기기에서 실제 원서를 읽어 본 사용자 판단으로 뒤집혔다 — 2단 조판이라
   // 원본 줄이 8~10단어로 짧아 줄 단위로 읽으면 다시 거꾸로 읽게 된다.
   'tts.unit': 'sentence',
+  // 5b — 반복 재생 횟수. **0 = 무한**(사용자가 끌 때까지). 반복 *모드* 는
+  // 저장하지 않는다 — 앱을 다시 열었을 때 무한 반복이 켜져 있으면 놀란다.
+  'tts.repeat.count': 3,
   'tts.voice.en': '',
   'tts.voice.ar': '',
   'tts.voice.fr': '',
