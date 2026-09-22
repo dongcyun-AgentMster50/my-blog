@@ -174,22 +174,30 @@
 .reflow .hy { display: none; }
 
 /* 6-5 — 5단계 하이라이트가 이 클래스를 토글한다. */
+/* [수정 2026-09-22] 실기기에서 이음매가 낱말을 갈랐다 — "undergo just" 가
+   "und|ergo jus|t" 로, "BRCA1 or" 가 "BRCA1| or" 로 보였다.
+
+   원인은 `box-decoration-break: clone` + `border-radius` 다. clone 은 접힌
+   조각마다 **별도 상자**를 만들고 radius 가 그 경계를 눈에 보이게 한다.
+   게다가 한 문장이 여러 `span.line` 에 걸치는데(문장 모드) 리플로우된 화면
+   줄과 PDF 원본 줄이 **다르게 접히므로** 이음매가 낱말 한가운데 떨어진다.
+
+   고침: 조각을 나누지 않고(`slice` = 기본값), 모서리를 둥글리지 않고,
+   그림자를 쓰지 않는다. 같은 배경색을 가진 인접 span 은 서로 맞닿아
+   이음매가 보이지 않는다. 줄 사이 세로 틈은 `padding-block` 으로 메운다 —
+   inline 요소의 세로 padding 은 줄 높이를 바꾸지 않고 칠하기만 한다. */
 .reflow .line.is-current {
   background: var(--hl-bg);
   color: var(--hl-text);
-  /* [수정 5단계] 6-5 의 "줄 사이 틈 메움"은 **세로 방향만**이다.
-     `0 0 0 4px` 은 사방으로 퍼지는데, 문장 모드에서는 한 문장이 걸친 줄
-     span 이 여럿이라 **뒤 span 의 그림자가 앞 span 의 마지막 글자를 덮는다**
-     ("cardiovascular" 가 "cardic vascular" 로 보였다 — 실측). 가로 퍼짐을
-     0 으로 두면 줄 사이는 그대로 메우면서 글자를 먹지 않는다. */
-  box-shadow: 0 -4px 0 0 var(--hl-bg), 0 4px 0 0 var(--hl-bg);
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  border-radius: 2px;
+  padding-block: 0.18em;
   transition: background-color 120ms linear;
 }
 
-.reflow .line.is-done { background: var(--hl-done); }
+/* 6-5 — 이미 읽은 줄. **현재 줄과 확실히 달라야 한다.**
+   실기기 피드백: 세피아에서 둘 다 따뜻한 갈색이라 "어디를 읽고 있는지"가
+   묻혔다. 배경으로 칠하지 않고 **글자를 옅게** 해서, 현재 줄의 배경
+   하이라이트와 아예 다른 축으로 구분한다. */
+.reflow .line.is-done { color: var(--hl-done); }
 
 /* ── 문단 kind 별 (4-9) ───────────────────────────────── */
 .reflow .para[data-kind="heading"] {

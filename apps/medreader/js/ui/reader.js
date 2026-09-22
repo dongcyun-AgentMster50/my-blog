@@ -441,10 +441,16 @@ function paraEl(b) {
   p.setAttribute('data-kind', b.kind || 'body');
   for (let i = 0; i < b.lines.length; i++) {
     const ln = b.lines[i];
-    p.appendChild(lineEl(ln, 1));
-    // 12-4 — 하이픈으로 이어지는 줄 사이에는 공백 노드를 두지 않는다.
+    // 12-4 — 하이픈으로 이어지는 줄 사이에는 공백을 두지 않는다.
+    //
+    // [수정 2026-09-22] 줄 사이 공백을 **span 밖의 텍스트 노드**로 두었더니
+    // 실기기에서 하이라이트에 틈이 생겼다("should| undergo"). 공백이
+    // `.is-current` 배경 밖에 있어 두 상자가 끊겨 보였고, 리플로우된 화면 줄과
+    // PDF 원본 줄이 다르게 접히므로 그 틈이 **낱말 한가운데** 떨어지기도 했다.
+    // 공백을 **앞 줄 span 안**으로 옮기면 하이라이트가 이어진다.
     const last = i === b.lines.length - 1;
-    if (!last && ln.hyphen === 'none') p.appendChild(document.createTextNode(' '));
+    const joinSpace = !last && ln.hyphen === 'none';
+    p.appendChild(lineEl(ln, 1, joinSpace));
   }
   return p;
 }
@@ -453,7 +459,7 @@ function paraEl(b) {
  * `span.line[data-line-id]` — **5단계 하이라이트의 앵커**(6-5).
  * `data-flow="1"` 인 줄만 낭독이 돈다. 접힌 줄은 `0` 이다.
  */
-function lineEl(ln, flow) {
+function lineEl(ln, flow, joinSpace) {
   const span = el('span', 'line');
   span.setAttribute('data-line-id', ln.id);
   span.setAttribute('data-flow', flow ? '1' : '0');
@@ -468,6 +474,8 @@ function lineEl(ln, flow) {
   } else {
     span.textContent = ln.text;
   }
+  // 다음 줄로 잇는 공백은 **span 안**에 둔다 — 밖에 두면 하이라이트가 끊긴다.
+  if (joinSpace) span.appendChild(document.createTextNode(' '));
   return span;
 }
 
