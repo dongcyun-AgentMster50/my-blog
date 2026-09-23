@@ -507,3 +507,137 @@
 
 /* 낭독 중 줄을 탭하면 그 줄부터 이동한다(6-5). 손가락이 닿을 곳임을 알린다. */
 .reflow .line { touch-action: manipulation; }
+
+/* ════════════════════════════════════════════════════════
+   원본 뷰 (spec 4-12 · 12-5) — 6b 단계
+
+   ★ **이 파일에서 물리 좌표를 쓰는 곳은 `.hl-line` 하나뿐이다**(16-H 가
+     명시한 예외 — spec 11-3: "원본 뷰 오버레이의 left/top 은 좌표계이므로
+     허용"). 그 밖에는 논리 속성만 쓴다.
+   ════════════════════════════════════════════════════════ */
+
+/* 상단 바의 뷰 전환 버튼 — 16-G 48×48. */
+.topbar .view-toggle {
+  flex: 0 0 auto;
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.topbar .view-toggle[disabled] { opacity: 0.45; }
+
+.original {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-2);
+}
+
+/* 줌 막대 — 하단은 컨트롤 바·쪽 이동 바·고지 바가 이미 쌓여 있다(12-3).
+   그래서 본문 위에 둔다. 375px 에서 버튼 2개 + 숫자가 한 줄에 들어간다. */
+.original-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 5;
+  padding-block: var(--sp-1);
+  background: var(--c-bg);
+}
+
+.original-bar button {
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  font: inherit;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  touch-action: manipulation;
+}
+
+.original-bar button[disabled] { opacity: 0.45; }
+
+.original-zoom-out {
+  min-inline-size: 5em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+.original-status { text-align: center; }
+.original-status[hidden] { display: none; }
+
+/* 12-5 — 확대 상태에서는 수평 스크롤을 허용한다. */
+.original-scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* 아래 세 바(고지·쪽이동·컨트롤)를 피해 남는 높이를 채운다. */
+  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--tts-h) - var(--notice-total) - var(--sp-7));
+  background: var(--c-surface-2);
+}
+
+/* 4-12 — canvas 와 오버레이가 같은 좌표계를 쓴다. */
+.original .page-wrap {
+  position: relative;
+  margin-inline: auto;
+  /* 렌더 중 임시 확대(12-5)가 여기에 걸린다. */
+  transition: none;
+}
+
+.original .page-canvas {
+  display: block;
+  /* 종이 그림이다 — 테마 배경 위에서도 흰 종이로 남는다(아래 주석 참조). */
+  background: #ffffff;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+}
+
+.original .hl-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ★ 16-H 의 **유일한 예외**(spec 11-3).
+   `left`/`top` 은 방향이 아니라 좌표다 — RTL 에서 거울이 되면 안 된다.
+   상자는 `transform: translate()` 로 옮긴다. 줄마다 만들지 않는다(4-12). */
+.original .hl-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: var(--hl-bg);
+  /* 글자를 덮지 않게 반투명으로 얹는다 — canvas 위에는 글자를 다시 그릴 수 없다. */
+  opacity: 0.38;
+  border-radius: 2px;
+  will-change: transform;
+  transition: transform 120ms linear;
+}
+
+.original .hl-line[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .original .hl-line { transition: none; }
+}
+
+/* ── 4-8 표 크롭 폴백 ─────────────────────────────────── */
+.reflow .table-crop-box {
+  /* 핀치 줌이 되도록 자체 스크롤 상자 안에 둔다(4-8). */
+  overflow: auto;
+  overscroll-behavior: contain;
+  max-block-size: 60dvh;
+  margin-block-end: var(--sp-2);
+  background: #ffffff;
+  border-radius: var(--radius-sm);
+}
+
+.reflow .table-crop {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  margin-inline: auto;
+}

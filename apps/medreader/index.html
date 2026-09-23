@@ -138,6 +138,10 @@
     <div class="topbar">
       <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
       <h1 class="title" id="readerTitle"></h1>
+      <!-- 12-3 뷰 전환 [⧉] — 리플로우 ↔ 원본. 글자는 `ui/reader.js` 가
+           "갈 곳"으로 쓴다(지금 상태가 아니라). pdf.js 가 없으면 비활성(2-3). -->
+      <button type="button" class="view-toggle" id="viewToggle" aria-pressed="false"
+              data-i18n-aria="reader.view.original"></button>
       <button type="button" class="aa" id="typesetBtn" aria-expanded="false"
               aria-controls="typesetPanel" data-i18n="reader.typeset.aa"
               data-i18n-aria="reader.typeset.open"></button>

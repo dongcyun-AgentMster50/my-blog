@@ -332,3 +332,32 @@ export const TTS_SYMBOLS = Object.freeze({
   '→': 'to',
   '%': 'percent'
 });
+
+/* ────────────────────────────────────────────────────────
+   12-5 · 4-8 · 4-12 원본 뷰 — 6b 단계에서 추가.
+   **기존 키(LAYOUT·KEEP_HYPHEN_*)는 건드리지 않는다.** 원본 뷰가 쓰는
+   숫자만 새 키로 모은다(16-K: 파라미터는 config 한 곳에).
+   ──────────────────────────────────────────────────────── */
+export const ORIGINAL = Object.freeze({
+  /* 12-5 — 앱 안 [−][+] 줌 범위. 16-F 가 0.8·1.5·3.0 에서 오버레이를 검사한다. */
+  ZOOM_MIN: 0.8,
+  ZOOM_MAX: 3.0,
+  /* 한 번 누를 때의 배율. 0.8 → 1.0 → 1.25 … 3.0 로 로그 간격에 가깝다. */
+  ZOOM_FACTOR: 1.25,
+
+  /* 4-6 — 하이라이트 상자는 줄 bbox 사방에 `0.15 × fontSize` 를 더해 그린다.
+     순수 계층은 원값만 주므로 이 padding 은 **UI(이 단계)의 몫**이다. */
+  HL_PAD_FACTOR: 0.15,
+
+  /* 4-8 폴백 — 표 크롭. `scale = 2 × devicePixelRatio`(상한 3). */
+  CROP_SCALE_FACTOR: 2,
+  CROP_SCALE_MAX: 3,
+  /* 4-8 — 표 영역 사방 여백 6pt. 표 테두리가 잘리지 않게 한다. */
+  CROP_PAD_PT: 6,
+  /* 4-8 — 크롭 이미지는 **메모리에만** 둔다(IndexedDB 금지). LRU 20개. */
+  CROP_CACHE_MAX: 20,
+
+  /* 렌더 canvas 의 devicePixelRatio 상한. 3.0× 줌 × dpr 3 이면 한 변이
+     5000px 을 넘어 저사양 기기에서 canvas 할당이 실패한다. */
+  DPR_MAX: 2
+});

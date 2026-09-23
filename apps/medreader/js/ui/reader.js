@@ -43,7 +43,10 @@ import { go, replace, readerHash, libraryHash } from '../router.js';
 import { openDoc, extractorFor } from './library.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
 import { initControls, leaveControls } from './controls.js';
-import { TTS } from '../config.js';
+import { TTS, ORIGINAL } from '../config.js';
+import * as render from '../pdf/render.js';
+import * as original from './original.js';
+import { pickAnchorLine } from './original.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
@@ -170,6 +173,76 @@ export function flowLineIdsOf(desc) {
   return out;
 }
 
+/**
+ * 4-8 (3) — 낭독이 표에 닿으면 **한 번** 안내하고 다음 문단으로 넘어간다.
+ *
+ * 표 줄은 애초에 낭독 큐에 없다(`describePage` 가 문단에 넣지 않는다). 그래서
+ * "닿았다"를 알리려면 **큐 위에 안내 한 마디를 끼워 넣는** 수밖에 없다. 낭독
+ * 상태 기계(`tts/speaker.js`)와 컨트롤 바는 이 단계의 수정 범위 밖이고, 그
+ * 둘을 건드리지 않고 6-4 의 제약(취소 후 60ms·세대 검사)을 지키는 길이
+ * 이것뿐이다 — 안내도 그냥 한 발화다.
+ *
+ * **같은 표에 다시 닿아도 반복하지 않는다.** `announced` 에 든 region 은
+ * 끼워 넣지 않는다(쪽을 다시 그려 큐를 새로 만들어도 마찬가지다).
+ *
+ * 순수 함수다 — 상태를 바꾸지 않고 새 배열을 돌려준다.
+ *
+ * @param {Array}  paras    `flowParas()` 가 낼 문단들(읽기 순서)
+ * @param {Array}  blocks   `describePage().blocks` — 표가 어디에 끼어 있는지 안다
+ * @param {Set}    announced 이미 안내한 regionId 들
+ * @param {string} text     안내 문장(UI 언어 — 3-2 에 따라 문자열화는 UI 의 몫)
+ */
+export function insertTableNotices(paras, blocks, announced, text) {
+  const list = Array.isArray(blocks) ? blocks : [];
+  const src = Array.isArray(paras) ? paras : [];
+  const said = announced || new Set();
+  const say = String(text || '').trim();
+  const out = [];
+  const usedNotice = new Set();
+
+  // `flowParas()` 는 `blocks` 의 문단을 **그 순서대로** 낸다. 그래서 id 로
+  // 맞추지 않고 번호로 맞춘다 — 문단 id 는 null 일 수 있다(문단에 속하지
+  // 않은 본문 줄).
+  let pi = 0;
+  for (let i = 0; i < list.length; i++) {
+    const b = list[i];
+    if (b.type === 'para') {
+      // 문단은 `flowParas()` 가 만든 객체를 **그대로** 쓴다(같은 줄 객체여야
+      // `tts/text.js` 의 하이픈 결합이 화면 글자와 어긋나지 않는다).
+      if (pi < src.length) out.push(src[pi]);
+      pi++;
+      continue;
+    }
+    if (b.type !== 'table' || !say) continue;
+    const rid = String(b.regionId);
+    if (said.has(rid) || usedNotice.has(rid)) continue;
+    usedNotice.add(rid);
+    out.push(tableNoticePara(rid, say));
+  }
+
+  // blocks 와 수가 맞지 않는 나머지 문단(방어) — 잃지 않는다.
+  for (; pi < src.length; pi++) out.push(src[pi]);
+  return out;
+}
+
+/** 안내 문단의 id 접두사. 화면의 줄 id 와 섞이지 않는 모양이어야 한다. */
+export const TABLE_NOTICE_PREFIX = 'tablenotice:';
+
+export function tableNoticePara(regionId, text) {
+  const id = TABLE_NOTICE_PREFIX + regionId;
+  return { id: id, kind: 'table-notice', lines: [{ id: id, text: text, hyphen: 'none' }] };
+}
+
+/** 이 id 가 표 안내인가. 그렇다면 화면에는 없는 줄이다(하이라이트 대상 아님). */
+export function isTableNotice(id) {
+  return typeof id === 'string' && id.indexOf(TABLE_NOTICE_PREFIX) === 0;
+}
+
+/** 안내 id → regionId. */
+export function regionOfNotice(id) {
+  return isTableNotice(id) ? id.slice(TABLE_NOTICE_PREFIX.length) : null;
+}
+
 function paraBlock(p, lineById) {
   const out = [];
   const ids = Array.isArray(p.lineIds) ? p.lineIds : [];
@@ -198,6 +271,8 @@ const state = {
   pageCount: 0,
   doc: null,
   desc: null,
+  /** `fromStored` 가 되살린 PageLayout — 원본 뷰의 bbox 가 여기서 온다(4-12). */
+  layout: null,
   currentLineId: null,
   /** 지금 이벤트를 듣고 있는 Extractor 와 해제 함수들 */
   wired: { docId: null, ex: null, off: [] },
@@ -213,7 +288,21 @@ const state = {
   /** 사용자가 직접 스크롤해 자동 스크롤을 쉬는 중인가. */
   scrollPaused: false,
   /** 자동 스크롤 복구 판정용 — 문단이 바뀌면 되살린다. */
-  lastParaId: null
+  lastParaId: null,
+
+  /* ── 6b 원본 뷰 ──────────────────────────────────── */
+  /** 9-3 `reader.view` — 'reflow' | 'original'. 새로고침 후에도 유지된다. */
+  view: 'reflow',
+  /** 사용자가 마지막으로 탭한 줄 — `pickAnchorLine` 의 `ctx` 한 조각. */
+  lastTappedLineId: null,
+  /** 4-8 (3) — 이미 안내한 표 region(문서가 바뀌면 비운다). */
+  announcedTables: new Set(),
+  /** 4-8 폴백 — 크롭 이미지 **메모리 LRU 20개.** IndexedDB 에 넣지 않는다. */
+  crops: render.createLru(ORIGINAL.CROP_CACHE_MAX, (key, val) => {
+    // 쫓겨난 이미지의 objectURL 은 돌려준다 — 안 그러면 탭이 살아 있는 동안
+    // 메모리에 남는다(7000쪽에서 이게 누적이다).
+    if (val && val.url) { try { URL.revokeObjectURL(val.url); } catch (e) { /* 이미 해제됨 */ } }
+  })
 };
 
 /** 줄 탭 구독자(`ui/controls.js`). 리더가 `speaker` 를 직접 import 하지 않는다. */
@@ -239,8 +328,27 @@ export function initReader() {
     next: root.querySelector('#pageNext'),
     input: root.querySelector('#pageInput'),
     total: root.querySelector('#pageTotal'),
-    backToLine: root.querySelector('#backToLine')
+    backToLine: root.querySelector('#backToLine'),
+    viewToggle: root.querySelector('#viewToggle')
   };
+
+  /* ── 6b 원본 뷰 (12-5) ─────────────────────────────
+     pdf.js 는 **원본 뷰를 요청할 때** 열린다(2-3). 실패하면 버튼을 끄고
+     리플로우로 되돌린다 — 추출이 끝난 쪽은 pdf.js 없이 계속 읽힌다. */
+  state.view = settings.get('reader.view') === 'original' ? 'original' : 'reflow';
+  original.initOriginal({
+    getPdfDoc: pdfDocFor,
+    onLineTap: (id) => {
+      state.lastTappedLineId = id == null ? null : String(id);
+      for (const fn of lineTapListeners) { try { fn(id); } catch (e) { /* 구독자 예외 */ } }
+    },
+    onUnavailable: (code) => {
+      banner({ code: code }, 'ERR_PDFJS_LOAD');
+      setView('reflow', { persist: false });
+    }
+  });
+  els.viewToggle.addEventListener('click', () => toggleView());
+  paintViewToggle();
 
   initTypeset();
   // 12-3 하단 컨트롤 바. 이 화면 안에서만 산다 — `main.js` 를 건드리지 않는다.
@@ -268,6 +376,7 @@ export function initReader() {
     const sel = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
     if (sel && String(sel).length > 0) return;
     const id = span.getAttribute('data-line-id');
+    state.lastTappedLineId = id;            // `pickAnchorLine` 의 ctx 한 조각
     for (const fn of lineTapListeners) { try { fn(id); } catch (e) { /* 구독자 예외가 리더를 막지 않는다 */ } }
   });
 
@@ -324,6 +433,13 @@ export async function showReader(params) {
   }
 
   const docChanged = state.docId !== docId;
+  if (docChanged) {
+    // 4-8 — region id 는 쪽 안에서만 유일하다. 문서가 바뀌면 비운다
+    // (같은 "45:r0" 이 다른 책의 다른 표일 수 있다).
+    state.announcedTables = new Set();
+    state.crops.clear();
+    state.lastTappedLineId = null;
+  }
   state.docId = docId;
   state.doc = doc;
   state.pageCount = pageCount;
@@ -348,10 +464,13 @@ export function leaveReader() {
   // 리더를 떠나면 낭독도 멈춘다 — 서재에서 소리가 계속 나면 안 된다.
   leaveControls();
   if (els && els.mount) clear(els.mount);
+  original.leaveOriginal();
   state.desc = null;
+  state.layout = null;
   state.currentLineId = null;
   state.currentLineIds = [];
   state.lastParaId = null;
+  state.lastTappedLineId = null;
   state.scrollPaused = false;
   hideBackChip();
 }
@@ -376,28 +495,263 @@ async function renderPage() {
   if (token !== state.renderToken) return;
 
   clear(els.mount);
+  original.leaveOriginal();
   state.currentLineId = null;
   state.currentLineIds = [];
 
   if (!rec) {
     // 아직 추출되지 않은 쪽 — **빈 화면을 보여주지 않는다**(12-3).
     state.desc = null;
+    state.layout = null;
     els.mount.appendChild(preparingBlock());
+    paintViewToggle();
     return;
   }
 
   let desc = null;
+  let layout = null;
   try {
-    desc = describePage(fromStored(rec));
+    layout = fromStored(rec);
+    desc = describePage(layout);
   } catch (e) {
     // 저장본이 깨졌어도 리더가 죽지는 않는다. 9-4 가 그 쪽을 다시 뽑는다.
     state.desc = null;
+    state.layout = null;
     els.mount.appendChild(noticeBlock('reader.page.broken'));
+    paintViewToggle();
     return;
   }
   state.desc = desc;
-  els.mount.appendChild(renderDescription(desc));
+  state.layout = layout;
+
+  // ★ **낭독 큐는 뷰와 무관하다.** `desc` 는 두 뷰에서 똑같이 만들어 두고
+  //   화면만 갈아 끼운다 — 원본 뷰에서도 낭독이 끊기지 않는다(6-4).
+  await paintView(token);
+  if (token !== state.renderToken) return;
   notifyPage();
+}
+
+/**
+ * 12-3 뷰 전환 — 같은 쪽을 리플로우로 그릴지 원본 canvas 로 그릴지.
+ * 원본 뷰가 실패하면 **조용히 리플로우로 되돌린다**(2-3: 앱은 죽지 않는다).
+ */
+async function paintView(token) {
+  if (state.view === 'original' && !original.originalUnavailable()) {
+    const ok = await original.showOriginal(els.mount, {
+      docId: state.docId, pageNo: state.page, layout: state.layout
+    });
+    if (token !== state.renderToken) return;
+    if (ok) { paintViewToggle(); return; }
+    // pdf.js 가 없다 → `onUnavailable` 이 이미 `state.view` 를 되돌렸다.
+    state.view = 'reflow';
+    clear(els.mount);
+  }
+  els.mount.appendChild(renderDescription(state.desc));
+  paintViewToggle();
+  // 4-8 폴백 — 표 자리에 크롭 이미지를 넣는다. pdf.js 가 없으면 조용히
+  // 자리표시자로 남는다(리플로우 읽기는 계속된다).
+  fillTableCrops(token);
+}
+
+/* ────────────────────────────────────────────────────────
+   3-b. 뷰 전환 (12-3 · 12-5)
+   ──────────────────────────────────────────────────────── */
+
+/** 원본 뷰·표 크롭이 쓰는 PDFDocumentProxy. pdf.js 로드는 여기서만 일어난다. */
+async function pdfDocFor(docId) {
+  const ex = extractorFor(docId) || await openDoc(docId);
+  return (ex && ex.pdfDoc) || null;
+}
+
+function paintViewToggle() {
+  if (!els || !els.viewToggle) return;
+  const isOriginal = state.view === 'original';
+  const down = original.originalUnavailable();
+  els.viewToggle.disabled = down;
+  els.viewToggle.setAttribute('aria-pressed', isOriginal ? 'true' : 'false');
+  // 버튼은 **갈 곳**을 말한다 — 지금 상태가 아니라.
+  const key = isOriginal ? 'reader.view.reflow' : 'reader.view.original';
+  els.viewToggle.textContent = t(key);
+  els.viewToggle.setAttribute('aria-label', t(key));
+}
+
+/**
+ * 12-3 — "같은 줄을 기준으로 위치를 유지한다". 어느 줄로 착지할지는
+ * `pickAnchorLine`(사람이 채운다)이 고르고, **null 이면 쪽 첫 줄**이다.
+ */
+async function toggleView() {
+  if (!els || original.originalUnavailable()) return;
+  // 기준 줄은 **바꾸기 전** 화면에서 고른다. 바꾼 뒤에는 그 사실이 사라진다.
+  const anchor = resolveAnchor();
+  const next = state.view === 'original' ? 'reflow' : 'original';
+  await setView(next, { persist: true, anchor: anchor });
+}
+
+/**
+ * @param {'reflow'|'original'} view
+ * @param {Object} opts persist — 9-3 `reader.view` 에 저장할 것인가
+ *                     anchor  — 착지할 줄 id (없으면 쪽 첫 줄)
+ */
+async function setView(view, opts) {
+  const o = opts || {};
+  const next = view === 'original' ? 'original' : 'reflow';
+  const changed = state.view !== next;
+  state.view = next;
+  if (o.persist) settings.set('reader.view', next).catch(() => { /* 저장 실패가 읽기를 막지 않는다 */ });
+  if (!els || els.root.hidden) { paintViewToggle(); return; }
+  if (!changed) { paintViewToggle(); return; }
+  await renderPage();
+  landOn(o.anchor);
+}
+
+/** 뷰를 바꾸기 **직전**에 지금 화면이 아는 사실을 모아 기준 줄을 고른다. */
+function resolveAnchor() {
+  const seen = visibleNow();
+  const ctx = {
+    speaking: state.currentLineIds.length > 0,
+    currentLineId: state.currentLineId,
+    visibleLineIds: seen.visible,
+    viewportCenterLineId: seen.center,
+    lastTappedLineId: state.lastTappedLineId
+  };
+  let picked = null;
+  try {
+    picked = pickAnchorLine(ctx);
+  } catch (e) {
+    picked = null;          // 사람이 채우는 자리다. 비어 있어도 뷰 전환은 돈다.
+  }
+  const id = picked == null ? null : String(picked);
+  // 고른 줄이 이 쪽에 없으면 쓰지 않는다(빈 함수·엉뚱한 값 모두 여기서 걸린다).
+  if (!id || flowLineIds().indexOf(id) < 0) return null;
+  return id;
+}
+
+/** 새 뷰에서 그 줄로 화면을 맞춘다. `null` 이면 쪽 첫 줄이다. */
+function landOn(lineId) {
+  const id = lineId || firstFlowLineId();
+  if (!id) return;
+  if (state.view === 'original') { original.scrollToLine(id); return; }
+  const node = lineElement(id);
+  if (!node) return;
+  state.programScrollAt = Date.now();
+  try { node.scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (e) { node.scrollIntoView(true); }
+}
+
+/** 지금 화면에 보이는 줄들(읽기 순서)과 세로 중앙에 가장 가까운 줄. */
+function visibleNow() {
+  if (state.view === 'original') return original.visibleLineIds();
+  if (!els || !els.mount) return { visible: [], center: null };
+  const vh = (typeof window !== 'undefined' && window.innerHeight) || 0;
+  const list = els.mount.querySelectorAll('span.line[data-flow="1"]');
+  const visible = [];
+  let center = null;
+  let best = Infinity;
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i].getBoundingClientRect();
+    if (r.bottom < 0 || r.top > vh) continue;
+    const id = list[i].getAttribute('data-line-id');
+    visible.push(id);
+    const d = Math.abs((r.top + r.bottom) / 2 - vh / 2);
+    if (d < best) { best = d; center = id; }
+  }
+  return { visible: visible, center: center };
+}
+
+/* ────────────────────────────────────────────────────────
+   3-c. 표 크롭 폴백 (4-8) — 이미지는 **메모리 LRU 20개**만.
+   ──────────────────────────────────────────────────────── */
+
+async function fillTableCrops(token) {
+  if (!els || !els.mount) return;
+  const figs = els.mount.querySelectorAll('figure.table-fallback');
+  if (!figs.length) return;
+  const regions = (state.layout && state.layout.regions) || [];
+  const byId = new Map();
+  for (let i = 0; i < regions.length; i++) byId.set(String(regions[i].id), regions[i]);
+
+  for (let i = 0; i < figs.length; i++) {
+    const fig = figs[i];
+    const rid = fig.getAttribute('data-region-id');
+    const region = byId.get(String(rid));
+    if (!region) continue;
+    try {
+      const img = await cropFor(rid, region);
+      if (token !== state.renderToken) return;       // 그 사이 쪽이 바뀌었다
+      if (!img) { paintCropFailed(fig); continue; }
+      paintCrop(fig, img, rid);
+    } catch (e) {
+      if (token !== state.renderToken) return;
+      // pdf.js 가 없다 — 자리표시자를 남기고 **리플로우는 계속 읽힌다**(2-3).
+      paintCropFailed(fig);
+    }
+  }
+}
+
+/** LRU 20개. 같은 표를 다시 보면 렌더하지 않는다(4-8). */
+async function cropFor(regionId, region) {
+  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  const scale = render.cropScale(dpr);
+  const key = render.cropKey(state.docId, state.page, regionId, scale);
+  const hit = state.crops.get(key);
+  if (hit) return hit;
+
+  const box = render.cropBox(region.bbox, { width: state.layout.width, height: state.layout.height });
+  if (!box) return null;
+
+  const pdfDoc = await pdfDocFor(state.docId);
+  if (!pdfDoc) return null;
+  const out = await render.renderRegionImage(pdfDoc, state.page, box, {
+    scale: scale,
+    makeCanvas: (w, h) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      return c;
+    }
+  });
+  if (!out || !out.blob) return null;
+  const img = { url: URL.createObjectURL(out.blob), width: out.width, height: out.height };
+  state.crops.set(key, img);
+  return img;
+}
+
+function paintCrop(fig, img, regionId) {
+  const old = fig.querySelector('img.table-crop');
+  if (old) old.remove();
+  // 핀치 줌이 되도록 이미지는 자체 스크롤 상자 안에 둔다(4-8).
+  let box = fig.querySelector('.table-crop-box');
+  if (!box) {
+    box = el('div', 'table-crop-box');
+    fig.insertBefore(box, fig.querySelector('button') || null);
+  }
+  clear(box);
+  const im = el('img', 'table-crop');
+  im.src = img.url;
+  im.alt = t('reader.table.crop');
+  im.decoding = 'async';
+  box.appendChild(im);
+
+  const btn = fig.querySelector('button[data-action="original"]');
+  if (btn) {
+    btn.disabled = false;
+    btn.onclick = () => openRegionInOriginal(regionId);
+  }
+}
+
+function paintCropFailed(fig) {
+  const cap = fig.querySelector('figcaption');
+  if (cap) {
+    cap.setAttribute('data-i18n', 'reader.table.cropFailed');
+    cap.textContent = t('reader.table.cropFailed');
+  }
+  const btn = fig.querySelector('button[data-action="original"]');
+  if (btn) btn.disabled = original.originalUnavailable();
+  if (btn && !btn.disabled) btn.onclick = () => openRegionInOriginal(fig.getAttribute('data-region-id'));
+}
+
+/** 4-8 — [원본으로 보기]: 원본 뷰로 바꾸고 그 표 자리로 스크롤한다(12-5). */
+async function openRegionInOriginal(regionId) {
+  await setView('original', { persist: true });
+  original.scrollToRegion(regionId);
 }
 
 /** 새 쪽이 그려졌다 — 낭독 큐가 이 쪽 것으로 갈아탄다(`ui/controls.js`). */
@@ -700,15 +1054,7 @@ export function lineElement(lineId) {
  * @returns {boolean} 그 줄이 지금 화면에 있었는가
  */
 export function setCurrent(lineId) {
-  if (!els || !els.mount) return false;
-  const prev = els.mount.querySelector('span.line.is-current');
-  if (prev) prev.classList.remove('is-current');
-  const next = lineElement(lineId);
-  if (!next) return false;
-  next.classList.add('is-current');
-  state.currentLineId = String(lineId);
-  state.currentLineIds = [String(lineId)];
-  return true;
+  return setCurrentLines([lineId]);
 }
 
 /** 5단계가 "이 줄까지 읽었다"를 표시할 때. 설정 `reader.showDone` 을 따른다. */
@@ -732,7 +1078,8 @@ export function flowParas() {
     if (blocks[i].type !== 'para') continue;
     out.push({ id: blocks[i].id, kind: blocks[i].kind, lines: blocks[i].lines });
   }
-  return out;
+  // 4-8 (3) — 표 자리에 안내 한 마디를 끼운다. 이미 말한 표는 빠진다.
+  return insertTableNotices(out, blocks, state.announcedTables, t('reader.tts.tableSkipped'));
 }
 
 /**
@@ -742,7 +1089,25 @@ export function flowParas() {
  */
 export function setCurrentLines(lineIds) {
   if (!els || !els.mount) return false;
-  const ids = Array.isArray(lineIds) ? lineIds : [lineIds];
+  const ids = (Array.isArray(lineIds) ? lineIds : [lineIds]).filter((x) => x != null);
+  if (!ids.length) return false;
+
+  /* 4-8 (3) — 표 안내는 **화면에 없는 줄**이다. 하이라이트할 곳이 없지만
+     "이 쪽에 없다"(false)도 아니다 — false 를 돌려주면 낭독이 쪽을 넘기려
+     든다. 안내를 말한 것으로 표시하고 true 를 돌려준다. */
+  if (isTableNotice(String(ids[0]))) {
+    const rid = regionOfNotice(String(ids[0]));
+    if (rid) state.announcedTables.add(rid);
+    return true;
+  }
+
+  if (state.view === 'original') {
+    const ok = original.setCurrentOriginal(ids);
+    if (!ok) return false;
+    state.currentLineIds = ids.map(String);
+    state.currentLineId = String(ids[0]);
+    return true;
+  }
 
   const prev = els.mount.querySelectorAll('span.line.is-current');
   for (let i = 0; i < prev.length; i++) prev[i].classList.remove('is-current');
@@ -785,6 +1150,11 @@ export function showSpoken(unit) {
  * 줄마다 스크롤하면 화면이 계속 흔들려 눈 피로가 되레 나빠진다.
  */
 function scrollToCurrent(force) {
+  if (state.view === 'original') {
+    state.programScrollAt = Date.now();
+    original.scrollCurrentIntoView(!!force);
+    return;
+  }
   const node = state.currentLineIds.length ? lineElement(state.currentLineIds[0]) : null;
   if (!node || typeof node.getBoundingClientRect !== 'function') return;
   const vh = window.innerHeight || 0;
@@ -848,11 +1218,16 @@ function relabelReader() {
   if (els.root.hidden) return;
   paintPager();
   paintProgressBar();
+  paintViewToggle();
+  // 원본 뷰는 canvas 라 글자가 언어를 타지 않는다. 줌 표시·대체 텍스트만 고친다.
+  if (state.view === 'original') { original.relabelOriginal(); return; }
   // 쪽 라벨·자리표시자 문장이 언어를 타므로 그린 것을 다시 그린다.
   if (state.desc) {
+    const ids = state.currentLineIds.slice();
     clear(els.mount);
     els.mount.appendChild(renderDescription(state.desc));
-    if (state.currentLineId) setCurrent(state.currentLineId);
+    fillTableCrops(state.renderToken);
+    if (ids.length) setCurrentLines(ids);
   } else {
     renderPage();
   }
