@@ -448,23 +448,53 @@ export function joinText(line, params = LAYOUT) {
 /**
  * spec 4-6 — 줄 bbox (PDF 좌표, 원점 좌하단).
  * 위첨자 아이템은 y1 계산에서 제외해 줄 박스가 위로 튀지 않게 한다.
+ *
+ * `[수정 2026-09-23 — 6a]` 두 가지를 더한다.
+ *  ① **x 범위에서 공백 아이템을 뺀다.** 판정은 `extendRun` 과 같은 `isBlankItem` 이다
+ *     (규칙이 두 벌이 되면 두 함수가 다시 어긋난다). y 범위는 공백도 그대로 기여한다 —
+ *     공백 아이템도 줄 높이의 일부다. 줄이 전부 공백이면 x0/x1 은 min/max(item.x) 로
+ *     두어 위치는 남기고 폭만 버린다(0,0 으로 뭉개지 않는다).
+ *  ② **선택 인자 `pageRect` 를 주면** 페이지 사각형으로 클립한다. 주지 않으면
+ *     클립하지 않는다 — `normalizeItems` 의 `pageInfo` 와 같은 관례다(판단 근거가
+ *     없으면 추측하지 않는다). 클립은 파이프라인 **마지막에 한 번만** 걸어야 한다:
+ *     거터 히스토그램(4-5)·run 분할(4-4)·문단 분할(4-9)에 클립된 값을 먹이면
+ *     오른쪽 끝이 전부 W 로 뭉개져 레이아웃 판정이 무너진다(`buildPageLayout` 참고).
+ *
+ * @param {Object} line 줄
+ * @param {Object} [pageRect] { width, height } — 선택. 0·음수·비유한 값인 축은 클립하지 않는다.
  */
-export function lineBBox(line) {
+export function lineBBox(line, pageRect) {
   const items = line.items;
   if (!items || !items.length) return { x0: 0, y0: 0, x1: 0, y1: 0 };
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, supY1 = -Infinity;
+  let blankX0 = Infinity, blankX1 = -Infinity;      // 전부 공백인 줄의 대비책
   let hasBase = false;
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const top = it.y + it.ascent * it.fontSize;
     const bottom = it.y + it.descent * it.fontSize;
-    if (it.x < x0) x0 = it.x;
-    if (it.x + it.w > x1) x1 = it.x + it.w;
+    // ① x 범위 — 공백 아이템 제외 (extendRun 과 같은 규칙)
+    if (!isBlankItem(it)) {
+      if (it.x < x0) x0 = it.x;
+      if (it.x + it.w > x1) x1 = it.x + it.w;
+    }
+    if (it.x < blankX0) blankX0 = it.x;
+    if (it.x > blankX1) blankX1 = it.x;
+    // y 범위 — 공백 아이템도 그대로 기여한다
     if (bottom < y0) y0 = bottom;
     if (top > supY1) supY1 = top;
     if (!it.sup) { if (top > y1) y1 = top; hasBase = true; }
   }
   if (!hasBase) y1 = supY1;
+  if (x0 === Infinity) { x0 = blankX0; x1 = blankX1; }   // 줄이 전부 공백
+
+  // ② 페이지 사각형으로 클립 (선택)
+  if (pageRect) {
+    const W = Number(pageRect.width);
+    const H = Number(pageRect.height);
+    if (Number.isFinite(W) && W > 0) { x0 = clamp(x0, 0, W); x1 = clamp(x1, 0, W); }
+    if (Number.isFinite(H) && H > 0) { y0 = clamp(y0, 0, H); y1 = clamp(y1, 0, H); }
+  }
   return { x0: x0, y0: y0, x1: x1, y1: y1 };
 }
 

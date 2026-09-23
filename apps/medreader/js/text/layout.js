@@ -42,8 +42,17 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  *     페이지 폭 612pt)이고 (b) 깨진 폭이 낀 줄의 run 경계가 틀려 있다.
  *     (a)는 4-12 하이라이트가 페이지 폭의 15배짜리 사각형을 그린다는 뜻이고,
  *     (b)는 컬럼·표 판정까지 바꾼다 — 다시 추출해야 한다.
+ * 7 — 6a단계: 4-6 줄 bbox 공백 제외 + 페이지 클립(spec 4-6 수정 2026-09-23).
+ *     6 은 폭 위생으로 (a)를 고쳐다고 했으나 **절반만 맞았다.** 위생은
+ *     `w > W` 를 보는데, 남은 결함은 `w` 가 정상이고 `x + w > W` 인 경우다.
+ *     실측(365쪽·24,460줄): 줄의 4.39%(1,074개)가 여전히 페이지 밖 —
+ *     공백 아이템 347개(32%, 초과 중앙값 192pt), 크롭 박스 밖의 정상
+ *     텍스트 717개(67%, 초과 중앙값 22pt), x0<0 10개.
+ *     6 으로 추출된 페이지는 그 bbox 를 `toStored` 에 그대로 담고 있고,
+ *     6b 원본 넷 하이라이트 오버레이는 바로 그 값을 그린다 — 다시 추출해야 한다.
+ *     (문단·영역 bbox 는 클립 전 값 그대로다 — 레이아웃 판정이 그 값을 쓴다.)
  */
-export const algoVersion = 6;
+export const algoVersion = 7;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {
@@ -144,6 +153,34 @@ export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT) {
 
   const bodyLeft = columnMetrics(ordered, P).map(function (c) { return c.left; });
 
+  // 마지막 — 페이지 사각형으로 bbox 클립 (spec 4-6 `[수정 2026-09-23 — 6a]`)
+  //
+  // **여기가 파이프라인의 끝이라서 여기다.** 위의 4·5·7·8·9 단계와 bodyLeft 는 모두
+  // 클립 전 bbox 를 읽는다 — detectColumns/splitRuns 는 items·run 좌표를 직접 보고,
+  // columnMetrics(4-9 ctx.colLeft/colWidth, bodyLeft)·newParagraph(들여쓰기·짧은 마지막 줄)
+  // ·detectTables(영역 bbox 합집합)는 line.bbox 를 읽는다. 클립된 값을 먹이면
+  // 오른쪽 끝이 전부 W 로 뭉개져 컬럼·문단 판정이 무너진다.
+  //
+  // width/height 가 0 이면 넘기지 않는다 — 0 으로 클립하면 모든 bbox 가 0 이 된다.
+  const pageRect = (width > 0 && height > 0) ? { width: width, height: height } : null;
+  let bboxDegenerate = 0;
+  if (pageRect) {
+    const all = ordered.concat(rotLines);
+    for (let i = 0; i < all.length; i++) {
+      const l = all[i];
+      const before = l.bbox;
+      const after = lineBBox(l, pageRect);
+      l.bbox = after;
+      // 클립이 결함을 가리지 않게: 클립 **때문에** 넓이가 0 이 된 줄을 센다.
+      // (원래부터 폭 0 인 줄 — 예: 전부 공백인 줄 — 은 페이지 밖 신호가 아니다.)
+      if (before &&
+          ((before.x1 - before.x0 > 0 && after.x1 - after.x0 <= 0) ||
+           (before.y1 - before.y0 > 0 && after.y1 - after.y0 <= 0))) {
+        bboxDegenerate++;
+      }
+    }
+  }
+
   return {
     pageNo: pageNo,
     width: width,
@@ -160,7 +197,11 @@ export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT) {
       warn: columns.warn || null,
       // spec 4-2 — 폭 위생이 고친 아이템 수. 새 책을 넣었을 때 이 수가 튀면
       // pdf.js 가 주는 폭 정보가 그 책에서 더 심하게 깨져 있다는 신호다.
-      widthFixed: norm.stats.widthFixed
+      widthFixed: norm.stats.widthFixed,
+      // spec 4-6 — 클립 후 넓이가 0 이 된 줄 수. 페이지 밖에 통째로 있는 줄이라는
+      // 뜻이며, 클립이 진짜 결함을 덮고 있다는 신호다. 줄은 버리지 않는다.
+      // 실측: 전수 729쪽에서 25건(1·226·655쪽) — 전부 페이지 **왼쪽** 밖이고 다수가 표지·책등의 회전 줄이다.
+      bboxDegenerate: bboxDegenerate
     }
   };
 }
