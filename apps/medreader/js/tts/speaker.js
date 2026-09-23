@@ -558,9 +558,19 @@ export function createSpeaker(deps) {
 
   /** 쪽이 새로 그려졌다 — 큐를 그 쪽 것으로 갈아 끼운다(사용자가 쪽을 넘긴 경우). */
   function reload(fromLineId) {
+    // `[수정 2026-09-23 — 6단계 Review]` 호출자가 기준 줄을 주지 않으면
+    // **갈아 끼우기 직전에 읽고 있던 줄**을 기준으로 삼는다.
+    //
+    // 왜: `onPageRender` 는 두 경우에 똑같이 불린다 — 사용자가 쪽을 넘겼을 때와
+    // **뷰를 바꿨을 때**(6b). 인자 없이 부르면 둘 다 index 0 으로 떨어져,
+    // 뷰만 바꿨는데 낭독이 그 쪽 첫 발화로 되돌아갔다(실측: 3/36 → 0/36).
+    // 지금 줄을 기준으로 두면 두 경우가 저절로 갈린다 —
+    // 같은 쪽을 다시 그렸으면 그 줄이 새 큐에도 있어 제자리를 지키고,
+    // 다른 쪽으로 넘어갔으면 `indexOfLine` 이 -1 을 줘 자연히 0 으로 간다.
+    const anchorId = fromLineId != null ? fromLineId : firstLineId(units[index]);
     units = buildUnits((view && view.paras && view.paras()) || [], unit);
     queueRebuilt();
-    const found = fromLineId == null ? -1 : indexOfLine(units, fromLineId);
+    const found = anchorId == null ? -1 : indexOfLine(units, anchorId);
     index = found >= 0 ? found : 0;
     if (state === 'speaking') restart(index);
   }

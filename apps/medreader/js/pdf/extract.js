@@ -98,6 +98,30 @@ export function removeFrom(list, pageNo) {
  * @param {number} [algo] 현재 알고리즘 버전
  * @returns {Object} 정상화 + 필요하면 되감긴 extraction (`reextract` 표시 포함)
  */
+/**
+ * `[신규 2026-09-23 — 6단계 Review]` 레이아웃에 넘길 **회전 전** 쪽 치수.
+ *
+ * pdf.js `page.view` 는 cropBox `[x0, y0, x1, y1]` 를 회전 전 사용자 공간으로 준다.
+ * 이것이 `getTextContent()` 아이템 좌표와 같은 공간이다. 값이 없거나 0 이면
+ * 회전된 viewport 치수로 물러선다 — **추측해서 뒤바꾸지는 않는다**(4-2 와 같은 관례).
+ *
+ * @param {Array}  view      page.view
+ * @param {number} fallbackW 회전된 viewport 폭
+ * @param {number} fallbackH 회전된 viewport 높이
+ * @returns {{width:number, height:number}}
+ */
+export function unrotatedPageSize(view, fallbackW, fallbackH) {
+  const fw = Number(fallbackW) || 0;
+  const fh = Number(fallbackH) || 0;
+  if (!Array.isArray(view) || view.length < 4) return { width: fw, height: fh };
+  const w = Math.abs(Number(view[2]) - Number(view[0]));
+  const h = Math.abs(Number(view[3]) - Number(view[1]));
+  if (!(Number.isFinite(w) && w > 0) || !(Number.isFinite(h) && h > 0)) {
+    return { width: fw, height: fh };
+  }
+  return { width: w, height: h };
+}
+
 export function planResume(ex, algo = ALGO_VERSION, derived = DERIVED_HASH) {
   const e = normalizeExtraction(ex);
   // spec 9-2 — 파생 규칙(하이픈 집합)이 바뀌면 저장본은 그대로여도 읽을 때
@@ -445,7 +469,15 @@ export class Extractor extends EventTarget {
         const it = tc.items[i];
         if (it && typeof it.str === 'string') items.push(it);
       }
-      const rec = { items: items, styles: tc.styles || {}, width: vp.width, height: vp.height };
+      // `[수정 2026-09-23 — 6단계 Review]` 레이아웃 좌표계는 **회전 전** PDF 사용자
+      // 공간이다. `getTextContent()` 아이템의 transform 은 `/Rotate` 를 반영하지 않는데
+      // `getViewport({scale:1})` 의 width/height 는 반영해 90·270 에서 뒤바뀐다.
+      // 그 값으로 4-6 클립을 걸면 줄 bbox 가 통째로 납작해진다
+      // (실측: /Rotate 90 에서 y0=y1=612, 높이 0, 10줄 중 7줄 degenerate).
+      // 렌더는 회전된 viewport 를 그대로 쓰고 bbox → 화면 변환은
+      // `convertToViewportPoint` 가 회전을 처리하므로 여기만 고치면 된다.
+      const size = unrotatedPageSize(page.view, vp.width, vp.height);
+      const rec = { items: items, styles: tc.styles || {}, width: size.width, height: size.height };
       this.itemsCache.set(pageNo, rec);
       // 최대 3쪽만 들고 있는다 — 7000쪽에서 메모리가 터지지 않게
       while (this.itemsCache.size > EXTRACT.ITEMS_CACHE_MAX) {

@@ -1892,3 +1892,475 @@ if (!this.stored.has(target.pageNo)) {
 5. **회전 줄(729쪽에 1,995줄)의 `bbox`를 그리지 마라.** 2b가 신고한 그대로다 — `lineBBox`가 `width`를 수평 폭으로 더하는데 90도 회전 아이템의 `width`는 세로 진행량이라 설계상 틀린다. 4-12 하이라이트는 `role === 'rotated'`를 건너뛰어야 한다.
 
 6. **`storeVersion`은 지금 `1`이고 "그릇의 모양"만 뜻한다.** 파생 규칙(하이픈 집합)은 담고 있지 않다(§2c-4). 3단계가 저장본 형식을 바꾸면 이 값을 올리되, **무엇을 뜻하는 값인지 먼저 정하고** 올려야 한다.
+
+---
+
+# Review — MedReader 6단계 (6a `f5500ec` · 6b `f3f6f8c`)
+
+검증 일자 2026-09-23. Build 와 다른 에이전트. 지침 `.claude/tasks/medreader-review-6.md`.
+검증 환경: Node 24 / `node --test "apps/medreader/tests/*.test.mjs"` **336개 전부 통과**,
+Chromium 375×812 에뮬레이션 + `127.0.0.1:8000`, 실물 729쪽 PDF 전수 재측정(Node + pdf.js 5.4.149).
+
+---
+
+## 6-0. 판정 — **조건부 통과**
+
+| 등급 | 건수 | 목록 |
+|---|---|---|
+| 차단 | 0 | — |
+| 중간 | 2 | ① 뷰를 바꾸면 낭독이 쪽 첫 발화로 되돌아간다 · ② `/Rotate≠0` 쪽에서 6a 클립이 줄 bbox 를 통째로 납작하게 만든다 |
+| 경미 | 4 | ③ 오프라인에서 표 크롭이 쪽마다·표마다 pdf.js 를 다시 부른다 · ④ `stats.bboxDegenerate` 가 저장되지 않는다 · ⑤ `B1` 테스트가 자기 이름의 규칙을 못 잡는다 · ⑥ `leaveReader` 가 크롭 LRU·canvas 를 풀지 않는다 |
+| 제안 | 4 | ⑦ `algoVersion` 값을 고정하는 테스트가 없다 · ⑧ 한 쪽에 표가 N개면 쪽 전체를 N번 렌더한다 · ⑨ `resolveAnchor` 의 `speaking` 은 실제로 "하이라이트가 있는가"다 · ⑩ 구간 반복이 안내 문단을 물면 회차마다 안내를 되풀이한다 |
+| 이월 | 1 | ⑪ ko/fr 의 110여 키가 아직 영어 — spec 19절 3번이 10단계로 미뤄 둔 것. 6b 가 새로 넣은 11개 키는 4개 언어 전부 실제로 번역됐다 |
+
+**조건** — ①을 고치고 나서 7단계로 간다. ②는 실제 7000쪽 자료를 넣는 **그날 아침에** 확인해야 한다(6-5절 참고).
+
+---
+
+## 6-1. 15개 항목
+
+### 6a
+
+**① 클립이 파이프라인에 새지 않았는가 — 새지 않았다.**
+
+`js/text/layout.js:169-183` 의 클립 루프는 4·5·7·8·9 단계와 `bodyLeft` **뒤**에 있다.
+`line.bbox` 를 읽는 곳을 `blocks.js` 에서 전수로 확인했다:
+
+```
+$ grep -n "bbox" js/text/blocks.js
+78,82,83             columnMetrics    (layout.js:158 — 클립 전)
+369,379,384,385,391  detectTables     (layout.js:152 — 클립 전)
+442,444              newParagraph     (groupParagraphs 안, layout.js:155 — 클립 전)
+495,513              groupParagraphs  (layout.js:155 — 클립 전)
+```
+
+`classifyRoles` 는 `bbox` 를 전혀 읽지 않는다(`baseline`·`fontSize` 만).
+`columns.js` 는 `lineX0`(items 직접)만 쓴다. **클립 뒤에 오는 `line.bbox` 소비자는
+`publicLine` 하나뿐이고 그건 출력이다.**
+
+실측 재검증 — 729쪽 전수(Node + pdf.js 5.4.149, `buildPageLayout` 직접 호출):
+
+```
+쪽 = 729  줄 = 49629
+페이지 밖 줄(badLines) = 0
+stats.bboxDegenerate 합계 = 25 쪽: 1(19) 226(3) 655(3)
+```
+
+6a 커밋 메시지의 "badLines 1,074 → 0", "bboxDegenerate 25건(1·226·655쪽)" 이
+**숫자까지 그대로 재현된다.** 커밋이 부풀린 곳이 없다.
+
+**② `regions[].bbox`·`paragraphs[].bbox` 를 6b 가 그리는가 — 그리지 않는다. 6a 는 반쪽이 아니다.**
+
+```
+$ grep -rn "\.bbox" js/ui/*.js
+js/ui/original.js:410  scrollToRegion — regions[i].bbox
+js/ui/original.js:509  visibleLineIds — l.bbox (줄, 클립됨)
+js/ui/reader.js:698    cropFor — render.cropBox(region.bbox, {width,height})
+```
+
+- `paragraphs[].bbox` 는 **한 곳에서도 쓰이지 않는다.**
+- `cropBox`(`js/pdf/render.js:191-200`)가 `clipBox(grown, W, H)` 로 스스로 접는다 —
+  6a 가 안 한 클립을 여기서 한다.
+- `scrollToRegion` 만 클립 전 값을 쓰는데, 결과는 `scroller.scrollTo({top})` 이고
+  브라우저가 범위를 접는다. **그리지 않는다.**
+
+**③ `stats.bboxDegenerate` 가 저장본에 남는가 — 남지 않는다.**
+
+`js/text/store.js:178-185` 의 `stats` 화이트리스트는
+`medianFontSize · medianLeading · bodyLeft · warn · widthFixed` 뿐이다.
+브라우저에서 실제 저장본을 꺼내 확인했다:
+
+```
+stats: { bodyLeft:[72,390], medianFontSize:11, medianLeading:14, warn:null, widthFixed:0 }
+```
+
+`dev/proto-extract.js:447,496` 의 화이트리스트에도 없다. **즉 이 수는 추출이 끝나는
+순간 사라지고 7000쪽에서는 아무도 못 본다.** 이것이 문제인가 — **그렇다(경미 ④).**
+이 값이 "클립이 진짜 결함을 덮고 있다"는 유일한 신호인데, 새 책에서 이 수가
+25가 아니라 2,500이 되어도 알 방법이 없다. 특히 ②(회전 쪽)가 발동하면 이 수가
+그 쪽 줄 전부로 뛴다. `widthFixed` 와 같은 대우를 받아야 한다(한 줄 + 테스트 한 개).
+
+**④ `algoVersion` 7 의 파급 — 전수 재추출. 9-4 커서는 되감긴다.**
+
+`js/pdf/extract.js:101-113` `planResume` 이 `e.algoVersion < algo` 면
+`cursor:1, failed:[], roleDirty:[], done:false, reextract:true` 로 되감는다.
+쪽별 판정은 `docId_algoVersion` 인덱스가 **값을 읽지 않고** 키만으로 한다(`:326-329`).
+그래서 7000쪽이 통째로 stale 로 잡힌다.
+
+그 재추출이 얼마나 보이는가 — 729쪽 전수 실측:
+
+```
+전수 시간 = 7.6s → 96.2 쪽/s | 7000쪽 환산 1.2 분   (Node, IDB 쓰기·틱 스케줄러 없음)
+toStored JSON 합계 = 15.6 MB | 쪽당 21.9 KB | 7000쪽 환산 150 MB
+```
+
+순수 계산만 보면 7000쪽도 몇 분이다. 다만 브라우저 경로에는 IndexedDB 쓰기와
+틱 스케줄러가 붙고, 코드 주석이 이미 측정해 둔 열화 경로(`extract.js:510-513`)가
+"729쪽 약 2분 → 7000쪽이면 20분" 이라고 적고 있다. **9-4 커서 재개가 그 경로를 탄다** —
+`cursor:1` 로 되감긴 뒤 순차 스캔이 돌고, 이웃 재계산이 `itemsCache`(3쪽) 안에서
+끝나면 1ms, 벗어나면 `getPage+getTextContent` 를 처음부터 다시 한다.
+사용자가 읽던 자리를 먼저 열면 임의 접근이 되어 캐시가 매번 빗나간다.
+
+### 6b
+
+**⑤ 오버레이 정합 — 맞는다. 테스트는 스텁이 자기를 확인하는 함정에 빠지지 않았다.**
+
+`tests/render.test.mjs` 의 `viewport` 스텁은 `viewportRect` 가 쓰는 API(`convertToViewportPoint`)
+만 제공하고, 기대값은 **스텁을 거치지 않고 손으로 계산한 값**이다(`72*s`, `(792-712)*s`).
+`viewportRect` 자신의 로직(두 점 변환 후 `min`/`abs`)이 검증 대상이다.
+
+그것으로 부족해서 **진짜 pdf.js 로 왕복 검증**을 했다(실물 729쪽 PDF 3쪽, 회전 4종 × 줌 3종):
+
+```
+rot=  0 s=0.8 → left=57.60   top=56.80   w=182.40 h=9.60   | 왕복 OK
+rot= 90 s=3   → left=2100.00 top=216.00  w=36.00  h=684.00 | 왕복 OK
+rot=180 s=1.5 → left=468.00  top=1050.00 w=342.00 h=18.00  | 왕복 OK
+rot=270 s=0.8 → left=56.80   top=249.60  w=9.60   h=182.40 | 왕복 OK
+   (12/12 전부 OK — viewportRect → pdfPoint 왕복 오차 < 1e-3)
+```
+
+브라우저에서도 실제 오버레이를 줌 6단계에서 측정했다. 기대값은 저장본 bbox 에서
+독립적으로 계산했다(`(x0-0.15*fs)*s` 등):
+
+```
+scale 0.8000 → dLeft  0       dTop  0        dW 0 dH 0
+scale 1.0000 → dLeft  0       dTop  0        dW 0 dH 0
+scale 1.2500 → dLeft  0       dTop -0.0005   dW 0 dH 0
+scale 1.5625 → dLeft  0.0001  dTop -0.0001   dW 0 dH 0
+scale 1.9531 → dLeft -0.0003  dTop  0.0003   dW 0 dH 0
+scale 2.4414 → dLeft  0.0001  dTop  0.0004   dW 0 dH 0
+scale 3.0000 → dLeft  0       dTop  0        dW 0 dH 0
+```
+
+변이 M6(=`min`/`abs` 제거)이 R4 를 빨갛게 만든다. **테스트에 이빨이 있다.**
+
+**⑥ 7000쪽 규모 — `ImageBitmap` 은 아예 쓰지 않는다. 크롭 LRU 는 제대로 돈다. canvas 는 명시적으로 풀지 않는다.**
+
+- `grep -rn "ImageBitmap" js/` → **0건.** 걱정하던 `ImageBitmap.close()` 누락은 없다.
+- 크롭 LRU: `js/ui/reader.js:301-306` 이 `onEvict` 에서 `URL.revokeObjectURL` 을 부른다.
+  변이 M11(`onEvict` 제거)에서 R20·R21·R22 가 빨개진다 — 축출 경로가 테스트로 묶여 있다.
+- **다만** `leaveReader()`(`js/ui/reader.js:462-477`)는 `state.crops.clear()` 를 부르지 않는다.
+  문서가 바뀔 때만 비운다(`showReader:440`). 서재로 나가도 blob URL 20개가 살아 있다(경미 ⑥).
+- canvas: `paint()` 가 `canvas.width/height` 를 키우고, 쪽을 넘기면
+  `renderPage → clear(mount) + leaveOriginal()` 로 DOM 을 통째로 버리는데
+  **`canvas.width = 0` 같은 명시적 해제가 없다.** 실측(375×812, dpr 2):
+
+```
+scale 1.0000 → 1224×1584 =  7.4 MB
+scale 1.5625 → 1912×2474 = 18.0 MB
+scale 3.0000 → 3672×4752 = 66.6 MB   ← 줌 최대에서 쪽을 넘길 때마다 이 덩어리가 GC 대기로 떨어진다
+```
+
+`DPR_MAX:2` 상한이 없었다면 dpr 3 에서 150MB 였다 — 그 상한은 옳다.
+
+**⑦ 오프라인 — 리플로우는 정말 계속 돈다. `original.js` 정적 import 는 문제를 만들지 않는다. 다만 크롭이 재시도를 멈추지 않는다.**
+
+정적 import 사슬(`reader.js → original.js → pdf/render.js → pdf/loader.js`)은
+모듈 최상위에서 아무 네트워크도 건드리지 않는다. `loader.js` 는 `loadPdfjs()` 를
+**부를 때만** `import()` 한다. 브라우저 실측(`simulateLoadFailure()` 후 뷰 전환):
+
+```
+unavailable      true       (원본 사용 불가로 표시됨)
+toggleDisabled   true       (버튼 비활성)
+stillReflow      true       (리플로우 DOM 유지)
+canvas           false
+state            "speaking" ← 낭독은 계속 돈다
+콘솔 오류        0건
+```
+
+**그런데** 표 크롭 경로는 `cropFor → pdfDocFor → openDoc` 로 `showOriginal` 을
+거치지 않는다. 그래서 `state.pdfjsFailed` 가 서지 않고, `loadPdfjs` 는 실패 시
+`libPromise` 를 비워(`loader.js:70`) **다음 호출이 두 CDN 을 처음부터 다시 시도한다.**
+결과: 오프라인에서 표가 3개 있는 쪽을 열 때마다 CDN 시도 6회. `fillTableCrops` 가
+`await` 되지 않아 읽기는 안 막히지만, 쪽마다 네트워크 타임아웃이 쌓인다(경미 ③).
+`fillTableCrops` 첫 줄에서 `if (original.originalUnavailable()) return;` 한 줄이면 끊긴다.
+
+**⑧ 표 안내가 낭독 큐에 들어가는 것 — 5단계와 충돌하지 않는다. 단 두 가지 결이 남는다.**
+
+브라우저 실측(합성 2쪽, 표 1개):
+
+```
+flowParas() → 문단 4개, 그중 table-notice 1개
+  id "tablenotice:1:t0"  kind "table-notice"  text "표입니다. 화면을 확인하세요."
+  위치: 1:p1(표 앞) 다음, 1:p2(표 뒤) 앞 — blocks 순서 그대로
+낭독 큐 총 36 발화
+```
+
+- `markDone` — 안내 id 는 `lineElement()` 가 `null` 을 주므로 조용히 아무 일도 안 한다(`reader.js:1061-1065`). 충돌 없음.
+- `setCurrentLines` — 안내를 만나면 `announcedTables.add(rid)` 하고 **`true`** 를 준다
+  (`reader.js:1096-1101`). `false` 였으면 낭독이 쪽을 넘겨 버렸을 것이다. 이 처리는 맞다.
+- **구간 반복** — `queueRebuilt()`(`speaker.js:215-220`)가 큐가 다시 만들어질 때마다
+  `repeatMode` 를 `'off'` 로 내린다. 그래서 "안내가 빠져 큐 길이가 줄었는데 `repeatFrom/To`
+  가 옛 번호를 가리킨다"는 사고는 **일어나지 않는다.** 확인:
+
+```
+reload 전 repeat = {"mode":"range","count":3,"pass":0,"from":2,"to":2}
+reload 후 repeat = {"mode":"off","count":3,"pass":0,"from":0,"to":0}
+```
+
+  남는 결: 구간이 안내 문단을 물고 있으면 **회차마다 안내를 되풀이한다**(반복 중에는
+  큐를 다시 만들지 않으므로 `announced` 가 걸러 주지 못한다). "한 번만 말한다"는 4-8 (3)의
+  문구와 어긋나지만 사용자가 스스로 그 구간을 지정한 상황이라 해가 크지 않다(제안 ⑩).
+
+**⑨ `pickAnchorLine` — 구현과 정책이 일치한다. `tests/anchor.test.mjs` 가 사슬 전체를 고정한다.**
+
+| 정책 단계 | 구현 | 고정한 테스트 | 변이하면 |
+|---|---|---|---|
+| ① 낭독 줄(보일 때) | `original.js:73-74` | A1 A2 | M10 → A6 빨강 |
+| ② 탭한 줄(보일 때) | `:81-82` | A4 A5 | M9 → A4 빨강 |
+| ③ 화면 중앙 | `:84-85` | A3 A6 | M8 → A3 A5 빨강 |
+| ④ 보이는 첫 줄 | `:88-89` | A7 | — |
+| ⑤ `null` | `:92` | A8 | — |
+| 순수·위생 | | A9 A10 A11 A12 | |
+
+구현이 정책 문장보다 한 조건 **더** 엄격하다 — `c.speaking &&`. A6 이 그것을 못으로 박는다
+("낭독 중이 아니면 낭독 줄이 보여도 쓰지 않는다"). 정책 문장과 모순은 아니다("듣는 곳"은
+낭독 중에만 존재한다).
+
+다만 호출자가 그 `speaking` 을 만드는 방식이 헐겁다 — `resolveAnchor()`(`reader.js:614`)는
+`speaking: state.currentLineIds.length > 0` 이다. 일시정지해도 `currentLineIds` 는 남으므로
+**정지 중에도 `speaking:true`** 다. 정책 의도("듣던 자리")로 보면 무해하지만, 이름과 값이
+다르다(제안 ⑨).
+
+**⑩ spec 6-4 Android TTS 제약 — 낭독이 죽지는 않는다. 그러나 자리를 잃는다. → 중간 ①**
+
+`renderPage()` 가 DOM 을 통째로 버려도 `speaker` 는 죽지 않는다(세대 검사·utterance 참조 모두 견딘다).
+실측: 뷰 전환 뒤 `state` 는 계속 `"speaking"`. **하지만 읽는 자리가 쪽 첫 발화로 돌아간다.**
+
+브라우저 실측(리플로우에서 [다음] 3회 → 원본 뷰로 전환):
+
+```
+전환 전  index 3/36  lineIds ["1:4"]  text "Page 1 line 5 of the synthetic body text…"
+전환 후  index 0/36  lineIds ["1:1"]  text "Page 1 line 2 of the synthetic body text…"   state "speaking"
+```
+
+pdf.js 로드 실패로 리플로우로 **되돌아가는** 경로에서도 같다(`index 8 → 0`).
+
+원인은 한 줄이다:
+
+- `setView()`(`reader.js:595-607`)가 `await renderPage()` 를 부른다 →
+- `renderPage()` 끝에서 `notifyPage()`(`:530`) →
+- `ui/controls.js:161` `onPageRender(() => { speaker.reload(); … })` — **인자가 없다** →
+- `speaker.reload(fromLineId)`(`speaker.js:559-566`)는
+  `const found = fromLineId == null ? -1 : …; index = found >= 0 ? found : 0;` → **index 0**,
+  `state==='speaking'` 이면 `restart(0)`.
+
+Node 재현(스텁 synth·가짜 시계, 실제 `speaker.js` 모듈):
+
+```
+진행 후 index = 2 / 4 state = speaking
+말한 것: ["Alpha one here.","Beta two here.","Gamma three here."]
+reload 후 index = 0 / 4 state = speaking
+말한 것: ["Alpha one here.","Beta two here.","Gamma three here.","Alpha one here."]   ← 되감겼다
+```
+
+`reader.js:528` 의 주석 "★ **낭독 큐는 뷰와 무관하다.** … 원본 뷰에서도 낭독이 끊기지
+않는다(6-4)" 는 **현재 코드와 다르다.** 쪽을 넘기는 경우에는 `index 0` 이 맞지만,
+**같은 쪽을 다시 그리는 뷰 전환**에서는 틀리다. 6b 가 같은 쪽을 다시 그리는 경로를
+새로 만들면서 생긴 결함이다.
+
+고치지 않은 이유는 6-4절에 적었다.
+
+### 전반
+
+**⑪ CSS 물리속성 — 1건, spec 11-3 이 명시한 예외 그대로.**
+
+```
+$ grep -rnE "(^|[^-a-z])(left|right|margin-left|margin-right|padding-left|padding-right|border-left|border-right)\s*:" css/*.css
+css/reader.css:611:  left: 0;
+```
+
+`.original .hl-line` 의 `left:0`(+`top:0`)뿐이고 상자는 `transform: translate()` 로 옮긴다.
+`js/**` 의 `style.left`/`style.right` 0건, `index.html` 0건.
+
+**⑫ i18n — 4개 언어 키 집합 동일. 6b 가 넣은 11개 키는 전부 실제로 번역됐다.**
+
+```
+ar 키 155 / en 155 | 누락 0 | 잉여 0
+fr 키 155 / en 155 | 누락 0 | 잉여 0
+ko 키 155 / en 155 | 누락 0 | 잉여 0
+6b 키 중 ar 가 영어 그대로: []
+6b 키 중 fr 가 영어 그대로: ["reader.view.original"]   ← "Original" 은 프랑스어 낱말이다
+6b 키 중 ko 가 영어 그대로: ["reader.original.zoom"]   ← 값이 "{percent}%" 다
+```
+
+전체로 보면 **fr 111개·ko 110개**가 아직 영어와 글자까지 같다. 이것은 6b 가 만든 것이
+아니라 spec 19절 3번이 "fr·ko 는 키만 복사하고 값은 영어로 둔다(번역은 10단계)"로 정한
+상태다(`dev/gen.mjs` 헤더 참고). 이월 ⑪.
+
+브라우저에서 표 폴백의 `figcaption` 이 "Table", 버튼이 "View in the original page" 로 나오는
+것도 같은 이유다(`reader.table.placeholder`·`reader.table.viewOriginal` — 6b 가 아니라
+`b94d2af` 이 넣은 키). 같은 화면 안에서 `alt` 는 "원본 쪽에서 잘라 낸 표 그림"으로 한국어라
+**한 카드 안에 두 언어가 섞여 보인다.** 10단계에서 같이 풀린다.
+
+**⑬ 터치 타깃 48px · 375px 가로 넘침 0 — 둘 다 통과.**
+
+375×812 에뮬레이션 실측:
+
+```
+viewToggle 52×48   zoomOut 66×48   zoomIn 66×48   play 64×64      (모두 ≥48)
+리플로우   clientW 375  scrollW 375  넘치는 요소 0개
+원본 3.0×  clientW 375  scrollW 375  넘치는 요소 0개   (확대분은 .original-scroll 안에서만 흐른다)
+콘솔 오류  0건
+```
+
+**⑭ `js/text/*` 순수성 — 0건.**
+
+```
+$ grep -n "document\|window\|fetch\|indexedDB\|navigator\|localStorage" js/text/*.js
+0건
+```
+
+**⑮ 서비스 계층이 UI 문자열을 만들지 않는가 — 만들지 않는다.**
+
+`js/pdf/render.js` 의 import 는 `../config.js`(ORIGINAL)와 `./loader.js` 뿐이다.
+`t(` 호출 0건, `textContent` 0건, `aria-label` 0건. 실패는 `ERR_PDFJS_LOAD` 같은
+**코드**로만 나가고 문구는 `ui/original.js`·`ui/reader.js` 가 `t()` 로 만든다.
+`js/text/*` 도 i18n 을 import 하지 않는다.
+
+---
+
+## 6-2. 변이 테스트 — 13건
+
+`node --test "apps/medreader/tests/*.test.mjs"`, 매 변이마다 `git checkout --` 으로 되돌렸다.
+마지막에 작업 트리가 깨끗하고 336개 전부 다시 통과하는 것을 확인했다.
+
+| # | 무엇을 망가뜨렸나 | 빨개진 테스트 |
+|---|---|---|
+| M1 | `lineBBox` 의 `!isBlankItem(it)` 가드 제거 | B2 B3 — **B1 은 통과했다(아래 참고)** |
+| M2 | `lineBBox` 의 `pageRect` 클립 무력화 | B5 B6 B8 |
+| M3 | `algoVersion` 7 → 6 | **없음** ← 구멍 |
+| M4 | 클립을 6단계 직후(파이프라인 앞)로 옮김 | B6 B8 |
+| M5 | `overlayable` 에서 `rotated` 검사 제거 | R8 R10 |
+| M6 | `viewportRect` 의 `min`/`abs` 제거 | R4 |
+| M7 | `lineAtPoint` 가 가장 **큰** 상자를 고르게 | R13 |
+| M8 | `pickAnchorLine` 의 "보이는가" 검사 제거 | A3 A5 |
+| M9 | `pickAnchorLine` 탭 ↔ 중앙 우선순위 뒤집기 | A4 |
+| M10 | `pickAnchorLine` 의 `speaking` 조건 제거 | A6 |
+| M11 | LRU 의 `onEvict` 호출 제거(objectURL 누수) | R20 R21 R22 |
+| M12 | `CROP_PAD_PT` 6 → 0 | R15 R16 |
+| M13 | `insertTableNotices` 가 `announced` 를 무시 | N3 N4 |
+
+**11/13 이 잡힌다.** 못 잡은 둘:
+
+- **M3 — `algoVersion` 값을 고정하는 테스트가 하나도 없다.** `grep -rn "algoVersion" tests/`
+  는 `db.test.mjs` 의 **인덱스** 검사만 보여 준다. 값을 실수로 되돌려도 336개가 전부
+  초록이고, 그 대가는 "이미 읽던 책의 오버레이가 계속 틀린 값을 그린다"이다. 제안 ⑦.
+- **M1 이 잡은 것은 B2·B3 뿐, `B1` 은 통과한다.** B1 의 이름은
+  "폭을 가진 공백 아이템이 x1 을 밀지 않는다(목차 점선 자리)" 인데 fixture 가
+  `[Chapter@72+40, 공백@112+400, 37@512+10]` 이라 공백을 넣든 빼든 `x1 = 522` 로 같다.
+  **테스트가 자기 이름의 규칙을 검증하지 못한다.** 실측이 말한 진짜 모양(공백이 마지막
+  실체 아이템 **너머로** 192pt 뻗는 것)을 쓰려면 공백을 맨 뒤로 옮겨야 한다.
+  예: `[Chapter@72+40, 37@112+10, 공백@122+400]` → 기대 `x1 = 122`(지금 구현), 변이하면 `522`. 경미 ⑤.
+
+---
+
+## 6-3. 고친 것 — **없다**
+
+지침의 기준("명백한 결함 · 한 파일 안에서 닫힘 · 기존 테스트 전부 통과")을
+셋 다 만족하는 건이 없었다. 가장 가까운 것이 중간 ①인데 6-4절의 이유로 올린다.
+
+---
+
+## 6-4. 중간 2건의 근거와 권고
+
+### ① 뷰를 바꾸면 낭독이 쪽 첫 발화로 되돌아간다
+
+실증은 6-1 ⑩에 있다(브라우저 `index 3→0`, Node 재현, 실패 경로 `8→0`).
+
+**권고(고치지 않았다).** `ui/controls.js:161` 한 줄로 닫힌다:
+
+```js
+onPageRender(() => {
+  const cur = speaker.getCurrent();                       // units[index] — lineIds 를 가진다
+  speaker.reload(cur && cur.lineIds && cur.lineIds[0]);   // 같은 쪽이면 찾아지고, 쪽이 바뀌면 -1 → 0
+  attachDebugHook();
+});
+```
+
+`reload` 는 못 찾으면 이미 `index = 0` 으로 떨어지므로 쪽 넘김 동작은 그대로다.
+
+**그런데도 내가 안 고친 이유:** 이 한 줄은 `goToPageForSpeech` → `renderPage` →
+`notifyPage` → `advancePage` 가 겹치는 자리를 지난다. 이 코드베이스가 다섯 번 데인
+것이 정확히 "각각은 맞는데 합치면 깨지는 두 규칙"이고, 지금 그 경로를 고정하는
+테스트는 없다(`reload` 인자 유무를 보는 테스트가 없다 — 그래서 이 결함이 살아남았다).
+**Build 에이전트가 테스트와 함께 넣어야 하는 수정이지 Review 가 끼워 넣을 수정이 아니다.**
+함께 넣을 테스트: "같은 쪽을 다시 그리면 낭독 자리가 유지된다", "다른 쪽으로 가면 0 이다".
+
+### ② `/Rotate ≠ 0` 쪽에서 6a 클립이 줄 bbox 를 통째로 납작하게 만든다
+
+`js/pdf/extract.js:440-448` 이 layout 에 넘기는 `width/height` 는
+`page.getViewport({scale:1})` 의 값이다. **회전 쪽에서 이 값은 뒤바뀐다.**
+반면 `getTextContent()` 아이템 좌표는 회전 전 PDF 사용자 공간이다.
+합성 `/Rotate 90` PDF 로 실측:
+
+```
+page.rotate = 90   view = [0, 0, 612, 792]
+extract.js 가 넘기는 width/height = vp.width/vp.height = 792 612
+textContent item: str="Hello rotated world"  x=100  y=700  width=100.032
+```
+
+`y = 700` 인데 클립 상한 `H = 612` 다. 6a 는 `y0=y1=612` 로 접는다 →
+넓이·높이 0 → `overlayable()` 이 `false`(`render.js:150`) → **오버레이가 안 그려지고
+줄 탭도 안 먹는다**(`lineAtPoint` 도 `overlayable` 로 거른다). 세로가 612를 넘는 모든
+줄, 즉 회전 쪽 본문의 상당 부분이 그렇게 된다.
+
+**지금 729쪽에서는 안 보인다.** 전수 확인:
+
+```
+rotate 분포: [[0,729]]
+viewport 크기 분포:
+   612x783 (view 0,0,612,783) → 727 쪽
+   783x612 (view 0,0,783,612) → 2 쪽     ← 진짜 가로 쪽이지 회전이 아니다
+```
+
+6a 이전에는 클립이 없어 bbox 가 틀리기만 했지 사라지지는 않았다. 6a 가 "틀린 것을
+숨기는" 쪽으로 바꿨고, 그 신호(`bboxDegenerate`)는 ③ 때문에 저장되지도 않는다.
+**두 결함이 맞물린다.**
+
+권고: `extract.js` 가 `vp.width/height` 대신 `page.view` 기준 폭·높이
+(`view[2]-view[0]`, `view[3]-view[1]`)를 넘기거나, 회전 쪽을 명시적으로 처리한다.
+어느 쪽이든 `algoVersion` 을 또 올려야 하므로 **7000쪽 자료를 넣기 전에** 결정하는 편이 싸다.
+
+---
+
+## 6-5. 7000쪽에서 터질 것 (지금 729쪽에서는 안 보인다)
+
+1. **`/Rotate ≠ 0` 쪽.** 위 ②. 729쪽에는 0개라 이 책으로는 영영 안 드러난다.
+   7000쪽 자료에 한 쪽이라도 있으면 그 쪽의 오버레이와 줄 탭이 통째로 죽는다.
+   **그리고 `bboxDegenerate` 가 저장되지 않으므로 아무 경고도 안 뜬다.**
+2. **저장 용량 150MB.** 쪽당 21.9KB × 7000 = 약 150MB 가 `pages` 스토어에 들어간다
+   (원본 PDF blob 은 별도). 지금 브라우저가 "5.0 GB 중 72KB" 라고 말하지만,
+   안드로이드 크롬의 오리진 쿼터는 기기 여유 공간에 비례해 줄어든다. `ERR_DB_QUOTA`
+   경로가 **7000쪽 중간에서** 처음 발동할 가능성이 높다 — 729쪽(15.6MB)에서는 절대 안 닿는다.
+3. **줌 최대에서 쪽 넘김.** canvas 뒷면 66.6MB 가 명시적 해제 없이 GC 로 떨어진다.
+   7000쪽을 훑으면 같은 일이 수천 번이다. `leaveOriginal()` 에서
+   `canvas.width = canvas.height = 0` 한 줄이면 즉시 돌려줄 수 있다.
+4. **한 쪽에 표가 N개면 쪽 전체를 N번 렌더한다**(제안 ⑧). `cropFor` 가 표마다
+   `renderRegionImage` 를 부르고, 그 함수는 매번 **쪽 전체**를 오프스크린에 그린 뒤
+   잘라 낸다(`render.js:350-365`). 크롭 배율 3× 에서 쪽 전체 캔버스가 1836×2349 ≈ 17MB.
+   표가 4개인 쪽이면 pdf.js 렌더 4회 + 17MB 할당 4회다. 의학서는 그런 쪽이 흔하다.
+5. **오프라인 × 표 많은 책.** ⑦의 재시도 루프. 표가 많은 의학서를 오프라인으로 훑으면
+   쪽마다 표 개수만큼 CDN 시도가 쌓인다. 729쪽 표 밀도로는 견디지만 7000쪽에서는
+   체감 정지로 보인다.
+6. **재추출 20분.** ④. `algoVersion` 이 또 오르면(②를 고치면 오른다) 7000쪽 전체가
+   되감긴다. 지금 UI 는 `reextract` 이벤트로 안내만 한다 — 20분이 걸린다는 것을
+   사용자가 알 방법이 있어야 한다.
+7. **확인함 — 문제 아님:** `lastTappedLineId` 는 문서가 바뀔 때만 비워지지만
+   (`showReader:442`), 줄 id 에 쪽 번호가 들어 있어(`"45:12"`) 다른 쪽에서 되살아날 수 없고
+   `resolveAnchor` 가 `flowLineIds().indexOf(id) < 0` 으로 한 번 더 거른다.
+
+---
+
+## 6-6. 사용자가 실기기(갤럭시 Z Fold 7)에서 확인할 것
+
+1. **낭독을 켜 둔 채 [원본] ↔ [본문] 을 한 번씩 누르고, 소리가 "그 문장"에서 이어지는지 들을 것.**
+   지금은 쪽 첫 문장으로 되돌아간다(중간 ①). 고친 뒤 이 한 가지만 귀로 확인하면 된다.
+2. **원본 뷰를 3.0× 로 키운 상태에서 쪽을 10번 연속 넘길 것.** 한 번에 66.6MB 짜리
+   canvas 가 오간다 — 렉이나 탭 강제 종료("Aw, Snap")가 나는지.
+3. **접은 화면(외부) ↔ 펼친 화면(8인치) 로 전환할 때** 원본 뷰의 하이라이트가
+   글자 위에 그대로 있는지. 줌을 손대지 않은 경우에만 폭을 다시 맞춘다(`refitOriginal`).
+4. **비행기 모드에서 표가 있는 쪽을 열 것.** 리플로우 읽기·낭독이 계속되는지,
+   그리고 쪽을 넘길 때마다 눈에 띄게 버벅이는지(경미 ③의 재시도 루프).
+5. **표가 나오는 대목을 문장 모드로 낭독시켜** "표입니다. 화면을 확인하세요." 가
+   **한 번만** 들리고 그 다음 문단으로 자연스럽게 넘어가는지.
