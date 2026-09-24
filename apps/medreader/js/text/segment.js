@@ -14,7 +14,15 @@ import { ABBREVIATIONS } from '../config.js';
 const QUESTION_RE = /^\s*(?:([IVXLC]{1,5})-)?(\d{1,3})\.\s+\S/;
 
 // spec 5-3 정답 정규식. 문항 정규식의 진부분집합이므로 kind 판정은 answer 를 먼저 본다(4-9).
-const ANSWER_RE = /^\s*(?:([IVXLC]{1,5})-)?(\d{1,3})\.\s+the\s+answers?\s+(?:is|are)\s+([A-E](?:\s*(?:,|and|&)\s*[A-E])*)\b/i;
+// `[수정 2026-09-24 — 9a]` 정답 글자를 **[A-J]** 로 넓혔다.
+// 원래 [A-E] 였는데, spec 5-4 가 "정답 글자가 보기 범위 밖(예: F) → unverified"
+// 라고 F 를 콕 집어 예로 드는데 **F 는 정답 문단으로 인식조차 되지 않았다.**
+// `[실측]` 729쪽에 `The answer is F.` 가 **3건** 있다(넓은 그물 1,190 vs 좁은 1,187).
+// 그 셋은 `answer` 가 아니라 `question` 후보로 흘러갔고, 해설 본문은
+// **앞 문항의 해설에 흡수됐다.** 인식은 넓히고, 보기 범위 밖인지는
+// 파서가 **실제 보기 글자와 대조해** 판정한다(quiz/parser.js) — 5-4 가 정한 바다.
+// 보기 자체는 5-3 그대로 A~E 가 최대다(`isOptionStart` 는 그대로 둔다).
+const ANSWER_RE = /^\s*(?:([IVXLC]{1,5})-)?(\d{1,3})\.\s+the\s+answers?\s+(?:is|are)\s+([A-J](?:\s*(?:,|and|&)\s*[A-J])*)\b/i;
 
 function str(text) { return String(text == null ? '' : text); }
 
@@ -55,7 +63,7 @@ export function parseAnswerStart(text) {
   // 구분자로 먼저 쪼갠다. 통째로 [A-E] 를 긁으면 "and" 의 A·D 가 딸려 온다.
   const letters = m[3].split(/\s*(?:,|and|&)\s*/i)
     .map(function (s) { return s.trim().toUpperCase(); })
-    .filter(function (s) { return /^[A-E]$/.test(s); });
+    .filter(function (s) { return /^[A-J]$/.test(s); });
   return { section: m[1] ? m[1].toUpperCase() : null, number: Number(m[2]), letters: letters };
 }
 

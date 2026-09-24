@@ -51,8 +51,17 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  *     6 으로 추출된 페이지는 그 bbox 를 `toStored` 에 그대로 담고 있고,
  *     6b 원본 넷 하이라이트 오버레이는 바로 그 값을 그린다 — 다시 추출해야 한다.
  *     (문단·영역 bbox 는 클립 전 값 그대로다 — 레이아웃 판정이 그 값을 쓴다.)
+ * 8 — 9a단계: 5-3 정답 글자를 [A-E] → [A-J] 로 넓혔다(spec 5-3 수정 2026-09-24).
+ *     spec 5-4 는 "정답 글자가 보기 범위 밖(예: F) → unverified" 라고 F 를 예로 드는데,
+ *     [A-E] 로는 **F 가 정답 문단으로 인식조차 되지 않았다.**
+ *     `[실측]` 729쪽에 `The answer is F.` 가 3건 있고, 7 까지는 그 셋이
+ *     `question` 후보로 흘러 `paragraphs[].kind` 가 'answer' 가 아니었으며
+ *     해설 본문은 **앞 문항의 해설에 흥수됐다.**
+ *     전수 재측: question 1,392 → 1,389 / answer 1,187 → 1,190 (정확히 3개 이동).
+ *     `kind` 가 저장본에 들어가므로 7 로 추출된 쪽은 틀린 문단 경계를
+ *     들고 있다 — 다시 추출해야 한다.
  */
-export const algoVersion = 7;
+export const algoVersion = 8;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {
