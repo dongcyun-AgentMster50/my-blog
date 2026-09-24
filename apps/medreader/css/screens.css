@@ -148,3 +148,203 @@
 /* ── 자리표시자 (4~9단계가 채운다) ───────────────────── */
 .placeholder h2 { text-align: center; }
 .placeholder p { text-align: center; }
+
+/* ════ 퀴즈 (5-5 · 16-E · 16-G) — 9b 단계 ═══════════════
+   ★ 논리 속성만(16-H). 정답/오답 색은 여기서 정의한다 —
+     `tokens.css` 는 이 단계의 수정 범위 밖이다. 네 테마 모두에서
+     본문 대비 4.5:1 이상(고대비는 7:1)을 맞춘다(16-F).
+   ──────────────────────────────────────────────────────── */
+:root {
+  --c-ok: #18653a;          /* #fdfcfa 위 5.9:1 */
+  --c-ok-bg: #e3f4e8;
+  --c-bad: #a3231f;         /* --c-danger 와 같은 값 */
+  --c-bad-bg: #fbe6e4;
+  --c-unknown-bg: #f2efea;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="sepia"]):not([data-theme="contrast"]) {
+    --c-ok: #74d69a;        /* #15181c 위 9.8:1 */
+    --c-ok-bg: #16301f;
+    --c-bad: #ef8f8b;
+    --c-bad-bg: #351b1a;
+    --c-unknown-bg: #272c33;
+  }
+}
+
+:root[data-theme="dark"] {
+  --c-ok: #74d69a;
+  --c-ok-bg: #16301f;
+  --c-bad: #ef8f8b;
+  --c-bad-bg: #351b1a;
+  --c-unknown-bg: #272c33;
+}
+
+:root[data-theme="sepia"] {
+  --c-ok: #1d5c33;          /* #f5ecd8 위 6.4:1 */
+  --c-ok-bg: #e2ecd4;
+  --c-bad: #8c2016;
+  --c-bad-bg: #f0dcc9;
+  --c-unknown-bg: #ece0c4;
+}
+
+:root[data-theme="contrast"] {
+  /* 검정 배경 위 — 초록 #7cff9e 는 15.5:1, 분홍 #ff9d96 은 9.4:1 */
+  --c-ok: #7cff9e;
+  --c-ok-bg: #000000;
+  --c-bad: #ff9d96;
+  --c-bad-bg: #000000;
+  --c-unknown-bg: #1a1a1a;
+}
+
+/* 상단 바의 "문항 3/57" */
+.quiz-count {
+  flex: 0 0 auto;
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.quiz-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  margin-block-end: var(--sp-4);
+}
+
+.quiz-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-block-end: var(--sp-3);
+}
+
+.quiz-number {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 16-E — 📕 배지와 "정답 미확인" 라벨은 **둘 중 하나만** 보인다. */
+.quiz-badge {
+  font-size: var(--fs-sm);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  color: var(--c-text-dim);
+}
+
+.quiz-badge-unverified {
+  background: var(--c-warn-bg);
+  color: var(--c-warn-text);
+}
+
+.quiz-stem {
+  font-size: var(--fs-lg);
+  line-height: 1.5;
+  margin-block-end: var(--sp-4);
+}
+
+/* 5-3 그림 문항의 원본 크롭. pdf.js 가 없으면 이 자리가 통째로 빠진다. */
+.quiz-figure { margin: 0 0 var(--sp-4); }
+
+.quiz-figure-box {
+  overflow: auto;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+}
+
+.quiz-crop {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+/* 보기 — 접은 화면(375px)에서 넘치지 않게 **세로로 쌓는다**(16-G). */
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.quiz-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--sp-3);
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.quiz-option:disabled { opacity: 1; }      /* 채점 뒤에도 글자는 또렷해야 한다 */
+
+.quiz-letter {
+  flex: 0 0 auto;
+  inline-size: 1.6em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.quiz-option-text { flex: 1 1 auto; }
+
+.quiz-option[data-state="correct"] {
+  background: var(--c-ok-bg);
+  border-color: var(--c-ok);
+  color: var(--c-ok);
+}
+
+.quiz-option[data-state="wrong"] {
+  background: var(--c-bad-bg);
+  border-color: var(--c-bad);
+  color: var(--c-bad);
+}
+
+.quiz-option[data-state="picked"] {
+  background: var(--c-unknown-bg);
+  border-color: var(--c-text-dim);
+}
+
+.quiz-feedback { margin-block-start: var(--sp-4); }
+
+.quiz-verdict { font-weight: 600; margin-block-end: var(--sp-2); }
+.quiz-verdict-correct { color: var(--c-ok); }
+.quiz-verdict-wrong { color: var(--c-bad); }
+.quiz-verdict-unknown { color: var(--c-warn-text); }
+
+.quiz-expected {
+  color: var(--c-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.quiz-explanation {
+  border-block-start: 1px solid var(--c-border);
+  padding-block-start: var(--sp-3);
+  margin-block-start: var(--sp-3);
+}
+
+.quiz-explanation summary {
+  min-block-size: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.quiz-explanation-text { line-height: 1.6; }
+
+.quiz-actions { margin-block-start: var(--sp-3); }
+.quiz-actions button { min-block-size: var(--tap); flex: 1 1 auto; }
+
+.quiz-score {
+  font-size: var(--fs-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.quiz-wrong { margin-block-end: var(--sp-3); }
+.quiz-wrong button { min-block-size: var(--tap); }

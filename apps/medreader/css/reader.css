@@ -641,3 +641,40 @@
   block-size: auto;
   margin-inline: auto;
 }
+
+/* ── 5-4 · 5-5 퀴즈 제안 칩 — 9b 단계 ───────────────────
+   리더 상단, 섹션 진입 시 1회, 닫을 수 있다. 논리 속성만(16-H). */
+.quiz-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin: var(--sp-2) var(--sp-4) 0;
+  padding: var(--sp-2);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+}
+
+.quiz-chip[hidden] { display: none; }
+
+.quiz-chip-open {
+  flex: 1 1 auto;
+  min-block-size: var(--tap);
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+}
+
+.quiz-chip-meta {
+  flex: 0 0 auto;
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.quiz-chip-dismiss {
+  flex: 0 0 auto;
+  min-block-size: var(--tap);
+  min-inline-size: var(--tap);
+}

@@ -17,6 +17,7 @@ import { startRouter, parseRoute, go, replace, libraryHash, onboardingHash } fro
 import { initOnboarding, showOnboarding, persistState } from './ui/onboarding.js';
 import { initLibrary, showLibrary, openFilePicker, relabel } from './ui/library.js';
 import { initReader, showReader, leaveReader } from './ui/reader.js';
+import { initQuizScreen, showQuiz, leaveQuiz } from './ui/quiz.js';
 
 /* ────────────────────────────────────────────────────────
    14절 배너 — 서비스 계층이 낸 **코드**를 여기서 문장으로 바꾼다(3-2).
@@ -120,6 +121,7 @@ async function boot() {
   initLibrary();
   initOnboarding({ onImport: openFilePicker });
   initReader();
+  initQuizScreen();
 
   // 정적 이동 버튼 — 해시만 바꾼다(뒤로가기가 그대로 동작한다).
   document.addEventListener('click', (ev) => {
@@ -170,6 +172,8 @@ function resolveRoute(route) {
 function onRoute(route) {
   // 리더를 떠나면 그 쪽 DOM 을 버린다(7000쪽 메모리 — 4단계).
   if (route.name !== 'reader') leaveReader();
+  // 퀴즈도 같다 — 문항 카드와 크롭 이미지를 들고 있다(9b).
+  if (route.name !== 'quiz') leaveQuiz();
 
   switch (route.name) {
     case 'onboarding':
@@ -181,6 +185,10 @@ function onRoute(route) {
     case 'reader':
       // 4단계 — 리플로우 뷰. `ui/reader.js` 가 한 쪽을 그린다(12-4).
       showReader(route.params);
+      break;
+    case 'quiz':
+      // 9b — 한 번에 문항 하나. `ui/quiz.js` 가 그린다(5-5).
+      showQuiz(route.params);
       break;
     default:
       break;

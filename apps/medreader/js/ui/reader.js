@@ -43,6 +43,8 @@ import { go, replace, readerHash, libraryHash } from '../router.js';
 import { openDoc, extractorFor } from './library.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
 import { initControls, leaveControls } from './controls.js';
+// 5-4 · 5-5 제안 칩 — 퀴즈 화면은 스스로 배선된다(이 import 가 그것을 읽힌다).
+import { updateReaderChip } from './quiz.js';
 import { TTS, ORIGINAL } from '../config.js';
 import * as render from '../pdf/render.js';
 import * as original from './original.js';
@@ -329,7 +331,8 @@ export function initReader() {
     input: root.querySelector('#pageInput'),
     total: root.querySelector('#pageTotal'),
     backToLine: root.querySelector('#backToLine'),
-    viewToggle: root.querySelector('#viewToggle')
+    viewToggle: root.querySelector('#viewToggle'),
+    quizChip: root.querySelector('#quizChipSlot')
   };
 
   /* ── 6b 원본 뷰 (12-5) ─────────────────────────────
@@ -464,6 +467,7 @@ export function leaveReader() {
   // 리더를 떠나면 낭독도 멈춘다 — 서재에서 소리가 계속 나면 안 된다.
   leaveControls();
   if (els && els.mount) clear(els.mount);
+  if (els && els.quizChip) els.quizChip.hidden = true;
   original.leaveOriginal();
   state.desc = null;
   state.layout = null;
@@ -759,6 +763,21 @@ function notifyPage() {
   for (const fn of pageListeners) {
     try { fn({ docId: state.docId, page: state.page }); } catch (e) { /* 구독자 예외 */ }
   }
+  paintQuizChip();
+}
+
+/**
+ * 5-4 — [이 섹션 퀴즈 풀기] 칩. 판단·파싱은 전부 `ui/quiz.js` 가 한다.
+ * **리더는 기다리지 않는다** — 파싱이 실패해도 칩이 안 뜰 뿐이다.
+ */
+function paintQuizChip() {
+  if (!els || !els.quizChip) return;
+  try {
+    updateReaderChip(els.quizChip, {
+      docId: state.docId, doc: state.doc, page: state.page,
+      extractor: extractorFor(state.docId)
+    });
+  } catch (e) { /* 칩이 리더를 막지 않는다(5-4) */ }
 }
 
 /** 12-4 의 DOM 을 만든다. 문서 텍스트는 전부 `textContent` 다(13절 XSS). */

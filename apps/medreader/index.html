@@ -153,6 +153,10 @@
       <div class="progress-track"><div class="progress-fill" id="readerProgressFill"></div></div>
     </div>
 
+    <!-- 5-4 · 5-5 제안 칩 자리 — [이 섹션 퀴즈 풀기]. `js/ui/quiz.js` 가
+         자격 있는 섹션(verified ≥ 60%, ≥ 5문항)에서만 채운다. 닫을 수 있다. -->
+    <div class="quiz-chip" id="quizChipSlot" hidden></div>
+
     <!-- Aa 팝오버 (12-3 · 16-F). 값은 9-3 의 키에 그대로 저장된다. -->
     <div class="typeset-panel" id="typesetPanel" role="dialog" aria-modal="false"
          data-i18n-aria="reader.typeset.title" hidden>
@@ -296,15 +300,18 @@
     </nav>
   </section>
 
-  <!-- ════ 퀴즈 — 자리표시자. 9단계. ════════════════════ -->
+  <!-- ════ 퀴즈 (5-5 · 12-1) — 9b 단계 ═══════════════════
+       ★ 문항 카드는 `js/ui/quiz.js` 가 `#quizMount` 안에 그린다.
+         **한 번에 한 문항만** 올라간다 — 12,000문항을 DOM 에 두지 않는다.
+       ★ 화면 전환은 라우터가 `hidden` 으로 한다. 이 화면은 그 변화를
+         스스로 보고 그린다(`main.js` 는 9b 의 수정 범위 밖이다). -->
   <section class="screen" data-screen="quiz" hidden>
     <div class="topbar">
       <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
-      <h1 class="title" data-i18n="quiz.placeholder.title"></h1>
+      <h1 class="title" id="quizTitle"></h1>
+      <span class="quiz-count" id="quizProgress" role="status" aria-live="polite"></span>
     </div>
-    <div class="placeholder">
-      <p data-i18n="quiz.placeholder.body"></p>
-    </div>
+    <div id="quizMount"></div>
   </section>
 
   <!-- ════ 설정 — 자리표시자. 7단계. ════════════════════ -->
