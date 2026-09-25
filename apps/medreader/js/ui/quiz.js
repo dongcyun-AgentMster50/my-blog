@@ -82,7 +82,8 @@ function ensureEls() {
     title: root.querySelector('#quizTitle'),
     progress: root.querySelector('#quizProgress'),
     mount: root.querySelector('#quizMount'),
-    back: root.querySelector('#quizBackBtn')
+    back: root.querySelector('#quizBackBtn'),
+    pager: root.querySelector('#quizPager')
   };
   if (!els.mount) { els = null; return null; }
   return els;
@@ -344,6 +345,10 @@ function shortSectionId(id) {
 }
 
 function paintProgress() {
+  // `[수정 2026-09-26]` 눈에 보이는 진행 표시는 이제 **이동 바**다.
+  // 여기는 화면 낭독기용(sr-only)으로 같은 말을 계속 전한다 —
+  // 입력칸만 남기면 "몇 번째인지"를 듣는 사람이 잃는다(16-G).
+  paintPager();
   if (!els || !els.progress) return;
   const s = state.session;
   if (!s || s.isFinished() || !s.total()) { els.progress.textContent = ''; return; }
@@ -437,12 +442,6 @@ function paintQuestion() {
   feedback.id = 'quizFeedback';
   card.appendChild(feedback);
 
-  // `[신규 2026-09-26]` **풀기 전에도 문항을 고를 수 있어야 한다.**
-  // `[실기기]` 사용자: "문항을 풀기전에 고를수 있게 해줘 … 문항을 내가 써서
-  // 이동할 수 있게 하거나, 이전 문제, 다음 문제로". 149문항짜리 섹션을 앞에서부터만
-  // 훑어야 한다면 쓸 수 없다. 리더의 쪽 이동 바와 같은 모양으로 둔다.
-  card.appendChild(questionPager());
-
   els.mount.appendChild(card);
 
   // 이미 답한 문항(언어 전환·되돌아오기)이면 결과를 다시 그린다.
@@ -451,34 +450,44 @@ function paintQuestion() {
 }
 
 /**
- * 문항 이동 바 — `[이전] [n] / 총 [다음]`. **푼 문항이든 아니든 항상 보인다.**
+ * 문항 이동 바 — `[이전] [n] / 총 [다음]`. **상단바에 산다.**
  *
- * 답을 찍어야만 나오던 `[다음]`(정답 카드 안)은 그대로 둔다 — 그건 "채점을
+ * `[수정 2026-09-26]` 처음에는 카드 아래에 뒀는데 사용자가 짚었다:
+ * "문제만 보고 바로바로 넘겨야 할 수 있어야 하거든. 안다 모른다 가 바로
+ * 보이는 상태인데 넘기려고 아래를 스크롤해야 하는 번거로움 귀찮음은 없도록".
+ * 훑어보기가 주 동작이면 이동은 **손이 이미 가 있는 곳**에 있어야 한다.
+ *
+ * 진행 표시 `문항 n/총` 을 이것이 대체한다 — 입력칸이 곧 현재 번호다.
+ * 화면 낭독기에는 `#quizProgress`(sr-only)가 같은 말을 계속 전한다.
+ *
+ * 답을 찍어야만 나오는 카드 안의 `[다음]` 은 그대로 둔다 — 그건 "채점을
  * 확인했으니 넘어간다"는 주 동작이고, 이 바는 "그냥 둘러본다"는 다른 일이다.
  */
-function questionPager() {
+function paintPager() {
+  if (!els || !els.pager) return;
   const s = state.session;
+  clear(els.pager);
+  if (!s || s.isFinished() || !s.total()) { els.pager.hidden = true; return; }
+  els.pager.hidden = false;
+
   const total = s.total();
   const pos = s.position();
 
-  const nav = el('nav', 'quiz-pager');
-  nav.setAttribute('aria-label', t('quiz.pager.label'));
-
-  const prev = button('quiz.pager.prev', '', () => {
-    stopSpeaking();
-    s.prev();
-    repaint();
-  });
+  const prev = el('button', 'quiz-pager-step');
+  prev.type = 'button';
+  prev.textContent = '‹';                       // ‹ — 좁은 상단바라 글리프로
+  prev.setAttribute('aria-label', t('quiz.pager.prev'));
   prev.disabled = pos <= 1;
-  nav.appendChild(prev);
+  prev.addEventListener('click', () => { stopSpeaking(); s.prev(); repaint(); });
+  els.pager.appendChild(prev);
 
   const input = el('input', 'quiz-pager-input');
   input.type = 'number';
   input.min = '1';
   input.max = String(total);
   input.value = String(pos);
-  input.setAttribute('aria-label', t('quiz.pager.jump'));
   input.setAttribute('inputmode', 'numeric');
+  input.setAttribute('aria-label', t('quiz.pager.jump'));
   const jump = () => {
     // 범위 밖이면 `goTo` 가 null 을 주고, 입력을 제자리로 되돌린다.
     if (s.goTo(input.value)) { stopSpeaking(); repaint(); }
@@ -486,21 +495,19 @@ function questionPager() {
   };
   input.addEventListener('change', jump);
   input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); jump(); } });
-  nav.appendChild(input);
+  els.pager.appendChild(input);
 
   const of = el('span', 'quiz-pager-total');
   of.textContent = t('quiz.pager.of', { n: formatNumber(total) });
-  nav.appendChild(of);
+  els.pager.appendChild(of);
 
-  const next = button('quiz.pager.next', '', () => {
-    stopSpeaking();
-    s.next();
-    repaint();
-  });
+  const next = el('button', 'quiz-pager-step');
+  next.type = 'button';
+  next.textContent = '›';                       // ›
+  next.setAttribute('aria-label', t('quiz.pager.next'));
   next.disabled = pos >= total;
-  nav.appendChild(next);
-
-  return nav;
+  next.addEventListener('click', () => { stopSpeaking(); s.next(); repaint(); });
+  els.pager.appendChild(next);
 }
 
 function optionButton(q, opt) {

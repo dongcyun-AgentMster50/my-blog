@@ -567,6 +567,14 @@ async function paintView(token) {
     state.view = 'reflow';
     clear(els.mount);
   }
+  // `[수정 2026-09-26]` 그릴 쪽이 없으면 안내만 남긴다.
+  // `state.desc` 는 저장본이 깨졌거나 문서가 지워진 뒤 뷰를 바꾸면 null 이다.
+  // 그대로 넘기면 `renderDescription` 이 `desc.pageNo` 에서 터진다(실측).
+  if (!state.desc) {
+    els.mount.appendChild(noticeBlock('reader.page.broken'));
+    paintViewToggle();
+    return;
+  }
   els.mount.appendChild(renderDescription(state.desc));
   paintViewToggle();
   // 4-8 폴백 — 표 자리에 크롭 이미지를 넣는다. pdf.js 가 없으면 조용히
