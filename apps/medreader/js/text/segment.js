@@ -121,3 +121,96 @@ export function splitSentences(text) {
   if (tail) out.push(tail);
   return out;
 }
+
+/* ============================================================
+   `[수정 2026-09-25 — 10d]` 놓치고 있는 정답 문단을 되찾기 위한 **추가** 패턴.
+
+   위의 `ANSWER_RE` 는 **건드리지 않는다.** 그 정규식은 blocks.js 의 `paragraphKind`
+   가 쓰고, 바꾸면 `paragraphs[].kind` 가 달라져 `algoVersion` 을 올려야 한다
+   (7000쪽 재추출). 그래서 아래는 전부 **새 정규식·새 함수**다.
+   `kind` 판정은 이 패턴들을 쓰지 않는다 — quiz/parser.js 만 쓴다.
+   ============================================================ */
+
+/* `[실측]` 정답 섹션 첫 쪽에서 번호 라벨이 좌측으로 떨어져 나간다:
+ *   body "I-1." / body "I-2." … heading "ANSWERS" / body "The answer is A. (Chap. 1) …"
+ * 라벨만 있는 문단 — 번호 뒤에 아무것도 없다. */
+const ANSWER_LABEL_RE = /^\s*(?:([IVXLC]{1,5})-)?(\d{1,3})\.\s*$/;
+
+/* 번호가 떨어져 나간 정답 문단 — "The answer is A. (Chap. 1) …" */
+const HEADLESS_ANSWER_RE = /^\s*the\s+answers?\s+(?:is|are)\s+([A-J](?:\s*(?:,\s*and|,|and|&)\s*[A-J])*)(?![A-Za-z])/i;
+
+/* `[실측]` 한 문단이 여러 문항을 답한다:
+ *   "I-36 and I-37. The answers are C and B, respectively. (Chap. 14) …"
+ *   "I-58, I-59, and I-60. The answers are A, C, and B, respectively. (Chap. 21) …"
+ * `[실측]` 마지막 이음말 없이 쉼표로만 잇는 것도 1건 있다:
+ *   "III-64, III-65, III-66, III-67, III-68. The answers are C, B, D, A, and E, respectively."
+ * 그래서 끝의 `and` 는 **선택**이다. 대신 번호는 **둘 이상**이어야 하고,
+ * 번호 개수와 정답 글자 개수가 **정확히 같아야** 한다(parseGroupAnswer).
+ * 글자 뒤의 `(?![A-Za-z])` 는 `/i` 때문에 ", each…" 의 `e` 를 정답으로 빨아들이는 것을 막는다. */
+const GROUP_ANSWER_RE = /^\s*((?:[IVXLC]{1,5}-)?\d{1,3}(?:\s*,\s*(?:[IVXLC]{1,5}-)?\d{1,3})*(?:\s*,?\s+and\s+(?:[IVXLC]{1,5}-)?\d{1,3})?)\.\s+the\s+answers\s+are\s+([A-J](?:\s*(?:,\s*and|,|and|&)\s*[A-J])*)(?![A-Za-z])/i;
+
+const ONE_NUMBER_RE = /^(?:([IVXLC]{1,5})-)?(\d{1,3})$/;
+
+function splitLetters(raw) {
+  // 구분자로 먼저 쪼갠다. 통째로 긁으면 "and" 의 A·D 가 딸려 온다(parseAnswerStart 와 같다).
+  return String(raw).split(/\s*(?:,|and|&)\s*/i)
+    .map(function (s) { return s.trim().toUpperCase(); })
+    .filter(function (s) { return /^[A-J]$/.test(s); });
+}
+
+/**
+ * `[10d]` 라벨만 있는 문단인가 — "I-1." · "7."
+ * @returns {{section: string|null, number: number}|null}
+ */
+export function parseAnswerLabel(text) {
+  const m = str(text).match(ANSWER_LABEL_RE);
+  if (!m) return null;
+  return { section: m[1] ? m[1].toUpperCase() : null, number: Number(m[2]) };
+}
+
+/**
+ * `[10d]` 번호 없이 시작하는 정답 문단인가 — "The answer is A. (Chap. 1) …"
+ * 번호는 모른다. 짝짓기는 parser 가 **같은 쪽의 고아 라벨**과 대조해 한다.
+ * @returns {{letters: string[]}|null}
+ */
+export function parseHeadlessAnswer(text) {
+  const m = str(text).match(HEADLESS_ANSWER_RE);
+  if (!m) return null;
+  const letters = splitLetters(m[1]);
+  if (!letters.length) return null;
+  return { letters: letters };
+}
+
+/**
+ * `[10d]` 묶음 정답 문단을 문항별로 펼친다.
+ * "I-36 and I-37. The answers are C and B, respectively." → I-36→C, I-37→B
+ *
+ * **펼치지 않는 경우**(null 을 돌려준다 — 틀린 정답을 붙이느니 unverified 가 낫다):
+ *   - 번호 개수 ≠ 정답 글자 개수
+ *   - 로마숫자가 있는 번호와 없는 번호가 섞여 있다(어느 섹션인지 단정할 수 없다)
+ * @returns {{members: {section: string|null, number: number, letters: string[]}[]}|null}
+ */
+export function parseGroupAnswer(text) {
+  const m = str(text).match(GROUP_ANSWER_RE);
+  if (!m) return null;
+  const tokens = m[1].split(/\s*(?:,|and)\s*/i)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
+  const nums = [];
+  let withRoman = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i].match(ONE_NUMBER_RE);
+    if (!t) return null;                       // 알 수 없는 토큰이 끼면 손대지 않는다
+    if (t[1]) withRoman++;
+    nums.push({ section: t[1] ? t[1].toUpperCase() : null, number: Number(t[2]) });
+  }
+  if (nums.length < 2) return null;
+  if (withRoman !== 0 && withRoman !== nums.length) return null;   // 섞여 있으면 거부
+  const letters = splitLetters(m[2]);
+  if (letters.length !== nums.length) return null;                 // 개수가 다르면 펼치지 않는다
+  const members = [];
+  for (let i = 0; i < nums.length; i++) {
+    members.push({ section: nums[i].section, number: nums[i].number, letters: [letters[i]] });
+  }
+  return { members: members };
+}

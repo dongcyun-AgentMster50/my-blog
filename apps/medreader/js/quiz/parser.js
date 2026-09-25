@@ -11,7 +11,8 @@
 import {
   isQuestionStart, parseQuestionNumber,
   isAnswerStart, parseAnswerStart,
-  isOptionStart
+  isOptionStart,
+  parseAnswerLabel, parseHeadlessAnswer, parseGroupAnswer
 } from '../text/segment.js';
 
 /* 5-3 의 나머지 규칙 — segment.js 가 갖고 있지 않은 것만 여기 둔다. */
@@ -75,21 +76,110 @@ function collectParagraphs(pageLayouts, errors) {
           kind: str(p && p.kind),
           text: text,
           trimmed: text.trim(),
-          answer: null, q: null, isOption: false
+          answer: null, q: null, isOption: false, group: null
         };
         // 4-9 와 같은 우선순위: answer 는 question 의 진부분집합이므로 먼저 본다.
         if (isAnswerStart(text)) {
           e.answer = parseAnswerStart(text);
-        } else if (isQuestionStart(text)) {
-          e.q = parseQuestionNumber(text);
-        } else if (isOptionStart(text)) {
-          e.isOption = true;
+        } else {
+          // `[10d]` ② 묶음 정답 — "I-36 and I-37. The answers are C and B, respectively."
+          // ANSWER_RE 는 번호 바로 뒤 마침표를 요구해서 이 형태를 놓친다.
+          // 개수가 맞지 않거나 로마숫자가 섞이면 parseGroupAnswer 가 null 을 준다 → 손대지 않는다.
+          const g = parseGroupAnswer(text);
+          if (g) {
+            e.group = g.members;
+            e.answer = g.members[0];
+          } else if (isQuestionStart(text)) {
+            e.q = parseQuestionNumber(text);
+          } else if (isOptionStart(text)) {
+            e.isOption = true;
+          }
         }
         out.push(e);
       } catch (e2) { errors.push(errMsg(e2)); }
     }
   }
   return out;
+}
+
+/* ---------------------------------------------------------------
+   1b) `[10d]` 고아 라벨 되찾기 — 번호와 본문이 다른 문단으로 갈라진 정답
+
+   `[실측]` 정답 섹션 **첫 쪽**에서 번호 라벨이 좌측으로 떨어져 나간다:
+
+     body    "I-1."  "I-2."  "I-3."  "I-4."      ← 라벨만
+     heading "ANSWERS"
+     body    "The answer is A. (Chap. 1) …"      ← 번호가 없다
+     body    "The answer is E. (Chap. 1) …"  …
+
+   **같은 쪽 안에서, 개수가 정확히 같을 때만** 순서대로 짝짓는다.
+   개수가 다르면 어느 하나가 어긋나고, 그러면 **틀린 정답을 확신에 차서** 보여 주게 된다.
+   지금(unverified)보다 나쁘다 — 그래서 하나도 짝짓지 않는다.
+   --------------------------------------------------------------- */
+
+function repairOrphanAnswersOnPage(paras, from, to, diag) {
+  /* (1) 라벨만 있는 문단을 모은다. 이미 정답·문항·보기로 판정된 것은 건드리지 않는다. */
+  const labels = [];
+  for (let i = from; i < to; i++) {
+    const p = paras[i];
+    if (p.answer || p.q || p.isOption) continue;
+    const lab = parseAnswerLabel(p.text);
+    if (lab) labels.push({ i: i, section: lab.section, number: lab.number });
+  }
+  if (!labels.length) return;
+  diag.orphanLabelParas += labels.length;
+
+  /* (2) 라벨 사이에는 heading 만 허용한다 — `[실측]` "ANSWERS" 가 실제로 낀다.
+         본문이 끼어 있으면 한 덩어리로 볼 근거가 없다. */
+  for (let k = 1; k < labels.length; k++) {
+    for (let j = labels[k - 1].i + 1; j < labels[k].i; j++) {
+      if (paras[j].kind !== 'heading') { diag.orphanRejectedBroken++; return; }
+    }
+  }
+
+  /* (3) 5-3 의 번호 연속성과 같은 원칙 — 같은 로마숫자, 번호가 1씩 는다. */
+  for (let k = 1; k < labels.length; k++) {
+    if (labels[k].section !== labels[k - 1].section) { diag.orphanRejectedRoman++; return; }
+    if (labels[k].number !== labels[k - 1].number + 1) { diag.orphanRejectedGap++; return; }
+  }
+
+  /* (4) 마지막 라벨 뒤에서 번호 없는 정답 문단을 모은다.
+         정상 정답 문단이나 문항 후보를 만나면 거기서 끊는다(그 뒤는 다른 이야기다).
+         사이의 일반 문단은 앞 정답의 해설 이어짐이므로 건너뛴다. */
+  const heads = [];
+  for (let i = labels[labels.length - 1].i + 1; i < to; i++) {
+    const p = paras[i];
+    if (p.answer || p.q) break;
+    const h = parseHeadlessAnswer(p.text);
+    if (h) heads.push({ i: i, letters: h.letters });
+  }
+  if (!heads.length) return;                    // 정답 섹션이 아니다 — 그냥 번호 목록
+  diag.orphanHeadlessParas += heads.length;
+
+  /* (5) ★ 개수가 다르면 아무것도 짝짓지 않는다. */
+  if (heads.length !== labels.length) { diag.orphanRejectedCount++; return; }
+
+  for (let k = 0; k < labels.length; k++) {
+    paras[heads[k].i].answer = {
+      section: labels[k].section,
+      number: labels[k].number,
+      letters: heads[k].letters.slice()
+    };
+    diag.orphanPaired++;
+  }
+}
+
+/** `[10d]` 쪽 단위로 고아 라벨을 되찾는다. **쪽을 넘어서는 짝짓지 않는다.** */
+function repairOrphanAnswers(paras, diag, errors) {
+  let from = 0;
+  while (from < paras.length) {
+    let to = from + 1;
+    while (to < paras.length && paras[to].pageNo === paras[from].pageNo) to++;
+    // 한 쪽이 실패해도 나머지는 계속 읽는다(5-4 — 파서가 리더를 죽이면 안 된다)
+    try { repairOrphanAnswersOnPage(paras, from, to, diag); }
+    catch (e) { errors.push(errMsg(e)); }
+    from = to;
+  }
 }
 
 /* isOptionStart 가 `^\s*[A-E]\.\s+\S` 를 이미 보장한다 — 정규식을 다시 쓰지 않고 잘라 쓴다. */
@@ -225,7 +315,13 @@ export function parseSectionsWithStats(pageLayouts, opts) {
     paragraphs: 0, questionCandidates: 0, answerParas: 0,
     rejectedNoOptions: 0, rejectedContinuity: 0,
     acceptedQuestions: 0, duplicateAnswerNumbers: 0,
-    candidatesWithoutRoman: 0, acceptedWithoutRoman: 0
+    candidatesWithoutRoman: 0, acceptedWithoutRoman: 0,
+    // `[10d]` ① 고아 라벨
+    orphanLabelParas: 0, orphanHeadlessParas: 0, orphanPaired: 0,
+    orphanRejectedCount: 0, orphanRejectedGap: 0,
+    orphanRejectedRoman: 0, orphanRejectedBroken: 0,
+    // `[10d]` ② 묶음 정답
+    groupAnswerParas: 0, groupAnswersExpanded: 0
   };
 
   function getOrCreate(id, roman, pageNo, title) {
@@ -238,6 +334,7 @@ export function parseSectionsWithStats(pageLayouts, opts) {
   try {
     const paras = collectParagraphs(pageLayouts, errors);
     diag.paragraphs = paras.length;
+    repairOrphanAnswers(paras, diag, errors);   // `[10d]` ① — 쪽 단위, 개수가 같을 때만
     let current = null;
     let lastQuestionSection = null;
 
@@ -247,26 +344,32 @@ export function parseSectionsWithStats(pageLayouts, opts) {
         /* ---- 정답·해설 ---- */
         if (p.answer) {
           diag.answerParas++;
-          const roman = p.answer.section ? String(p.answer.section).toUpperCase() : null;
-          let sec;
-          if (roman) {
-            sec = getOrCreate(makeSectionId(roman, p.pageNo), roman, p.pageNo, titleNear(paras, i, cfg));
-          } else if (lastQuestionSection) {
-            sec = lastQuestionSection;              // 로마숫자 없는 책: 직전 문항 섹션에 붙는다
-          } else {
-            sec = getOrCreate(makeSectionId(null, p.pageNo), null, p.pageNo, titleNear(paras, i, cfg));
-          }
+          if (p.group) { diag.groupAnswerParas++; diag.groupAnswersExpanded += p.group.length; }
           const ex = extractExplanation(paras, i, cfg);
-          const n = p.answer.number;
-          if (sec.answers.has(n)) {
-            // 조용히 덮어쓰지 않는다 — 먼저 나온 것을 남기고 번호를 표시해 둔다(5-4).
-            sec.dupAnswerNumbers.add(n);
-            diag.duplicateAnswerNumbers++;
-          } else {
-            sec.answers.set(n, {
-              number: n, letters: p.answer.letters.slice(),
-              explanationParaIds: ex.ids, explanation: ex.text, pageNo: p.pageNo
-            });
+          // `[10d]` ② 묶음 정답은 한 문단이 여러 문항을 답한다. **해설은 전부가 공유한다**(원문이 그렇다).
+          const members = p.group || [p.answer];
+          for (let mi = 0; mi < members.length; mi++) {
+            const a = members[mi];
+            const roman = a.section ? String(a.section).toUpperCase() : null;
+            let sec;
+            if (roman) {
+              sec = getOrCreate(makeSectionId(roman, p.pageNo), roman, p.pageNo, titleNear(paras, i, cfg));
+            } else if (lastQuestionSection) {
+              sec = lastQuestionSection;              // 로마숫자 없는 책: 직전 문항 섹션에 붙는다
+            } else {
+              sec = getOrCreate(makeSectionId(null, p.pageNo), null, p.pageNo, titleNear(paras, i, cfg));
+            }
+            const n = a.number;
+            if (sec.answers.has(n)) {
+              // 조용히 덮어쓰지 않는다 — 먼저 나온 것을 남기고 번호를 표시해 둔다(5-4).
+              sec.dupAnswerNumbers.add(n);
+              diag.duplicateAnswerNumbers++;
+            } else {
+              sec.answers.set(n, {
+                number: n, letters: a.letters.slice(),
+                explanationParaIds: ex.ids, explanation: ex.text, pageNo: p.pageNo
+              });
+            }
           }
           continue;
         }
