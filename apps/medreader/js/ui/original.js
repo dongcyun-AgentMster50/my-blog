@@ -196,6 +196,50 @@ const state = {
  */
 export function initOriginal(d) {
   deps = d || {};
+  watchResize();
+}
+
+/* ────────────────────────────────────────────────────────
+   화면 크기가 바뀌면 다시 맞춘다 (12-3)
+   ──────────────────────────────────────────────────────── */
+
+let resizeTimer = 0;
+let resizeBound = false;
+
+/**
+ * `[신규 2026-09-25]` **12-3 의 "화면 회전·리사이즈 시 재계산"을 실제로 연결한다.**
+ *
+ * `refitOriginal()` 은 있었는데 **아무도 부르지 않는 죽은 코드**였다
+ * (`resize`·`orientationchange` 구독이 `js/` 전체에 0건).
+ *
+ * `[실기기 · 폴더블]` 사용자 보고: "폴드를 편 상태에서 이 앱을 열면 120% 였었어.
+ * 접었을때는 자동으로 맞춰지진 않아서, 75%까지 축소했어(그게 한계야)".
+ * 편 화면 폭으로 맞춘 배율이 접은 뒤에도 남아 **손으로 줄여야** 했다.
+ *
+ * 하이라이트가 어긋나지 않았던 이유도 여기 있다 — canvas 와 오버레이는 **같은
+ * 좌표계에서 함께** 스케일되므로, 배율이 낡아도 둘의 상대 위치는 맞는다.
+ * 틀린 것은 "얼마나 크게 보이나" 하나뿐이었다.
+ *
+ * 사용자가 줌을 직접 건드렸으면(`state.userZoom`) 그 선택을 존중하고 오버레이만
+ * 다시 잡는다 — `refitOriginal()` 이 이미 그렇게 나뉘어 있다.
+ */
+function watchResize() {
+  if (resizeBound || typeof window === 'undefined') return;
+  resizeBound = true;
+  const onResize = () => {
+    // 원본 뷰가 떠 있지 않으면 할 일이 없다.
+    if (!els || !state.layout) return;
+    if (resizeTimer) clearTimeout(resizeTimer);
+    // 접었다 펴는 동안 여러 번 터진다. 마지막 한 번만 다시 그린다.
+    resizeTimer = setTimeout(() => {
+      resizeTimer = 0;
+      refitOriginal().catch(() => { /* 렌더 실패는 setStatus 가 이미 알린다 */ });
+    }, 150);
+  };
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  // 폴더블·주소창 접힘은 visualViewport 로만 오는 경우가 있다.
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 }
 
 /** 2-3 — 원본 뷰 버튼을 비활성으로 둘 것인가. */

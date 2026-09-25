@@ -194,6 +194,8 @@ export default {
   'quiz.empty.title': 'لا توجد أسئلة هنا بعد',
   'quiz.empty.body': 'لا توجد أسئلة جاهزة في هذا القسم. تظهر بعد تجهيز النص.',
   'quiz.figure.alt': 'صورة من الصفحة الأصلية',
+  'quiz.topbar.label': 'اختبار',
+  'quiz.topbar.open': 'افتح اختبار هذا القسم',
   'quiz.chip.open': 'اختبر نفسك في هذا القسم',
   'quiz.chip.meta.one': 'سؤال واحد',
   'quiz.chip.meta.other': '{n} أسئلة',

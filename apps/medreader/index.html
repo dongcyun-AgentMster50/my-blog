@@ -142,6 +142,11 @@
            "갈 곳"으로 쓴다(지금 상태가 아니라). pdf.js 가 없으면 비활성(2-3). -->
       <button type="button" class="view-toggle" id="viewToggle" aria-pressed="false"
               data-i18n-aria="reader.view.original"></button>
+      <!-- 9b/10c — 퀴즈 입구. 칩과 같은 판정(`chipEntry`)을 쓰되
+           **닫을 수 없다** — 칩을 "나중에"로 닫으면 돌아갈 길이 없었다
+           (`[실기기]` "나중에 눌러서 닫혀버렸어 어떻게 켜는지 몰러"). -->
+      <button type="button" class="quiz-btn" id="readerQuizBtn" hidden
+              data-i18n="quiz.topbar.label" data-i18n-aria="quiz.topbar.open"></button>
       <button type="button" class="aa" id="typesetBtn" aria-expanded="false"
               aria-controls="typesetPanel" data-i18n="reader.typeset.aa"
               data-i18n-aria="reader.typeset.open"></button>

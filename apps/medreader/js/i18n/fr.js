@@ -198,6 +198,8 @@ export default {
   'quiz.empty.title': 'Aucune question ici pour le moment',
   'quiz.empty.body': "Cette section n'a pas encore de questions. Elles apparaissent une fois le texte préparé.",
   'quiz.figure.alt': 'Image tirée de la page originale',
+  'quiz.topbar.label': 'Quiz',
+  'quiz.topbar.open': 'Ouvrir le quiz de cette section',
   'quiz.chip.open': 'Faire le quiz de cette section',
   'quiz.chip.meta.one': '{n} question',
   'quiz.chip.meta.other': '{n} questions',

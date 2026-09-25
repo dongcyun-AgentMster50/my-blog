@@ -200,6 +200,8 @@ export default {
   'quiz.empty.title': 'No questions here yet',
   'quiz.empty.body': 'This section has no questions ready. They appear once the text is prepared.',
   'quiz.figure.alt': 'Image from the original page',
+  'quiz.topbar.label': 'Quiz',
+  'quiz.topbar.open': 'Open the quiz for this section',
   'quiz.chip.open': 'Take the quiz for this section',
   'quiz.chip.meta.one': '{n} question',
   'quiz.chip.meta.other': '{n} questions',

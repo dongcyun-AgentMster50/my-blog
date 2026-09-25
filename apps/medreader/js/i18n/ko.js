@@ -198,6 +198,8 @@ export default {
   'quiz.empty.title': '아직 문항이 없습니다',
   'quiz.empty.body': '이 섹션에는 준비된 문항이 없습니다. 텍스트 준비가 끝나면 나타납니다.',
   'quiz.figure.alt': '원본 쪽에서 잘라 낸 그림',
+  'quiz.topbar.label': '퀴즈',
+  'quiz.topbar.open': '이 섹션 퀴즈 열기',
   'quiz.chip.open': '이 섹션 퀴즈 풀기',
   'quiz.chip.meta.one': '{n}문항',
   'quiz.chip.meta.other': '{n}문항',

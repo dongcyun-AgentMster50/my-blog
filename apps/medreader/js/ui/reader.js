@@ -39,12 +39,12 @@ import * as settings from '../settings.js';
 import { t, applyTranslations, formatNumber, onLangChange } from '../i18n/index.js';
 import { fromStored } from '../text/store.js';
 import { joinHyphen } from '../text/hyphen.js';
-import { go, replace, readerHash, libraryHash } from '../router.js';
+import { go, replace, readerHash, libraryHash, quizHash } from '../router.js';
 import { openDoc, extractorFor } from './library.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
 import { initControls, leaveControls } from './controls.js';
 // 5-4 · 5-5 제안 칩 — 퀴즈 화면은 스스로 배선된다(이 import 가 그것을 읽힌다).
-import { updateReaderChip } from './quiz.js';
+import { updateReaderChip, onQuizEntry } from './quiz.js';
 import { TTS, ORIGINAL } from '../config.js';
 import * as render from '../pdf/render.js';
 import * as original from './original.js';
@@ -334,7 +334,8 @@ export function initReader() {
     total: root.querySelector('#pageTotal'),
     backToLine: root.querySelector('#backToLine'),
     viewToggle: root.querySelector('#viewToggle'),
-    quizChip: root.querySelector('#quizChipSlot')
+    quizChip: root.querySelector('#quizChipSlot'),
+    quizBtn: root.querySelector('#readerQuizBtn')
   };
 
   /* ── 6b 원본 뷰 (12-5) ─────────────────────────────
@@ -534,6 +535,14 @@ async function renderPage() {
   }
   state.desc = desc;
   state.layout = layout;
+
+  // `[수정 2026-09-25]` 퀴즈 칩·버튼은 **렌더와 무관하다** — `docId` 와 `page` 만
+  // 있으면 판정할 수 있다. 이걸 `notifyPage()` 에만 매달아 뒀더니,
+  // 원본 뷰에서 `showOriginal` 이 겹쳐 불려 렌더가 버려질 때(`token` 검사에서
+  // 빠져나갈 때) **칩과 버튼이 함께 사라졌다** — `[실기기]` 사용자가 칩을
+  // "나중에"로 닫은 뒤 퀴즈로 갈 길이 없던 것과 겹쳐 완전히 막혔다.
+  // 그래서 버려질 수 있는 비동기 작업 **앞에서** 한 번 그린다.
+  paintQuizChip();
 
   // ★ **낭독 큐는 뷰와 무관하다.** `desc` 는 두 뷰에서 똑같이 만들어 두고
   //   화면만 갈아 끼운다 — 원본 뷰에서도 낭독이 끊기지 않는다(6-4).
@@ -786,6 +795,30 @@ function paintQuizChip() {
     });
   } catch (e) { /* 칩이 리더를 막지 않는다(5-4) */ }
 }
+
+/**
+ * `[신규 2026-09-25]` 상단바 퀴즈 버튼 — **닫을 수 없는 입구.**
+ *
+ * 칩은 "나중에"로 닫을 수 있는데 그게 **유일한 입구**였다.
+ * `[실기기]` 사용자: "나중에 눌러서 닫혀버렸어 어떻게 켜는지 몰러. (안보임)"
+ * 문구가 거짓말을 한 셈이다 — "나중에"라고 써 놓고 돌아올 길을 안 만들었다.
+ *
+ * 칩과 **같은 판정**(`chipEntry` — 5-4 의 0.6 · 5문항)을 쓴다.
+ * 그래서 자격 없는 섹션에서는 버튼도 안 보인다 — 규칙이 두 벌이 되면 어긋난다.
+ */
+function paintQuizButton(entry, docId) {
+  if (!els || !els.quizBtn) return;
+  if (!entry || docId !== state.docId) {
+    els.quizBtn.hidden = true;
+    els.quizBtn.onclick = null;
+    return;
+  }
+  els.quizBtn.hidden = false;
+  els.quizBtn.onclick = () => go(quizHash(docId, entry.sectionId));
+}
+
+/* 칩이 자격을 판정할 때마다 버튼도 같이 그린다 — 판정은 한 벌이다. */
+onQuizEntry(paintQuizButton);
 
 /** 12-4 의 DOM 을 만든다. 문서 텍스트는 전부 `textContent` 다(13절 XSS). */
 function renderDescription(desc) {

@@ -792,8 +792,27 @@ export function updateReaderChip(host, ctx) {
   }
 }
 
+/**
+ * `[신규 2026-09-25]` 칩이 결정한 `entry` 를 호출자에게 알린다.
+ *
+ * 상단바 퀴즈 버튼이 같은 판정을 써야 하는데, 호출자가 든 `doc` 은
+ * `sectionIndex` 가 쓰이기 **전** 값일 수 있다(칩은 db 에서 다시 읽어 고친다).
+ * 그래서 버튼이 따로 판정하지 않고 **칩이 정한 결과를 그대로** 받는다 —
+ * 규칙이 두 벌이 되면 언젠가 어긋난다(6a 에서 `lineBBox` 와 `extendRun` 이 그랬다).
+ */
+const entryListeners = new Set();
+/** `onLineTap`·`onPageRender` 와 같은 모양 — 구독자를 덮어쓰지 않는다. */
+export function onQuizEntry(fn) {
+  if (typeof fn !== 'function') return () => { };
+  entryListeners.add(fn);
+  return () => entryListeners.delete(fn);
+}
+
 function paintChip(host, doc, page, docId) {
   const entry = chipEntry(doc, page);
+  entryListeners.forEach((fn) => {
+    try { fn(entry, docId); } catch (e) { /* 구독자 예외가 칩을 막지 않는다 */ }
+  });
   if (!entry || dismissedChips.has(docId + '|' + entry.sectionId)) {
     host.hidden = true;
     clear(host);
