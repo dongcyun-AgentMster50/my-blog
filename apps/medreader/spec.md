@@ -852,6 +852,20 @@ div.page-wrap (position: relative; width: canvasCssWidth; height: canvasCssHeigh
     └── div.hl-line[data-line-id] (position:absolute; left/top/width/height px; 현재 줄만 1개 생성·이동)
 ```
 
+`[수정 2026-09-25 — 10a]` **오버레이 상자를 합집합 1개가 아니라 덮는 줄마다 1개로 바꾼다.**
+
+초안은 "DOM 은 언제나 1개"였다. 그랬더니 문장이 여러 줄에 걸칠 때 **합집합 상자**가 되어
+줄 사이 여백과 문장 밖 글자까지 덮었다(`[실기기]` 사용자가 본 "두 줄·세 줄짜리 블럭").
+
+- 상자는 **풀(pool)에서 재사용**한다. 한 발화가 걸치는 줄은 현실적으로 ≤ 5개이고,
+  모자라면 `HL_MAX_BOXES`(기본 8)에서 자른다 — 줄 수만큼 DOM 을 만드는 일은 여전히 없다.
+- **첫 줄·마지막 줄은 가로로 자른다.** `Unit.ranges` 의 문자 오프셋을 그 줄의 `runs`
+  경계에 대응시켜 x 를 구한다. run 안에서는 **글자 수 비례**로 보간한다 —
+  글자폭을 모르므로 근사치지만, 줄 전체를 칠하는 것보다는 훨씬 맞다.
+  가운데 줄들은 통째로 덮는다.
+- 회전 줄(`role === 'rotated'`)은 여전히 그리지 않는다 — bbox 가 가로 상자라 세로 글과 겹치지 않는다.
+- `Unit.ranges` 가 없으면(300자 분할 경우) **줄 통째 상자**로 돌아간다.
+
 - 원본 뷰에서는 **하이라이트 요소를 줄마다 만들지 않는다.** `.hl-line` 하나를 현재 줄 bbox로 옮긴다(`transform: translate()` + `width/height`). 줄 탭 감지는 `.page-wrap`의 `pointerup` 좌표를 PDF 좌표로 역변환(`viewport.convertToPdfPoint`)해 bbox에 포함되는 줄을 찾는다(줄 수 ≤ 100이므로 선형 탐색).
 - 줌: 원본 뷰는 `scale`을 사용자가 핀치(브라우저 기본 줌은 막지 않는다)로 바꾸는 대신, 앱 내 [−][+] 버튼으로 `scale`을 0.8~3.0 사이에서 바꾸고 canvas를 다시 렌더한다. 오버레이는 같은 viewport로 다시 계산되므로 어긋나지 않는다. 렌더 중에는 이전 canvas를 CSS `transform: scale()`로 임시 확대해 깜빡임을 줄인다.
 - 리플로우 뷰의 하이라이트는 12절·6절: `<span class="line" data-line-id>` 요소에 `.is-current` 클래스 토글.
@@ -1079,6 +1093,36 @@ pickVoice(lang, voices, preferredURI?):
 | `SpeechRecognition` | Android Chrome은 서버 인식이라 **네트워크 필수**, `webkitSpeechRecognition` 접두사, 연속 인식 불안정. Firefox 등 미지원 | Phase 1에서는 쓰지 않는다. P3 말하기 테스트에서: 기능 감지 `('SpeechRecognition' in window) || ('webkitSpeechRecognition' in window)`, 오프라인이면 버튼 비활성 + 안내, 미지원 브라우저면 "텍스트로 답하기" 폴백 |
 
 ### 6-5. 하이라이트와 자동 스크롤
+
+`[수정 2026-09-25 — 10a]` **하이라이트 단위를 줄이 아니라 읽고 있는 문장의 문자 구간으로 바꾼다.**
+
+`[실기기]` 사용자 보고: "오버레이와 낭독 부분이 일치하지 않음. 원본도, 본문도 둘 다."
+문장의 첫시작과 마지막을 가리키지 않고 **두 줄·세 줄짜리 블럭**을 칠한다.
+
+원인은 단위가 어긋난 것이다. 5단계에서 `[수정 2026-09-22]` 낭독 단위를
+줄 → **문장**으로 바꿨으나 **하이라이트 단위는 줄로 남겨** 둔 탓이다.
+문장이 줄 중간에서 시작하면 그 줄의 **앞부분까지** 칠해진다.
+
+데이터는 이미 있다 — `tts/text.js` 의 `spansIn` 이 줄별 문자 구간을 계산해 놓고
+`emit` 이 `lineIds` 만 남기고 `start`/`end` 를 버린다. **버리지만 않으면 된다.**
+
+```
+Unit.ranges: [{ id, start, end }]      # start/end 는 **그 줄 텍스트 안의** 오프셋
+                                       # lineIds 는 그대로 두어 기존 호출부를 깨지 않는다
+```
+
+- **300자 분할(`splitLong`)로 발화가 나뉘면 `ranges` 를 붙이지 않는다.**
+  `normalizeSpeech`·`splitLong` 이 문자열을 바꿔 오프셋 대응이 깨진다.
+  그때는 지금처럼 줄 단위로 칠한다 — 틀린 구간을 그리느니 넓게 칠하는 편이 낫다.
+- **리플로우 뷰**는 **CSS Custom Highlight API**(`CSS.highlights` + `Range`)로 칠한다.
+  DOM 을 건드리지 않으므로 줄 span 을 쪼개지 않아도 된다(6a 에서 이음새 문제로
+  한 번 데였던 자리다). `::highlight(medreader-current)` 로 스타일한다.
+  **지원하지 않는 브라우저에서는 지금의 줄 단위 `.is-current` 로 물러선다**(기능 손실 없음).
+- 이미 읽은 줄(`--hl-done`)은 **줄 단위 그대로 둔다.** 그것은 "어디까지 진도했나"를
+  보이는 것이지 "지금 어디를 읽나"가 아니다.
+
+그 밖의 규칙은 아래와 같다.
+
 
 - `speaker`의 `linechange` 이벤트를 `ui/reader.js`가 받아 현재 뷰에 위임한다: 리플로우 뷰 → `reflow.setCurrent(lineId)`(이전 `.is-current` 제거, 새 요소에 추가), 원본 뷰 → `original.setCurrent(lineId)`(오버레이 이동, 페이지가 다르면 페이지 전환).
 - 하이라이트 스타일: 배경 `--hl-bg`(테마별: 라이트 연노랑, 다크 진남색, 세피아 연갈색, 고대비 노랑+검정 글자), `outline` 없이 `box-shadow` 0 0 0 4px 같은 색(줄 사이 틈 메움), `transition: background-color 120ms`(`prefers-reduced-motion`이면 없음). 이미 읽은 줄은 옅은 `--hl-done`(설정으로 끌 수 있음).

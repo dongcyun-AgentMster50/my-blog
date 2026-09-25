@@ -7,10 +7,16 @@
    0.8~3.0× (12-5).
 
    ── ★ 오버레이를 줄마다 만들지 않는다 (4-12) ────────────
-   `.hl-line` **한 개**를 `transform: translate()` 로 옮긴다. 줄 수만큼 DOM 을
-   만들면 7000쪽에서 죽는다. 문장 모드는 한 발화가 여러 줄에 걸치므로
-   **그 줄들의 합집합 상자** 하나로 그린다(줄 사이가 조금 넓어질 뿐,
-   DOM 개수는 1 이다).
+   `.hl-line` 을 **풀에서 재사용**한다(`ORIGINAL.HL_MAX_BOXES`, 기본 8).
+   줄 수만큼 DOM 을 만들면 7000쪽에서 죽는다.
+
+   ── ★ `[수정 2026-09-25 — 10a]` 합집합을 버렸다 ─────────
+   초안은 걸친 줄들의 **합집합 상자 하나**였다. 그랬더니 문장이 여러 줄에
+   걸칠 때 줄 사이 여백과 문장 밖 글자까지 덮었다(`[실기기]` 사용자가 본
+   "두 줄·세 줄짜리 블럭"). 이제 **덮는 줄마다 상자 하나**를 그리고,
+   `Unit.ranges` 가 있으면 **첫 줄·마지막 줄은 가로로 자른다**
+   (`render.charRangeX` — run 경계 대응 + run 안쪽 글자 수 비례 보간).
+   `ranges` 가 없으면(300자 분할) 줄 통째 상자로 돌아간다.
 
    ── ★ 회전 줄에는 그리지 않는다 ─────────────────────────
    `role === 'rotated'` 의 bbox 는 가로 상자라 세로로 인쇄된 글과 겹치지
@@ -26,6 +32,7 @@
    ============================================================ */
 
 import * as render from '../pdf/render.js';
+import { ORIGINAL } from '../config.js';
 import { t, formatNumber } from '../i18n/index.js';
 
 /* ────────────────────────────────────────────────────────
@@ -104,6 +111,8 @@ const state = {
   /** 사용자가 줌을 건드렸는가. 안 건드렸으면 쪽마다 화면 폭에 맞춘다(12-5). */
   userZoom: false,
   currentIds: [],
+  /** 10a — `Unit.ranges`. 없으면(300자 분할) 줄 통째로 칠한다. */
+  currentRanges: null,
   /** 늦게 끝난 옛 렌더가 새 쪽을 덮어쓰지 않게 한다. */
   token: 0,
   /** pdf.js 를 못 불러왔다. 버튼을 비활성으로 두는 근거(2-3). */
@@ -153,6 +162,7 @@ export async function showOriginal(mount, req) {
   state.pageNo = Number(req.pageNo) || 1;
   state.layout = req.layout;
   state.currentIds = [];
+  state.currentRanges = null;
 
   buildDom(mount);
   setStatus('reader.original.loading');
@@ -287,7 +297,20 @@ function buildDom(mount) {
   root.appendChild(scroller);
   mount.appendChild(root);
 
-  els = { root: root, bar: bar, zoomOut: out, status: status, scroller: scroller, pageWrap: pageWrap, canvas: canvas, layer: layer, hl: hl };
+  els = { root: root, bar: bar, zoomOut: out, status: status, scroller: scroller, pageWrap: pageWrap, canvas: canvas, layer: layer, hl: hl, boxes: [hl] };
+}
+
+/** 10a — 상자 풀. 필요한 만큼만 만들고 `HL_MAX_BOXES` 에서 멈춘다. */
+function ensureBoxes(n) {
+  const max = Math.max(1, Number(ORIGINAL.HL_MAX_BOXES) || 1);
+  const want = Math.min(max, Math.max(1, n));
+  while (els.boxes.length < want) {
+    const box = el('div', 'hl-line');
+    box.hidden = true;
+    els.layer.appendChild(box);
+    els.boxes.push(box);
+  }
+  return els.boxes;
 }
 
 function onPointerUp(ev) {
@@ -317,39 +340,124 @@ function lineIdAtClient(clientX, clientY) {
 
 /**
  * 6-5 — 낭독이 옮겨 간 줄들. 원본 뷰의 하이라이트는 이 한 함수뿐이다.
+ * @param {string[]} lineIds
+ * @param {Array<{id,start,end}>} [ranges] 10a — 줄 안의 글자 구간. 없으면 줄 통째.
  * @returns {boolean} 그 줄들이 지금 쪽에 있고 그릴 수 있었는가
  */
-export function setCurrentOriginal(lineIds) {
+export function setCurrentOriginal(lineIds, ranges) {
   state.currentIds = (Array.isArray(lineIds) ? lineIds : [lineIds]).filter((x) => x != null).map(String);
+  state.currentRanges = Array.isArray(ranges) && ranges.length ? ranges : null;
   return moveOverlay();
 }
 
 export function clearCurrentOriginal() {
   state.currentIds = [];
-  if (els && els.hl) els.hl.hidden = true;
+  state.currentRanges = null;
+  hideBoxes(0);
 }
 
-/** 지금 상태로 오버레이 상자를 다시 계산한다(줌·회전·리사이즈 뒤에도 같은 길). */
+function hideBoxes(from) {
+  if (!els || !els.boxes) return;
+  for (let i = Math.max(0, from); i < els.boxes.length; i++) els.boxes[i].hidden = true;
+}
+
+/**
+ * ★ 10a — `ranges` 를 줄 id 로 찾을 수 있게 편다. 같은 줄이 두 번 오면 첫 것을 쓴다
+ * (한 발화 안에서 같은 줄이 두 구간으로 갈리는 일은 없다).
+ */
+function rangeMap(ranges) {
+  const m = new Map();
+  const list = Array.isArray(ranges) ? ranges : [];
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
+    if (!r || r.id == null) continue;
+    const k = String(r.id);
+    if (!m.has(k)) m.set(k, r);
+  }
+  return m;
+}
+
+/**
+ * ★ 10a — 덮을 상자들(PDF 좌표). 읽기 순서. 회전 줄·납작한 줄은 빠진다.
+ * `HL_MAX_BOXES` 에서 자른다.
+ */
+function overlayBoxes(ids, ranges) {
+  const lines = (state.layout && state.layout.lines) || [];
+  const want = new Set((Array.isArray(ids) ? ids : []).map(String));
+  if (!want.size) return [];
+  const page = state.layout ? { width: state.layout.width, height: state.layout.height } : null;
+  const rmap = rangeMap(ranges);
+  const max = Math.max(1, Number(ORIGINAL.HL_MAX_BOXES) || 1);
+
+  const out = [];
+  for (let i = 0; i < lines.length && out.length < max; i++) {
+    const l = lines[i];
+    if (!want.has(String(l.id))) continue;
+    if (!render.overlayable(l)) continue;            // ★ 회전 줄은 그리지 않는다
+    const b = render.highlightBox(l, page);
+    if (!b) continue;
+    out.push(narrowBox(l, b, rmap.get(String(l.id))));
+  }
+  return out;
+}
+
+/**
+ * ★ 10a — 첫 줄·마지막 줄을 가로로 자른다. 줄 통째를 덮는 구간(가운데 줄)과
+ * `ranges` 가 없는 경우는 원래 상자 그대로 둔다.
+ *
+ * 세로는 건드리지 않는다 — 자를 이유가 없고, `highlightBox` 의 여백이 사라지면
+ * 글자 윗부분이 잘려 보인다.
+ */
+function narrowBox(line, box, range) {
+  if (!range) return box;
+  const len = String(line.text || '').length;
+  if (!len) return box;
+  const s = Math.min(len, Math.max(0, Math.floor(Number(range.start))));
+  const e = Math.min(len, Math.max(0, Math.floor(Number(range.end))));
+  if (!(e > s)) return box;
+  if (s <= 0 && e >= len) return box;                // 줄 통째 — 자를 것이 없다
+
+  const xr = render.charRangeX(line, s, e);
+  if (!xr) return box;
+
+  const pad = (Number(line.fontSize) || 0) * ORIGINAL.HL_PAD_FACTOR;
+  const x0 = Math.max(box.x0, xr.x0 - pad);
+  const x1 = Math.min(box.x1, xr.x1 + pad);
+  if (!(x1 > x0)) return box;
+  return { x0: x0, y0: box.y0, x1: x1, y1: box.y1 };
+}
+
+/** 지금 상태로 오버레이 상자들을 다시 계산한다(줌·회전·리사이즈 뒤에도 같은 길). */
 function moveOverlay() {
-  if (!els || !els.hl) return false;
-  const box = unionBox(state.currentIds);
-  if (!box || !state.viewport) { els.hl.hidden = true; return false; }
+  if (!els || !els.layer) return false;
+  if (!state.viewport) { hideBoxes(0); return false; }
 
-  const r = render.viewportRect(box, state.viewport);
-  if (!(r.width > 0 && r.height > 0)) { els.hl.hidden = true; return false; }
+  const boxes = overlayBoxes(state.currentIds, state.currentRanges);
+  const rects = [];
+  for (let i = 0; i < boxes.length; i++) {
+    const r = render.viewportRect(boxes[i], state.viewport);
+    if (r.width > 0 && r.height > 0) rects.push(r);
+  }
+  if (!rects.length) { hideBoxes(0); return false; }
 
-  els.hl.hidden = false;
-  els.hl.style.inlineSize = r.width + 'px';
-  els.hl.style.blockSize = r.height + 'px';
-  els.hl.style.transform = 'translate(' + r.left + 'px, ' + r.top + 'px)';
-  els.hl.setAttribute('data-line-id', state.currentIds[0] || '');
+  const pool = ensureBoxes(rects.length);
+  const n = Math.min(pool.length, rects.length);
+  for (let i = 0; i < n; i++) {
+    const r = rects[i];
+    pool[i].hidden = false;
+    pool[i].style.inlineSize = r.width + 'px';
+    pool[i].style.blockSize = r.height + 'px';
+    pool[i].style.transform = 'translate(' + r.left + 'px, ' + r.top + 'px)';
+  }
+  hideBoxes(n);
+  // 첫 상자가 "지금 줄" 이다 — 자동 스크롤과 16-F 검사가 이걸 본다.
+  pool[0].setAttribute('data-line-id', state.currentIds[0] || '');
   return true;
 }
 
 /**
- * 문장 모드에서는 한 발화가 여러 줄에 걸친다. 줄마다 상자를 만들지 않고
- * **합집합 하나**로 그린다(4-12 — DOM 은 언제나 1개).
- * 회전 줄은 합집합에서 빠진다.
+ * 뷰 전환의 착지(`scrollToLine`)가 쓰는 합집합 상자. **하이라이트는 이제 이걸
+ * 쓰지 않는다**(10a — 줄마다 상자). 회전 줄은 합집합에서 빠진다.
  */
 function unionBox(ids) {
   const lines = (state.layout && state.layout.lines) || [];
@@ -483,6 +591,7 @@ export function relabelOriginal() {
 
 export function leaveOriginal() {
   state.currentIds = [];
+  state.currentRanges = null;
   state.viewport = null;
   state.layout = null;
   els = null;

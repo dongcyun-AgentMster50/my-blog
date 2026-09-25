@@ -193,6 +193,22 @@
   transition: background-color 120ms linear;
 }
 
+/* ★ `[수정 2026-09-25 — 10a]` 6-5 — **읽고 있는 문장의 글자 구간**.
+   줄 단위 `.is-current` 는 문장이 줄 중간에서 시작할 때 앞 문장 꼬리까지
+   칠했다. CSS Custom Highlight API 는 DOM 을 쪼개지 않고 글자 구간만 칠한다
+   (span 을 쪼개면 6a 의 이음새 문제가 돌아온다).
+
+   지원하지 않는 브라우저는 이 규칙을 통째로 무시하고, JS 가 `.is-current`
+   로 물러선다 — 두 길이 동시에 켜지는 일은 없다.
+
+   ::highlight() 는 `color`·`background-color`·`text-decoration`·`text-shadow`
+   만 받는다. `.is-current` 의 `padding-block` 은 쓸 수 없어 줄 사이 세로 틈이
+   조금 남는다 — 구간을 정확히 가리키는 값이 그보다 크다. */
+.reflow ::highlight(medreader-current) {
+  background-color: var(--hl-bg);
+  color: var(--hl-text);
+}
+
 /* 6-5 — 이미 읽은 줄. **현재 줄과 확실히 달라야 한다.**
    실기기 피드백: 세피아에서 둘 다 따뜻한 갈색이라 "어디를 읽고 있는지"가
    묻혔다. 배경으로 칠하지 않고 **글자를 옅게** 해서, 현재 줄의 배경
@@ -605,7 +621,9 @@
 
 /* ★ 16-H 의 **유일한 예외**(spec 11-3).
    `left`/`top` 은 방향이 아니라 좌표다 — RTL 에서 거울이 되면 안 된다.
-   상자는 `transform: translate()` 로 옮긴다. 줄마다 만들지 않는다(4-12). */
+   상자는 `transform: translate()` 로 옮긴다.
+   `[수정 2026-09-25 — 10a]` 상자는 **덮는 줄마다 하나**지만 DOM 은 풀에서
+   재사용한다(`ORIGINAL.HL_MAX_BOXES`) — 줄 수만큼 만들지 않는다(4-12). */
 .original .hl-line {
   position: absolute;
   left: 0;

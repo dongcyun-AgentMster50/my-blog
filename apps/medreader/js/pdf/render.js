@@ -158,6 +158,124 @@ export function overlayLines(lines) {
   return out;
 }
 
+/* ────────────────────────────────────────────────────────
+   2-b. 글자 구간 → x (4-12 `[수정 2026-09-25 — 10a]`)
+
+   문장이 줄 중간에서 시작하면 줄 통째 상자는 **앞 문장 꼬리까지** 덮는다.
+   그래서 첫 줄·마지막 줄은 가로로 잘라야 하는데, 우리는 글자폭을 모른다.
+   가진 것은 `runs[].x0/x1`(4-4 가 큰 X 간격으로 나눈 조각)뿐이다.
+
+   그래서 **글자를 run 에 배정하고 run 안에서는 글자 수 비례로 보간**한다.
+   근사치다 — 비례 글꼴에서 'i' 와 'W' 는 폭이 다르다. 그래도 줄 전체를
+   칠하는 것보다 훨씬 맞고, run 경계에서는 **정확**하다(경계가 앵커다).
+
+   run 텍스트는 표 줄에만 저장된다(`text/store.js` 규칙 2). 본문 줄은
+   `{x0,x1}` 뿐이라 폭 비례로 나눈다.
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 줄의 각 run 이 **줄 텍스트의 어느 글자 구간**인가.
+ *
+ * @param {Object} line 저장본의 줄 `{text, runs:[{x0,x1,text?}], bbox}`
+ * @returns {Array<{x0:number,x1:number,c0:number,c1:number}>} 읽기 순서. 못 만들면 `[]`.
+ */
+export function runCharSpans(line) {
+  const text = String((line && line.text) || '');
+  const len = text.length;
+
+  const runs = [];
+  const src = (line && Array.isArray(line.runs)) ? line.runs : [];
+  for (let i = 0; i < src.length; i++) {
+    const r = src[i];
+    if (!r || !Number.isFinite(r.x0) || !Number.isFinite(r.x1) || r.x1 <= r.x0) continue;
+    runs.push(r);
+  }
+
+  // run 이 하나도 쓸 만하지 않으면 줄 bbox 를 run 하나로 친다.
+  if (!runs.length) {
+    const b = line && line.bbox;
+    if (!finiteBox(b) || b.x1 <= b.x0 || len === 0) return [];
+    return [{ x0: b.x0, x1: b.x1, c0: 0, c1: len }];
+  }
+
+  // ① run 텍스트가 전부 있으면 줄 텍스트 안에서 찾아 **정확히** 맞춘다(표 줄).
+  let allText = true;
+  for (let i = 0; i < runs.length; i++) {
+    if (typeof runs[i].text !== 'string' || runs[i].text.length === 0) { allText = false; break; }
+  }
+  if (allText) {
+    const exact = [];
+    let cursor = 0;
+    let ok = true;
+    for (let i = 0; i < runs.length; i++) {
+      const at = text.indexOf(runs[i].text, cursor);
+      if (at < 0) { ok = false; break; }
+      const c1 = at + runs[i].text.length;
+      exact.push({ x0: runs[i].x0, x1: runs[i].x1, c0: at, c1: c1 });
+      cursor = c1;
+    }
+    if (ok && exact.length) return exact;
+  }
+
+  // ② 없으면 run 폭에 비례해 글자를 나눈다. run 사이 공백 글자는 앞 run 에 얹힌다.
+  let total = 0;
+  for (let i = 0; i < runs.length; i++) total += runs[i].x1 - runs[i].x0;
+  if (!(total > 0) || len === 0) return [];
+
+  const out = [];
+  let acc = 0;
+  let c = 0;
+  for (let i = 0; i < runs.length; i++) {
+    acc += runs[i].x1 - runs[i].x0;
+    const last = i === runs.length - 1;
+    const c1 = last ? len : Math.max(c, Math.min(len, Math.round((len * acc) / total)));
+    out.push({ x0: runs[i].x0, x1: runs[i].x1, c0: c, c1: c1 });
+    c = c1;
+  }
+  return out;
+}
+
+/**
+ * 줄 텍스트의 `[start, end)` 글자 구간이 차지하는 **PDF x 구간**.
+ *
+ * 범위 밖 오프셋은 줄 길이로 접는다. 구간이 비거나(끝 ≤ 시작) run 사이
+ * 공백에만 걸리면 `null` — 호출자가 줄 통째 상자로 돌아간다.
+ *
+ * @returns {{x0:number, x1:number}|null}
+ */
+export function charRangeX(line, start, end) {
+  const spans = runCharSpans(line);
+  if (!spans.length) return null;
+
+  // 범위 밖 오프셋을 여기서 접지 **않는다** — 아래 run 별 교집합이 이미 접는다.
+  // 한 번 더 접으면 그 줄이 죽은 코드가 되고, 그러면 어떤 테스트도 이 경계를
+  // 지키지 못한다(변이로 확인했다).
+  const num = (v) => {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) ? n : null;
+  };
+  const s = num(start);
+  const e = num(end);
+  if (s === null || e === null || e <= s) return null;
+
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  for (let i = 0; i < spans.length; i++) {
+    const sp = spans[i];
+    const from = Math.max(s, sp.c0);
+    const to = Math.min(e, sp.c1);
+    if (to <= from) continue;
+    const n = sp.c1 - sp.c0;
+    const w = sp.x1 - sp.x0;
+    const a = n > 0 ? sp.x0 + ((from - sp.c0) / n) * w : sp.x0;
+    const b = n > 0 ? sp.x0 + ((to - sp.c0) / n) * w : sp.x1;
+    if (a < x0) x0 = a;
+    if (b > x1) x1 = b;
+  }
+  if (!(x1 > x0)) return null;
+  return { x0: x0, x1: x1 };
+}
+
 /**
  * PDF 좌표의 한 점이 어느 줄 안인가(4-12 — 줄 ≤ 100 이라 선형 탐색).
  *

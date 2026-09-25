@@ -384,6 +384,11 @@ export const ORIGINAL = Object.freeze({
      순수 계층은 원값만 주므로 이 padding 은 **UI(이 단계)의 몫**이다. */
   HL_PAD_FACTOR: 0.15,
 
+  /* `[수정 2026-09-25 — 10a]` 4-12 — 오버레이는 합집합 1개가 아니라 **덮는 줄마다 1개**다.
+     한 발화가 걸치는 줄은 현실적으로 ≤ 5개다. 상한을 두어 7000쪽에서도 DOM 이
+     줄 수만큼 늘지 않게 한다(풀에서 재사용하고, 넘치면 앞에서 자른다). */
+  HL_MAX_BOXES: 8,
+
   /* 4-8 폴백 — 표 크롭. `scale = 2 × devicePixelRatio`(상한 3). */
   CROP_SCALE_FACTOR: 2,
   CROP_SCALE_MAX: 3,

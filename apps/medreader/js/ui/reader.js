@@ -285,6 +285,8 @@ const state = {
   /* ── 6-5 자동 스크롤 ─────────────────────────────── */
   /** 지금 하이라이트된 줄들(문장 모드에서는 여럿). */
   currentLineIds: [],
+  /** 10a — 그 줄들 **안의** 글자 구간(`Unit.ranges`). 없으면 줄 통째로 칠한다. */
+  currentRanges: null,
   /** 마지막으로 **우리가** 스크롤한 시각 — 사용자 스크롤과 구분한다(최근 800ms). */
   programScrollAt: 0,
   /** 사용자가 직접 스크롤해 자동 스크롤을 쉬는 중인가. */
@@ -473,6 +475,8 @@ export function leaveReader() {
   state.layout = null;
   state.currentLineId = null;
   state.currentLineIds = [];
+  state.currentRanges = null;
+  clearCharHighlight();
   state.lastParaId = null;
   state.lastTappedLineId = null;
   state.scrollPaused = false;
@@ -502,6 +506,9 @@ async function renderPage() {
   original.leaveOriginal();
   state.currentLineId = null;
   state.currentLineIds = [];
+  state.currentRanges = null;
+  // 버린 DOM 을 가리키는 `Range` 를 레지스트리에 남기지 않는다(10a).
+  clearCharHighlight();
 
   if (!rec) {
     // 아직 추출되지 않은 쪽 — **빈 화면을 보여주지 않는다**(12-3).
@@ -1101,15 +1108,87 @@ export function flowParas() {
   return insertTableNotices(out, blocks, state.announcedTables, t('reader.tts.tableSkipped'));
 }
 
+/* ────────────────────────────────────────────────────────
+   ★ `[수정 2026-09-25 — 10a]` 리플로우 하이라이트 (spec 6-5)
+
+   줄 단위 `.is-current` 는 문장이 줄 중간에서 시작할 때 **앞 문장 꼬리까지**
+   칠했다(`[실기기]` "두 줄·세 줄짜리 블럭"). 이제 `Unit.ranges` 의 글자 구간을
+   **CSS Custom Highlight API** 로 칠한다.
+
+   ★ **DOM 을 건드리지 않는다.** 줄 span 을 쪼개면 6a 에서 한 번 데었던 이음새
+     문제가 돌아온다(하이라이트가 낱말을 자르던 그 건). `Range` 는 텍스트 노드를
+     가리키기만 한다.
+
+   ★ 지원하지 않는 브라우저에서는 **지금의 줄 단위 `.is-current` 로 물러선다.**
+     기능 손실은 없다 — 넓게 칠할 뿐이다.
+   ──────────────────────────────────────────────────────── */
+
+const HL_NAME = 'medreader-current';
+
+function highlightsSupported() {
+  return typeof CSS !== 'undefined' && !!CSS && !!CSS.highlights && typeof Highlight === 'function';
+}
+
+function clearCharHighlight() {
+  if (!highlightsSupported()) return;
+  try { CSS.highlights.delete(HL_NAME); } catch (e) { /* 레지스트리 접근 실패는 치명적이지 않다 */ }
+}
+
+/**
+ * `ranges` 를 `Range` 로 바꿔 레지스트리에 올린다.
+ *
+ * 오프셋은 `joinPieces` 가 하이픈을 **뗀 뒤** 기준이고, DOM 의 첫 텍스트 노드는
+ * `lineEl()` 이 만든 "하이픈 뗀 본문"(또는 줄 전체)이다. 그래도 **노드 길이로
+ * 클램프**한다 — 범위를 벗어난 오프셋은 `Range` 가 던지고, 그러면 하이라이트가
+ * 통째로 사라진다.
+ *
+ * @returns {boolean} 한 구간이라도 칠했는가
+ */
+function paintCharHighlight(ranges) {
+  if (!highlightsSupported()) return false;
+  const list = Array.isArray(ranges) ? ranges : [];
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
+    if (!r || r.id == null) continue;
+    const node = lineElement(r.id);
+    if (!node) continue;
+    const tn = node.firstChild;
+    if (!tn || tn.nodeType !== 3) continue;         // 텍스트 노드가 아니면 건너뛴다
+    const len = tn.length;
+    const s = Math.min(len, Math.max(0, Math.floor(Number(r.start))));
+    const e = Math.min(len, Math.max(0, Math.floor(Number(r.end))));
+    if (!(e > s)) continue;
+    try {
+      const rg = document.createRange();
+      rg.setStart(tn, s);
+      rg.setEnd(tn, e);
+      out.push(rg);
+    } catch (x) { /* 이 줄만 건너뛴다 */ }
+  }
+  if (!out.length) { clearCharHighlight(); return false; }
+  try {
+    CSS.highlights.set(HL_NAME, new Highlight(...out));
+  } catch (x) {
+    clearCharHighlight();
+    return false;
+  }
+  return true;
+}
+
 /**
  * 6-5 — 문장이 걸친 **모든 줄**에 하이라이트를 준다. 문장 모드가 기본이라
  * 한 발화가 원본 줄 3~4개에 걸친다(2단 조판이라 줄이 8~10낱말로 짧다).
+ *
+ * @param {string[]} lineIds 자동 스크롤·쪽 판정의 계약 — **바뀌지 않았다**
+ * @param {Array<{id,start,end}>} [ranges] 10a — 줄 안의 글자 구간
  * @returns {boolean} 그 줄들이 지금 쪽에 있었는가
  */
-export function setCurrentLines(lineIds) {
+export function setCurrentLines(lineIds, ranges) {
   if (!els || !els.mount) return false;
   const ids = (Array.isArray(lineIds) ? lineIds : [lineIds]).filter((x) => x != null);
   if (!ids.length) return false;
+  const rs = Array.isArray(ranges) && ranges.length ? ranges : null;
 
   /* 4-8 (3) — 표 안내는 **화면에 없는 줄**이다. 하이라이트할 곳이 없지만
      "이 쪽에 없다"(false)도 아니다 — false 를 돌려주면 낭독이 쪽을 넘기려
@@ -1121,9 +1200,10 @@ export function setCurrentLines(lineIds) {
   }
 
   if (state.view === 'original') {
-    const ok = original.setCurrentOriginal(ids);
+    const ok = original.setCurrentOriginal(ids, rs);
     if (!ok) return false;
     state.currentLineIds = ids.map(String);
+    state.currentRanges = rs;
     state.currentLineId = String(ids[0]);
     return true;
   }
@@ -1131,15 +1211,21 @@ export function setCurrentLines(lineIds) {
   const prev = els.mount.querySelectorAll('span.line.is-current');
   for (let i = 0; i < prev.length; i++) prev[i].classList.remove('is-current');
 
+  // ★ 10a — 글자 구간을 칠할 수 있으면 줄 클래스는 **붙이지 않는다**. 붙이면
+  //   줄 통째가 다시 칠해져 고친 것이 무의미해진다.
+  const charOk = rs ? paintCharHighlight(rs) : false;
+  if (!charOk) clearCharHighlight();
+
   let first = null;
   for (let i = 0; i < ids.length; i++) {
     const node = lineElement(ids[i]);
     if (!node) continue;
-    node.classList.add('is-current');
+    if (!charOk) node.classList.add('is-current');
     if (!first) first = node;
   }
-  if (!first) return false;
+  if (!first) { clearCharHighlight(); return false; }
   state.currentLineIds = ids.map(String);
+  state.currentRanges = rs;
   state.currentLineId = String(ids[0]);
   return true;
 }
@@ -1150,7 +1236,8 @@ export function setCurrentLines(lineIds) {
  */
 export function showSpoken(unit) {
   const u = unit || {};
-  const ok = setCurrentLines(u.lineIds || []);
+  // 10a — `ranges` 는 `tts/text.js` 가 만들고 `speaker` 가 그대로 들고 온다.
+  const ok = setCurrentLines(u.lineIds || [], u.ranges);
   if (!ok) return false;
 
   // 6-5 — 문단이 바뀌면 자동 스크롤을 되살린다(사용자가 딴 데를 보다가도
@@ -1243,10 +1330,13 @@ function relabelReader() {
   // 쪽 라벨·자리표시자 문장이 언어를 타므로 그린 것을 다시 그린다.
   if (state.desc) {
     const ids = state.currentLineIds.slice();
+    const rs = state.currentRanges;
     clear(els.mount);
+    // DOM 을 버리면 `Range` 들도 떠 있는 노드를 가리킨다 — 레지스트리를 비운다.
+    clearCharHighlight();
     els.mount.appendChild(renderDescription(state.desc));
     fillTableCrops(state.renderToken);
-    if (ids.length) setCurrentLines(ids);
+    if (ids.length) setCurrentLines(ids, rs);
   } else {
     renderPage();
   }
