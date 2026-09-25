@@ -351,3 +351,12 @@
 
 .quiz-wrong { margin-block-end: var(--sp-3); }
 .quiz-wrong button { min-block-size: var(--tap); }
+
+/* `[신규 2026-09-26]` 해설 낭독 하이라이트 (5-5 · 6-5).
+   리플로우와 **같은 장치**(CSS Custom Highlight API)를 쓰고
+   이름만 다르다 — 둘이 동시에 켜져도 서로 안 섮인다.
+   `[실기기 2026-09-26]` "'해설 낭독'도 오버레이는 안되네;;" */
+.quiz-explanation-text ::highlight(medreader-quiz-current) {
+  background-color: var(--hl-bg);
+  color: var(--hl-text);
+}

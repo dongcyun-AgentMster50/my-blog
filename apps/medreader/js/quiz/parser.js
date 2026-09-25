@@ -20,6 +20,24 @@ const FIGURE_RE = /\b(figure|image|shown (below|above)|photograph|radiograph|ECG
 const SECTION_HEADING_RE = /^\s*(SECTION|CHAPTER)\b/i;
 const SECTION_HINT_RE = /choose the (one )?best (single )?(response|answer)/i;
 
+/**
+ * `[신규 2026-09-26]` **파싱 규칙 판본.** 이 숫자가 바뀌면 저장된 섹션 인덱스와
+ * `questions` 를 **다시 만든다**(`ui/quiz.js` 의 `ensureSectionIndex`).
+ *
+ * 왜 `algoVersion` 과 따로 두는가: `algoVersion` 은 **추출**(`pages`)의 경첩이라
+ * 올리면 729쪽·7000쪽을 통째로 다시 뽑는다. 파서만 바뀌었을 때 그 대가를 치를
+ * 이유가 없다 — `pages` 는 그대로 두고 **파싱만** 다시 하면 된다.
+ *
+ * `[실기기 2026-09-26]` 이 장치가 없어서 실제로 데었다. 10d 가 정답 문단을
+ * 31개 되찾았는데, 사용자 기기의 `sectionIndexDone` 이 이미 `true` 라
+ * **다시 파싱하지 않았다.** sec-I 1~4번이 여전히 `unverified` 로 남아
+ * 출제에서 빠졌고, 퀴즈가 1번이 아니라 **5번부터** 시작했다.
+ *
+ * 1 — 9a 최초
+ * 2 — 10d: 고아 라벨 짝짓기 + 묶음 정답 펼치기
+ */
+export const parserVersion = 2;
+
 export const PARSER_DEFAULTS = Object.freeze({
   // 문항 시작 뒤 첫 보기(A.)를 찾을 때 허용하는 stem 이어짐 문단 수
   stemLookahead: 3,

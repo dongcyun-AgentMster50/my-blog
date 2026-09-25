@@ -25,7 +25,9 @@ import { QUIZ, TTS } from '../config.js';
 import { fromStored } from '../text/store.js';
 import { parseRoute, go, quizHash, readerHash, libraryHash } from '../router.js';
 import * as engine from '../quiz/engine.js';
+import { parserVersion } from '../quiz/parser.js';
 import * as render from '../pdf/render.js';
+import * as charhl from './charhl.js';
 import { createSpeaker } from '../tts/speaker.js';
 import { loadVoices, pickVoice } from '../tts/voices.js';
 import { openDoc, extractorFor } from './library.js';
@@ -104,11 +106,19 @@ export function initQuizScreen() {
  */
 function paintBack(docId) {
   if (!els || !els.back) return;
-  els.back.onclick = () => go(libraryHash());
+  // `[수정 2026-09-26]` **`data-nav` 하나로 통일한다.** 목적지만 데이터로 바꾼다.
+  //
+  // 앞서는 `data-nav` 를 떼고 JS `onclick` 을 붙였는데, 그러면 **둘이 같이 맞아야**
+  // 버튼이 산다 — 새 `index.html`(id 있음)과 옛 `quiz.js`(붙여 주는 코드 없음)가
+  // 섞이면 핸들러가 **하나도 없는** 상태가 된다. GitHub Pages 는 파일마다 캐시
+  // 만료가 달라 그 반쪽 상태가 실제로 생긴다(`[실기기 2026-09-26]` "back 버튼이
+  // 안 눌러진다"). `data-nav` 는 `main.js` 의 **전역 위임**이 처리하므로 이 함수가
+  // 한 번도 안 돌아도 최소한 서재로는 간다. 죽은 버튼보다 낫다.
+  els.back.setAttribute('data-nav', libraryHash());
   db.get('documents', docId).then((doc) => {
     if (!els || !els.back) return;
     const page = num(doc && doc.lastPage) || 0;
-    if (page > 0) els.back.onclick = () => go(readerHash(docId, page));
+    if (page > 0) els.back.setAttribute('data-nav', readerHash(docId, page));
   }).catch(() => { /* 서재로 가는 기본 동작이 남는다 */ });
 }
 
@@ -284,7 +294,12 @@ export function ensureSectionIndex(docId, doc, opts) {
       // 나중 재파싱이 verified 로 승격한다). 다만 **다 만든 인덱스가 이미
       // 있는데 추출이 아직이면** 다시 돌리지 않는다 — 'done' 이 부른다.
       if (hasIndex && !o.force && !ex.done) return d.sectionIndex;
-      if (hasIndex && !o.force && ex.done && d.sectionIndexDone) return d.sectionIndex;
+      // `[수정 2026-09-26]` 파서 판본이 바뀜으면 **다시 파싱한다.**
+      // 이게 없어서 10d 가 정답 31개를 되찾았는데도 사용자 기기의
+      // 인덱스는 옆것 그대로였고, 퀴즈가 1번이 아니라 5번부터 시작했다.
+      // `pages` 는 그대로 두고 파싱만 다시 한다 — 재추출은 일어나지 않는다.
+      const indexFresh = num(d.sectionIndexVersion) === parserVersion;
+      if (hasIndex && !o.force && ex.done && d.sectionIndexDone && indexFresh) return d.sectionIndex;
       const out = await engine.buildSectionIndex(makeIo(docId), {
         docId: docId,
         pageCount: num(d.pageCount)
@@ -292,7 +307,11 @@ export function ensureSectionIndex(docId, doc, opts) {
       if (ex.done) {
         try {
           const fresh = await db.get('documents', docId);
-          if (fresh) { fresh.sectionIndexDone = true; await db.put('documents', fresh); }
+          if (fresh) {
+            fresh.sectionIndexDone = true;
+            fresh.sectionIndexVersion = parserVersion;
+            await db.put('documents', fresh);
+          }
         } catch (e) { /* 표시 실패는 다음에 다시 만들 뿐이다 */ }
       }
       return out.sections;
@@ -521,7 +540,19 @@ function explanationBlock(text) {
   const p = el('p', 'quiz-explanation-text');
   p.setAttribute('dir', 'ltr');
   p.setAttribute('lang', 'en');
-  p.textContent = text;
+  // `[수정 2026-09-26]` 낭독 하이라이트가 붙을 자리를 만든다.
+  // 통째 `textContent` 였을 때는 칠할 줄 요소가 없어 `show()` 가 할 일이 없었다
+  // (`[실기기]` "그리고 '해설 낭독'도 오버레이는 안되네;;").
+  // id 는 `speakParas` 가 만드는 줄 id 와 **같은 규칙**(`explanationLines`)이어야 한다.
+  const parts = explanationLines(text);
+  parts.forEach(function (line, i) {
+    const span = document.createElement('span');
+    span.className = 'line';
+    span.setAttribute('data-line-id', EXP_LINE_PREFIX + i);
+    span.textContent = line;
+    p.appendChild(span);
+    if (i < parts.length - 1) p.appendChild(document.createTextNode(' '));
+  });
   det.appendChild(p);
 
   const row = el('div', 'row quiz-actions');
@@ -717,6 +748,36 @@ let speaker = null;
 let speakParas = [];
 let speakBtn = null;
 
+/** 해설 줄 id 접두사. 화면과 낭독 큐가 **같은 id** 를 써야 하이라이트가 붙는다. */
+const EXP_LINE_PREFIX = 'quiz-exp-';
+/** `::highlight()` 이름 — 리더와 겹치지 않게 따로 둔다. */
+const EXP_HL_NAME = 'medreader-quiz-current';
+
+/**
+ * 해설을 **줄**로 나눈다. 화면(`explanationBlock`)과 낭독 큐(`toggleSpeak`)가
+ * 이 하나를 같이 쓴다 — 규칙이 두 벌이면 id 가 어긋나 하이라이트가 안 붙는다.
+ */
+function explanationLines(text) {
+  return String(text == null ? '' : text)
+    .split('\n')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
+}
+
+/**
+ * 해설 안에서 그 줄의 요소를 찾는다. `charhl` 이 쓰는 계약이다.
+ * id 는 우리가 만든 `quiz-exp-N` 뿐이라 선택자에 넣어도 안전하지만,
+ * 그래도 **속성 탐색 대신 순회**로 찾는다 — 문자열을 선택자에 붙이지 않는다(13절).
+ */
+function expLineElement(id) {
+  if (!els || !els.mount) return null;
+  const list = els.mount.querySelectorAll('.quiz-explanation-text .line');
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].getAttribute('data-line-id') === String(id)) return list[i];
+  }
+  return null;
+}
+
 function ensureSpeaker() {
   if (speaker) return speaker;
   const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
@@ -728,7 +789,14 @@ function ensureSpeaker() {
       paras: () => speakParas,
       page: () => ({ page: 1, pageCount: 1 }),
       goToPage: () => Promise.resolve(false),
-      show: () => true,
+      // `[수정 2026-09-26]` 읽는 문장을 칠한다. 10a 와 **같은 장치**를 쓴다
+      // (`ui/charhl.js`). `ranges` 가 없으면(300자 분할) 칠하지 않고 넘어간다 —
+      // 틀린 구간을 그리느니 안 그리는 편이 낫다. 낭독은 어느 쪽이든 계속된다.
+      show: (u) => {
+        try { charhl.paintCharRanges(EXP_HL_NAME, (u && u.ranges) || [], expLineElement); }
+        catch (e) { /* 하이라이트 실패가 낭독을 멈춰서는 안 된다 */ }
+        return true;
+      },
       markDone: () => { }
     }
   });
@@ -754,9 +822,9 @@ function toggleSpeak(text, btn) {
   speakParas = [{
     id: 'quiz-explanation',
     kind: 'body',
-    lines: String(text).split('\n').map((line, i) => ({
-      id: 'quiz-exp-' + i, text: line, hyphen: 'none'
-    })).filter((l) => l.text.trim().length > 0)
+    lines: explanationLines(text).map((line, i) => ({
+      id: EXP_LINE_PREFIX + i, text: line, hyphen: 'none'
+    }))
   }];
   sp.stop();
   sp.play();
@@ -765,6 +833,7 @@ function toggleSpeak(text, btn) {
 
 function stopSpeaking() {
   if (speaker) { try { speaker.stop(); } catch (e) { /* 이미 멈춤 */ } }
+  try { charhl.clearCharRanges(EXP_HL_NAME); } catch (e) { /* 레지스트리 접근 실패 */ }
   paintSpeakButton(false);
 }
 
@@ -805,7 +874,8 @@ export function updateReaderChip(host, ctx) {
   // 인덱스가 아직 없으면 지금 만들어 둔다(비동기 — 리더는 기다리지 않는다).
   const hasIndex = doc && Array.isArray(doc.sectionIndex) && doc.sectionIndex.length > 0;
   const done = !!(doc && doc.extraction && doc.extraction.done);
-  if (!hasIndex || (done && !doc.sectionIndexDone)) {
+  const stale = num(doc && doc.sectionIndexVersion) !== parserVersion;
+  if (!hasIndex || stale || (done && !doc.sectionIndexDone)) {
     ensureSectionIndex(docId, doc).then((entries) => {
       if (!entries) return;
       db.get('documents', docId).then((fresh) => {

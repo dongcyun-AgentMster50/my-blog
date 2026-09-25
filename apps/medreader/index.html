@@ -314,7 +314,8 @@
     <div class="topbar">
       <!-- `[수정 2026-09-25]` 서재가 아니라 **읽던 쪽**으로 돌아간다.
            `data-nav` 을 쓰면 목적지가 고정되므로 `ui/quiz.js` 가 붙인다. -->
-      <button type="button" id="quizBackBtn" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <button type="button" id="quizBackBtn" data-nav="#/library"
+              data-i18n-aria="nav.back" data-i18n="nav.back"></button>
       <h1 class="title" id="quizTitle"></h1>
       <span class="quiz-count" id="quizProgress" role="status" aria-live="polite"></span>
     </div>

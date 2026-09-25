@@ -47,6 +47,7 @@ import { initControls, leaveControls } from './controls.js';
 import { updateReaderChip, onQuizEntry } from './quiz.js';
 import { TTS, ORIGINAL } from '../config.js';
 import * as render from '../pdf/render.js';
+import * as charhl from './charhl.js';
 import * as original from './original.js';
 import { pickAnchorLine } from './original.js';
 
@@ -1158,55 +1159,14 @@ export function flowParas() {
 
 const HL_NAME = 'medreader-current';
 
-function highlightsSupported() {
-  return typeof CSS !== 'undefined' && !!CSS && !!CSS.highlights && typeof Highlight === 'function';
-}
+/* `[수정 2026-09-26]` 본문은 `ui/charhl.js` 로 빠졌다 — 퀴즈 해설 낭독도
+   같은 장치를 써야 하는데, 복사하면 규칙이 두 벌이 된다. */
+function highlightsSupported() { return charhl.highlightsSupported(); }
 
-function clearCharHighlight() {
-  if (!highlightsSupported()) return;
-  try { CSS.highlights.delete(HL_NAME); } catch (e) { /* 레지스트리 접근 실패는 치명적이지 않다 */ }
-}
+function clearCharHighlight() { charhl.clearCharRanges(HL_NAME); }
 
-/**
- * `ranges` 를 `Range` 로 바꿔 레지스트리에 올린다.
- *
- * 오프셋은 `joinPieces` 가 하이픈을 **뗀 뒤** 기준이고, DOM 의 첫 텍스트 노드는
- * `lineEl()` 이 만든 "하이픈 뗀 본문"(또는 줄 전체)이다. 그래도 **노드 길이로
- * 클램프**한다 — 범위를 벗어난 오프셋은 `Range` 가 던지고, 그러면 하이라이트가
- * 통째로 사라진다.
- *
- * @returns {boolean} 한 구간이라도 칠했는가
- */
 function paintCharHighlight(ranges) {
-  if (!highlightsSupported()) return false;
-  const list = Array.isArray(ranges) ? ranges : [];
-  const out = [];
-  for (let i = 0; i < list.length; i++) {
-    const r = list[i];
-    if (!r || r.id == null) continue;
-    const node = lineElement(r.id);
-    if (!node) continue;
-    const tn = node.firstChild;
-    if (!tn || tn.nodeType !== 3) continue;         // 텍스트 노드가 아니면 건너뛴다
-    const len = tn.length;
-    const s = Math.min(len, Math.max(0, Math.floor(Number(r.start))));
-    const e = Math.min(len, Math.max(0, Math.floor(Number(r.end))));
-    if (!(e > s)) continue;
-    try {
-      const rg = document.createRange();
-      rg.setStart(tn, s);
-      rg.setEnd(tn, e);
-      out.push(rg);
-    } catch (x) { /* 이 줄만 건너뛴다 */ }
-  }
-  if (!out.length) { clearCharHighlight(); return false; }
-  try {
-    CSS.highlights.set(HL_NAME, new Highlight(...out));
-  } catch (x) {
-    clearCharHighlight();
-    return false;
-  }
-  return true;
+  return charhl.paintCharRanges(HL_NAME, ranges, lineElement);
 }
 
 /**
