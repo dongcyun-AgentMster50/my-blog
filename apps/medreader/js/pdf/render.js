@@ -43,6 +43,22 @@ export function clampScale(s) {
 }
 
 /**
+ * `[신규 2026-09-25 — 10b]` **물리적 한계**로만 자른다. UI 정책(12-5 의 0.8)은 보지 않는다.
+ *
+ * 왜 나뉲는가: `clampScale` 은 **정책**이다("보통 상황에서 0.8 보다 작게 줄일 이유가 없다").
+ * 그걸 렌더 계층이 다시 강제하면, 접은 화면처럼 **폭 맞춤이 0.8 보다 작은** 경우
+ * UI 가 0.57× 를 넘겨도 canvas 는 0.8× 로 그려져 **줄 표시만 거짓말을 한다.**
+ * `[실기기]` 사용자가 접은 화면에서 오른쪽이 잘려 손으로 밀어야 했던 이유의 절반이다.
+ *
+ * 렌더 계층은 "그릴 수 있는가"만 판단한다. 얼마로 보일지는 UI 몫이다.
+ */
+export function clampScaleAbs(s) {
+  const v = Number(s);
+  if (!Number.isFinite(v)) return 1;
+  return Math.min(ORIGINAL.ZOOM_MAX, Math.max(ORIGINAL.ZOOM_FLOOR_MIN, v));
+}
+
+/**
  * 12-5 — "페이지 폭을 화면 폭에 맞춘 scale 을 기본으로".
  * @param {number} pageWidthPt `viewport(scale:1).width` (PDF 포인트)
  * @param {number} availablePx 쓸 수 있는 CSS 픽셀 폭
@@ -51,7 +67,9 @@ export function fitScale(pageWidthPt, availablePx) {
   const w = Number(pageWidthPt);
   const avail = Number(availablePx);
   if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(avail) || avail <= 0) return 1;
-  return clampScale(avail / w);
+  // 10b — **진짜 폭 맞춤 배율**을 돌려준다(접은 화면에서 0.57 같은 값). 0.8 에서 멈출지
+  // 말지는 호출자(`ui/original.js` 의 `zoomFloor`)가 정한다.
+  return clampScaleAbs(avail / w);
 }
 
 /** [−][+] 한 번. 끝에 닿으면 그 자리에 머문다. */
@@ -410,7 +428,8 @@ export function ensurePdfjs() {
 export async function renderPageInto(pdfDoc, pageNo, canvas, scale, dpr) {
   const page = await pdfDoc.getPage(pageNo);
   try {
-    const s = clampScale(scale);
+    // 10b — UI 가 정한 배율을 그대로 그린다. 여기서 정책 하한을 다시 강제하면 표시가 거짓말을 한다.
+    const s = clampScaleAbs(scale);
     const ratio = canvasRatio(dpr);
     const viewport = page.getViewport({ scale: s });
     const cssW = Math.max(1, Math.floor(viewport.width));

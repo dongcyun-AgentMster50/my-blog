@@ -36,6 +36,71 @@ import { ORIGINAL } from '../config.js';
 import { t, formatNumber } from '../i18n/index.js';
 
 /* ────────────────────────────────────────────────────────
+   ★ `[10b]` 줌 하한 — 12-5 "페이지 폭을 화면 폭에 맞춘 scale 을 기본으로"
+
+   `[실기기 · Fold 7]` 접은 화면(375px)에서 쓸 수 있는 폭은 351px 이고
+   Letter 쪽은 612pt 라 폭 맞춤은 0.57× 다. 그런데 하한이 0.8× 로 못 박혀
+   있어 처음 열면 쪽이 화면보다 138px 넓었고, 좌우로 밀어야 오른쪽이 보였다.
+
+   실질 하한을 **min(폭 맞춤 배율, ZOOM_MIN)** 으로 내린다. 폭 맞춤보다 더
+   작게 줄일 이유는 없으므로 그것이 곧 바닥이고, 넓은 화면에서는 폭 맞춤이
+   0.8 보다 크므로 예전과 똑같이 0.8 에서 멈춘다. 상한 3.0 은 그대로.
+
+   세 함수 모두 **순수**하다 — `render.clampScale`·`render.zoomStep` 은
+   0.8 을 상수로 물고 있어 쓰지 않는다(그 파일은 이 단계의 수정 범위 밖이다).
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 이 쪽·이 화면 폭에서의 줌 하한.
+ * @param {number} pageWidthPt `viewport(scale:1).width` (PDF 포인트)
+ * @param {number} availablePx 쓸 수 있는 CSS 픽셀 폭
+ * @returns {number} min(폭 맞춤, ZOOM_MIN). 단서가 없으면 ZOOM_MIN.
+ */
+export function zoomFloor(pageWidthPt, availablePx) {
+  const w = Number(pageWidthPt);
+  const avail = Number(availablePx);
+  if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(avail) || avail <= 0) return ORIGINAL.ZOOM_MIN;
+  const fit = avail / w;
+  if (!Number.isFinite(fit) || fit <= 0) return ORIGINAL.ZOOM_MIN;
+  // 절대 바닥 아래로는 안 내려간다 — 폭이 1px 로 보고돼도 글자가 사라지면 안 된다.
+  return Math.max(ORIGINAL.ZOOM_FLOOR_MIN, Math.min(ORIGINAL.ZOOM_MIN, fit));
+}
+
+/**
+ * ★ `[10b — 막힘]` **렌더 계층이 실제로 그려 줄 수 있는 하한.**
+ *
+ * `render.renderPageInto` 는 받은 배율을 안에서 `clampScale` 로 다시 자른다
+ * (`pdf/render.js:413`). 그래서 여기서 0.57× 를 계산해 넘겨도 canvas 는
+ * 0.8× 로 그려지고, 줌 표시만 57% 가 되어 **화면이 거짓말을 한다.**
+ *
+ * 그 한 줄은 이 단계의 **수정 허용 범위 밖**이라 건드리지 않았다. 대신 실질
+ * 하한을 렌더 계층에 물어서 그보다 아래로는 내려가지 않게 한다 — 그쪽 하한이
+ * 내려가는 날 이 코드는 **고칠 것 없이** 저절로 폭 맞춤까지 따라 내려간다.
+ *
+ * `clampScale(0)` 은 곧 그 계층의 하한이다(0 을 올려 붙인 값).
+ */
+function renderFloor() {
+  const v = render.clampScaleAbs(0);
+  return Number.isFinite(v) && v > 0 ? v : ORIGINAL.ZOOM_MIN;
+}
+
+/** 배율을 [floor, ZOOM_MAX] 안으로. floor 가 없으면 12-5 의 0.8 을 쓴다. */
+export function clampZoom(scale, floor) {
+  const lo = Number.isFinite(Number(floor)) && Number(floor) > 0 ? Number(floor) : ORIGINAL.ZOOM_MIN;
+  const hi = Math.max(lo, ORIGINAL.ZOOM_MAX);
+  const v = Number(scale);
+  if (!Number.isFinite(v)) return lo;
+  return Math.min(hi, Math.max(lo, v));
+}
+
+/** [−][+] 한 번. 끝(하한·상한)에 닿으면 그 자리에 머문다. */
+export function stepZoom(scale, dir, floor) {
+  const cur = clampZoom(scale, floor);
+  const f = ORIGINAL.ZOOM_FACTOR;
+  return clampZoom(Number(dir) >= 0 ? cur * f : cur / f, floor);
+}
+
+/* ────────────────────────────────────────────────────────
    ★ 사람이 채우는 함수 — 뷰를 바꿀 때 **어느 줄로 착지할 것인가**
    ──────────────────────────────────────────────────────── */
 
@@ -108,6 +173,8 @@ const state = {
   /** 지금 그려진 viewport. 오버레이·탭 판정이 **이것 하나**를 쓴다. */
   viewport: null,
   scale: 1,
+  /** `[10b]` 지금 쪽·지금 폭에서의 줌 하한 = min(폭 맞춤, 0.8). */
+  floor: ORIGINAL.ZOOM_MIN,
   /** 사용자가 줌을 건드렸는가. 안 건드렸으면 쪽마다 화면 폭에 맞춘다(12-5). */
   userZoom: false,
   currentIds: [],
@@ -185,7 +252,10 @@ export async function showOriginal(mount, req) {
     if (token !== state.token) return false;
     // 렌더 자체가 실패한 것은 **pdf.js 가 없는 것과 다르다.** 버튼을 끄지
     // 않고 이 쪽만 안내한다(다음 쪽은 될 수 있다).
+    // 호출자는 false 를 받으면 mount 를 비우고 리플로우로 되돌린다 —
+    // 그때 페이지가 다시 스크롤돼야 하므로 표식을 끈다.
     setStatus('reader.original.failed');
+    markView(false);
     return false;
   }
   if (token !== state.token) return false;
@@ -196,6 +266,7 @@ export async function showOriginal(mount, req) {
 function fail(e) {
   state.pdfjsFailed = true;
   state.viewport = null;
+  markView(false);
   if (deps && deps.onUnavailable) {
     try { deps.onUnavailable((e && e.code) || 'ERR_PDFJS_LOAD'); } catch (x) { /* 구독자 예외 */ }
   }
@@ -211,7 +282,17 @@ async function paint(pdfDoc, token) {
   }
   if (token !== state.token) return;
 
-  if (!state.userZoom) state.scale = render.fitScale(baseWidth, availableWidth());
+  /* `[10b]` 하한을 먼저 정하고 그 안에서 배율을 잡는다. `render.fitScale` 은
+     0.8 로 잘라 버리므로 쓰지 않는다 — 폭 맞춤을 그대로 살려야 한다. */
+  const avail = availableWidth();
+  // ★ 렌더 계층이 못 그리는 배율은 하한으로 삼지 않는다 — `renderFloor()` 주석.
+  state.floor = Math.max(zoomFloor(baseWidth, avail), renderFloor());
+  if (!state.userZoom) {
+    state.scale = clampZoom(baseWidth > 0 && avail > 0 ? avail / baseWidth : 1, state.floor);
+  } else {
+    // 화면이 좁아져 하한이 내려갔을 수도, 넓어져 올라갔을 수도 있다.
+    state.scale = clampZoom(state.scale, state.floor);
+  }
 
   // 12-5 — 렌더 중에는 이전 canvas 를 CSS 로 임시 확대해 깜빡임을 줄인다.
   const prev = Number(els.canvas.getAttribute('data-scale')) || 0;
@@ -244,8 +325,27 @@ function dpr() {
   return (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
 }
 
+/* ────────────────────────────────────────────────────────
+   ★ `[10b]` 스크롤 소유권 표식
+
+   원본 뷰가 화면에 있는 동안 `<body data-reader-view="original">` 을 건다.
+   `reader.css` 의 `[스크롤 소유권]` 블록이 이것을 보고 리더 화면을 뷰포트
+   높이에 맞춰 세워, **세로로 움직이는 것을 `.original-scroll` 하나로** 만든다.
+
+   CSS 는 `body:has(.original)` 로도 같은 규칙에 걸린다 — `:has()` 를 쓰는
+   브라우저에서는 DOM 이 사라지는 순간 저절로 풀리고, 이 표식은 `:has()` 가
+   없는 브라우저를 받친다. 그래서 **끄는 자리를 빠짐없이** 둔다: 떠날 때
+   (`leaveOriginal`), pdf.js 실패(`fail`), 렌더 실패(호출자가 mount 를 비운다).
+   ──────────────────────────────────────────────────────── */
+function markView(on) {
+  if (typeof document === 'undefined' || !document.body) return;
+  if (on) document.body.setAttribute('data-reader-view', 'original');
+  else document.body.removeAttribute('data-reader-view');
+}
+
 /** 12-5 DOM (4-12 구조 그대로). 한 번 만들고 쪽마다 다시 쓴다. */
 function buildDom(mount) {
+  markView(true);
   if (els && els.root && els.root.parentNode === mount) { return; }
   clear(mount);
 
@@ -531,7 +631,7 @@ export function scrollToRegion(regionId) {
    ──────────────────────────────────────────────────────── */
 
 export async function zoomBy(dir) {
-  const next = render.zoomStep(state.scale, dir);
+  const next = stepZoom(state.scale, dir, state.floor);
   if (next === state.scale) { paintZoom(); return; }
   state.scale = next;
   state.userZoom = true;
@@ -571,7 +671,7 @@ function paintZoom() {
   const btns = els.bar.querySelectorAll('button[data-zoom]');
   for (let i = 0; i < btns.length; i++) {
     const dir = Number(btns[i].getAttribute('data-zoom'));
-    const next = render.zoomStep(state.scale, dir);
+    const next = stepZoom(state.scale, dir, state.floor);
     btns[i].disabled = next === state.scale;
   }
 }
@@ -590,6 +690,7 @@ export function relabelOriginal() {
 }
 
 export function leaveOriginal() {
+  markView(false);
   state.currentIds = [];
   state.currentRanges = null;
   state.viewport = null;

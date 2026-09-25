@@ -20,7 +20,7 @@ body {
   font-size: var(--fs-base);
   line-height: 1.55;
   /* 12-7 고정 고지가 화면 맨 아래에 붙으므로 그만큼 비워 둔다. */
-  padding-block-end: calc(var(--notice-h) + env(safe-area-inset-bottom, 0px));
+  padding-block-end: calc(var(--notice-total) + env(safe-area-inset-bottom, 0px));
   min-block-size: 100vh;
   overflow-wrap: break-word;
 }
@@ -117,9 +117,11 @@ input[type="checkbox"] {
   inset-inline: 0;
   inset-block-end: 0;
   z-index: 40;
+  /* `[10b]` 고지는 없애지 않는다(16-I). 얇게만 만든다 — 24+8 → 22 총높이.
+     border-box 라 min-block-size 가 곧 렌더 높이다(= --notice-total). */
   min-block-size: var(--notice-h);
-  padding: var(--sp-1) var(--sp-3);
-  padding-block-end: calc(var(--sp-1) + env(safe-area-inset-bottom, 0px));
+  padding: var(--notice-pad) var(--sp-3);
+  padding-block-end: calc(var(--notice-pad) + env(safe-area-inset-bottom, 0px));
   background: var(--c-notice-bg);
   color: var(--c-notice-text);
   font-size: var(--fs-sm);

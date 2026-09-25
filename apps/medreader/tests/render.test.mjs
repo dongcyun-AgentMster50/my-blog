@@ -72,7 +72,15 @@ test('R2 [−][+] 는 끝에 닿으면 그 자리에 머문다', () => {
 
 test('R3 화면 폭 맞춤 scale, dpr 상한', () => {
   // 612pt 쪽을 360px 화면에 → 0.588 이지만 12-5 하한이 0.8 이다.
-  assert.equal(fitScale(612, 360), ORIGINAL.ZOOM_MIN);
+  // `[수정 2026-09-25 — 10b]` 이 테스트는 원래 "12-5 하한 0.8" 을 고정했다.
+  // 그러나 `fitScale` 은 **진짜 폭 맞춤 배율**을 말해야 한다 — 0.8 에서 멈출지
+  // 말지는 UI(`ui/original.js` 의 `zoomFloor`)가 정한다. 렌더 계층이 정책까지
+  // 강제하니, 접은 화면에서 UI 가 0.57× 를 넘겨도 canvas 는 0.8× 로 그려져
+  // 줌 표시만 거짓말을 했다(`[실기기]` 오른쪽이 잘려 손으로 밀어야 했던 이유).
+  assert.ok(Math.abs(fitScale(612, 360) - 360 / 612) < 1e-9,
+    'fitScale 은 진짜 폭 맞춤 배율을 돌려줘야 한다');
+  // 물리적 바닥(ZOOM_FLOOR_MIN) 아래로는 안 내려간다.
+  assert.equal(fitScale(612, 1), ORIGINAL.ZOOM_FLOOR_MIN);
   assert.equal(fitScale(612, 612), 1);
   assert.equal(fitScale(0, 360), 1);
   assert.equal(canvasRatio(3), ORIGINAL.DPR_MAX);

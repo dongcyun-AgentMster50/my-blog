@@ -16,12 +16,9 @@
   --reader-ls: 0em;
   --reader-font: var(--font-body-sans);
 
-  /* 12-3 하단 컨트롤 바가 **실제로 차지하는** 높이. 쪽 이동 바(--pager-h)
-     위에 얹히므로 본문 아래 여백과 팝오버 띄우기가 이 값을 함께 쓴다.
-     [실측] 재생 버튼 64px + 위아래 패딩 + 테두리 = 81px. --pager-h(72px)도
-     실제 렌더는 73px 이라 --sp-1 만큼 띄워 두 바가 1px 겹치지 않게 한다. */
-  --tts-h: 88px;
-  --tts-gap: var(--sp-1);
+  /* `[10b]` --tts-h · --tts-gap 은 **tokens.css 로 옮겼다.**
+     여기 있으면 tokens.css 만 보고 세로 예산을 셀 수 없다(바 높이 토큰은
+     한 곳에 모인다). 값의 근거도 그 파일에 적혀 있다. */
 }
 
 /* ── 상단 바의 Aa 버튼 ────────────────────────────────── */
@@ -61,7 +58,7 @@
      (b) Close 가 스크롤 안쪽 맨 끝에 있어 잘렸다 — 아래로 끌어야 보였다.
          패널을 하단 시트로 두고 Close 를 sticky 로 붙인다. */
   position: fixed;
-  inset-block-end: calc(var(--pager-h) + var(--tts-h) + var(--notice-total) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  inset-block-end: calc(var(--reader-chrome-bottom) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
   inset-inline: var(--sp-2);
   z-index: 25;
   max-inline-size: 520px;
@@ -73,7 +70,7 @@
   padding-block-end: 0;          /* sticky Close 가 자기 여백을 갖는다 */
   box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
   /* 상단바를 덮지 않도록 남은 높이 안에서만 커진다. */
-  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--tts-h) - var(--notice-total) - var(--sp-6));
+  max-block-size: calc(100dvh - var(--bar-top) - var(--reader-chrome-bottom) - var(--sp-6));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -318,7 +315,10 @@
   justify-content: center;
   gap: var(--sp-3);
   flex-wrap: wrap;
-  padding: var(--sp-3) var(--sp-4);
+  /* `[10b]` 위아래 --sp-3(12) → --bar-pad(2). 안의 버튼·입력칸이 16-G 의
+     48px 를 그대로 지키므로 바는 48 + 4 + 테두리 1 = --pager-h(53px). */
+  padding-block: var(--bar-pad);
+  padding-inline: var(--sp-4);
   border-block-start: 1px solid var(--c-border);
   background: var(--c-surface);
 
@@ -356,9 +356,11 @@
 /* 리더 화면은 본문이 화면 폭을 다 쓴다 — .screen 의 기본 여백을 줄인다. */
 .screen[data-screen="reader"] {
   padding-inline: var(--sp-3);
+  /* `[10b]` 위 여백 --sp-4(16) → --sp-2(8). 상단바 바로 아래다. */
+  padding-block-start: var(--sp-2);
   /* 고정된 .pager 뒤로 본문 마지막 줄이 숨지 않게 한다.
-     base.css 가 이미 --notice-h 만큼 body 에 여백을 주므로 여기서는
-     pager 높이와 컨트롤 바 높이를 더한다. --tap(48) + 위아래 패딩. */
+     base.css 가 이미 --notice-total 만큼 body 에 여백을 주므로 여기서는
+     그 위에 쌓이는 쪽 이동 바·컨트롤 바만 더한다. */
   padding-block-end: calc(var(--pager-h) + var(--tts-h) + var(--tts-gap));
 }
 
@@ -374,7 +376,10 @@
   justify-content: center;
   gap: var(--sp-2);
   flex-wrap: nowrap;
-  padding: var(--sp-2) var(--sp-3);
+  /* `[10b]` 위아래 --sp-2(8) → --bar-pad(2). 가장 큰 조각인 재생 버튼이
+     --tap-play(56) 이므로 바는 56 + 4 + 테두리 1 = --tts-h(61px). */
+  padding-block: var(--bar-pad);
+  padding-inline: var(--sp-3);
   background: var(--c-surface);
   border-block-start: 1px solid var(--c-border);
 
@@ -402,10 +407,12 @@
   white-space: nowrap;
 }
 
-/* 12-3 — 재생 버튼은 64px. 엄지가 제일 자주 닿는 곳이다. */
+/* 12-3 — 재생 버튼은 엄지가 제일 자주 닿는 곳이라 다른 버튼보다 크다.
+   `[10b]` 64 → --tap-play(56). 하단 바 높이를 혼자 결정하던 조각이고,
+   16-G 의 48px 하한은 그대로 지킨다. */
 .tts-bar .tts-play {
-  min-inline-size: var(--tap-lg);
-  min-block-size: var(--tap-lg);
+  min-inline-size: var(--tap-play);
+  min-block-size: var(--tap-play);
   border-radius: 50%;
   background: var(--c-accent);
   color: var(--c-accent-text);
@@ -454,7 +461,7 @@
 /* 속도·낭독 단위 팝오버 — Aa 팝오버와 같은 하단 시트 방식(12-3) */
 .tts-rate-panel {
   position: fixed;
-  inset-block-end: calc(var(--pager-h) + var(--tts-h) + var(--notice-total) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  inset-block-end: calc(var(--reader-chrome-bottom) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
   inset-inline: var(--sp-2);
   z-index: 35;
   max-inline-size: 520px;
@@ -471,7 +478,7 @@
 /* 5b — 속도 계단 6개 + 반복 3줄이 들어오면서 시트가 길어졌다. 접은 화면
    (375×~800)에서 잘리지 않도록 스스로 스크롤한다. */
 .tts-rate-panel {
-  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--tts-h) - var(--notice-total) - var(--sp-6));
+  max-block-size: calc(100dvh - var(--bar-top) - var(--reader-chrome-bottom) - var(--sp-6));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -494,7 +501,7 @@
    컨트롤 바 위에 떠서 본문을 거의 가리지 않는다. */
 .back-to-line {
   position: fixed;
-  inset-block-end: calc(var(--notice-total) + var(--pager-h) + var(--tts-h) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  inset-block-end: calc(var(--reader-chrome-bottom) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
   inset-inline: 0;
   z-index: 28;
   margin-inline: auto;
@@ -546,8 +553,10 @@
 .original {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding-block-start: var(--sp-2);
+  /* `[10b]` 8 → 4. 줌 막대와 쪽 사이 틈은 그만큼이면 충분하고, 되찾은 높이는
+     전부 쪽 그림으로 간다. */
+  gap: var(--sp-1);
+  padding-block-start: var(--sp-1);
 }
 
 /* 줌 막대 — 하단은 컨트롤 바·쪽 이동 바·고지 바가 이미 쌓여 있다(12-3).
@@ -560,8 +569,11 @@
   position: sticky;
   inset-block-start: 0;
   z-index: 5;
-  padding-block: var(--sp-1);
+  /* `[10b]` 위아래 --sp-1 을 걷었다. 안의 버튼이 --tap(48) 이라 막대는 48px.
+     56 → 48 로 줄어든 8px 이 그대로 쪽 높이가 된다. */
+  padding-block: 0;
   background: var(--c-bg);
+  flex: 0 0 auto;
 }
 
 .original-bar button {
@@ -588,14 +600,102 @@
 .original-status { text-align: center; }
 .original-status[hidden] { display: none; }
 
-/* 12-5 — 확대 상태에서는 수평 스크롤을 허용한다. */
+/* 12-5 — 확대 상태에서는 수평 스크롤을 허용한다.
+   ★ `[10b]` **세로는 이 상자 하나만 움직인다.** `overscroll-behavior: contain`
+     이 안쪽 끝에서의 체이닝을 막고, 아래 `[스크롤 소유권]` 블록이 페이지
+     자체를 아예 스크롤되지 않게 만든다. 가로(12-5)는 그대로 살아 있다. */
 .original-scroll {
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  /* 아래 세 바(고지·쪽이동·컨트롤)를 피해 남는 높이를 채운다. */
-  max-block-size: calc(100dvh - var(--bar-top) - var(--pager-h) - var(--tts-h) - var(--notice-total) - var(--sp-7));
+  /* 아래 바들을 피해 남는 높이. `[스크롤 소유권]` 블록이 켜지면 flex 가
+     남는 높이를 **정확히** 주므로 거기서 none 으로 푼다. 이 값은 JS 가 돌기
+     전 한 프레임과 옛 브라우저를 위한 안전망이다. */
+  max-block-size: calc(100dvh - var(--bar-top) - var(--reader-chrome-bottom) - var(--sp-7));
   background: var(--c-surface-2);
+}
+
+/* ════ `[10b]` 스크롤 소유권 — 원본 뷰 ═══════════════════
+   `[실기기 · Fold 7]` "어쩔땐 본문이 움직이고 어쩔땐 전체 화면이 위아래로
+   움직여서 구분을 확실하게 가져가야 할 것 같아"
+
+   원인은 세로 축이 **둘**이었다는 것이다. `.original-scroll`(쪽 안쪽)과
+   페이지(document). 손가락이 줌 막대나 바깥 여백에 닿으면 페이지가 움직였다.
+
+   고침: 리더 화면을 뷰포트 높이에 **딱 맞춰** 세로 flex 로 세운다. 남는
+   높이가 그대로 `.original-scroll` 이 되고, 페이지에는 넘칠 것이 남지 않는다
+   (`overflow: hidden` 이 그것을 못 박는다). 높이를 calc 로 더하지 않는 것이
+   핵심이다 — 상단바·진행 띠·퀴즈 칩이 붙거나 떨어져도 flex 가 알아서 맞춘다.
+
+   `:has()` 를 못 쓰는 브라우저는 `body[data-reader-view="original"]` 로
+   같은 규칙에 걸린다(`ui/original.js` 가 건다). 둘 중 하나만 맞아도 된다.
+   ════════════════════════════════════════════════════════ */
+/* ★ 높이를 **body 부터** 세로 flex 로 나눈다. `.screen` 에 100dvh 를 박으면
+   그 위에 14절 상태 바(`.banners` — 예: "낭독 중 화면이 꺼질 수 있습니다")가
+   붙는 순간 그 높이만큼 페이지가 다시 스크롤된다. 실제로 그랬다(실측 99px).
+   배너·상단바·진행 띠·퀴즈 칩이 붙거나 떨어져도 flex 가 알아서 맞춘다. */
+body:has(.original),
+body[data-reader-view="original"] {
+  display: flex;
+  flex-direction: column;
+  block-size: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* 화면이 아래 여백을 직접 잡는다 — body 여백은 이 모드에서 이중 계산이다. */
+  padding-block-end: 0;
+}
+
+/* 배너는 제 높이를 그대로 갖는다(줄어들면 글이 잘린다). */
+body:has(.original) > .banners,
+body[data-reader-view="original"] > .banners { flex: 0 0 auto; }
+
+/* `min-block-size: 0` 이 없으면 flex 항목이 내용 높이 밑으로 줄지 않아
+   스크롤 상자가 다시 바 아래로 흘러넘친다. 아래 네 겹 전부에 필요하다. */
+body:has(.original) > main,
+body[data-reader-view="original"] > main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+body:has(.original) .screen[data-screen="reader"],
+body[data-reader-view="original"] .screen[data-screen="reader"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  /* ★ `inline-size: 100%` 가 없으면 안 된다. `.screen` 은 `margin-inline: auto`
+     로 가운데 정렬하는데, **세로 flex 항목의 가로 auto 여백은 stretch 를 끈다.**
+     그러면 폭이 내용 크기로 쪼그라들고(실측 760 → 528), 그 좁아진 폭으로 폭
+     맞춤 배율을 재서 쪽이 더 작게 그려진다. 100% + max-inline-size 로
+     "가능한 만큼, 760px 까지, 가운데" 라는 원래 규칙을 되돌린다. */
+  inline-size: 100%;
+  overflow: hidden;
+  padding-block-end: calc(var(--reader-chrome-bottom) + env(safe-area-inset-bottom, 0px));
+}
+
+/* 세로 방향으로 나눈다 — `.original` 의 `flex: 1 1 auto` 가 **높이**를 채우게. */
+body:has(.original) #readerMount,
+body[data-reader-view="original"] #readerMount {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+body:has(.original) .original,
+body[data-reader-view="original"] .original {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  inline-size: 100%;
+}
+
+body:has(.original) .original-scroll,
+body[data-reader-view="original"] .original-scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  max-block-size: none;
 }
 
 /* 4-12 — canvas 와 오버레이가 같은 좌표계를 쓴다. */
