@@ -437,11 +437,70 @@ function paintQuestion() {
   feedback.id = 'quizFeedback';
   card.appendChild(feedback);
 
+  // `[신규 2026-09-26]` **풀기 전에도 문항을 고를 수 있어야 한다.**
+  // `[실기기]` 사용자: "문항을 풀기전에 고를수 있게 해줘 … 문항을 내가 써서
+  // 이동할 수 있게 하거나, 이전 문제, 다음 문제로". 149문항짜리 섹션을 앞에서부터만
+  // 훑어야 한다면 쓸 수 없다. 리더의 쪽 이동 바와 같은 모양으로 둔다.
+  card.appendChild(questionPager());
+
   els.mount.appendChild(card);
 
   // 이미 답한 문항(언어 전환·되돌아오기)이면 결과를 다시 그린다.
   const prev = s.resultOf(q.id);
   if (prev) paintFeedback(q, prev);
+}
+
+/**
+ * 문항 이동 바 — `[이전] [n] / 총 [다음]`. **푼 문항이든 아니든 항상 보인다.**
+ *
+ * 답을 찍어야만 나오던 `[다음]`(정답 카드 안)은 그대로 둔다 — 그건 "채점을
+ * 확인했으니 넘어간다"는 주 동작이고, 이 바는 "그냥 둘러본다"는 다른 일이다.
+ */
+function questionPager() {
+  const s = state.session;
+  const total = s.total();
+  const pos = s.position();
+
+  const nav = el('nav', 'quiz-pager');
+  nav.setAttribute('aria-label', t('quiz.pager.label'));
+
+  const prev = button('quiz.pager.prev', '', () => {
+    stopSpeaking();
+    s.prev();
+    repaint();
+  });
+  prev.disabled = pos <= 1;
+  nav.appendChild(prev);
+
+  const input = el('input', 'quiz-pager-input');
+  input.type = 'number';
+  input.min = '1';
+  input.max = String(total);
+  input.value = String(pos);
+  input.setAttribute('aria-label', t('quiz.pager.jump'));
+  input.setAttribute('inputmode', 'numeric');
+  const jump = () => {
+    // 범위 밖이면 `goTo` 가 null 을 주고, 입력을 제자리로 되돌린다.
+    if (s.goTo(input.value)) { stopSpeaking(); repaint(); }
+    else input.value = String(s.position());
+  };
+  input.addEventListener('change', jump);
+  input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); jump(); } });
+  nav.appendChild(input);
+
+  const of = el('span', 'quiz-pager-total');
+  of.textContent = t('quiz.pager.of', { n: formatNumber(total) });
+  nav.appendChild(of);
+
+  const next = button('quiz.pager.next', '', () => {
+    stopSpeaking();
+    s.next();
+    repaint();
+  });
+  next.disabled = pos >= total;
+  nav.appendChild(next);
+
+  return nav;
 }
 
 function optionButton(q, opt) {

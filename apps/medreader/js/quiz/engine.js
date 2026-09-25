@@ -543,6 +543,36 @@ export function createSession(ctx) {
       return current();
     },
 
+    /**
+     * `[신규 2026-09-26]` **앞 문항으로.** 풀기 전에도 움직일 수 있어야 한다.
+     *
+     * `[실기기]` 사용자: "문항을 풀기전에 고를수 있게 해줘. 문항 1/149 보이거든.
+     * 문항을 내가 써서 이동할 수 있게 하거나, 이전 문제, 다음 문제로 고를수있게".
+     * 149문항짜리 섹션을 앞에서부터만 훑어야 한다면 쓸 수 없는 물건이다.
+     *
+     * 이미 답한 문항으로 돌아가도 **첫 응답은 그대로 남는다**(`answer` 가
+     * 두 번째 탭을 무시한다). 점수가 되돌려지지 않는다.
+     */
+    prev: function () {
+      if (i > 0) i--;
+      finished = false;                  // 결과 화면에서 되돌아올 수 있다
+      shownAt = now();
+      return current();
+    },
+
+    /**
+     * `[신규 2026-09-26]` **번호로 이동.** 1-based — 화면이 보이는 `문항 n/총` 과 같다.
+     * 범위 밖이면 아무 일도 하지 않고 `null` 을 돌려준다(호출자가 입력을 되돌린다).
+     */
+    goTo: function (pos) {
+      const n = Math.floor(Number(pos));
+      if (!Number.isFinite(n) || n < 1 || n > queue.length) return null;
+      i = n - 1;
+      finished = false;
+      shownAt = now();
+      return current();
+    },
+
     /** 5-5 종료 화면 — 점수·오답 목록. `unverified` 는 어느 쪽에도 안 든다. */
     result: function () {
       let score = 0;

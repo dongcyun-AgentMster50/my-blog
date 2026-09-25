@@ -360,3 +360,42 @@
   background-color: var(--hl-bg);
   color: var(--hl-text);
 }
+
+/* `[신규 2026-09-26]` 문항 이동 바 (5-5 · 16-G).
+   `[실기기]` "문항을 풀기전에 고를수 있게 해줘 … 이전 문제, 다음 문제로".
+   리더의 쪽 이동 바와 같은 모양이되 카드 안에 둔다 — 하단 고정 바를
+   하나 더 쌓으면 10b 에서 되찾은 세로 예산을 도로 까먹는다. */
+.quiz-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-4);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--c-border);
+}
+
+.quiz-pager button {
+  min-block-size: var(--tap);
+  min-inline-size: var(--tap);
+  padding-inline: var(--sp-3);
+}
+
+.quiz-pager button[disabled] { opacity: 0.4; }
+
+.quiz-pager-input {
+  inline-size: 4.5em;
+  min-block-size: var(--tap);
+  text-align: center;
+  font-size: var(--fs-base);
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+
+.quiz-pager-total {
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
