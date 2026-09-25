@@ -79,7 +79,8 @@ function ensureEls() {
     root: root,
     title: root.querySelector('#quizTitle'),
     progress: root.querySelector('#quizProgress'),
-    mount: root.querySelector('#quizMount')
+    mount: root.querySelector('#quizMount'),
+    back: root.querySelector('#quizBackBtn')
   };
   if (!els.mount) { els = null; return null; }
   return els;
@@ -94,6 +95,23 @@ export function initQuizScreen() {
    2. 화면 열기
    ──────────────────────────────────────────────────────── */
 
+/**
+ * 뒤로가기 목적지 — **읽던 쪽**. 문서를 아직 못 읽었으면 서재로.
+ *
+ * `documents.lastPage` 는 리더가 쪽을 넘길 때마다 갱신한다. 퀴즈에 들어온
+ * 시점의 값이 곧 "직전에 읽던 곳"이다. db 를 기다리지 않도록 먼저 서재를
+ * 걸어 두고, 읽어 오면 그때 쪽으로 바꾼다 — 버튼이 잠깐도 죽지 않는다.
+ */
+function paintBack(docId) {
+  if (!els || !els.back) return;
+  els.back.onclick = () => go(libraryHash());
+  db.get('documents', docId).then((doc) => {
+    if (!els || !els.back) return;
+    const page = num(doc && doc.lastPage) || 0;
+    if (page > 0) els.back.onclick = () => go(readerHash(docId, page));
+  }).catch(() => { /* 서재로 가는 기본 동작이 남는다 */ });
+}
+
 export async function showQuiz(params) {
   const e = ensureEls();
   if (!e) return;
@@ -104,6 +122,11 @@ export async function showQuiz(params) {
   const token = ++state.token;
   const same = state.docId === docId && state.sectionId === sectionId && state.session;
   if (same) { repaint(); return; }
+
+  // `[수정 2026-09-25]` 뒤로가기는 **읽던 쪽**으로. 서재로 보내면 사용자가
+  // 다시 문서를 찾아 들어가야 한다 — `[실기기]` "뒤로 가기 back 하면 읽던 본문이
+  // 아니라 최초 import a PDF 화면이거든.. 읽던 곳으로 가게 하는게 나을듯".
+  paintBack(docId);
 
   state.docId = docId;
   state.sectionId = sectionId;
@@ -827,7 +850,9 @@ function paintChip(host, doc, page, docId) {
   open.textContent = t('quiz.chip.open');
   open.addEventListener('click', () => go(quizHash(docId, entry.sectionId)));
   const meta = el('span', 'quiz-chip-meta');
-  meta.textContent = t('quiz.chip.meta', { n: num(entry.questions) });
+  // `[수정 2026-09-25]` **실제로 낼 문항 수**를 보인다. 채점 불가 문항은 내지
+  // 않으므로(`planQuizOrder`), 전체 수를 적으면 152 라 해놓고 132 를 내게 된다.
+  meta.textContent = t('quiz.chip.meta', { n: num(entry.verified) || num(entry.questions) });
   const close = el('button', 'quiz-chip-dismiss');
   close.type = 'button';
   close.textContent = t('quiz.chip.dismiss');

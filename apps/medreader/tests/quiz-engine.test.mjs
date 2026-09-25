@@ -169,21 +169,41 @@ test('E4 ★ unverified 는 점수에도 total 에도 들지 않는다 (5-4)', f
     q({ id: 'd', number: 4, status: 'unverified', answer: { letters: ['B'] } }),
     q({ id: 'c', number: 3 })
   ];
+  // `[수정 2026-09-25]` **채점할 수 없는 문항은 기본으로 내지 않는다.**
+  // `[실기기]` 사용자가 퀴즈를 처음 열자 1번이 "정답 미확인"이고 해설도 없었다:
+  // "해설이 없다? 그럼 퀴즈 왜 푸냐???" — 답도 해설도 없으면 시험이 아니다.
   const s = createSession({ docId: 'd', sectionId: 'sec-I', questions: qs, mode: 'all', now: fakeClock() });
-  assert.equal(s.total(), 4, '풀기는 넷 다 푼다');
+  assert.equal(s.total(), 2, '채점 가능한 둘만 낸다');
 
   s.answer('B'); s.next();      // 정답
-  s.answer('A'); s.next();      // 채점 불가 (정답 문단 없음)
-  s.answer('B'); s.next();      // 채점 불가 (status 가 unverified — 글자가 맞아도 세지 않는다)
   s.answer('C'); s.next();      // 오답
 
   const r = s.result();
-  assert.equal(r.score, 1, 'unverified 문항의 "맞은 것처럼 보이는" 답은 점수가 아니다');
-  assert.equal(r.total, 2, '채점된 둘만 분모다');
+  assert.equal(r.score, 1);
+  assert.equal(r.total, 2);
+  assert.equal(r.ungraded, 0, '낼 때 걸렀으므로 채점 못 한 것이 남지 않는다');
+  assert.deepEqual(r.wrong.map(function (x) { return x.id; }), ['c']);
+});
+
+test('E4b ★ 섹션이 통째로 채점 불가면 그래도 낸다 — 그때는 점수가 0/0 이다', function () {
+  // 걸러서 아무것도 안 남으면 빈 퀴즈를 주는 대신 원래대로 낸다(`pool = all` 폴백).
+  // 그 경우에도 5-4 의 "채점하지 않는다"는 그대로 지켜져야 한다.
+  const qs = [
+    q({ id: 'a', number: 1, status: 'unverified', answer: null }),
+    q({ id: 'b', number: 2, status: 'unverified', answer: { letters: ['B'] } })
+  ];
+  const s = createSession({ docId: 'd', sectionId: 'sec-I', questions: qs, mode: 'all', now: fakeClock() });
+  assert.equal(s.total(), 2, '빈 퀴즈를 주지는 않는다');
+
+  s.answer('A'); s.next();
+  s.answer('B'); s.next();      // 글자가 맞아도 세지 않는다
+
+  const r = s.result();
+  assert.equal(r.score, 0);
+  assert.equal(r.total, 0, '채점된 것이 없으니 분모도 0 이다');
   assert.equal(r.ungraded, 2);
-  assert.equal(r.answered, 4);
-  assert.deepEqual(r.wrong.map(function (x) { return x.id; }), ['c'],
-    '채점 안 된 문항은 오답 목록에도 없다');
+  assert.equal(r.answered, 2);
+  assert.deepEqual(r.wrong, [], '채점 안 된 문항은 오답 목록에도 없다');
 });
 
 /* ══════════════════════════════════════════════════════════

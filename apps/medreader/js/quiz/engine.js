@@ -389,13 +389,23 @@ export function planQuizOrder(ctx) {
   // 그리고 `[실측]` sec-III 는 **273문항**이다. 한자리에 다 풀 양이 아니므로
   // **중간에 나갔다 돌아오면 이어서** 푸는 것이 기본이어야 한다.
   // 직전 시도가 끝까지 갔으면 새 회차로 보고 섹션 전체를 다시 낸다.
-  const touched = attemptedIdsOf(ctx.lastAttempt);
-  if (!touched.size) return all.slice();
+  // `[수정 2026-09-25]` **채점할 수 없는 문항은 기본으로 내지 않는다.**
+  //
+  // `[실기기]` 사용자가 퀴즈를 처음 열자 1번이 "정답 미확인"이었고 해설도 없었다:
+  // "해설이 없다? 그럼 퀴즈 왜 푸냐??? 이상하지 않아?" — 옳은 지적이다.
+  // 답도 해설도 없는 문항은 시험이 아니라 낭비다. 5-4 는 "풀 수는 있되 채점하지
+  // 않는다"고 하지만, 그건 **띄웠을 때** 어떻게 다루냐는 규칙이지 **기본으로
+  // 내라**는 뜻이 아니다. 원문 확인이 필요하면 리더에서 그 쪽으로 가면 된다.
+  const gradable = all.filter(function (q) { return q && q.status === 'verified'; });
+  const pool = gradable.length ? gradable : all;
 
-  const rest = all.filter(function (q) { return !touched.has(str(q && q.id)); });
+  const touched = attemptedIdsOf(ctx.lastAttempt);
+  if (!touched.size) return pool.slice();
+
+  const rest = pool.filter(function (q) { return !touched.has(str(q && q.id)); });
 
   // 남은 것이 없다 = 직전 시도가 완료됐다 → 처음부터 새 회차.
-  return rest.length ? rest : all.slice();
+  return rest.length ? rest : pool.slice();
 }
 
 /** attempt 가 **손댄** 문항 id 들(채점 여부와 무관 — unverified 도 푼 것이다). */
