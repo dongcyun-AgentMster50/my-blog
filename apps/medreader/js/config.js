@@ -408,3 +408,72 @@ export const ORIGINAL = Object.freeze({
      5000px 을 넘어 저사양 기기에서 canvas 할당이 실패한다. */
   DPR_MAX: 2
 });
+
+/* ────────────────────────────────────────────────────────
+   8절 AI 프로바이더 · 13절 키 보호 — 7a 단계에서 추가.
+   **기존 키(LAYOUT·KEEP_HYPHEN_*·TTS·QUIZ·ORIGINAL)는 건드리지 않는다.**
+
+   ★ 여기에 **진짜 키를 적지 않는다.** 여기 있는 것은 키의 *모양*뿐이다.
+   ──────────────────────────────────────────────────────── */
+export const AI = Object.freeze({
+  /* 9-3 `ai.provider` 기본값과 같아야 한다. */
+  DEFAULT_PROVIDER: 'gemini',
+
+  /* 8-4 `[가정]` 가장 저렴·경량 Flash 계열. 설정에서 바꾼다.
+     **무료 티어 한도 수치는 코드 어디에도 적지 않는다**(8-4). */
+  DEFAULT_MODEL: Object.freeze({ gemini: 'gemini-2.5-flash-lite' }),
+
+  /* 8-4 `listModels()` 가 실패했을 때의 폴백 목록. */
+  STATIC_MODELS: Object.freeze({
+    gemini: Object.freeze(['gemini-2.5-flash-lite', 'gemini-2.5-flash'])
+  }),
+
+  /* 8-5 요청 하나의 상한(입력 + maxOutputTokens). 넘으면 파이프라인(8단계)이 쪼갠다. */
+  MAX_REQ_TOKENS: 8000,
+
+  /* 8-5 토큰 근사. 라틴은 4자/토큰, 아랍어·한글은 2자/토큰.
+     비율 임계는 분수로 둔다 — 0.3 은 이진 부동소수에 정확히 담기지 않아
+     "정확히 30%" 경계가 기기마다 달라질 수 있다(정수 비교로 고정한다). */
+  TOKEN_CHARS_LATIN: 4,
+  TOKEN_CHARS_WIDE: 2,
+  WIDE_RATIO_NUM: 3,
+  WIDE_RATIO_DEN: 10,
+
+  /* 13절 키 저장 위치. 기본 `sessionStorage`, `privacy.rememberKey` 가
+     켜졌을 때만 `localStorage`. **`settings` 스토어에는 넣지 않는다**(9-3). */
+  KEY_STORAGE_PREFIX: 'medreader.key.',
+
+  /* 13절 표시용 마스킹 `AQ.Ab…6l` — 앞 5자 + … + 뒤 2자.
+     `MASK_MIN_LEN` 보다 짧으면 통째로 가린다(짧은 키는 5+2 만으로 거의 다 드러난다). */
+  MASK_HEAD: 5,
+  MASK_TAIL: 2,
+  MASK_ELLIPSIS: '…',
+  MASK_MIN_LEN: 8,
+
+  /* 9-2 `usage.byKind` 의 고정 키. */
+  USAGE_KINDS: Object.freeze(['translate', 'summarize', 'quiz', 'grade', 'table', 'verify']),
+
+  /* 8-4 검증 호출이 `usage` 에 남기는 종류(대시보드 투명성). */
+  VERIFY_KIND: 'verify'
+});
+
+/* 8-4 키 형식 검사 — **길이 하한만** 두고 정확한 길이를 강제하지 않는다.
+   불일치는 **경고만** 하고 저장을 막지 않는다(형식이 또 바뀔 수 있다). */
+export const AI_KEY_PATTERNS = Object.freeze({
+  gemini: /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
+});
+
+/* 13절 `redact.js` 가 `[KEY]` 로 지울 것들.
+   **정규식 객체가 아니라 source 문자열로 둔다** — `g` 플래그가 붙은 정규식은
+   `lastIndex` 를 들고 다녀서, 같은 객체를 두 번 쓰면 두 번째 치환이 조용히
+   앞부분을 건너뛴다. `redact` 가 호출마다 새로 컴파일한다.
+
+   목록은 `AI_KEY_PATTERNS` 보다 **넓다**. 지우는 쪽은 넓을수록 안전하고,
+   아직 어댑터가 없는 프로바이더(openai·mistral·openrouter)의 키가 오류
+   객체를 타고 흘러나오는 경우까지 덮는다. */
+export const REDACT_PATTERNS = Object.freeze([
+  'AIza[0-9A-Za-z_\\-]{30,}',    // 구형 Google API 키
+  'AQ\\.[0-9A-Za-z_\\-]{20,}',   // 신형 Google API 키
+  'Bearer\\s+\\S+',              // 13절이 명시한 형태 (openai-compat 계열)
+  'sk-[A-Za-z0-9_\\-]{16,}'      // openai/mistral 계열 키가 헤더 밖에 나왔을 때
+]);
