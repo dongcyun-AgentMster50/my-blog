@@ -54,6 +54,10 @@ PATTERNS = [
 
 
 def main():
+    # Windows 에서 파이썬 표준 입출력의 기본 인코딩은 cp949 다.
+    # Claude Code 는 UTF-8 로 주고받으므로 맞추지 않으면 한글이 양방향으로 깨진다.
+    sys.stdin.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
     try:
         payload = json.load(sys.stdin)
     except Exception:

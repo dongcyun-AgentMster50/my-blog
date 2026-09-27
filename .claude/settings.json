@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/block-dangerous-commands.py",
+            "command": "python \"D:/01_claude_my-blog/.claude/hooks/block-dangerous-commands.py\"",
             "statusMessage": "명령 안전 검사"
           }
         ]
