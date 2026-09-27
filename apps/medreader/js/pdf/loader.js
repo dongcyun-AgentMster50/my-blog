@@ -82,7 +82,40 @@ export function loadPdfjs(bases = PDFJS_BASES) {
  * @param {ArrayBuffer|Uint8Array} data
  * @returns {Promise<Object>} PDFDocumentProxy
  */
-export async function openDocument(data) {
+export async function openDocument(source) {
   const lib = await loadPdfjs();
-  return lib.getDocument({ data: data }).promise;
+
+  /* `[수정 2026-09-27]` **Blob 은 통째로 읽지 않는다.**
+   *
+   * `hash.js` 가 이미 경고해 둔 것을 이 경로만 못 받았다:
+   *   "7000쪽 실자료는 200MB 를 넘을 수 있다. `file.arrayBuffer()` 로 전체를
+   *    올리면 200MB 가 한 번에 힙에 올라오고 Android Chrome 에서 탭이 죽는다.
+   *    pdf.js 가 이미 같은 버퍼를 들고 있으므로 순간 점유는 **두 배**가 된다."
+   *
+   * `[사용자 2026-09-27]` 실제 자료가 **100MB 를 넘는다**. 호출부가
+   * `await file.arrayBuffer()` 로 우리 힙에 한 벌, pdf.js 가 또 한 벌을 들었다.
+   * blob URL 을 주면 사본은 **pdf.js 것 하나뿐**이다.
+   *
+   * URL 은 문서를 닫을 때 푼다 — pdf.js 가 쪽을 늦게 읽을 수 있으므로
+   * `.promise` 가 풀렸다고 바로 revoke 하면 안 된다.
+   */
+  if (typeof Blob !== 'undefined' && source instanceof Blob) {
+    const url = URL.createObjectURL(source);
+    let doc;
+    try {
+      doc = await lib.getDocument({ url: url }).promise;
+    } catch (e) {
+      URL.revokeObjectURL(url);
+      throw e;
+    }
+    const destroy = doc.destroy ? doc.destroy.bind(doc) : null;
+    doc.destroy = function () {
+      URL.revokeObjectURL(url);
+      return destroy ? destroy() : Promise.resolve();
+    };
+    return doc;
+  }
+
+  // 이미 버퍼를 들고 있는 호출자(합성 문서·테스트)는 그대로 받는다.
+  return lib.getDocument({ data: source }).promise;
 }

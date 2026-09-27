@@ -238,8 +238,11 @@ async function importFile(file) {
 
     setStatus(t('library.import.opening'));
     // pdf.js 를 먼저 열어야 쪽수를 안다 — 2차 방벽이 쪽수를 요구한다.
-    const buf = await file.arrayBuffer();
-    const pdfDoc = await openDocument(buf);
+    // `[수정 2026-09-27]` 파일을 **통째로 올리지 않는다.**
+    // 전에는 `await file.arrayBuffer()` 로 우리 힙에 한 벌, pdf.js 가 또 한 벌을
+    // 들어 100MB 자료가 순간 200MB 가 됐다(`hash.js` 가 경고해 둔 그것).
+    // `openDocument` 가 Blob 을 받으면 blob URL 로 넘겨 사본이 하나가 된다.
+    const pdfDoc = await openDocument(file);
     const pageCount = pdfDoc.numPages;
 
     const existing = await db.findByFileHash(fileHash);
@@ -346,7 +349,8 @@ export async function openDoc(docId) {
   if (!doc) return null;
   const rec = await db.get('blobs', docId);
   if (!rec || !rec.blob) return null;
-  const pdfDoc = await openDocument(await rec.blob.arrayBuffer());
+  // 같은 이유 — 이것은 문서를 **열 때마다** 일어난다.
+  const pdfDoc = await openDocument(rec.blob);
   // 저장된 쪽수가 실제와 다르면 실제를 믿는다(2차 방벽이 이 값을 쓴다).
   if (doc.pageCount !== pdfDoc.numPages) {
     doc.pageCount = pdfDoc.numPages;
