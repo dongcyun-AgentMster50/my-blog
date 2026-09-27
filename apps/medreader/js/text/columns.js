@@ -61,8 +61,23 @@ export function detectColumns(lines, pageInfo, params = LAYOUT) {
       const g0 = runs[r - 1].x1;
       const g1 = runs[r].x0;
       if (!(g1 > g0)) continue;
-      const lo = Math.max(0, Math.ceil(g0 / BIN));
-      const hi = Math.min(BINS - 1, Math.floor(g1 / BIN) - 1);
+      // `[수정 2026-09-27]` **bin 의 중심이 간격 안에 드는가**로 센다.
+      //
+      // 전에는 간격에 **완전히 포함된** bin 만 셌다(`ceil(g0/BIN)` ~
+      // `floor(g1/BIN) - 1`). 그러면 양 끝에서 최대 1 bin 씩, 합쳐 **2 bin 까지**
+      // 실제 거터를 깎아 먹는다. bin 이 좁은 쪽(`W/100`)에서는 그 손실이 크다.
+      //
+      // `[실측 2026-09-27 · CMDT 2026]` 폭 517pt 쪽(BIN 5.17), 거터가 271→289 로
+      // **18pt** 인데 옛 방식은 **2 bin = 10.3pt** 로 쟀다(43% 축소).
+      // 밴드 최소폭이 `1.2 × Fm = 10.8pt` 라 **0.5pt 차이로 탈락**했고,
+      // 표본 197쪽 중 158쪽이 1단으로 판정됐다 — 2단 본문을 좌우 한 줄씩
+      // 번갈아 읽게 되는, 4-5 가 막으려던 바로 그 실패다.
+      // 중심 기준으로 세면 같은 거터가 **4 bin = 20.7pt** 로 제대로 나온다.
+      //
+      // 옛 책(612pt 쪽, 거터 15pt)이 통과했던 것은 기하가 우연히 선 위에
+      // 있었기 때문이다 — 임계값이 맞았던 게 아니라 **자가 짧았다.**
+      const lo = Math.max(0, Math.ceil(g0 / BIN - 0.5));
+      const hi = Math.min(BINS - 1, Math.ceil(g1 / BIN - 0.5) - 1);
       for (let b = lo; b <= hi; b++) {
         if (!marked.has(b)) { marked.add(b); hist[b] += 1; }
       }
