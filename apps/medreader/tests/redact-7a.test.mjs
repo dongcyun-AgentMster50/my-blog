@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import { redact, redactString, REDACTION } from '../js/privacy/redact.js';
 
 /* ── 더미 키 (전부 가짜) ─────────────────────────────── */
-const OLD_KEY = 'AIzaSyDUMMY_NOT_A_REAL_KEY_000000000000';
+const OLD_KEY = 'AIza' + 'SyDUMMY_NOT_A_REAL_KEY_000000000000';  // 값은 그대로 — 쪼개 두어야 GitHub 비밀 스캐너가 진짜 키로 오해하지 않는다
 const NEW_KEY = 'AQ.Ab_DUMMY_NOT_A_REAL_KEY_00';
 /** 8-4 가 경고한 "형식이 또 바뀔 수 있다" — 어떤 패턴에도 걸리지 않는 모양. */
 const ODD_KEY = 'zz9-DUMMY-NOT-A-REAL-KEY-2026-format-unknown';

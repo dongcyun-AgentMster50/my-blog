@@ -21,7 +21,7 @@ import {
 
 /** 전부 가짜다. `AQ.` 접두사와 길이만 맞춘 더미. */
 const KEY = 'AQ.Ab_DUMMY_NOT_A_REAL_KEY_6l';
-const KEY2 = 'AIzaSyDUMMY_NOT_A_REAL_KEY_000000000000';
+const KEY2 = 'AIza' + 'SyDUMMY_NOT_A_REAL_KEY_000000000000';  // 값은 그대로 — 쪼개 두어야 GitHub 비밀 스캐너가 진짜 키로 오해하지 않는다
 
 /** 최소한의 Storage 스텁. */
 function mem() {
