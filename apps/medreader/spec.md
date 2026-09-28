@@ -1,6 +1,8 @@
 # MedReader — 설계 문서 (spec)
 
-**MedReader**는 의학 원서 PDF를 "듣고, 보고, 이해하고, 확인하며" 읽는 모바일 우선 리더 웹앱이다. 사용자는 시리아 라타키아 대학병원 류마티스내과 1년차 레지던트(모어 아랍어, 영어 B1)이며 주 기기는 Realme GT7T / Android 15 / Chrome이다. 앱은 pdf.js `getTextContent()`로 추출한 텍스트 아이템을 **좌표 기반으로 줄(line)과 문단(paragraph)으로 재구성**한 뒤, 줄 단위로 Web Speech API 낭독(TTS)을 하면서 현재 줄을 강조하고, 사용자가 탭한 줄을 아랍어로 즉시 번역하며, 문단이 끝나면 아랍어+영어 병기 요약을 제공한다. 대상 원서(Harrison's Principles of Internal Medicine Self-Assessment and Board Review, 20th ed, 729p / 25MB)가 "객관식 문제 + 해설집" 형식이므로 문항 구조를 파싱해 📕 원서 문제 퀴즈 모드를 제공한다. 프레임워크·번들러 없이 순수 HTML/CSS/JavaScript + ES modules로 `/apps/medreader/` 안에 자체 완결되며(pdf.js만 CDN), GitHub Pages 정적 호스팅에서 백엔드 없이 동작한다. **낭독·하이라이트·읽기·퀴즈·복습은 전부 무료·오프라인**이고, API가 필요한 기능은 번역·요약·AI 출제·작문 채점 4개뿐이며, 사용자가 자기 키를 넣는 BYOK(Gemini 기본) 방식으로 **사용자 비용 0원**을 유지한다. PDF는 사용자 기기의 IndexedDB에만 저장되고 저장소에 절대 커밋하지 않는다.
+**MedReader**는 의학 원서 PDF를 "듣고, 보고, 이해하고, 확인하며" 읽는 모바일 우선 리더 웹앱이다. 사용자는 시리아 라타키아 대학병원 류마티스내과 1년차 레지던트(모어 아랍어, 영어 B1)이며 주 기기는 Realme GT7T / Android 15 / Chrome이다. 앱은 pdf.js `getTextContent()`로 추출한 텍스트 아이템을 **좌표 기반으로 줄(line)과 문단(paragraph)으로 재구성**한 뒤, 문장 단위로 Web Speech API 낭독(TTS)을 하면서 읽는 문장을 강조하고, **낭독을 따라 문장마다 번역(기본 아랍어)을 하단 자막 띠에 띄우며 원하면 번역문도 이어서 소리 내어 읽는다**(7-8, 주 사용 경로). 탭한 줄의 문장 번역(7-2)과 문단 요약(7-3)은 보조 경로다. 대상 원서(Harrison's Principles of Internal Medicine Self-Assessment and Board Review, 20th ed, 729p / 25MB)가 "객관식 문제 + 해설집" 형식이므로 문항 구조를 파싱해 📕 원서 문제 퀴즈 모드를 제공한다. 프레임워크·번들러 없이 순수 HTML/CSS/JavaScript + ES modules로 `/apps/medreader/` 안에 자체 완결되며(pdf.js만 CDN), GitHub Pages 정적 호스팅에서 백엔드 없이 동작한다. **낭독·하이라이트·읽기·퀴즈·복습은 전부 무료·오프라인**이고, API가 필요한 기능은 번역·요약·AI 출제·작문 채점 4개뿐이며, 사용자가 자기 키를 넣는 BYOK(Gemini 기본) 방식으로 **사용자 비용 0원**을 유지한다. PDF는 사용자 기기의 IndexedDB에만 저장되고 저장소에 절대 커밋하지 않는다.
+
+`[수정 2026-09-28]` **전제가 바뀌었다.** 대상 자료는 한 권이 아니라 1,800~7,000쪽짜리 **여러 권**이고 형식이 제각각이다(첫 실물: CMDT 2026, 1,967쪽). 실사용자 Nour(아랍어 모어)의 확인된 요구는 "**원서에서 아랍어로만**, 한 번에 모두 번역할 필요 없이 **책을 읽으면서 각 줄을 소리 내어 번역**"이고, 원서는 대부분 영어지만 **프랑스어·한국어 원서도 같은 방식**이면 좋다. 그래서 원서 언어는 문서 속성(`documents.lang`, 9-2)이고 번역 대상 언어는 설정값(`ai.translationLang`, 기본 `ar`)이다 — 코드에 `en`·`ar` 을 박지 않는다. 위 문단의 729쪽 문제집은 첫 검증본이며 퀴즈(5절)는 문제집 형식에만 해당한다.
 
 이 문서는 Phase 1(리더 핵심)을 구현자가 이 문서만 읽고 만들 수 있을 만큼 상세히 정의하고, Phase 2·3은 Phase 1 설계가 막지 않도록 확장 지점만 명시한다. 가장 중요한 절은 **4. 줄 재구성 알고리즘**과 **16. Phase 1 수용 기준**이다.
 
@@ -10,13 +12,13 @@
 
 ## 목차
 
-1. 요약(위 문단)
+1. 요약(위 문단) `[수정 2026-09-28]`
 2. 파일 구조 (2-4 책별 프로파일 `BOOK_PROFILE` 포함)
 3. 모듈 책임과 의존 방향
 4. 줄 재구성 알고리즘 상세 ★
 5. 문제/보기/정답/해설 구조 파서
 6. TTS·하이라이트·자동 스크롤 (Android Chrome 제약 포함)
-7. 번역·요약 파이프라인
+7. 번역·요약 파이프라인 (**7-8 낭독 동반 번역이 주 경로** `[신설 2026-09-28]`)
 8. 프로바이더 추상화 인터페이스
 9. IndexedDB 스키마
 10. AI 프롬프트 설계
@@ -35,7 +37,9 @@
 
 ## 2. 파일 구조
 
-### 2-1. 전체 트리 (Phase 1 = 굵게 표시 없는 기본, `[P2]`·`[P3]`는 나중 단계에서 추가)
+### 2-1. 전체 트리 (Phase 1 = 굵게 표시 없는 기본, `[P2]`·`[P3]`는 나중 단계에서 추가) `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 7-8(낭독 동반 번역)·원문 언어 속성 때문에 더해지는 파일: `js/ai/readalong.js`(쪽 창·선행 요청·번역 조회, 서비스), `js/ui/trband.js`(하단 자막 띠, UI), `js/text/lang.js`(원문 언어 추정, 순수), `js/ai/cache.js`·`prompts.js`·`jsonrepair.js`·`pipeline.js`(8a). `ui/inline.js` 는 **요약 블록·표 폴백 블록만** 맡는다 — 번역 인라인 블록은 없어졌다(7-7).
 
 ```
 apps/medreader/
@@ -69,7 +73,8 @@ apps/medreader/
 │   │   ├── columns.js          다단 컬럼 판별과 읽기 순서
 │   │   ├── blocks.js           헤더/푸터/페이지번호 제외, 표 영역 감지, 문단 그룹핑, 제목 판별
 │   │   ├── hyphen.js           하이픈 줄바꿈 결합 규칙
-│   │   ├── segment.js          문장 분리(약어 예외 포함) — 번역 단위·문장 낭독 모드용
+│   │   ├── segment.js          문장 분리(약어 예외 포함) — 번역 단위·문장 낭독 모드용. ★ `splitSentences` 를 부르는 곳은 tts/text.js 하나뿐(7-8-2)
+│   │   ├── lang.js             [신설 2026-09-28] 원문 언어 추정(문자 체계 + 기능어 빈도) — 순수 (9-2 documents.lang)
 │   │   └── layout.js           위 모듈을 순서대로 호출하는 파이프라인 함수 buildPageLayout(items, pageInfo)
 │   ├── quiz/
 │   │   ├── parser.js           순수: 문항 번호·보기·정답·해설 구조 감지
@@ -93,7 +98,8 @@ apps/medreader/
 │   │   ├── cache.js            aiCache 스토어 읽기/쓰기, 적중률 계산, 용량 상한 정리
 │   │   ├── usage.js            일별 호출·토큰·캐시 적중 집계, 상한 검사
 │   │   ├── grounding.js        AI 문항의 근거 문장이 원문에 존재하는지 로컬 검증 (순수)
-│   │   └── pipeline.js         translate/summarize/generateQuiz 오케스트레이션: 캐시 → 온디바이스 → 원격, 429 상태 기계
+│   │   ├── pipeline.js         translate/summarize/generateQuiz 오케스트레이션: 캐시 → 온디바이스 → 원격, 429 상태 기계
+│   │   └── readalong.js        [신설 2026-09-28] 낭독 동반 번역: 글자 수 창·청크(쪽 경계를 넘음), 선행 요청, 문장 번역 조회 (7-8)
 │   ├── privacy/
 │   │   ├── keys.js             키 저장(sessionStorage 기본/localStorage 선택), 마스킹, 형식 검증
 │   │   ├── redact.js           로그·에러 문자열에서 키 패턴 제거
@@ -107,7 +113,8 @@ apps/medreader/
 │       ├── reflow.js           리플로우 텍스트 뷰 렌더 (DOM class 토글 하이라이트)
 │       ├── original.js         원본 canvas 뷰 + 하이라이트 오버레이 (bbox → CSS px)
 │       ├── controls.js         하단 컨트롤 바(재생/일시정지/이전/다음/속도/더보기)
-│       ├── inline.js           줄 아래 인라인 번역 블록, 문단 끝 요약 블록, 표 폴백 블록
+│       ├── inline.js           문단 끝 요약 블록, 표 폴백 블록 (번역은 trband.js — 7-7)
+│       ├── trband.js           [신설 2026-09-28] 하단 자막 띠: 낭독 동반 번역·탭 번역을 한 곳에 표시 (7-7·7-8)
 │       ├── quiz.js             퀴즈 화면 (📕 배지, 정답 미확인 처리, 결과)
 │       ├── settings.js         언어·테마·글자·낭독·프로바이더·키·상한 설정
 │       └── usage.js            사용량 대시보드
@@ -285,7 +292,9 @@ node apps/medreader/dev/profile.mjs <pdf> [--pages 200] [--json out.js]
 
 **순수 계층이 DOM을 전혀 모르는 것이 핵심 제약이다.** 2048의 "규칙 계층이 DOM을 모른다"와 같은 취지다. 줄 재구성(`text/lines.js`)은 `getTextContent()` 결과와 동일한 형태의 JSON을 받아 줄 배열을 돌려주는 함수이므로, Review 단계에서 `node --test tests/`로 브라우저 없이 검증하고, `dev/proto-lines.html`에서 실제 PDF로 시각 검증한다.
 
-### 3-2. import 방향 표 (행이 열을 import 할 수 있음 = ○)
+### 3-2. import 방향 표 (행이 열을 import 할 수 있음 = ○) `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` `ai/*` 행의 `text/*` 는 **`text/store.js` 만**이다(`segment` 금지). 대신 `ai/readalong.js` 가 **`tts/text.js`(순수 부분 — `buildUnits`·`sentencesOf`)** 를 import 한다. 문장을 나누는 함수가 두 곳에서 불리면 번역이 한 문장씩 밀린다(7-8-2). Review 는 `grep -rn "splitSentences" js/` 가 `text/segment.js`(정의)와 `tts/text.js`(유일한 호출) 두 파일만 내는지 확인한다. 다음 쪽의 문단은 `ai/readalong.js` 가 직접 만들지 않고 **UI 가 주입한 `loadParas(pageNo)`** 로 받는다(`ui/reader.js` 의 순수 함수 `flowParasOf(describePage(fromStored(rec)))` — 서비스가 ui 를 import 하지 않기 위해서다).
 
 | from ＼ to | config | text/* | quiz/parser | ai/prompts,jsonrepair,grounding | hash | db | pdf/* | tts/* | ai/pipeline 등 서비스 | i18n | ui/* |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -296,7 +305,7 @@ node apps/medreader/dev/profile.mjs <pdf> [--pages 200] [--json out.js]
 | pdf/render | ○ | | | | | | ○(loader) | | | | |
 | tts/* | ○ | ○(segment) | | | | | | ○ | | | |
 | quiz/engine | ○ | | ○ | | | ○ | | | | | |
-| ai/pipeline, cache, usage, ondevice, provider, adapters | ○ | ○(segment) | | ○ | ○ | ○ | | | ○ | | |
+| ai/pipeline, cache, usage, ondevice, provider, adapters, readalong | ○ | ○(store 만 — segment 금지) | | ○ | ○ | ○ | | ○(tts/text 만) | ○ | | |
 | privacy/* | ○ | | | | | | | | | | |
 | i18n | ○ | | | | | | | | | ○(i18n/*) | |
 | ui/* | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |
@@ -1012,7 +1021,7 @@ sectionId ← 로마숫자가 있으면 "sec-{로마숫자}"   (예: "sec-III")
 
 ## 6. TTS·하이라이트·자동 스크롤
 
-### 6-1. 낭독 단위와 상태 기계
+### 6-1. 낭독 단위와 상태 기계 `[수정 2026-09-28]`
 
 - 기본 낭독 단위는 **문장**이다 `[수정 2026-09-21]`. 설정에서 **줄(PDF 줄)** 단위로 바꿀 수 있다.
   초판은 줄이 기본이었다(사용자가 "각 줄"을 1순위로 요구했다). `[실기기 검증]` 배포본을 실제 원서로 읽어 본 뒤 뒤집었다 — **"문장 단위가 낫다. 줄 단위로 읽으면 다시 거꾸로 읽게 되는 경향이 크다"**. 이 책은 2단 조판이라 원본 줄이 8~10단어로 짧고, 낭독이 따르는 것은 화면(리플로우)의 긴 줄이 아니라 **원본 PDF의 짧은 줄**이라 한 문장이 3~4번 쪼개진다.
@@ -1033,9 +1042,38 @@ setRate(r)               0.5~2.0, 0.1 단계. 즉시 적용: 현재 줄을 cance
 setVoice(lang, voiceURI)
 ```
 
-utterance 생성 규칙: `new SpeechSynthesisUtterance(text)`, `lang = 'en-US'`(원서 언어; 문서 언어를 설정에서 바꿀 수 있음), `voice`(6-3), `rate`, `pitch = 1`. `text`는 줄 `text`에서 URL·이메일을 "link"로 치환하고, 연속 대문자 약어(≥ 4자, 예: `NSAIDs`)는 그대로 두되 `≥`→"greater than or equal to" 등 기호 소수(`≥ ≤ ± µ → %`)만 읽기 쉬운 단어로 치환한다(치환 표는 `config.js` `TTS_SYMBOLS`).
+`[신설 2026-09-28]` **발화 단계(phase).** 낭독 동반 번역(7-8)의 `speak` 모드에서는 한 발화 번호 `i` 가 두 단계를 갖는다. `SpeakerState` 는 **늘리지 않는다**(컨트롤 바·Wake Lock·visibility 처리가 전부 그 다섯 값에 묶여 있다). 단계는 별도 변수이고 `phasechange {phase, index}` 이벤트로만 알린다.
 
-### 6-2. onend 체이닝과 워치독
+```
+phase: 'src' | 'tr-wait' | 'tr'          # 'src' = 원문 발화, 'tr' = 번역문 발화, 'tr-wait' = 번역 도착 대기
+Unit 에 더해지는 필드 (tts/text.js, 7-8-2):
+  src:  string    # normalizeSpeech 이전의 문장 원문 — 번역 입력이자 번역 조회 키
+  seg:  number    # 쪽 안의 문장 번호. 300자 분할 조각(part)들은 같은 seg 를 공유한다
+  kind: string    # 문단 kind. 'table-notice' 는 번역하지 않는다
+```
+
+| 지금 | 사건 | 다음 |
+|---|---|---|
+| `src` (마지막 조각이 아님) | onend | 같은 `seg` 의 다음 조각 `src` (지금과 같다) |
+| `src` (마지막 조각) | onend, 모드 ≠ `speak` 또는 `kind = table-notice` | `nextIndexAfter(i)` 의 `src` (지금과 같다) |
+| `src` (마지막 조각) | onend, 모드 `speak`, 번역 `ready` | `tr` 첫 조각 |
+| `src` (마지막 조각) | onend, 모드 `speak`, 번역 `pending` | `tr-wait` (상한 `READALONG.TR_WAIT_MS`) |
+| `src` (마지막 조각) | onend, 모드 `speak`, 번역 `failed`·`blocked`·`none` | `nextIndexAfter(i)` 의 `src` — **기다리지 않는다** |
+| `tr-wait` | 번역 도착(`readalong` 의 `change`) | `tr` 첫 조각 |
+| `tr-wait` | 상한 경과 / 원격 상태가 ready 아님으로 바뀜 | `nextIndexAfter(i)` 의 `src`. 그 문장의 번역문은 **나중에 되돌아가 읽지 않는다**(띠에는 도착하면 채운다) |
+| `tr` | onend (조각 남음) | 다음 `tr` 조각 |
+| `tr` | onend (마지막 조각) | `nextIndexAfter(i)` 의 `src` — **반복·쪽 넘김은 번역문까지 끝난 뒤에** |
+| `tr` | onerror(`interrupted`·`canceled` 외) | 재시도 없이 `nextIndexAfter(i)`. 첫 번째 `tr` 발화가 실패하면 "번역문 음성 불가"로 보고 `show` 로 내려간다(7-8-5) |
+| 어느 단계든 | `pause()` | `paused` + `(index, phase)` 기억. `resume()` 은 **같은 단계의 처음**부터(`tr-wait` 은 `tr` 로 본다 — 도착했으면 읽고, 아니면 `src` 다음으로) |
+| 어느 단계든 | `next()`·`prev()`·줄 탭·`setUnit` | 단계는 `src` 로 되돌린다. 인덱스 규칙은 위 표 그대로 |
+| `tr` | `setRate(r)` | 같은 `tr` 조각을 처음부터 새 속도로 |
+
+- `speakSource = false`(원문은 읽지 않고 번역문만 읽기, 9-3 `readalong.speakSource`)이면 `src` 단계는 **소리 없이 하이라이트만** 옮기고(발화 대신 `tr-wait` 로 곧장) `tr` 을 읽는다. 번역이 없으면(`failed`·`blocked`) 그 문장만 원문으로 읽는다 — 소리가 끊기지 않게.
+- `speak` 모드는 **문장 단위에서만** 동작한다. 줄 단위(`tts.unit = 'line'`)면 번역 조각이 원서 줄과 맞지 않으므로 낭독 동반 번역 전체가 쉬고, 상태 바가 "번역은 문장 단위 낭독에서만 따라옵니다" 를 한 번 보인다(7-8-1 유효 모드, 14-2).
+
+utterance 생성 규칙: `new SpeechSynthesisUtterance(text)`. `[수정 2026-09-28]` **`lang` 은 단계가 정한다** — `src` 는 문서 원문 언어(`documents.lang` → 고른 음성의 `voice.lang`, 없으면 `{en:'en-US', fr:'fr-FR', ko:'ko-KR'}[lang]`), `tr` 은 대상 언어(`ai.translationLang` → `pickVoice(target)` 의 `voice.lang`). 코드에 `'en-US'`·`'ar'` 을 박지 않는다. 표 안내 발화(`kind = table-notice`)는 **UI 언어** 문장이므로 UI 언어 음성으로 읽는다(지금은 원서 음성으로 읽어 UI 가 아랍어면 영어 음성이 아랍어를 읽는다 — 8b 에서 함께 고친다). 그 밖에 `voice`(6-3), `rate`(두 단계 공통), `pitch = 1`. `text`는 줄 `text`에서 URL·이메일을 "link"로 치환하고, 연속 대문자 약어(≥ 4자, 예: `NSAIDs`)는 그대로 두되 `≥`→"greater than or equal to" 등 기호 소수(`≥ ≤ ± µ → %`)만 읽기 쉬운 단어로 치환한다(치환 표는 `config.js` `TTS_SYMBOLS`). `[수정 2026-09-28]` 치환 낱말은 영어이므로 표를 **원문 언어별**로 둔다(`TTS_SYMBOLS.en` = 지금 표). `fr`·`ko` 표는 실물 측정 전까지 **비워 둔다**(기호를 그대로 둔다 — 프랑스어 문장 속에 영어 "greater than" 이 끼는 것보다 낫다). 번역문(`tr`) 발화에는 치환을 하지 않는다. 번역 입력은 치환 **이전** 원문(`Unit.src`)이다.
+
+### 6-2. onend 체이닝과 워치독 `[수정 2026-09-28]`
 
 ```
 speakLine(i):
@@ -1057,7 +1095,39 @@ startWatchdog(text):
 - 큐 전체를 한 번에 `speak()`로 쌓지 않는다(취소·속도 변경·건너뛰기가 복잡해지고 Android에서 큐가 길면 중단됨). **항상 utterance 1개만 재생 중**이고 `onend`에서 다음을 건다.
 - `onstart`가 안 오는 환경 대비: `speak()` 직후 `linechange`를 먼저 emit 하고 `onstart`에서는 중복 emit 하지 않는다(같은 lineId면 무시).
 
-### 6-3. 음성 선택 (`tts/voices.js`)
+`[신설 2026-09-28]` **번역문 발화(`tr`)도 같은 사슬의 한 고리다.** 새 재생 경로를 만들지 않는다.
+
+```
+onSrcEnd(i):                                   # 6-1 표의 'src 마지막 조각 onend'
+    if mode != 'speak' or units[i].kind == 'table-notice': speakAt(nextIndexAfter(i)); return
+    r ← translation.get(units[i])              # 동기 조회 — 메모리 맵(7-8-3). await 없음
+    if r.state == 'ready':  speakTr(i, 0); return
+    if r.state == 'pending':
+        phase ← 'tr-wait'; myGen ← gen
+        off ← translation.onChange(units[i], () → if myGen == gen: clear(); speakTr(i, 0))
+        timer ← setTimeout(() → if myGen == gen: off(); speakAt(nextIndexAfter(i)), TR_WAIT_MS)
+        return
+    speakAt(nextIndexAfter(i))                 # failed / blocked / none — 기다리지 않는다
+
+speakTr(i, k):
+    parts ← splitLong(r.text, MAX_UTTER_CHARS, TR_BREAKS)   # 번역문도 300자 규칙(6-4). 경계 문자에 '،' '؛' 추가
+    u ← makeUtterance(parts[k]); u.lang ← trLang; u.voice ← voiceFor[trLang]
+    u.onend   ← gen 검사 → k+1 < parts.length ? speakTr(i, k+1) : (markDone(i); speakAt(nextIndexAfter(i)))
+    u.onerror ← gen 검사 → interrupted/canceled 면 return. 아니면 emit('error', TR_SKIPPED); 첫 실패면 emit('error', TR_VOICE_FAILED)
+                           speakAt(nextIndexAfter(i))          # 원문이 주인이다. 번역문 재시도 없음
+    워치독: expectedMs 를 TTS.CHARS_PER_SEC_TR(기본 10 [가정 — 아랍어 음성의 초당 글자 수. 8b 실기기에서 잰다]) 로 계산
+```
+
+- **`markDone`(읽은 줄 표시)과 `nextIndexAfter`(반복 회차)는 번역문까지 끝난 뒤에** 부른다. 문장 반복(5b)은 "원문 + 번역문" 한 쌍을 반복한다.
+- `tr-wait` 동안 소리는 없고 `speechSynthesis` 에 걸린 발화도 없다. 그래서 **워치독 대신 `TR_WAIT_MS` 타이머가** 이 단계를 끝낸다. 두 타이머 모두 `gen` 을 들고 있어 취소·일시정지 뒤 늦게 와도 물러난다(6-2 세대 규칙 그대로).
+- 번역 조회(`translation.get`)는 **동기**여야 한다. `onend` 안에 `await`(IndexedDB 조회 등)를 넣으면 그 사이 `cancel`·`pause` 와 경합하는 창이 생기고, 다음 `speak()` 가 `onend` 밖으로 밀린다 — 제스처 없이 이어지는 `speak()` 가 안드로이드에서 계속 허용되는지는 `onend` 안에서 곧장 부르는 지금 방식으로만 확인됐다 `[가정 — 비동기 뒤 speak 는 미검증]`. 그래서 번역은 미리 메모리 맵에 올라와 있고(7-8-3) 도착은 이벤트로 온다.
+- 연속 3문장 이상 `tr-wait` 이 상한으로 끝나면 상태 바에 `readalong.lagging` 을 **한 번** 보인다(원격이 느린 것이지 고장이 아니다).
+
+### 6-3. 음성 선택 (`tts/voices.js`) `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 원문 음성은 **문서의 원문 언어**(`documents.lang`)로 고른다 — `pickVoice(doc.lang)`. 프랑스어 원서면 프랑스어 음성이다. 번역문 음성은 `pickVoice(ai.translationLang)`(기본 `ar`). `availability()` 의 `out.en` 고정은 `out[doc.lang]` 로 바뀐다. "음성 없음" 배너 문구는 언어 이름을 매개변수로 받는다(`reader.tts.noVoice {lang}`). 문서를 바꾸면 원문 음성을 다시 고른다.
+
+`[가정]` **Android Chrome 의 아랍어 음성 유무.** Chrome 은 기기 기본 TTS 엔진이 가진 음성을 노출한다. Google 음성 서비스(Speech Services by Google)에는 아랍어가 있는 것으로 알려져 있으나, 삼성(Z Fold 7)·Realme(Nour 기기) 기본 엔진이 무엇이고 아랍어 음성 데이터가 **설치돼 있는지**는 모른다. 확인 방법: 배포본을 연 기기에서 DevTools 콘솔 또는 원격 디버깅으로 `window.__medreader.tts.voices().filter(v => v.lang.toLowerCase().replace('_','-').startsWith('ar'))` — 빈 배열이면 없다. 7b 설정 AI 탭이 같은 결과를 "아랍어 음성: 있음/없음"으로 보인다(12-7).
 
 ```
 loadVoices(): Promise<SpeechSynthesisVoice[]>
@@ -1075,7 +1145,7 @@ pickVoice(lang, voices, preferredURI?):
 ```
 
 - 언어별 음성 가용성 `{ en: bool, ar: bool, fr: bool, ko: bool }`을 부팅 후(사용자 첫 제스처 이후) 계산해 설정 화면과 리더에 표시한다.
-- **음성 없음 안내**: 원서 언어(en) 음성이 없으면 리더 상단 배너: "영어 음성이 기기에 없습니다. 설정 > 시스템 > 언어 및 입력 > 텍스트 음성 변환 출력에서 Google 음성 인식 및 합성(Speech Services by Google) 언어 팩을 설치하세요." + [자세히] (i18n 4개 언어). 아랍어·한국어·프랑스어 음성 없음은 번역문 낭독·어학 기능(P3)에서 같은 배너 재사용. 배너는 세션당 1회, 닫기 가능.
+- **음성 없음 안내**: 원서 언어(`documents.lang`, 초판 문구는 en) 음성이 없으면 리더 상단 배너: "영어 음성이 기기에 없습니다. 설정 > 시스템 > 언어 및 입력 > 텍스트 음성 변환 출력에서 Google 음성 인식 및 합성(Speech Services by Google) 언어 팩을 설치하세요." + [자세히] (i18n 4개 언어). 아랍어·한국어·프랑스어 음성 없음은 번역문 낭독·어학 기능(P3)에서 같은 배너 재사용. 배너는 세션당 1회, 닫기 가능. `[수정 2026-09-28]` 번역문 음성이 없으면 낭독 동반 번역이 `speak` → `show` 로 **내려가고** 그 사실을 `readalong.noVoice {lang}` 로 한 번 안내한다(7-8-5). 음성 목록이 비어 판정할 수 없을 때(1.5초 타임아웃)는 `lang` 만으로 한 번 시도해 보고, 첫 번역문 발화가 오류로 끝나면 그때 내려간다.
 - Android에서 `voice.lang`이 `en_US`처럼 언더스코어인 경우가 있어 정규화한다.
 
 ### 6-4. Android Chrome에서의 Web Speech API 제약과 폴백 (별도 소절)
@@ -1092,7 +1162,14 @@ pickVoice(lang, voices, preferredURI?):
 | 참조 없는 utterance | GC로 `onend` 유실 | 모듈 스코프 변수에 현재 utterance 유지 |
 | `SpeechRecognition` | Android Chrome은 서버 인식이라 **네트워크 필수**, `webkitSpeechRecognition` 접두사, 연속 인식 불안정. Firefox 등 미지원 | Phase 1에서는 쓰지 않는다. P3 말하기 테스트에서: 기능 감지 `('SpeechRecognition' in window) || ('webkitSpeechRecognition' in window)`, 오프라인이면 버튼 비활성 + 안내, 미지원 브라우저면 "텍스트로 답하기" 폴백 |
 
-### 6-5. 하이라이트와 자동 스크롤
+### 6-5. 하이라이트와 자동 스크롤 `[수정 2026-09-28]`
+
+`[신설 2026-09-28]` **번역문을 읽는 동안(`tr`·`tr-wait`) 하이라이트는 방금 읽은 원문 문장의 글자 구간에 그대로 머문다.** 번역문은 원문 문장 하나에 대응하므로 "지금 무엇의 번역을 듣는가"는 그 문장이다. `show()` 를 다시 부르지 않는다(자동 스크롤·`aria-live` 가 두 번 돌지 않게). 대신 띠(7-7)가 `data-speaking="tr"` 로 바뀌어 "지금 소리는 이쪽"을 보인다(띠 테두리 `inline-start` 강조색). 원본 뷰 오버레이도 그대로 둔다.
+
+`[신설 2026-09-28]` **편안 영역은 "보이는 본문 영역" 기준이다.** 지금은 `window.innerHeight` 의 30%~65% 인데, 자막 띠가 켜지면 창 높이의 65% 지점이 띠 **아래**에 떨어질 수 있다(12-3 수치: 740px 창에서 띠 윗변 ≈ 433px, 65% = 481px). 그래서:
+- 본문 영역 = `[--bar-top, innerHeight − --reader-chrome-bottom(px, 띠 포함) − safe-area]`. 편안 영역은 그 영역의 30%~65% 다. 띠가 꺼져 있으면 지금과 거의 같다.
+- `scrollIntoView({block:'center'})` 가 띠 아래로 가운데를 잡지 않도록 문서 스크롤러에 `scroll-padding-block-start: var(--bar-top)`, `scroll-padding-block-end: calc(var(--reader-chrome-bottom) + env(safe-area-inset-bottom))` 를 준다(CSS 만으로 해결 — `scrollIntoView` 는 scroll-padding 을 존중한다).
+- 수용 기준은 16-D3 "띠가 본문을 가리지 않는다".
 
 `[수정 2026-09-25 — 10a]` **하이라이트 단위를 줄이 아니라 읽고 있는 문장의 문자 구간으로 바꾼다.**
 
@@ -1128,41 +1205,51 @@ Unit.ranges: [{ id, start, end }]      # start/end 는 **그 줄 텍스트 안�
 - 하이라이트 스타일: 배경 `--hl-bg`(테마별: 라이트 연노랑, 다크 진남색, 세피아 연갈색, 고대비 노랑+검정 글자), `outline` 없이 `box-shadow` 0 0 0 4px 같은 색(줄 사이 틈 메움), `transition: background-color 120ms`(`prefers-reduced-motion`이면 없음). 이미 읽은 줄은 옅은 `--hl-done`(설정으로 끌 수 있음).
 - **자동 스크롤 규칙**: 현재 줄 요소가 스크롤 컨테이너의 "편안 영역"(상단 30%~하단 65%) 밖에 있을 때만 `scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' })`. 줄마다 스크롤하면 화면이 계속 흔들려 눈 피로를 악화시킨다.
 - 사용자가 낭독 중 직접 스크롤하면(`scroll` 이벤트 + 최근 800ms 안에 프로그램 스크롤이 아님) **자동 스크롤을 일시 해제**하고 하단 바에 [현재 줄로 돌아가기] 칩을 띄운다. 칩을 누르거나 다음 문단으로 넘어가면 자동 스크롤을 복구한다.
-- 줄 탭(리플로우: `.line` 요소 `pointerup`, 원본: 좌표 역변환)은 두 가지 동작을 갖는다: 낭독 중이면 **그 줄부터 낭독 이동**, 아니면 **인라인 번역 열기**. 두 동작을 구분하기 위해 낭독 중에는 탭 = 이동, 길게 누르기(500ms) = 번역. 낭독 중이 아닐 때는 탭 = 번역, 길게 누르기 = 여기서부터 재생. 하단 바 도움말에 표기.
+- 줄 탭(리플로우: `.line` 요소 `pointerup`, 원본: 좌표 역변환)은 두 가지 동작을 갖는다: 낭독 중이면 **그 줄부터 낭독 이동**, 아니면 **그 줄의 문장 번역을 자막 띠에 열기**(`[수정 2026-09-28]` 인라인 블록 → 띠, 7-7). 두 동작을 구분하기 위해 낭독 중에는 탭 = 이동, 길게 누르기(500ms) = 번역. 낭독 중이 아닐 때는 탭 = 번역, 길게 누르기 = 여기서부터 재생. 하단 바 도움말에 표기.
 
 ---
 
 ## 7. 번역·요약 파이프라인
 
-### 7-1. 원칙
+### 7-1. 원칙 `[수정 2026-09-28]`
 
 1. **캐시 → 온디바이스 → 원격** 순서. 각 단계는 실패하면 조용히 다음으로 넘어간다.
-2. **자동 전체 번역 금지.** 사용자가 탭한 줄이 속한 문단, 사용자가 누른 요약 버튼의 대상만 호출한다. 설정 "낭독 중 문단 끝 자동 요약"(기본 OFF)만 예외이며, 켤 때 호출량 경고를 보여준다.
-3. **요청 병합**: 번역 요청 단위는 **문단**(문장 배열), 요약 요청 단위는 **문단** 또는 사용자가 [이 페이지 요약]을 눌렀을 때 **페이지의 본문 문단 전체를 1회 호출**로 묶는다.
-4. 결과는 **문장·문단 단위로 캐시**해 다른 진입 경로(줄 탭 vs 페이지 번역)에서도 재사용된다.
+2. `[수정 2026-09-28 — 추가 지침 4: 쪽 → 글자 수]` **스스로 번역하는 범위는 "지금 발화 중인 문장부터 앞으로 `READ_AHEAD_CHARS` 글자"까지다.** 이것이 "자동 전체 번역 금지"의 새 경계다. 쪽 수가 아니라 **글자 수**로 잰다.
+   - 초판은 "사용자가 탭한 줄이 속한 문단만"이었다. 실사용자의 확인된 요구가 "책을 읽으면서 각 줄을 소리 내어 번역"이므로 **낭독이 번역을 끌고 간다**(7-8). 그러나 앱이 문서 전체·장 전체·"남은 쪽"을 미리 번역하는 일은 여전히 없다.
+   - 창 `W` = 커서(지금 발화 중인 문장)부터 읽기 순서로 이어지는 문장들 중, 커서로부터의 누적 원문 글자 수가 `READ_AHEAD_CHARS`(기본 9,000자 = `MAX_REQ_CHARS` × 1.5, 7-8-3) 미만인 것. **쪽 경계와 무관하다** — 쪽이 작은 책(CMDT 2021 쪽당 1,907자 `[실측 2026-09-28]`)이면 창이 4~5쪽에 걸치고, 큰 책(CMDT 2026 4,511자)이면 2쪽 남짓이다. **낭독 중(`speaking`·`waiting-page`)일 때만** 창이 움직인다. 멈춘 채로 쪽을 넘겨 보기만 하면 요청 0건.
+   - 창 밖의 문장은 어떤 경로로도 스스로 요청하지 않는다. **한 번에 떠 있는 요청은 최대 1개**(냉시작 때만 head 1개가 더해져 2개). 쪽을 건너뛰면(쪽 이동 입력) 커서가 옮겨 가 창도 옮겨 가고, 옛 창의 진행 중 요청은 **끝까지 받아 캐시한다**(이미 비용이 났다 — 버리지 않는다).
+   - 왜 쪽이 아니라 글자인가(18절): 같은 내용이 책마다 쪽수만 다르다. CMDT 2021(5,051쪽)과 2026(1,967쪽)은 책 전체 글자 수가 약 960만 대 890만으로 거의 같은데, 쪽 단위 호출이면 2021 판이 약 5,000회, 2026 판이 약 2,360회다 — **같은 공부량에 무료 한도를 2배 넘게 쓴다.** 글자 단위(6,000자 청크)면 2021 판도 약 1,600회다 `[실측 2026-09-28]`.
+   - 사용자가 직접 누른 것(줄 탭 번역 7-2, 그리고 후순위로 미룬 [요약 보기]·[이 페이지 요약] 7-3)은 창과 무관하게 그 대상만 호출한다. "낭독 중 문단 끝 자동 요약"(기본 OFF)은 요약과 함께 후순위다.
+3. **요청 병합**: `[수정 2026-09-28 — 추가 지침 4]` 낭독 동반 번역의 요청 단위는 **청크** — 읽기 순서로 이어지는 미캐시 문장들을 누적 `MAX_REQ_CHARS`(6,000자) 이하로 묶은 것이며 **쪽 경계를 넘어 묶는다**(7-8-3). 탭 번역은 문단. 요약 요청 단위는 **문단** 또는 [이 페이지 요약]일 때 **페이지의 본문 문단 전체를 1회 호출**로 묶는다.
+4. 결과는 **문장 단위로 캐시**한다. 키는 문장 원문의 해시다(7-5) — 낭독 동반 번역·줄 탭 번역이 **같은 문장 원문**(`Unit.src`, 7-8-2)을 쓰므로 어느 경로로 받았든 서로 적중한다. `[신설 2026-09-28]` **청크 경계는 캐시 키에 들어가지 않는다.** 그래서 청크를 어떻게 자르든(냉시작 head, 미추출 쪽에서 끊김, 캐시를 건너뛰며 채움, `MAX_REQ_CHARS` 변경) 이미 받은 문장은 그대로 재사용되고, 다음 청크는 빈 문장만 채운다.
+5. `[신설 2026-09-28]` **원문 언어와 대상 언어는 둘 다 값이다.** 원문 = `documents.lang`(9-2), 대상 = `ai.translationLang`(9-3, 기본 `ar`). 둘이 같으면 번역하지 않는다. `ar`·`en` 을 파이프라인·프롬프트·UI 코드에 박지 않는다(대상의 글자 방향은 `RTL_LANGS` 에서 유도, 7-7).
 
-### 7-2. 번역 흐름 (줄 탭 → 아랍어)
+### 7-2. 번역 흐름 (줄 탭 → 대상 언어) — 보조 경로 `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 주 경로는 7-8 이다. 줄 탭 번역은 **멈춰 있을 때 탭**, **낭독 중 길게 누르기**(6-5)로 여는 보조 경로로 남는다. 바뀐 점은 셋이다: (1) 문장을 **`segment` 로 다시 나누지 않고** 지금 쪽 낭독 큐(`buildUnits(..., 'sentence')`)의 `Unit` 을 그대로 쓴다 — 분할이 한 벌이어야 두 경로의 캐시가 서로 적중한다(7-8-2). (2) 원문 언어가 `'en'` 고정이 아니라 `doc.lang`. (3) 표시는 인라인 블록이 아니라 **자막 띠**(7-7).
 
 ```
 translateForLine(docId, lineId):
-    para ← 줄이 속한 문단; sentences ← segment(para.text)           # 문장 배열, 각 문장에 속한 lineIds 계산
-    target ← settings.translationLang (기본 'ar')
-    keys ← sentences.map(s → cacheKey(docId, s, target, 'translate'))
-    hits ← cache.getMany(keys)
-    missing ← 미적중 문장들
+    units ← buildUnits(flowParas(), 'sentence')                      # ★ 낭독과 같은 함수·같은 입력
+    para  ← 탭한 줄이 속한 문단 id
+    segs  ← sentencesOf(units).filter(s → s.paraId == para)          # 문단의 문장들(Unit.src)
+    src   ← doc.lang ; target ← settings.get('ai.translationLang')    # 기본 'ar'. 둘이 같으면 번역하지 않는다
+    keys  ← segs.map(s → cacheKey(docId, s.src, target, 'translate'))
+    hits  ← cache.getMany(keys) ; missing ← 미적중
     if missing.length > 0:
-        result ← ondevice.translate(missing, 'en', target)  ?? remote.translate(missing, target)   # 배열 그대로, 문장 순서 보존
+        result ← ondevice.translate(missing, src, target) ?? pipeline.translate(missing, {src, target, kind:'translate'})
         cache.putMany(...)
-    표시: 탭한 줄과 겹치는 문장들의 번역을 줄 아래 인라인 블록에 (RTL, lang="ar")
-         + [문단 전체 번역 보기] 토글 → 문단의 모든 문장 번역
+    표시: 탭한 줄과 겹치는 문장(들)의 번역을 자막 띠에 (7-7). 띠의 [문단 전체] 토글 → 그 문단 모든 문장
 ```
 
-- 줄 조각을 번역하지 않고 **문장**을 번역하는 이유: 줄은 문장 중간에서 끊기므로 줄 조각 번역은 아랍어 어순상 의미가 깨진다. 문장이 여러 줄에 걸치면 그 줄들 아래에 같은 번역 블록이 표시된다(중복 표시가 아니라 "이 문장의 번역" 헤더로 한 번만, 마지막 줄 아래).
-- 문단 단위 1회 호출이므로 같은 문단의 다른 줄을 탭하면 캐시 적중, API 0회.
-- `continuesNext` 문단은 다음 페이지 첫 문단의 첫 문장을 함께 보낸다(문장이 페이지를 넘어가면 앞 조각+뒤 조각을 이어 하나의 문장으로 만든다).
+- 줄 조각을 번역하지 않고 **문장**을 번역하는 이유: 줄은 문장 중간에서 끊기므로 줄 조각 번역은 아랍어 어순상 의미가 깨진다.
+- 문단 단위 1회 호출이므로 같은 문단의 다른 줄을 탭하면 캐시 적중, API 0회. 낭독 동반 번역이 이미 그 문장들을 받았으면 탭도 0회다(같은 키).
+- `[수정 2026-09-28]` **쪽을 넘어가는 문장은 이어 붙이지 않는다.** 초판은 `continuesNext` 문단이면 다음 쪽 첫 문장을 함께 보내 한 문장으로 만들었다. 낭독 큐는 쪽마다 따로 만들어지므로(6-1) 쪽 끝의 조각과 다음 쪽 첫 조각은 **서로 다른 `Unit`** 이다. 번역만 둘을 합치면 번역 한 개가 발화 두 개에 대응해 7-8-2 의 1:1 계약이 깨진다. 조각은 조각대로 번역하고, 프롬프트에 "이 조각은 문장의 앞/뒤 일부다" 표시(`frag: 'head'|'tail'`, 10-2)만 붙인다. 품질 손실은 쪽 경계마다 최대 1문장이다(18절). `[수정 2026-09-28 — 추가 지침 4]` 낭독 동반 번역은 청크가 쪽 경계를 넘으므로 앞 조각(`head`)과 뒤 조각(`tail`)이 대개 **같은 요청 안에 나란히** 들어가 모델이 문맥을 본다 — 그래도 번역은 조각마다 하나다(1:1 유지).
 - 전송 전 문장 배열 총 길이가 `MAX_REQ_CHARS`(기본 6,000자)를 넘으면 문장 경계에서 나눠 여러 호출로 보낸다(대부분의 문단은 한 번에 들어간다).
 
-### 7-3. 요약 흐름
+### 7-3. 요약 흐름 `[후순위 2026-09-28]`
+
+`[후순위 2026-09-28]` 사용자 결정으로 이번 7b·8 단계에서 뺀다 — NotebookLM 이 자료 전체 요약·질문을 이미 해 주고, 무료 한도를 낭독 동반 번역에 몰아 쓰기 위해서다. 설계는 아래에 그대로 보존한다(19절: 10단계 이후 또는 Phase 2). 8a 파이프라인은 `kind` 로 요약이 그대로 올라탈 수 있게 둔다.
 
 - 문단 끝(낭독이 문단의 마지막 줄을 끝냈을 때, 또는 사용자가 문단을 길게 눌러 메뉴를 열었을 때) 문단 아래에 **[요약 보기]** 칩이 나타난다(자동 호출 아님). 누르면 `summarize([para], ['ar','en'])` → 캐시 → 온디바이스 → 원격.
 - 요약 단위 결정: **문단**이 표시 단위, **페이지**가 병합 단위. [이 페이지 요약]은 페이지의 본문 문단(kind body, 문장 2개 이상, 60자 이상)을 배열로 보내 문단별 요약 배열을 1회 호출로 받고, 각각을 문단 캐시 키로 저장한다. 그러면 나중에 개별 문단의 [요약 보기]는 캐시 적중이다.
@@ -1198,7 +1285,9 @@ translate(sentences, src, dst):
 - 감지 결과는 설정 > 고급에 "기기 내 AI: 번역 ✓ / 요약 ✗ / 언어감지 ✓"로 표시하고, 사용량 대시보드에서 온디바이스로 처리된 건수를 "절약분"에 포함한다.
 - 사용자가 설정에서 "기기 내 AI 사용 안 함"을 켤 수 있다(품질 비교용).
 
-### 7-5. 캐시 키
+### 7-5. 캐시 키 `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 번역의 `text` 는 **`Unit.src`**(치환·분할 이전의 문장 원문, 7-8-2)다. 낭독 동반 번역과 탭 번역이 같은 `src` 를 쓰므로 같은 키가 된다. 원문 언어는 키에 넣지 않는다 — `docId` 가 이미 문서를 가르고, 사용자가 문서 언어를 고쳐도 같은 원문의 번역은 유효하다. 전역 상한 기본값을 **50MB → 200MB** 로 올린다(아래 근거, 18절).
 
 ```
 cacheKey(docId, text, targetLang, kind, extra = '') =
@@ -1211,12 +1300,16 @@ extra: 요약은 'ar+en', 퀴즈는 'n=5|v=프롬프트버전', 채점은 rubric
 
 - `hash`는 `hash.js`: 보안 컨텍스트면 `crypto.subtle.digest('SHA-256')` → hex 64자, 아니면 FNV-1a 64비트(두 개의 32비트 상태로 구현) hex 16자 + 길이. 접두사로 `s:`/`f:`를 붙여 두 알고리즘의 키가 섞이지 않게 한다. 같은 기기에서 오리진이 바뀌면(LAN http → https) 캐시가 자연히 분리된다(IndexedDB 자체가 오리진별이므로 실제로는 문제가 없다).
 - 캐시 값에 `provider`, `model`, `promptVersion`을 저장하되 **키에는 넣지 않는다**: 모델을 바꿔도 기존 번역은 유효하며 재호출을 유발하지 않는 것이 비용 원칙에 맞다. 사용자가 "다시 생성"을 명시적으로 누를 때만 덮어쓴다.
-- 문서를 삭제하면 `aiCache`에서 `docId` 인덱스로 해당 항목을 지운다. 전역 상한(기본 50MB, 설정 가능)을 넘으면 `createdAt` 오래된 순으로 정리한다.
+- 문서를 삭제하면 `aiCache`에서 `docId` 인덱스로 해당 항목을 지운다. 전역 상한(`[수정 2026-09-28]` 기본 **200MB**, 설정 가능)을 넘으면 `createdAt` 오래된 순으로 정리한다.
+  - 근거 `[추정]` — `[수정 2026-09-28 — 추가 지침 4: 쪽 대신 글자로]`: 낭독 동반 번역은 읽은 글 **전부**를 문장 단위로 캐시한다. 쪽당 문장 수는 책마다 다르므로(CMDT 2026 쪽당 48문장, CMDT 2021 쪽당 19문장 `[실측 2026-09-28]`) **글자로** 잰다. `[실측 2026-09-28]` CMDT 2026 은 4,511자에 48문장 → **1,000자당 약 10.6문장**. 문장 번역 한 항목 ≈ 1KB(아랍어 200자 × UTF-16 + 메타) 로 두면 **원문 1,000자당 약 10.6KB**.
+    - 50MB ≈ 470만 자 ≈ CMDT **반 권**(권당 약 890만~960만 자). 한 권도 못 담으면 다시 읽을 때 **같은 번역에 또 돈을 낸다.**
+    - **200MB ≈ 1,890만 자 ≈ CMDT 약 2권**(2026 판·2021 판 어느 쪽이든 — 두 판은 책 전체 글자 수가 거의 같다). 사용자 기기 quota 285GB 의 0.07% 다(9-2 실측).
+    - 실제 항목 크기(1KB 가정)는 8b 에서 `storage.estimate()` 로 잰다.
 
-### 7-6. 429·오류 상태 기계 (`ai/pipeline.js`)
+### 7-6. 429·오류 상태 기계 (`ai/pipeline.js`) `[수정 2026-09-28]`
 
 ```
-RemoteState: 'ready' | 'inflight' | 'cooldown' | 'exhausted' | 'no-key' | 'offline' | 'capped'
+RemoteState: 'ready' | 'inflight' | 'cooldown' | 'exhausted' | 'no-key' | 'offline' | 'capped' | 'region'   # 'region' [신설 2026-09-28]
 
 ready      --요청--> inflight
 inflight   --2xx-->  ready               (usage.record)
@@ -1224,6 +1317,8 @@ inflight   --429-->  exhausted(until)    until = Retry-After 헤더(초) 가 있
                                           ※ Gemini 무료 티어의 일일 한도는 태평양 시간 기준으로 리셋될 수 있으나 [가정] 정확한 시각을 모르므로
                                             "내일 다시 가능"으로 안내하고, 사용자가 [다시 시도]를 누르면 즉시 ready로 돌린다
 inflight   --401/403--> no-key           키 무효. 설정으로 유도
+inflight   --REGION-->  region           [신설 2026-09-28] 지역 제한(8-2). **키는 문제가 아니다.** 키 다시 넣기로 유도하지 않는다.
+                                          세션 동안 유지(자동 해제 없음). 사용자가 [다시 시도]를 누르거나 프로바이더를 바꾸면 ready
 inflight   --5xx / 네트워크 오류--> cooldown(until = now + 30s → 60s → 120s, 최대 3단계)  자동 재시도 없음. 사용자 재시도 시 cooldown 해제
 inflight   --타임아웃(30s)--> cooldown
 ready      --usage.cap 초과--> capped     사용자 상한. 다음 날 자동 해제 또는 상한 상향
@@ -1234,19 +1329,219 @@ ready      --usage.cap 초과--> capped     사용자 상한. 다음 날 자동 
 - **무한 재시도 금지**: 파이프라인은 어떤 상태에서도 자동 재시도를 하지 않는다. 단 하나의 예외: 5xx에 대해 **1회** 즉시 재시도(지수 백오프 없이) 후 cooldown.
 - 인플라이트 중 같은 캐시 키 요청이 오면 진행 중인 Promise를 공유한다(중복 호출 방지). 사용자가 빠르게 여러 줄을 탭해도 문단당 1회.
 - 요청은 `AbortController`로 30초 타임아웃. 화면을 떠나면 abort(비용은 이미 발생했을 수 있으므로 usage에는 기록).
+- `[신설 2026-09-28]` **낭독 동반 번역에서의 재시도 경계 — "보내지 않은 것"과 "보냈다가 실패한 것"을 가른다.**
+  - 원격 상태가 ready 가 아니어서 **아예 보내지 않은** 문장(창 안의 미적중분)은, 상태가 ready 로 돌아오면(online 이벤트, 날짜 변경으로 `exhausted`·`capped` 해제, 키 저장, 사용자 [다시 시도]) 창 안에 있는 한 **보낸다.** 이것은 재시도가 아니라 첫 전송이다.
+  - **보냈다가 실패한** 문장(5xx 1회 재시도 후 실패, 파싱 실패, SAFETY, 개수 누락)은 `failed` 로 표시하고 **다시 보내지 않는다.** 띠의 [다시 시도](사용자 동작)만 그 쪽의 `failed` 를 다시 보낸다.
+  - `cooldown` 의 `until` 이 지나면 상태는 ready 로 돌아온다. 그 뒤 **새 쪽**의 요청은 첫 전송이므로 나간다. 실패했던 쪽은 위 규칙대로 그대로 `failed`.
+  - 어떤 경우에도 **쪽마다 같은 안내를 반복하지 않는다** — 상태 바는 상태가 바뀔 때 한 번(14-2). 영어(원문) 낭독은 어느 상태에서도 멈추지 않는다.
 
-### 7-7. 인라인 표시 규칙
+### 7-7. 표시 규칙 — 번역은 하단 자막 띠 `[수정 2026-09-28]`
 
-- 번역 블록: 탭한 줄 바로 아래 `<div class="inline-tr" dir="rtl" lang="ar">`. 원문 줄과 시각적으로 묶이도록 왼쪽(논리적 `inline-start`) 세로 선. 닫기 ×. 같은 문단의 다른 줄을 탭하면 이전 블록은 닫히고 새 블록이 열린다(한 번에 하나).
+`[수정 2026-09-28]` **번역 표시는 리플로우·원본 두 뷰 모두 "하단 자막 띠" 하나로 한다.** 초판의 줄 아래 인라인 블록(`div.inline-tr`)은 없앤다.
+
+**왜 인라인이 아니라 띠인가** (18절에 한 줄):
+1. **본문이 움직이지 않는다.** 낭독 동반 번역은 문장마다 번역이 바뀐다. 인라인 블록을 문장 뒤에 넣었다 빼면 그 아래 본문이 문장마다 블록 높이(3~6줄)만큼 오르내린다 — 눈 피로가 이 앱의 핵심 문제다(18절 "리더 기본 뷰"). 띠는 높이가 **고정**이라 본문이 한 번도 밀리지 않는다.
+2. **하이라이트 구조를 건드리지 않는다.** 문장은 줄 중간에서 끝난다. 인라인 블록을 문장 끝에 넣으려면 `span.line` 의 텍스트 노드를 쪼개야 하고, 그것은 10a 의 CSS Custom Highlight(`Range` 가 텍스트 노드 오프셋을 가리킴)와 6a 의 이음새 문제를 다시 연다.
+3. **원본 뷰는 어차피 하단이어야 한다**(canvas 사이에 끼울 수 없다). 띠 하나면 두 뷰가 같은 부품·같은 수용 기준을 쓴다.
+대가는 세로 공간이다 — 아래 예산과 16-D3 의 수치 기준으로 다룬다.
+
+**구조** (`ui/trband.js`, `index.html` 의 `#ttsBar` 바로 앞):
+```
+div.tr-band#trBand [role=region][aria-label=t('readalong.band')][hidden]
+               [data-state = ready | pending | failed | blocked | idle] [data-speaking = src | tr]
+├── p.tr-text  [dir = dirOf(target)] [lang = target]      ← 번역문. textContent 로만
+├── p.tr-note  [dir = UI 방향]                              ← "번역 중…" · "번역 실패" · 상태 한 줄 (UI 언어)
+├── button.tr-retry  (failed 일 때만)                        ← [다시 시도] — 사용자 동작만 재전송(7-6)
+└── button.tr-close  (탭 번역으로 열렸을 때만, 48×48)
+```
+- `dirOf(lang) = RTL_LANGS.includes(lang) ? 'rtl' : 'ltr'`, `RTL_LANGS = ['ar','fa','he','ur']`(`config.js`). 대상이 `ko` 가 되면 저절로 `ltr` 이다. 글꼴은 `.tr-text:lang(ar) { font-family: var(--font-ar) }` 식으로 **언어 속성**에서 고른다. `unicode-bidi: plaintext`(혼합 문장).
+- **모든 삽입은 `textContent`**. AI 출력에 HTML 이 있어도 글자로 보인다(13절).
+- `aria-live` 를 **주지 않는다** — 낭독이 이미 소리로 읽고 있다. 스크린 리더는 region 으로 찾아 읽는다.
+
+**세로 예산** — ★ 10b 에서 "토큰이 실제 렌더 높이보다 작아서 원본 쪽 아래가 잘렸다"(tokens.css 주석). 띠는 같은 실수를 하지 않도록 **높이를 내용이 아니라 토큰이 정한다**(`block-size`, `min-block-size` 아님):
+```
+--tr-fs:     clamp(18px, calc(var(--reader-fs) * 0.9), 24px)    # 번역 글자. Aa 슬라이더를 따라가되 상한 24px
+--tr-lh:     1.8                                               # 아랍어는 상하 돌출이 커 여백이 필요(11-4)
+--tr-lines:  3
+--tr-pad:    6px                                               # 위아래 각각
+--tr-band-h: min(calc(var(--tr-lines) * var(--tr-fs) * var(--tr-lh) + 2 * var(--tr-pad) + 1px), 22dvh)   # +1px = 위 테두리
+.tr-band { box-sizing: border-box; block-size: var(--tr-band-h); overflow-y: auto; overscroll-behavior: contain;
+           position: fixed; inset-block-end: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + var(--tts-h) + env(safe-area-inset-bottom, 0px)); }
+body[data-tr-band="on"] { --reader-chrome-bottom: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + var(--tts-h) + var(--tr-band-h)); }
+```
+- 띠가 켜지면 **`--reader-chrome-bottom` 하나가 늘어난다.** 리플로우 아래 여백, 원본 뷰 flex 상자(`.screen` 의 `padding-block-end`), Aa·속도 팝오버 위치가 전부 이 토큰 하나를 쓰므로(10b) 따로 고칠 곳이 없다. 띠가 꺼지면 원래 138px 로 돌아간다.
+- 띠가 켜지는 조건: 낭독 동반 번역의 **유효 모드**(7-8-1)가 `show`·`speak` 이거나, 탭 번역으로 열렸을 때. 키가 없거나 원문=대상 언어 등으로 유효 모드가 `off` 면 **자리를 잡지 않는다**.
+
+| 창(CSS px) | 기존 본문 높이 = H − 49 − 138 | 띠 (`reader-fs`) | 띠 켠 본문 높이 | 감소 |
+|---|---:|---:|---:|---:|
+| 360×800 세로 (16-G) | 613 | 119.9 (22px) | 493 | −19.6% |
+| 360×740 세로 (주소창 있음) | 553 | 119.9 (22px) | 433 | −21.7% |
+| 360×740, 글자 최대 | 553 | 142.6 (≥ 26.7px → tr-fs 24) | 410 | −25.8% |
+| 800×360 가로 | 173 | 79.2 (22dvh 로 잘림 → 약 2줄) | 94 | −46% |
+
+원본 뷰(360×740, 폭 맞춤): CMDT 517×720pt 쪽 = 약 501px 높이 → 상자 553 에서 **다 보이던 것이** 433 에서는 86% 가 보이고 나머지는 상자 안 스크롤로 닿는다. Harrison 612×792pt = 466px → 93%. **잘리는 것이 아니라 스크롤로 닿는 것**이 수용 기준이다(16-D3). 가로 모드는 원래도 좁다 — 띠가 2줄로 줄고 넘치는 번역은 띠 안에서 스크롤된다.
+
+**넘치는 번역문**: 3줄은 약 100~130자(아랍어, 360px 폭)다. 의학 문장의 번역은 그보다 길 때가 많다 `[추정]`. 띠 안에서 스크롤되며, 발화 중에는 **경과 비율 스크롤**을 한다 — `scrollTop = (scrollHeight − clientHeight) × clamp((경과 − 1s) / expectedMs, 0, 1)` 를 500ms 마다(Android 에 `onboundary` 가 없으므로 6-4 의 글자 수 비율 타이머와 같은 방식). `show` 모드는 **원문 발화** 시간, `speak` 모드의 `tr` 단계는 **번역문 발화** 시간을 쓴다. 사용자가 띠를 만지면 그 문장 동안은 멈춘다. `prefers-reduced-motion` 이면 부드럽게 흐르지 않고 계단으로 옮긴다.
+
+**무엇을 보이는가**:
+- 낭독 중·일시정지: 지금 발화 번호 `i` 의 문장(`Unit.seg`) 번역. `pending` 이면 `tr-note` 에 "번역 중…", `failed` 면 "번역 실패" + [다시 시도], `blocked`(원격 상태가 ready 아님)면 상태 한 줄(`ai.state.*` 짧은 형) — 긴 안내는 상태 바(14-2)가 한 번만 한다.
+- 탭 번역(멈춰 있을 때 탭 / 낭독 중 길게 누르기): 그 문장의 번역을 띄우고 [×] 로 닫는다. 낭독 중에 연 탭 번역은 **다음 발화가 시작되면** 낭독 문장으로 돌아간다. [문단 전체] 토글은 그 문단 문장들의 번역을 이어서 보인다(띠 안 스크롤).
+
 - 요약 블록: 문단 아래 `<div class="inline-sum">` 안에 아랍어(RTL) → 영어(LTR) 순서로 두 단락. 각 단락에 [낭독] 버튼(아랍어 음성 없으면 비활성 + 툴팁).
 - 모든 삽입은 `textContent`. AI 출력에 HTML이 있어도 문자로 보인다.
-- 원본 뷰에서는 인라인 삽입이 불가하므로 하단 시트(bottom sheet)로 같은 내용을 보여준다.
+- 원본 뷰에서는 인라인 삽입이 불가하므로 하단 시트(bottom sheet)로 같은 내용을 보여준다. `[수정 2026-09-28]` 이 줄은 이제 **요약**에만 해당한다. 번역은 두 뷰 모두 자막 띠다.
+
+### 7-8. 낭독 동반 번역 — 주 사용 경로 `[신설 2026-09-28]`
+
+실사용자 요구: "한 번에 모두 번역할 필요는 없고, **책을 읽으면서 각 줄을 소리 내어 번역**해 주면 된다." 낭독이 문장 단위이므로(6-1) 번역도 **낭독하는 문장 하나하나를 따라간다**. 모듈은 `ai/readalong.js`(서비스 — 창·선행 요청·조회), 표시는 `ui/trband.js`(7-7), 소리는 `tts/speaker.js` 의 `tr` 단계(6-1·6-2).
+
+#### 7-8-1. 모드와 기본값
+
+설정 `readalong.mode`(9-3): `'off'`(끔) · `'show'`(번역 표시) · `'speak'`(번역 표시 + 번역문 낭독). **기본값 `'speak'`.**
+
+- 근거: 요구가 문자 그대로 "소리 내어 번역"이고, 이 기능을 쓰려면 사용자가 어차피 설정 AI 탭에서 키를 넣어야 한다 — 그 화면에 모드 선택이 있다(12-7). 기본을 `show` 로 두면 요구한 기능이 "없는 것처럼" 보인다.
+- 대가 `[추정]`: 발화 시간. 원문 14자/초(6-2), 번역문 10자/초 `[가정]`, 쪽당 평균 4,511자(CMDT `[실측 2026-09-28]` — 5쪽 간격 표본 394쪽, `buildUnits` 를 거친 낭독 글자 수. Harrison 은 4,031자)이고 번역문 글자 수가 원문과 비슷하다면: 원문만 ≈ 5.4분, 번역문만 ≈ 7.5분, 원문 + 번역문 ≈ 12.9분 — **약 2.4배**(비율은 글자 수와 무관). CMDT 1,967쪽이면 약 176시간 → 423시간이다. 그래서 (1) 모드 전환을 **속도 팝오버**(12-3, 읽는 중 한 번 탭)에 두고, (2) `readalong.speakSource`(기본 `true`)를 끄면 원문은 소리 없이 하이라이트만 하고 **번역문만** 읽는다(6-1) — 약 1.4배. **`speakSource` 기본 `true`(원문 → 번역문 둘 다 읽기)는 사용자 확정**(2026-09-28).
+- 아랍어 음성이 없으면 **유효 모드**가 `show` 로 내려간다(7-8-5). 설정값은 바꾸지 않는다 — 음성 팩을 깔면 저절로 `speak` 가 된다.
+
+**유효 모드**는 순수 함수 `effectiveMode(ctx)`(`ai/readalong.js` export, 테스트 대상)가 정한다. 위에서부터 처음 걸리는 줄이 이긴다.
+
+| 조건 | 유효 모드 | 띠 | 안내 (한 번) |
+|---|---|---|---|
+| `mode = 'off'` | off | 없음 | — |
+| 동의 전(`privacy.consentedAt` 없음) | off | 없음 | 동의 카드로(13절) |
+| 원문 언어 미지원(`documents.lang ∉ SUPPORTED_SRC`, 9-2) | off | 없음 | `readalong.unsupportedLang` |
+| 원문 언어 = 대상 언어 | off | 없음 | `readalong.sameLang` |
+| `tts.unit = 'line'` | off | 없음 | `readalong.lineMode` |
+| 키 없음 | off | 없음 | `ai.state.noKey` + [키 설정] (재생을 처음 누를 때) |
+| `mode = 'speak'` 이고 번역문 음성 불가 | show | 있음 | `readalong.noVoice {lang}` |
+| 그 밖 | `mode` 그대로 | 있음 | — |
+
+원격 상태(`exhausted`·`capped`·`offline`·`cooldown`·`region`)는 유효 모드를 바꾸지 않는다 — 띠는 남아 캐시된 번역을 계속 보이고, 없는 문장은 `blocked` 로 표시된다. 그래야 상태가 돌아왔을 때 화면이 들썩이지 않는다.
+
+#### 7-8-2. ★ 번역 단위 = 낭독 단위 — 분할은 한 벌
+
+**문장을 나누는 함수가 두 곳에서 불리면 번역이 한 문장씩 밀린다.** 이것을 세 겹으로 막는다.
+
+1. **분할 함수는 하나다.** 번역 입력은 `tts/text.js` 의 `buildUnits(paras, 'sentence')` 결과에서만 만든다. `ai/*`·`ui/*` 어디에서도 `splitSentences` 를 부르지 않는다(3-2, grep 으로 확인). `buildUnits` 가 만드는 `Unit` 에 세 필드를 더한다:
+   ```
+   Unit.src   normalizeSpeech 이전의 문장 원문(joinPieces 결과의 [from, to) 구간). 300자 분할 조각들도 같은 src
+   Unit.seg   쪽 안의 문장 번호(0부터). 조각들은 같은 seg
+   Unit.kind  문단 kind ('table-notice' 포함)
+   ```
+   그리고 순수 함수 하나를 더한다:
+   ```
+   sentencesOf(units) → [{ seg, src, paraId, kind, frag }]      # seg 오름차순, seg 당 하나, kind='table-notice' 제외
+       frag: 'head' — 쪽의 마지막 문장이고 endsSentence(src) 가 거짓 (다음 쪽으로 이어진다)
+             'tail' — 쪽의 첫 문장이고 첫 글자가 소문자 (앞 쪽에서 이어졌다)
+             null   — 그 밖
+   ```
+2. **입력도 하나다.** 지금 쪽은 `reader.flowParas()`, 그 뒤의 쪽들은 UI 가 주입하는 `loadParas(n)`(`n = p+1, p+2, …` — 창이 찰 때까지 여러 쪽, 7-8-3) = `flowParasOf(describePage(fromStored(rec)))`. `buildUnits` 는 **여전히 쪽마다** 돈다 — 청크는 그 결과 문장들을 읽기 순서로 **이어 붙이기만** 한다(쪽을 넘는 문장의 `frag` 규칙도 그대로). `flowParas()` 는 `flowParasOf(state.desc)` 에 표 안내만 끼운 것으로 **고쳐 쓴다**(지금은 같은 일을 인라인으로 한다) — 두 입력이 같은 함수를 지난다. 표 안내 문단은 `kind='table-notice'` 라 `sentencesOf` 가 빼므로 앞뒤 번호에 영향이 없다.
+3. **조회는 번호가 아니라 원문으로 한다.** 번역을 찾을 때 `seg` 번호로 찾지 않고 `normalize(Unit.src)`(7-5 의 `normalize`) 문자열을 키로 찾는다. 번호는 요청 안에서 응답을 짝지을 때(10-2 의 `i`)만 쓴다. 그래서 설령 다음 쪽을 미리 만든 큐와 실제로 넘어가서 만든 큐가 달라져도(표 안내가 끼는 등) **엉뚱한 문장의 번역이 뜨는 일은 없다** — 최악이 "번역 없음"이다.
+
+테스트(8a, `tests/tts-text.test.mjs`·`tests/readalong.test.mjs`):
+- R1 같은 입력에 `buildUnits` 두 번 → `sentencesOf` 결과가 `JSON.stringify` 기준 같다.
+- R2 모든 `Unit` 에 대해 `sentencesOf` 안에 `src` 가 같은 항목이 정확히 하나 있다(조각 포함).
+- R3 300자 분할 문장: 조각 수 ≥ 2 인데 `sentencesOf` 항목은 1개.
+- R4 표 안내가 낀 큐와 안 낀 큐의 `sentencesOf` 가 같다.
+- R5 **변이 테스트**: `sentencesOf` 가 `splitSentences` 를 따로 부르도록 바꾸거나 약어 목록 하나를 빼면(두 번째 분할이 생긴 상황) R2 가 빨개진다.
+- R6 `grep` — `splitSentences` 호출은 `tts/text.js` 한 곳.
+
+#### 7-8-3. 요청 병합과 선행 요청 — 글자 수 창과 청크 `[수정 2026-09-28 — 추가 지침 4: 쪽 → 글자 수]`
+
+초판(같은 날)은 창 `{p, p+1}` 과 "쪽 단위 1회 호출"이었다. **쪽은 책마다 크기가 2배 넘게 달라** 같은 공부량의 호출 수가 책을 따라 흔들린다(7-1 원칙 2, 18절). 그래서 창과 요청 단위를 **글자 수**로 바꾼다.
+
+**용어**
+- **흐름(stream)**: 커서가 있는 쪽 `p` 부터 `p+1, p+2, …` 의 `sentencesOf(buildUnits(paras, 'sentence'))` 를 읽기 순서로 이어 붙인 문장 열. 각 문장은 `(page, seg, src, frag)`. 쪽마다 따로 만든 것을 **이어 붙이기만** 한다(7-8-2).
+- **커서**: 지금 발화 중인 문장(`speaker` 의 현재 `Unit` → 그 `seg`).
+- **거리** `dist(s)` = 커서 문장부터 `s` 직전 문장까지의 `src` 글자 수 합. 커서 문장 자신은 0.
+- **창** `W` = `dist(s) < READ_AHEAD_CHARS` 인 문장들(7-1 원칙 2).
+- **덮인 거리** `covered` = 커서부터 연속으로 `ready`·`pending` 인 문장들의 글자 수 합(첫 빈 문장에서 멈춘다).
+- **청크** = 창 안의 **빈 문장**(`mem` 에 없거나 `blocked` — 보내지 않은 것)을 읽기 순서로 모아 누적 `MAX_REQ_CHARS`(6,000자)·`MAX_REQ_TOKENS` 이하로 자른 것. **이미 캐시된 문장은 건너뛰고 채운다**, `failed` 는 건너뛴다(7-6 — 다시 보내지 않는다).
+
+```
+readalong (서비스, 문서당 하나):
+  mem:    Map<normalize(src), {state:'ready'|'pending'|'failed'|'blocked', text?}>   # 창 안 + 커서 쪽 문장만. 커서 뒤로 지나간 쪽은 버린다
+  stream: Map<pageNo, sentences[] | 'unextracted'>                                  # loadParas 결과 캐시(창을 벗어난 쪽은 버린다)
+  inflight: 0 | 1  (+ 냉시작 head 1)
+
+  onQueue(p, units):          # speaker 가 쪽 큐를 새로 만들 때(play·advancePage·reload) — 낭독 중일 때만
+      stream[p] ← sentencesOf(units); 커서 ← speaker 의 현재 seg
+      refill(cold = 커서 문장이 mem 에 없다)
+
+  onProgress():               # linechange 마다 — 커서만 옮기고 refill
+      커서 ← 현재 seg; refill(cold = false)
+
+  refill(cold):
+      if 원격 상태 != ready: 창 안 빈 문장을 'blocked' 로 표시하고 끝          # 보내지 않은 것(7-6). 요청 0건
+      if inflight == 1 and !cold: 끝                                         # 한 번에 하나
+      if !cold and covered > READ_AHEAD_CHARS − MAX_REQ_CHARS: 끝             # 기본 9,000 − 6,000 = 3,000자 넘게 덮여 있으면 아직 이르다
+      cand ← 창 안을 커서부터 걸으며 빈 문장 수집:
+          쪽 n 의 문장이 필요하면 stream[n] 없을 때 await loadParas(n)
+              null(미추출) → stream[n] ← 'unextracted'; **그 경계에서 수집을 멈춘다**(기다리지 않는다)
+          cache.getMany 로 적중한 문장은 mem 'ready' 로 올리고 건너뛴다
+          dist(s) ≥ READ_AHEAD_CHARS 이면 멈춘다
+      if cold: head ← cand 앞에서 HEAD_CHARS(600자)까지 떼어 곧장 보낸다       # 냉시작만 head 가 더해진다
+      chunk ← cand 앞에서 누적 MAX_REQ_CHARS 이하(문장 경계)
+      send(chunk)
+
+  send(chunk):
+      chunk 문장들 → mem 'pending'; inflight++
+      r ← pipeline.translate(chunk, {src: doc.lang, target, kind:'readalong', docId})
+      성공 → cache.putMany + mem 'ready' + emit('change', src)
+      누락·실패 → mem 'failed' (다시 보내지 않는다 — 7-6)
+      inflight--; refill(false)                                            # 끝나면 다음을 볼 기회
+```
+
+- **청크 크기가 쪽과 무관하다.** `[실측 2026-09-28]` 쪽당 글자 수: CMDT 2021 평균 1,907(중앙값 2,006·최대 3,054, 쪽당 19문장), CMDT 2026 평균 4,511(중앙값 5,260·최대 6,793, 48문장), Harrison 4,031. 쪽 단위였다면 CMDT 2026 은 21.1% 의 쪽이 2회(쪽당 평균 1.2회)였고 CMDT 2021 은 매 쪽 1회라 한 권 ≈ 5,000회였다. 청크(6,000자)면 두 CMDT 모두 한 권 ≈ 1,500~1,600회로 **같은 공부량이면 같은 호출 수**다.
+- **선행 요청 시점: 덮인 거리가 `READ_AHEAD_CHARS − MAX_REQ_CHARS`(기본 3,000자 = 청크의 절반) 이하로 떨어질 때.** 그때 창 끝까지 비어 있는 약 6,000자를 한 청크로 보낸다. 원문 3,000자는 낭독으로 약 3.5분(14자/초), `speak` 모드면 약 8.5분이라 응답 지연(수 초 `[가정]`)보다 훨씬 길다. 재생을 누르자마자 멀리까지 요청하지 않는 이유: 두세 문장 듣고 멈추는 일이 흔하고, 그때 앞선 청크는 버린 돈이 된다.
+- **`READ_AHEAD_CHARS` 기본값이 `MAX_REQ_CHARS` 가 아니라 그 1.5배(9,000자)인 이유**: 창을 6,000자로 두면 "청크 절반을 읽었을 때 다음 청크"를 보낼 자리가 3,000자밖에 남지 않아 청크가 늘 반쪽이 되고 호출 수가 약 2배가 된다. 창 = 청크 + 선행 여유(청크의 절반)여야 청크가 꽉 찬다. 커서로부터 9,000자를 넘는 곳은 여전히 요청하지 않는다.
+- **냉시작**(커서 문장이 `mem` 에 없음 — 재생을 누른 곳, 쪽 건너뛰기 뒤)만 head 1회가 더해진다: 첫 문장의 번역이 청크 전체 응답(수 초~십수 초 `[가정]`)을 기다리지 않게 하려는 것이다. head 와 첫 청크는 겹치지 않는다(head 로 보낸 문장은 `pending` 이라 청크 수집에서 빠진다). 이때만 떠 있는 요청이 2개다.
+- **다음 쪽 문단 공급**: 쪽이 작은 책은 청크 하나가 3쪽 이상에 걸친다(CMDT 2021: 6,000 ÷ 1,907 ≈ 3.1쪽, 창 9,000자 ≈ 4.7쪽). 그래서 `loadParas` 는 `p+1` 만이 아니라 **창이 찰 때까지 여러 쪽**을 차례로 준다. 결과는 `stream` 에 두어 같은 쪽을 다시 읽지 않는다. **아직 추출되지 않은 쪽을 만나면 그 경계에서 청크를 끊고 보낸다**(추출을 기다리지 않는다). 다음 `onProgress` 때 그 쪽을 다시 물어본다.
+  - 추출 큐(9-4)와의 관계: **낭독 동반 번역은 추출 우선순위를 올리지 않는다.** 추출 큐가 이미 현재 쪽 ±1(priority 0)과 ±2…±5(priority 1)를 먼저 처리하므로, 창(최대 약 5쪽)은 보통 이미 추출돼 있다.
+- **같은 문장을 두 번 보내지 않는다**: `pending` 은 수집에서 빠지고, 파이프라인은 같은 캐시 키의 인플라이트 Promise 를 공유한다(7-6). 사용자가 앞뒤로 오가도 캐시 적중이다.
+- 요청은 원격 호출이 **시작될 때** `usage.calls++`, `byKind.readalong++`, `charsTranslated += 청크의 src 글자 수 합`(15절 글자 기준 지표).
+
+#### 7-8-4. 번역이 늦거나 막힐 때 — 원문 낭독은 멈추지 않는다
+
+| 상황 | `show` 모드 | `speak` 모드 |
+|---|---|---|
+| 그 문장 `pending` | 띠에 "번역 중…", 도착하면 그 자리에서 채움 | 원문을 읽은 뒤 `tr-wait` — **최대 `READALONG.TR_WAIT_MS`(4초)**. 도착하면 번역문을 읽고, 아니면 **건너뛰고** 다음 문장 원문으로. 건너뛴 문장의 번역문은 되돌아가 읽지 않는다(띠에는 도착하면 채운다) |
+| 그 문장 `failed` | "번역 실패" + [다시 시도] | 기다리지 않고 다음 원문으로 |
+| 원격 상태 `exhausted`·`capped`·`offline`·`no-key`·`region`·`cooldown` → `blocked` | 띠에 짧은 상태 한 줄. 상태 바는 **상태가 바뀔 때 한 번**(14-2) | 기다리지 않는다(0초) |
+
+- 4초의 근거: 원문 한 문장 발화가 대략 8~15초다. 번역이 그보다 늦게 오는 것은 대개 냉시작 첫 문장이거나 원격이 느린 경우인데, 4초 넘게 침묵하면 사용자는 "멈췄다"고 느낀다. head 청크(600자)의 응답 시간은 `[가정 — 1~3초]` 이고 7b 의 [시험 번역]이 실제 지연(ms)을 보인다 — 그 값을 보고 8b 에서 조정한다.
+- **쪽마다 반복 호출·반복 안내 금지**: 원격 상태가 ready 가 아니면 `refill` 은 요청 없이 `blocked` 만 표시한다(요청 0건 — 쪽을 몇 번 넘겨도). 상태 바 문구는 상태 전이에서만 나온다.
+
+#### 7-8-5. 번역문 낭독 — 음성
+
+- 음성: `pickVoice(target, voices, settings['tts.voice.' + target])`(6-3). `ar` 을 박지 않는다.
+- 음성이 없으면(`null`) 유효 모드 `show` + `readalong.noVoice {lang}` 한 번(설치 안내 링크는 6-3 배너 재사용). 음성 목록이 비어 판정할 수 없으면 한 번 시도하고, **첫 `tr` 발화가 오류로 끝나면**(`interrupted`·`canceled` 외) 그때 `show` 로 내려간다 — 세션 동안 유지.
+- 속도는 원문과 같은 `tts.rate` 를 쓴다(따로 두지 않는다 — 조작을 늘리지 않는다. 실기기에서 아랍어가 너무 빠르다는 말이 나오면 그때 나눈다).
+- 체이닝·워치독·하이라이트는 6-1(단계 표)·6-2(`speakTr`)·6-5(하이라이트는 원문 문장에 머묾)가 정한다.
+
+#### 7-8-6. 상수 (`config.js` `READALONG`)
+
+```
+READALONG = {                # [수정 2026-09-28 — 추가 지침 4] PREFETCH_AT(쪽 비율)을 없애고 글자 기준으로
+  READ_AHEAD_FACTOR: 1.5,  # READ_AHEAD_CHARS = ai.maxReqChars(기본 6000) × 이 값 = 9000. 숫자를 두 곳에 두지 않는다
+                           # 선행 요청 문턱 = READ_AHEAD_CHARS − maxReqChars (덮인 거리가 이 이하일 때 다음 청크, 기본 3000)
+                           # 사용자가 ai.maxReqChars 를 바꾸면 창·문턱이 같은 비율로 따라간다
+  HEAD_CHARS:   600,       # 냉시작 head 청크 크기
+  TR_WAIT_MS:   4000,      # speak 모드에서 번역 도착을 기다리는 상한
+  LAG_NOTICE_AFTER: 3,     # 연속 이만큼 건너뛰면 'readalong.lagging' 한 번
+  SPLIT_BREAKS_TR: ['،', '؛', ',', ';']   # 번역문 300자 분할 경계(6-4) — 대상 언어가 바뀌어도 해가 없는 문자들
+}
+TTS.CHARS_PER_SEC_TR = 10  # [가정] 번역문 워치독용. 8b 실기기에서 잰다
+RTL_LANGS = ['ar', 'fa', 'he', 'ur']
+SUPPORTED_SRC = ['en', 'fr', 'ko']   # 9-2
+```
+**무료 티어 한도 숫자는 여기에도 없다**(15절).
 
 ---
 
 ## 8. 프로바이더 추상화 인터페이스
 
-### 8-1. `AIProvider` 인터페이스
+### 8-1. `AIProvider` 인터페이스 `[수정 2026-09-28]`
 
 ```
 interface AIProvider {
@@ -1266,9 +1561,9 @@ CompletionResult   { text: string, usage: { input: number, output: number } | nu
 
 번역·요약·출제·채점은 `pipeline.js`가 `prompts.js`로 `CompletionRequest`를 만들고 `provider.complete()`를 호출한 뒤 `jsonrepair.js`로 파싱한다. **프로바이더는 프롬프트 내용을 모른다**(교체 가능성의 핵심).
 
-편의 함수(파이프라인 계층): `translate(segments, targetLang)`, `summarize(text, langs)`, `generateQuiz(passage, n)`, `gradeWriting(text, rubric)` — 모두 `complete()` 위에 구현.
+편의 함수(파이프라인 계층): `translate(segments, {src, target, kind, docId})`(`[수정 2026-09-28]` 초판 `translate(segments, targetLang)` — 원문 언어를 값으로 받는다, `kind ∈ 'translate'|'readalong'`), `summarize(text, langs)`, `generateQuiz(passage, n)`, `gradeWriting(text, rubric)` — 모두 `complete()` 위에 구현.
 
-### 8-2. 어댑터 선언 형태
+### 8-2. 어댑터 선언 형태 `[수정 2026-09-28]`
 
 각 어댑터는 함수 4개로 분리된 선언 객체다. `ProxyProvider`는 `endpoint`와 `headers`만 바꾸면 되도록 한다.
 
@@ -1279,9 +1574,17 @@ adapter = {
   headers(key)               → { 'Content-Type': 'application/json', ... 인증 헤더 }
   bodyBuilder(req, model)    → JSON 직렬화 가능한 객체
   responseParser(json)       → { text, usage }
-  errorParser(status, json)  → code: 'RATE_LIMIT' | 'AUTH' | 'SERVER' | 'BAD_REQUEST' | 'SAFETY' | 'UNKNOWN'
+  errorParser(status, json)  → code: 'RATE_LIMIT' | 'AUTH' | 'REGION' | 'SERVER' | 'BAD_REQUEST' | 'SAFETY' | 'UNKNOWN'
 }
 ```
+
+`[신설 2026-09-28]` **`REGION` — 지역 제한은 `AUTH` 와 다른 코드다.** 실사용자 Nour 는 시리아(라타키아)에 있다. 그가 "Gemini·Copilot 등을 쓸 수 있다"고 한 것은 **소비자용 웹 앱**을 쓸 수 있다는 뜻일 뿐, **API 를 시리아 IP 에서 호출할 수 있다는 뜻이 아니다.** `[가정]` Gemini API 는 지원하지 않는 지역에서 **400 + `error.status: 'FAILED_PRECONDITION'`**, 메시지 "User location is not supported for the API use" 류를 낸다고 알려져 있다. 이것을 "키가 틀렸다"로 안내하면 사용자는 영원히 키만 다시 넣는다.
+- gemini `errorParser`: `(status === 400 && error.status === 'FAILED_PRECONDITION') || ((status === 400 || status === 403) && /user location|not supported.*(location|region|country)/i.test(error.message))` → `'REGION'`. **이 판정은 `AUTH`·`BAD_REQUEST` 판정보다 먼저** 한다(403 으로 올 가능성도 배제하지 않는다 — 그때 `AUTH` 로 떨어지면 같은 오안내가 된다). 메시지 문구는 가정이므로, 판정 근거(상태 코드·`error.status`·메시지)를 `dev.debug` 일 때 **키를 지운 채**(`redactString`) 표시해 실물 응답으로 확정한다.
+- 이 코드는 파이프라인 상태 `region`(7-6), 검증 결과 "지역 제한"(8-4), 문구 `ai.state.region`(14-2)으로 이어진다.
+- `[가정]` 확인 방법: **Nour 의 기기·시리아 네트워크에서** 7b 설정 AI 탭의 [검증]·[시험 번역]을 누른다. 한국에서 통과해도 시리아에서 막힐 수 있다 — 이 확인 없이는 결론이 나지 않는다(16-D0 `[M]`). 모델 목록(`GET /models`)은 통과하고 생성(`generateContent`)만 막힐 수도 있으므로 **두 호출을 모두** 본다.
+
+`[신설 2026-09-28]` **지역 제한 시 대안(위치만 잡는다 — 이번 Build 범위 아님, 19절)**: Nour 가 말한 "GROOC" 는 **xAI Grok** 으로 확정됐다. 대안 어댑터 `xai` = `openai-compat` 파라미터화, base `https://api.x.ai/v1`(아래 표에 행 추가). 다음은 전부 `[가정]` 이다 — (1) 브라우저 직접 호출(CORS) 허용 여부, (2) **무료로 쓸 수 있는지** — 유료라면 1절의 "사용자 비용 0원" 원칙과 **충돌한다**. 붙이기 전에 사용자가 비용을 받아들일지 먼저 정해야 한다, (3) 시리아 지역 제한 여부. 붙일 때 7b 와 같은 방법([검증]·[시험 번역]을 Nour 기기에서)으로 확인한다. **Copilot 은 공개 BYOK API 가 없으므로 대상에서 뺀다.** Nour 가 쓰는 "AI 기반 도서 서비스"(**NotebookLM**)도 공개 BYOK API 가 없어 **연동 대상이 아니다**(역할 분담은 17절).
+- 참고 신호: Nour 가 시리아에서 NotebookLM(구글 소비자 제품)을 쓴다는 것은 Gemini **API** 가 막히지 않았을 가능성에 대한 **약한** 긍정 신호일 뿐이다. 소비자 제품과 API 의 지역 정책은 다를 수 있다. 결론은 Nour 기기 실호출로 낸다(16-D0).
 
 `provider.js`의 공통 `complete()`가 `fetch(endpoint, { method:'POST', headers, body, signal })` → 상태 코드 분기 → `responseParser`를 호출한다. 429는 `Retry-After`를 읽어 파이프라인에 넘긴다.
 
@@ -1292,10 +1595,13 @@ adapter = {
 | openai | base `https://api.openai.com/v1` | ″ | ″ | 기본 모델 `[가정]` 저가 mini 계열 |
 | mistral | base `https://api.mistral.ai/v1` | ″ | ″ | 무료 실험 티어 존재 `[가정]` |
 | openrouter | base `https://openrouter.ai/api/v1` | ″ + `HTTP-Referer`, `X-Title: MedReader` | ″ | `:free` 접미 모델 선택 가능 |
+| xai `[신설 2026-09-28 — 위치만]` | base `https://api.x.ai/v1` | ″ | ″ `[가정]` | 지역 제한 시 대안(19절). CORS·무료 여부·시리아 지역 제한 전부 `[가정]`. 유료면 "비용 0원" 원칙과 충돌 |
 | anthropic | `https://api.anthropic.com/v1/messages` | `x-api-key`, `anthropic-version: 2023-06-01`, **`anthropic-dangerous-direct-browser-access: true`** | 없음 → 프롬프트로 JSON 강제 + jsonrepair | `system`, `messages`, `max_tokens` 필수, `usage.input_tokens/output_tokens` |
 | proxy (나중) | 설정의 URL | `Authorization: Bearer {앱 토큰}` 또는 없음 | 서버 결정 | 서버가 프로바이더를 감춘다. 클라이언트 변경은 어댑터 1개 추가뿐 |
 
-### 8-3. CORS — 브라우저 직접 호출 가능성
+### 8-3. CORS — 브라우저 직접 호출 가능성 `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` **Gemini 행은 아직 `[가정]` 이다.** 7a 까지 `fetch` 스텁으로만 검증했고 실제 호출을 한 사람이 없다. `x-goog-api-key`·`Content-Type: application/json` 은 **사용자 정의 헤더**라 브라우저가 preflight(`OPTIONS`)를 먼저 보낸다 — preflight 가 거절되면 본 요청은 나가지도 않고 `TypeError: Failed to fetch` 만 남는다. 확인 방법(7b 의 첫 작업): 배포본(https) 설정 AI 탭 → [검증](`GET /models`) → [시험 번역](`POST …:generateContent`, 고정 예문 2문장). DevTools 네트워크 탭에서 `OPTIONS` 204/200 과 `access-control-allow-origin`, 본 요청 200 을 본다. 키 입력은 **사용자 본인이 한다**(에이전트는 실제 키를 입력하지 않는다). 한국 PC 와 **Nour 기기(시리아)** 두 곳에서 본다(8-2 `REGION`).
 
 | 프로바이더 | 브라우저 직접 호출 | 근거/조건 |
 |---|---|---|
@@ -1308,7 +1614,9 @@ adapter = {
 
 CORS 실패(`TypeError: Failed to fetch`)는 네트워크 오류와 구별이 안 되므로, `verifyKey()` 단계에서 실패하면 "이 프로바이더는 브라우저에서 직접 호출이 차단되었을 수 있습니다"를 함께 안내한다.
 
-### 8-4. 키 검증
+### 8-4. 키 검증 `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 검증 결과는 **다섯 갈래**다: 유효 / 무효(`AUTH`) / 한도(`RATE_LIMIT`, 키는 유효) / **지역 제한(`REGION`, 키는 판정 불가 — "키 문제가 아닙니다")** / 확인 불가(네트워크·CORS). `verifyKey()` 는 `REGION` 이면 `{ok:false, code:'REGION', canSave:true}` 를 돌려준다(키 저장은 막지 않는다 — 키는 멀쩡할 수 있고, 대안 경로(VPN·다른 프로바이더)에서 쓸 수 있다). `GET /models` 가 통과해도 생성이 지역으로 막힐 수 있으므로 **[시험 번역]** 결과도 같은 다섯 갈래로 보인다(12-7).
 
 ```
 keyPattern (gemini) = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
@@ -1333,11 +1641,23 @@ keyPattern (gemini) = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
 - 마이그레이션 정책: `db.js`는 `MIGRATIONS = { 1: fn, 2: fn, … }` 사다리를 두고 `oldVersion+1 … newVersion`을 순서대로 실행한다. 각 fn은 멱등이어야 한다(`objectStoreNames.contains` 검사).
 - DB 이름 `medreader`, 버전 **`2`** `[수정 2026-09-21]`. 초판은 `1`이었다. `pages`에 **`docId_algoVersion` 복합 인덱스**를 더했고 IndexedDB는 **인덱스 추가에 버전 증가가 필요**하다. 이 인덱스가 없으면 9-4 재개 때 "`algoVersion`이 최신인 쪽" 집합을 구하려고 **7000쪽 × 9KB를 전부 역직렬화**해야 한다. 배포 후에는 되돌릴 수 없으므로 **배포 전인 지금** 올린다. `MIGRATIONS[2]`는 기존 스토어에 빠진 인덱스만 보충하고 데이터는 건드리지 않는다(멱등). `blocked`/`versionchange` 이벤트에서 다른 탭에 닫기 요청 후 안내.
 
-### 9-2. 스토어 정의
+### 9-2. 스토어 정의 `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` **원문 언어는 문서 속성이다.** `documents` 에 `lang`(기본 `'en'`), `langSource`(`'default'|'auto'|'user'`), `langGuess`(`{lang, score, script}` 마지막 추정 결과) 를 둔다. 필드 추가라 DB 버전은 그대로다(9-1). 옛 레코드에 `langSource` 가 없으면 `'default'` 로 읽는다.
+- **지원 범위**: `SUPPORTED_SRC = ['en','fr','ko']`. `en` 은 필수. `fr`·`ko` 는 **번역 경로(원문 언어 값·음성·프롬프트·문장 분할의 언어 인자)만 열어 둔다** — 추출 품질(4절)은 실물을 받아 재기 전까지 손대지 않는다(이번 Build 에서 4절 알고리즘 변경 없음). 중국어·일본어·아랍어 원서는 **미지원**이다 — 서재에서 고를 수 없고, 추정이 그 문자 체계를 보면 `lang = 'und'`(미지원)로 두고 낭독 동반 번역을 끈다(7-8-1).
+- **자동 추정**(`text/lang.js`, 순수): 온디바이스 `LanguageDetector` 는 쓰지 않는다(Android Chrome 미지원 `[가정]`이고, 지원 언어 셋은 휴리스틱으로 충분히 갈린다 — 경로를 하나로 둔다). 추출이 본문 쪽을 5쪽 이상 모으면 **한 번** 돈다(앞 30쪽 안에서 본문 문단 텍스트 최대 8,000자).
+  ```
+  guessLang(text) → {lang, score, script}
+    1. 문자 체계: 한글 비율 ≥ 30% → 'ko' · 가나 존재 → 'ja'(미지원) · 한자 ≥ 30% → 'zh'(미지원) · 아랍 문자 ≥ 30% → 'ar'(미지원)
+    2. 라틴이면 기능어 빈도(낱말 1,000개당): en {the, and, of, to, is, in, with, for} vs fr {le, la, les, des, est, et, une, du, pour, dans}.
+       큰 쪽이 작은 쪽의 2배 이상이면 그 언어, 아니면 'en'(기본) + score 낮음
+  ```
+  `langSource === 'user'` 면 추정이 **덮어쓰지 않는다**. 추정 결과는 서재 카드에 "원문: English (자동)" 으로 보이고 [⋯] 에서 바꾼다(12-6).
+- **하드코딩된 `'en'` 을 문서 속성으로 바꾸는 범위(7c)**: `ui/library.js` 새 문서의 `lang: 'en'`(기본값으로는 남고 추정이 덮는다) · `ui/reader.js` 본문 `article[lang="en"]` → `doc.lang`(`dir` 은 `ltr` 유지 — 지원 원문이 전부 LTR) · `ui/controls.js` `pickVoice('en', …)`·`setDocLang` → `doc.lang` · `tts/voices.js` `availability()` 의 `out.en` · 6-3 음성 없음 배너 문구 · `config.js` `TTS_SYMBOLS` → 언어별 표(6-1) · `text/segment.js` `splitSentences(text, {lang})` — **`lang` 이 `'en'` 이거나 없으면 지금과 한 글자도 다르지 않다**(기존 테스트가 고정). `fr`·`ko` 는 "다음 글자가 문장 시작처럼 보이는가" 판정에 `\p{Lu}`·한글 음절을 더하는 것만 한다 `[가정 — 실물 측정 전]` · spec 7-2 `ondevice.translate(missing, 'en', target)` → `doc.lang` · 10-2 프롬프트의 원문 언어.
 
 | 스토어 | 키 | 인덱스 | 주요 필드 | Phase |
 |---|---|---|---|---|
-| `documents` | `id` (uuid) | `lastOpenedAt`, `fileHash`(unique) | `title, fileName, size, pageCount, fileHash(SHA-256 또는 FNV), addedAt, lastOpenedAt, lastPage, lastLineId, lang('en'), extraction{done:boolean, pagesDone:number, cursor:number, failed:number[], algoVersion}(9-4), columnsHint, sectionIndex[](5절 파서 결과 요약: {sectionId, title, startPage, endPage, questions, verified}), icd[]([P2])` | P1 |
+| `documents` | `id` (uuid) | `lastOpenedAt`, `fileHash`(unique) | `title, fileName, size, pageCount, fileHash(SHA-256 또는 FNV), addedAt, lastOpenedAt, lastPage, lastLineId, lang('en' 기본 — 원문 언어, 위), langSource, langGuess, readStats{pages, chars}(`[신설 2026-09-28]` 낭독 동반 번역이 처음 문장 목록을 만든 쪽마다 누적 — 그 책의 실측 쪽당 글자 수, 15절), extraction{done:boolean, pagesDone:number, cursor:number, failed:number[], algoVersion}(9-4), columnsHint, sectionIndex[](5절 파서 결과 요약: {sectionId, title, startPage, endPage, questions, verified}), icd[]([P2])` | P1 |
 | `blobs` | `docId` | — | `blob` (원본 PDF `Blob`) | P1 |
 | `pages` | `[docId, pageNo]` | `docId` | `PageLayout`(3-3) + `textHash, extractedAt, roleVersion` | P1 |
 | `progress` | `[docId, sectionId]` | `docId`, `updatedAt` | `readLineCount, totalLineCount, completedAt, lastLineId, minutes` | P1(저장만)·P2(화면) |
@@ -1346,7 +1666,7 @@ keyPattern (gemini) = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
 | `mistakes` | `id` (uuid) | `questionId`, `docId`, `resolvedAt` | `questionId, attemptId, chosen, at, resolvedAt, note` | P1(저장)·P2(화면) |
 | `cards` | `id` (uuid) | `docId`, `dueAt`, `term` | `term, definition{en, ar}, context(문장), pageNo, sm2{ease:2.5, interval:0, reps:0, lapses:0}, dueAt, createdAt, suspended` | P2 |
 | `aiCache` | `key` (문자열, 7-5) | `docId`, `createdAt`, `kind` | `kind, docId, targetLang, result(any), provider, model, promptVersion, sizeBytes, createdAt, hits` | P1 |
-| `usage` | `day` (`'YYYY-MM-DD'` 로컬) | — | `calls, byKind{translate,summarize,quiz,grade,table,verify}, byProvider{}, tokensIn, tokensOut, cacheHits, ondeviceHits, blocked429, errors` | P1 |
+| `usage` | `day` (`'YYYY-MM-DD'` 로컬) | — | `calls, byKind{translate,readalong,summarize,quiz,grade,table,verify}, byProvider{}, tokensIn, tokensOut, cacheHits, ondeviceHits, blocked429, errors, charsTranslated` (`[수정 2026-09-28]` `readalong`·`charsTranslated` 추가 — 15절 글자 기준 지표. 같은 날 앞선 초안의 `pagesTranslated` 는 추가 지침 4로 없앴다) | P1 |
 | `settings` | `key` | — | `value` (임의 JSON). 키 목록은 9-3 | P1 |
 | `annotations` | `id` (uuid) | `[docId, pageNo]`, `docId`, `kind` | `kind('highlight'|'note'), anchor{pageNo, lineIds[], paraId, textHash}, color, text, createdAt, updatedAt` | P2 |
 | `sections` | `[docId, sectionId]` | `docId` | `title, startPage, endPage, order, icdChapter?([P2]), specialty?([P2])` | P1 |
@@ -1432,20 +1752,23 @@ keyPattern (gemini) = /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
   **7000쪽 실자료를 받으면 이 측정을 가장 먼저 한다.**
 - 용량 관리: `navigator.storage.estimate()`로 사용량을 설정 화면에 표시하고, 문서 가져오기 전 `quota - usage < size × 1.5`이면 경고. `navigator.storage.persist()`를 온보딩 후 요청한다(브라우저가 저장소를 임의로 비우는 것을 줄인다).
 
-### 9-3. `settings` 키 목록
+### 9-3. `settings` 키 목록 `[수정 2026-09-28]`
 
 ```
 ui.lang ('ar'|'en'|'fr'|'ko')     ui.theme ('light'|'dark'|'sepia'|'contrast'|'system')
 reader.view ('reflow'|'original')  reader.fontSize (px, 16~40)  reader.lineHeight (1.3~2.2)  reader.letterSpacing (0~0.1em)
 reader.font ('system'|'serif'|'sans')   reader.showDone (bool)   reader.autoScroll (bool)
 tts.rate (0.5~2.0)  tts.unit ('line'|'sentence')  tts.voice.en / .ar / .fr / .ko (voiceURI)  tts.autoSummarize (bool, 기본 false)
-tts.wakeLock (bool)
+tts.wakeLock (bool)  tts.repeat.count
+readalong.mode ('off'|'show'|'speak', 기본 'speak')          [신설 2026-09-28] 7-8-1
+readalong.speakSource (bool, 기본 true)                      [신설 2026-09-28] speak 모드에서 원문도 소리 내어 읽는가
 ai.provider  ai.model  ai.translationLang ('ar')  ai.summaryLangs (['ar','en'])  ai.useOnDevice (bool)  ai.dailyCap (number, 기본 100)
-ai.warnAt (0.8)  ai.cacheLimitMB (50)  ai.maxReqChars (6000)  ai.proxyUrl ('' — 나중)
+ai.warnAt (0.8)  ai.cacheLimitMB ([수정 2026-09-28] 200 — 7-5)  ai.maxReqChars (6000)  ai.proxyUrl ('' — 나중)
 privacy.consentedAt (ISO)  privacy.piiCheck (bool, 기본 true)  privacy.rememberKey (bool)
 onboarding.done (bool)   dev.debug (bool)
 ```
 API 키는 **`settings`에 저장하지 않는다**(13절: `sessionStorage`/`localStorage`).
+`[신설 2026-09-28]` `ai.translationLang` 은 **전역**이다(한 기기 = 한 사용자). 운영자가 나중에 다른 언어 → **한국어** 번역 낭독을 원할 때는 자기 기기에서 이 값을 `ko` 로 두면 된다 — 파이프라인·띠·음성이 전부 이 값에서 유도되므로(7-1 원칙 5) 막히는 곳이 없다. 문서별 대상 언어(`documents.targetLang`)는 **필요해질 때** 더한다(필드 추가라 DB 버전 불변). 이번 범위에서 7b 설정 화면은 대상 언어를 **보여 주기만** 한다(12-7).
 
 ### 9-4. 추출 전략 (대용량 25MB)
 
@@ -1498,7 +1821,9 @@ extraction: {
 
 ## 10. AI 프롬프트 설계
 
-### 10-1. 공통 골격
+### 10-1. 공통 골격 `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 규칙 5 의 "as written" 은 원문 언어가 무엇이든 그대로다. 언어는 코드(`'fr'`)가 아니라 **이름**으로 넣는다 — `prompts.js` 의 `LANG_NAMES = {en:'English', fr:'French', ko:'Korean', ar:'Arabic', …}`(순수). 이름이 없는 코드가 오면 번역을 요청하지 않는다(모델에게 언어 코드를 추측시키지 않는다).
 
 모든 시스템 프롬프트에 포함하는 고정 블록(영어로 작성; 모델 지시는 영어가 가장 안정적):
 
@@ -1518,15 +1843,18 @@ RULES:
 
 `promptVersion` 상수를 `prompts.js`에 두고 캐시 `extra`와 `questions.promptVersion`에 기록한다.
 
-### 10-2. 번역
+### 10-2. 번역 `[수정 2026-09-28]`
 
-- 입력: 문장 배열 `segments[]`(각 `{i, text}`), `targetLang`.
-- 지시: "Translate each segment into {targetLang}. Keep segment count and order. Medical terminology: give the standard Arabic term and keep the English term in parentheses on first occurrence in a segment (e.g. التهاب المفاصل الروماتويدي (rheumatoid arthritis))."
-- 스키마: `{ "segments": [ { "i": number, "t": string } ], "notes": string }`
+- 입력: 문장 배열 `segments[]`(각 `{i, text, frag?}` — `text` = `Unit.src`, `frag` = `'head'|'tail'`, 7-8-2), `srcLang`, `targetLang`. `[수정 2026-09-28]` 초판은 원문을 영어로 가정했다.
+- 지시: "Translate each segment from {srcLangName} into {targetLangName}. Keep segment count and order; output exactly one item per input `i`. Segments marked `frag` are incomplete pieces of a sentence that continues on the previous/next page — translate the piece as it is, do not complete it. Medical terminology: give the standard {targetLangName} term and keep the original {srcLangName} term in parentheses on first occurrence in a segment{example}." — `{example}` 은 `prompts.js` 의 대상 언어별 예시(`ar`: ` (e.g. التهاب المفاصل الروماتويدي (rheumatoid arthritis))`). 예시가 없는 대상 언어는 빈 문자열. **`ar` 을 지시문에 박지 않는다.**
+- 스키마: `{ "segments": [ { "i": number, "t": string } ], "notes": string }` — gemini 는 `responseSchema` 로 강제(8-2).
 - 검증: `segments.length === 입력 길이`이고 `i`가 모두 존재해야 채택. 개수가 다르면 존재하는 것만 캐시하고 누락분은 "번역 누락 — 다시 시도" 표시(재호출은 사용자가).
-- `maxOutputTokens = estimateTokens(입력) × 3 + 200`(아랍어 팽창 고려), `temperature 0.2`.
+  `[신설 2026-09-28]` **밀림 방지 검사(싸고 로컬)**: 모델이 두 문장을 합치거나 한 칸씩 밀어 쓰면 개수는 맞아도 짝이 틀린다. 항목마다 `len(t) / len(text)` 가 `[0.2, 5]` 밖이면 그 항목은 `failed`(캐시하지 않음). 한 청크에서 20% 넘게 걸리면 **청크 전체**를 파싱 실패로 본다(밀림이 의심된다). 원문에 숫자 토큰(`\d+(\.\d+)?`)이 있는데 번역에 그중 하나도 없으면 역시 그 항목만 `failed` — 비교 전에 번역문의 아랍-인도 숫자(`٠-٩`, `۰-۹`)를 `0-9` 로 바꾼다(모델이 동방 숫자로 쓸 수 있다). — 의미 검증이 아니라 명백한 어긋남만 거른다.
+- `maxOutputTokens = estimateTokens(입력) × 3 + 200`(아랍어 팽창 고려), `temperature 0.2`. 쪽 단위 요청(분할 후 최대 6,000자 — `MAX_REQ_CHARS`)이면 입력 약 1,500 + 출력 상한 약 4,700 토큰으로 `MAX_REQ_TOKENS`(8,000) 안이다.
 
-### 10-3. 요약
+### 10-3. 요약 `[후순위 2026-09-28]`
+
+`[후순위 2026-09-28]` 7-3 과 함께 미룬다(NotebookLM 이 요약을 이미 하고, 무료 한도를 낭독 동반 번역에 쓴다). 프롬프트 설계는 보존한다.
 
 - 입력: 문단 배열 `paragraphs[]`(`{i, text}`), `langs: ['ar','en']`.
 - 지시: "For each paragraph write a 1–3 sentence summary in Arabic and in English, for a first-year internal medicine resident with B1 English. Use simple sentence structure. Add up to 5 key terms (English term + Arabic gloss)."
@@ -1601,12 +1929,12 @@ parseAIJson(text, schema):
 - 언어 파일 간 키 집합이 같은지 확인하는 테스트 `tests/i18n.test.mjs`(Review 항목).
 - 문자열 안에 HTML을 넣지 않는다. 링크가 필요한 문구는 `{link}` 자리표시자와 별도 URL 키로 나눈다.
 
-### 11-3. 언어 감지 초기값과 RTL
+### 11-3. 언어 감지 초기값과 RTL `[수정 2026-09-28]`
 
 - 초기값: `settings.ui.lang`이 있으면 그것. 없으면 `navigator.languages`에서 `ar/en/fr/ko`로 시작하는 첫 항목, 없으면 **`ar`**(주 사용자). 온보딩 첫 화면에서 4개 언어 버튼으로 바로 바꿀 수 있다.
 - `setLang(lang)`: `document.documentElement.lang = lang`, `dir = lang === 'ar' ? 'rtl' : 'ltr'`, 모든 `[data-i18n]` 요소의 `textContent` 갱신, `aria-label`은 `[data-i18n-aria]`.
 - **CSS는 논리적 속성만 쓴다**: `margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `border-inline-start`, `text-align: start`. `left/right/margin-left/margin-right`는 Review에서 grep으로 0건이어야 한다(예외: 원본 뷰 오버레이의 `left/top`은 좌표계이므로 허용 — `original.js`와 `.hl-line`에 한정).
-- **원서 텍스트 영역은 항상 `dir="ltr" lang="en"`**(UI가 아랍어여도 영어 본문은 LTR). 번역 블록은 `dir="rtl" lang="ar"`. 혼합 문장(아랍어 안의 영어 용어)은 브라우저 bidi 알고리즘에 맡기되 `unicode-bidi: plaintext`를 번역 블록에 준다.
+- **원서 텍스트 영역은 항상 `dir="ltr" lang="en"`**(UI가 아랍어여도 영어 본문은 LTR). 번역 블록은 `dir="rtl" lang="ar"`. `[수정 2026-09-28]` → 원서 영역은 `dir="ltr" lang={documents.lang}`(지원 원문 en·fr·ko 가 전부 LTR), 번역(자막 띠 `.tr-text`)은 `dir={dirOf(ai.translationLang)} lang={ai.translationLang}`(7-7). 값은 전부 유도하며 `ar` 을 박지 않는다. 혼합 문장(아랍어 안의 영어 용어)은 브라우저 bidi 알고리즘에 맡기되 `unicode-bidi: plaintext`를 번역 블록에 준다.
 - 하단 컨트롤 바의 [이전]/[다음] 아이콘은 RTL에서 좌우가 뒤집힌다(논리 순서를 따르므로 자동). "이전 줄"은 항상 `inline-start` 쪽.
 
 ### 11-4. 폰트
@@ -1642,7 +1970,27 @@ parseAIJson(text, schema):
 
 키 없이 번역/요약을 처음 탭하면 인라인 안내 "번역에는 API 키가 필요합니다" + [키 설정하기] 링크(설정 AI 탭으로 딥링크, 돌아오면 원래 위치).
 
-### 12-3. 리더 레이아웃 (모바일 세로 기준)
+### 12-3. 리더 레이아웃 (모바일 세로 기준) `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 아래 그림의 "인라인 번역 블록"은 없어졌다. 번역은 **하단 자막 띠**가 낭독 컨트롤 바 바로 위에 붙어 보인다(7-7 — 세로 예산 표도 거기). 지금 실제 하단 순서는 위에서부터 `[자막 띠 (켜졌을 때만)] → [낭독 컨트롤 바 61] → [쪽 이동 바 53] → [고정 고지 22]` 이다(tokens.css). 속도 팝오버(`#ttsRatePanel`)에 **"번역 따라가기: 끔 / 표시 / 표시+낭독"** 한 줄과 "원문도 소리 내어 읽기" 토글을 더한다 — 읽는 중에 한 번 탭으로 바꿀 수 있어야 한다(설정 AI 탭과 **같은 설정 키**, 그리는 함수도 하나 — 10 라운드 교훈 "동작을 한 가지 장치로").
+
+```
+│  1. Which of the following can help    │
+│  reduce errors in the delivery of      │  ← 읽는 문장: 글자 구간 하이라이트(10a)
+│  health care?                          │
+├────────────────────────────────────────┤
+│ ┃ أي مما يلي يمكن أن يساعد في تقليل      │  자막 띠 (--tr-band-h ≈ 120px @22px, 3줄, 넘치면 띠 안 스크롤)
+│ ┃ الأخطاء في تقديم الرعاية الصحية؟        │  dir/lang = 대상 언어에서 유도. 번역문 낭독 중엔 inline-start 테두리 강조
+├────────────────────────────────────────┤
+│  [이전]   [ ▶ ]   [다음]  [1.0×]  12/58  │  낭독 컨트롤 바 61
+├────────────────────────────────────────┤
+│  [앞 쪽]  [ 45 ] / 1,967  [뒤 쪽]       │  쪽 이동 바 53
+├────────────────────────────────────────┤
+│ 교육 목적 · 임상 의사결정에 사용 금지        │  고정 고지 22
+└────────────────────────────────────────┘
+```
+
+(아래는 초판 그림이다 — 구조 참고용으로 남긴다.)
 
 ```
 ┌────────────────────────────────────────┐
@@ -1678,7 +2026,9 @@ parseAIJson(text, schema):
 - 낭독 중 화면 회전·리사이즈: 하이라이트 재계산(원본 뷰는 viewport 재생성).
 - 스크린 리더: 하단 바 버튼에 `aria-label`, 현재 줄 변경은 `aria-live="polite"` 영역에 "줄 12/58"만 알린다(본문을 두 번 읽지 않도록).
 
-### 12-4. 리플로우 뷰 DOM
+### 12-4. 리플로우 뷰 DOM `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` `article` 의 `lang` 은 `documents.lang`. 아래의 `div.inline-tr` 는 **만들지 않는다**(번역은 `#trBand`, 7-7). 문단 안에 블록을 끼우지 않으므로 줄 span·텍스트 노드 구조(10a 하이라이트의 전제)는 그대로다.
 
 ```
 article.reflow[dir=ltr][lang=en]
@@ -1703,15 +2053,22 @@ article.reflow[dir=ltr][lang=en]
 - 줄 탭/길게 누르기 동작은 리플로우와 같고, 번역·요약은 하단 시트로.
 - 표·그림이 있는 페이지에서 리플로우 뷰의 [원본으로 보기]가 이 뷰의 해당 영역으로 스크롤한다.
 
-### 12-6. 서재 (Phase 1 최소)
+### 12-6. 서재 (Phase 1 최소) `[수정 2026-09-28]`
 
+- `[신설 2026-09-28]` **원문 언어.** 카드 메타 줄에 "원문: English (자동)" 을 보인다. 지금 카드에는 [이어 읽기]·[삭제] 두 버튼뿐이므로 **[⋯] 버튼을 더하고**, 그 시트에 "원문 언어" 선택(English / Français / 한국어 — `SUPPORTED_SRC` 에서 만든다) 하나만 둔다. 고르면 `lang` 과 `langSource = 'user'` 를 저장하고, 그 문서가 열려 있으면 원문 음성·`article[lang]`·낭독 큐를 다시 만든다. 이름 바꾸기 등 다른 항목은 이번 범위가 아니다([삭제]는 지금 자리에 둔다). 추정이 미지원 문자 체계를 보면 "원문: 지원하지 않는 언어" 로 보이고 선택지는 그대로 셋이다.
 - [PDF 가져오기] → `<input type="file" accept="application/pdf">` → 파일 해시 계산(중복이면 기존 문서 열기) → `blobs`·`documents` 저장 → 추출 큐 시작 → 리더로 이동.
 - 카드: 제목(PDF 메타 `Title` 또는 파일명), 페이지 수, 크기, 진행률(마지막 페이지/전체), 추출 상태, [이어 읽기], [⋯](이름 바꾸기, 삭제 — 삭제 시 blobs·pages·aiCache·questions·attempts 연쇄 삭제 확인 대화).
 - 저장 공간 표시(`storage.estimate`).
 
-### 12-7. 설정·사용량·퀴즈
+### 12-7. 설정·사용량·퀴즈 `[수정 2026-09-28]`
 
-- 설정 AI 탭: 프로바이더 선택 → 키 입력(`type="password"`, 눈 아이콘으로 표시 토글, 붙여넣기 버튼) → [검증](결과: 유효/무효/한도/확인 불가) → "이 기기에 기억"(기본 OFF, 켜면 경고 문구) → 모델 드롭다운 → 일일 상한(숫자, 기본 100) → 기기 내 AI 사용 → 캐시 용량·비우기.
+- 설정 AI 탭: 프로바이더 선택 → 키 입력(`type="password"`, 눈 아이콘으로 표시 토글, 붙여넣기 버튼) → [검증](결과: 유효/무효/한도/`[수정 2026-09-28]` **지역 제한**/확인 불가 — 8-4) → "이 기기에 기억"(기본 OFF, 켜면 경고 문구) → 모델 드롭다운 → 일일 상한(숫자, 기본 100) → 기기 내 AI 사용 → 캐시 용량·비우기.
+  - `[신설 2026-09-28]` 7b 가 여기에 더하는 것(7a 의 `provider`·`keys`·`redact`·`assertNoKeyInUrl` **위에 얹는다 — 재구현 금지**):
+    1. **[시험 번역]** — 고정 예문 2문장(코드 안 상수, PDF 본문 아님)을 `provider.complete()` 로 1회 번역해 결과와 **걸린 시간(ms)**, 결과 코드(유효/무효/한도/지역 제한/확인 불가)를 보인다. usage 에 `kind:'translate'` 로 기록된다. 실제 생성 호출·CORS·지역 제한을 확인하는 유일한 버튼이다(8-3). `JSON` 파싱은 8a 전이므로 여기서는 응답 문자열을 그대로 `textContent` 로 보인다.
+    2. **번역 따라가기** — `끔 / 표시 / 표시+낭독`(`readalong.mode`, 기본 표시+낭독) + "원문도 소리 내어 읽기"(`readalong.speakSource`). 속도 팝오버의 같은 줄과 **같은 그리기 함수**를 쓴다. 7b 에서는 저장만 되고 동작은 8b 에서 붙는다(그 사이 문구: "8b 에서 켜집니다" 같은 것을 보이지 않는다 — 저장만 하고 조용히 둔다).
+    3. **번역 언어 표시** — "번역 언어: العربية" (`ai.translationLang` 의 자국어 이름, 읽기 전용). 옆에 **"번역문 음성: 있음 / 없음 [설치 방법]"**(`pickVoice(target)` 결과, 6-3).
+  - 진입: 서재 상단바 [설정], 리더 속도 팝오버의 [번역 설정], 키 없음 안내의 [키 설정](12-2 딥링크).
+- `[신설 2026-09-28]` **의학 사이트 계정은 받지 않는다.** Nour 가 장학금으로 유료 의학 사이트 계정(아이디·비밀번호, 매년 갱신)을 받을 수 있다. 앱은 **그 계정 정보를 입력받거나 저장하지 않는다** — 13절 "유료 DB: 딥링크만" 그대로다. 이 항목으로 새 기능을 설계하지 않는다.
 - 키 입력창 옆 상시 경고(아랍어 우선 + 현재 UI 언어): "실제 환자 정보를 입력하지 마세요". 이 경고 컴포넌트(`ui/notice.js` `piiWarning()`)는 **AI로 전송되는 모든 입력창**(P3 작문·질문 입력 포함) 옆에 붙인다. Phase 1에서 사용자가 직접 텍스트를 입력해 AI로 보내는 곳은 없다(PDF 텍스트만 전송)—그래도 설정의 키 입력 화면과 [AI로 표 재구성] 버튼 옆에 같은 문구를 둔다.
 - 사용량 화면: 15절.
 - 퀴즈 화면: 5-5.
@@ -1719,7 +2076,7 @@ article.reflow[dir=ltr][lang=en]
 
 ---
 
-## 13. 프라이버시·보안
+## 13. 프라이버시·보안 `[수정 2026-09-28]`
 
 | 항목 | 규칙 |
 |---|---|
@@ -1730,14 +2087,14 @@ article.reflow[dir=ltr][lang=en]
 | 최초 실행 동의 | 12-2. 동의 전에는 AI 기능 버튼이 동의 카드로 연결된다 |
 | PDF 저장 | 기기 IndexedDB에만. `.gitignore`에 `apps/medreader/tests/fixtures/*.pdf`, `*.pdf` 추가는 **Build 범위 밖**(블로그 파일 수정 금지) → Review가 `git status`에 PDF가 없는지 확인. 픽스처는 좌표+텍스트 JSON 발췌만, 원서 문항 전문은 2페이지 이내 |
 | 외부 요청 | Phase 1의 네트워크 요청은 pdf.js CDN 2종 + 선택한 AI 프로바이더 1종뿐. 분석·폰트·이미지 CDN 없음. Review가 네트워크 탭으로 확인 |
-| 유료 DB | UpToDate·VisualDx 등은 딥링크만(P2·P3). 스크래핑·재요약 코드 없음 |
+| 유료 DB | UpToDate·VisualDx 등은 딥링크만(P2·P3). 스크래핑·재요약 코드 없음. `[확인 2026-09-28]` 사용자가 받을 수 있는 유료 의학 사이트 계정(아이디·비밀번호)을 **앱이 입력받거나 저장하지 않는다**(12-7) |
 | 의료 안전 | 고정 고지(12-7), 프롬프트의 치료 프로토콜 금지(10-1), 의료 영상 판독 기능 없음 |
 
 ---
 
 ## 14. 오프라인/네트워크 실패 UX
 
-### 14-1. 기능별 매트릭스
+### 14-1. 기능별 매트릭스 `[수정 2026-09-28]`
 
 | 기능 | 오프라인 | 필요 자원 | 실패 시 |
 |---|---|---|---|
@@ -1748,11 +2105,12 @@ article.reflow[dir=ltr][lang=en]
 | 글자·테마·리플로우 설정 | ○ | — | — |
 | 📕 퀴즈 풀이·채점·attempts 기록 | ○ | questions 스토어 | — |
 | 캐시된 번역·요약 재열람 | ○ | aiCache | — |
+| 낭독 동반 번역 `[신설 2026-09-28]` | △ — 캐시된 쪽은 ○(띠·번역문 낭독 모두), 캐시 없는 쪽은 원문 낭독만 | aiCache · 네트워크 + 키 · 번역문 음성 | 원문 낭독은 계속. 띠에 `blocked` 한 줄, 상태 바 한 번(7-8-4) |
 | 새 번역·요약·표 재구성·🤖 출제·채점 | ✗ | 네트워크 + 키 | 상태 바 안내(7-6). 온디바이스 API가 있으면 번역은 ○ |
 | 키 검증 | ✗ | 네트워크 | "확인 불가, 나중에" |
 | 음성 인식(P3) | ✗ | 네트워크(Android) | 텍스트 입력 폴백 |
 
-### 14-2. 메시지 (i18n 키 → 의미)
+### 14-2. 메시지 (i18n 키 → 의미) `[수정 2026-09-28]`
 
 - `ai.state.offline`: "오프라인입니다. 읽기·낭독·퀴즈는 계속 쓸 수 있습니다. 번역·요약은 연결되면 가능합니다."
 - `ai.state.exhausted`: "오늘 무료 한도에 도달했습니다. 낭독·읽기·복습은 계속 사용할 수 있고, 번역은 내일 다시 가능합니다." + [다시 시도]
@@ -1761,6 +2119,15 @@ article.reflow[dir=ltr][lang=en]
 - `ai.state.cooldown`: "서비스 응답이 없습니다. 잠시 후 [다시 시도]를 눌러주세요." (자동 재시도 없음)
 - `ai.state.parseFail`: "AI 응답을 해석하지 못했습니다." + [다시 시도]
 - `pdf.engine.fail`: "PDF 엔진을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요."
+- `[신설 2026-09-28]` `ai.state.region`: "이 지역에서는 {provider} API 를 쓸 수 없습니다. **키 문제가 아닙니다.** 낭독·읽기·퀴즈는 계속 쓸 수 있습니다." + [다시 시도]. **[키 설정] 링크를 붙이지 않는다**(키를 다시 넣게 만들지 않는다). 설정 검증 결과 문구는 `settings.ai.verify.region` 로 같은 뜻.
+- `[신설 2026-09-28]` 낭독 동반 번역(7-8):
+  - `readalong.noVoice`: "{lang} 음성이 기기에 없어 번역은 화면에만 표시합니다." + [설치 방법](6-3 안내 재사용)
+  - `readalong.lineMode`: "번역은 문장 단위 낭독에서만 따라옵니다." (줄 단위로 바꾼 순간 상태 바에 한 번. 띠는 자리를 잡지 않는다)
+  - `readalong.unsupportedLang`: "이 원서의 언어는 번역 따라가기를 지원하지 않습니다."
+  - `readalong.sameLang`: "원서 언어와 번역 언어가 같아 번역하지 않습니다."
+  - `readalong.lagging`: "번역이 낭독을 따라오지 못해 몇 문장은 번역문을 건너뛰었습니다. 화면에는 도착하는 대로 표시됩니다."
+  - `readalong.pending` / `readalong.failed` / `readalong.band`: 띠 안의 짧은 글("번역 중…", "번역 실패", 띠의 접근성 이름)
+- `[신설 2026-09-28]` **낭독 동반 번역 중 원격 상태 안내는 상태 전이에서만 한 번 나온다.** 쪽을 넘길 때마다 같은 안내를 다시 띄우지 않는다. 429·capped·offline·no-key·region·cooldown 어느 경우에도 원문 낭독은 멈추지 않는다.
 
 토스트가 아니라 **상태 바**(리더 상단·하단 바 위, 닫기 가능, 상태가 바뀌면 자동 갱신)로 보여준다. 같은 메시지는 상태가 바뀌기 전엔 반복하지 않는다.
 
@@ -1770,11 +2137,15 @@ article.reflow[dir=ltr][lang=en]
 
 ---
 
-## 15. 사용량 대시보드와 상한
+## 15. 사용량 대시보드와 상한 `[수정 2026-09-28]`
 
 - 저장: `usage` 스토어, 키 = 로컬 날짜 `YYYY-MM-DD`. 호출이 **시작될 때** `calls++`(응답 실패도 비용이 발생했을 수 있음), 응답 후 토큰·오류·429를 갱신. 캐시 적중은 `cacheHits++`, 온디바이스 처리는 `ondeviceHits++`.
+- `[신설 2026-09-28]` `[수정 2026-09-28 — 추가 지침 4: 쪽 → 글자]` **호출 효율을 글자 기준으로 보인다.** 낭독 동반 번역의 호출 수는 "읽은 **글자** 수"에 비례한다. 같은 날 앞선 초안의 "쪽당 호출 수"는 **책마다 뜻이 달라** 버렸다(쪽당 1,907자인 책과 4,511자인 책의 "쪽당 1회"는 효율이 2배 넘게 다르다 `[실측 2026-09-28]`). 지표는 (1) 요청 병합(7-8-3)이 실제로 작동하는지를 **사용자와 Review 가 한 숫자로** 보게 하고, (2) "오늘 얼마나 더 번역할 수 있나"를 **사용자 자신의 상한**으로 계산하게 해 준다. 무료 티어 한도는 쓰지 않는다.
+  - `byKind.readalong` = 낭독 동반 번역 원격 호출 수, `charsTranslated` = 그 호출들로 보낸 원문 글자 수 합(캐시로 끝난 문장은 세지 않는다).
+  - 표시: "낭독 번역 {calls}회 · {chars}자 → **호출당 평균 {chars/calls}자** · 1만 자당 {calls/chars × 10000, 소수 1자리}회". `calls = 0` 이면 "—". 연속 낭독이면 호출당 평균이 청크 크기(6,000자)에 가깝고, 냉시작 head·미추출 쪽 끊김·캐시 건너뛰기가 그것을 깎는다.
+  - 표시: "오늘 상한까지 약 {n}쪽" — `n = floor((dailyCap − 오늘 calls) × 호출당 평균 글자 ÷ 이 책의 쪽당 글자)`. **쪽당 글자는 그 책의 실측값**(`documents.readStats.chars / readStats.pages`, 9-2)이다 — 책마다 다르다. `readStats.pages < 5` 이거나 호출당 평균이 없으면 숨긴다. **상한은 사용자가 정한 `ai.dailyCap` 이다.**
 - 화면:
-  - 오늘: 호출 수 / 상한, 종류별(번역·요약·표·검증), 프로바이더·모델, 추정 토큰(입력/출력), 캐시 적중 n회, 온디바이스 n회.
+  - 오늘: 호출 수 / 상한, 종류별(번역·**낭독 번역**·요약·표·검증), 프로바이더·모델, 추정 토큰(입력/출력), 캐시 적중 n회, 온디바이스 n회, **호출당 평균 글자·1만 자당 호출**(위).
   - 이번 달: 일별 막대(순수 CSS/SVG, 라이브러리 없음), 합계, **"절약된 호출" = cacheHits + ondeviceHits**, 적중률 = 절약 / (calls + 절약).
   - 캐시: 항목 수, 용량, [비우기].
   - AI 문항 폐기율(P2).
@@ -1808,7 +2179,7 @@ article.reflow[dir=ltr][lang=en]
 - [ ] `[M]` 실기기에서 전체 추출이 5분 이내에 끝나고 그동안 낭독이 끊기지 않는다.
 - [ ] `[D]` `navigator.storage.persist()` 요청이 온보딩 후 1회 호출된다.
 
-### 16-C. TTS·하이라이트·자동 스크롤
+### 16-C. TTS·하이라이트·자동 스크롤 `[수정 2026-09-28]`
 
 - [ ] `[M]` [재생]을 누르면 현재 줄부터 영어 낭독이 시작되고, 줄이 바뀔 때마다 하이라이트가 이동한다(20줄 연속 관찰, 누락 0).
 - [ ] `[M]` 헤더·푸터·페이지 번호·표 줄은 낭독되지 않는다. 표에 도달하면 안내 1회 후 건너뛴다.
@@ -1824,20 +2195,100 @@ article.reflow[dir=ltr][lang=en]
 - [ ] `[D][M]` 자동 스크롤은 현재 줄이 편안 영역을 벗어날 때만 일어나고, 사용자가 스크롤하면 [현재 줄로 돌아가기] 칩이 뜬다.
 - [ ] `[D][M]` `prefers-reduced-motion`에서 스크롤·하이라이트 전이가 즉시(애니메이션 없음) 적용된다.
 - [ ] `[M]` 300자 문장(문장 모드)이 끊기지 않고 끝까지 읽힌다(분할 규칙 동작).
+- [ ] `[D]` `[신설 2026-09-28]` 원문 언어가 `fr` 인 문서(서재 [⋯]에서 바꿈)를 열면 `article[lang="fr"]` 이고 원문 발화의 `utterance.lang` 이 `fr-*` 이다(`__medreader.tts.current()`·스텁으로 확인). `en` 문서는 지금과 같다.
+- [ ] `[N]` `[신설 2026-09-28]` `splitSentences(text)` 와 `splitSentences(text, {lang:'en'})` 의 결과가 기존 `tts-text`·`segment` 테스트 전체에서 같다(영어 동작 불변).
 
-### 16-D. 번역·요약·캐시·429
+### 16-D. 번역·캐시·429·낭독 동반 번역 `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 19절의 단계(7b·7c·8a·8b·8c)마다 묶었다. **각 단계는 자기 묶음이 전부 통과해야 끝난다.** 요약 항목은 후순위로 옮겼다(16-D5). 표기 `[사용자]` = 실제 키가 필요한 항목 — **키 입력은 사용자 본인이 한다**(에이전트는 실제 키를 넣지 않는다).
+
+#### 16-D0. 7b — 설정 AI 탭과 실제 호출
+
+- [ ] `[D][사용자]` **(가장 먼저)** 배포본(https)·한국 PC 에서 유효한 Gemini 키로 [검증] → 유효, [시험 번역] → 번역문이 보이고 걸린 시간(ms)이 표시된다. DevTools 네트워크: `OPTIONS` preflight 성공(`access-control-allow-origin` 있음), 본 요청 200, **요청 URL 에 키 없음**(헤더만). 결과(지연 ms 포함)를 review.md 에 적는다.
+- [ ] `[M][사용자]` **Nour 의 기기·시리아 네트워크에서** 같은 두 버튼을 누른다. 결과를 셋 중 하나로 기록한다: 통과 / **지역 제한**(`REGION` 문구가 뜨고 [키 설정] 유도가 **없다**) / 그 밖(코드·상태 기록). **이 항목 없이는 7b 를 끝내지 않는다** — 한국에서 통과해도 시리아에서 막힐 수 있다(8-2). `GET /models` 만 통과하고 생성이 막히는 경우를 가르기 위해 두 결과를 따로 적는다.
+- [ ] `[N]` gemini `errorParser`: 400+`FAILED_PRECONDITION` → `REGION`, 403+"User location is not supported" → `REGION`, 403(그 문구 없음) → `AUTH`, 400+`INVALID_ARGUMENT` → `BAD_REQUEST`, 429 → `RATE_LIMIT`. `verifyKey` 가 `REGION` 에 `{ok:false, code:'REGION', canSave:true}`.
+- [ ] `[D]` 검증 결과 다섯 갈래(유효/무효/한도/지역 제한/확인 불가)가 fetch 스텁 5종으로 각각 다른 문구로 보인다. 지역 제한 문구에 [키 설정]이 없다.
+- [ ] `[D]` 유효한 형식(구형 `AIza…`·신형 `AQ.…`)은 경고 없이, 다른 형식은 경고만 하고 저장된다(8-4).
+- [ ] `[D]` 설정 AI 탭의 "번역 따라가기"와 리더 속도 팝오버의 같은 줄이 **한 값**을 보인다 — 한쪽에서 바꾸면 다른 쪽을 다시 열었을 때 같다. 기본값 `표시+낭독`, "원문도 소리 내어 읽기" 켜짐.
+- [ ] `[D]` "번역 언어: العربية"와 "번역문 음성: 있음/없음"이 보인다. 음성 없음은 스텁(`voices = []`)으로 확인.
+- [ ] `[D]` 동의 전에는 [검증]·[시험 번역]이 동의 카드로 연결된다(13절).
+- [ ] `[D]` 요청 URL에 키가 없고(헤더만), 콘솔·토스트·에러 문자열 어디에도 키 문자열이 나타나지 않는다(의도적으로 잘못된 엔드포인트·모델 칸에 키 붙여넣기로 에러를 유발해 확인 — 7a `assertNoKeyInUrl` 이 막는다).
+
+#### 16-D1. 7c — 원문 언어
+
+- [ ] `[N]` `tests/lang.test.mjs`: 영어 본문 발췌 → `en`, 프랑스어 → `fr`, 한국어 → `ko`, 한자 위주 → `zh`(미지원), 가나 → `ja`(미지원), 아랍 문자 → `ar`(미지원), 200자 미만·기능어 동률 → `en` + 낮은 score. 발췌는 저작권 범위 안(각 2~3문장, 직접 작성 가능).
+- [ ] `[D]` 새 문서를 가져오면 본문 5쪽 추출 뒤 `documents.lang`·`langGuess` 가 채워지고 서재 카드에 "원문: … (자동)"이 보인다. [⋯]에서 바꾸면 `langSource = 'user'` 가 되고 이후 추정이 덮어쓰지 않는다.
+- [ ] `[D]` 열린 문서의 원문 언어를 바꾸면 `article[lang]`·원문 음성(`utterance.lang`)·낭독 큐가 다시 만들어진다(새로고침 없이).
+- [ ] `[D]` grep: `js/` 에서 `pickVoice('en'`, `setAttribute('lang', 'en')`, `'en-US'`(config 의 언어별 기본 지역 표 제외)가 0건.
+- [ ] `[N]` `splitSentences` 의 영어 결과 불변(16-C 항목과 같은 테스트).
+
+#### 16-D2. 8a — 파이프라인·캐시·상태 기계·분할 계약
+
+- [ ] `[N]` 분할 계약 R1~R6(7-8-2) 통과. **R5 변이 테스트**: 두 번째 분할을 일부러 만들면 R2 가 빨개진다(빨개지는 것을 review.md 에 기록).
+- [ ] `[D]` grep: `splitSentences` 호출이 `js/tts/text.js` 한 곳, 정의가 `js/text/segment.js` 한 곳.
+- [ ] `[N]` `jsonrepair.test.mjs`: 코드펜스, 후행 쉼표, 잘린 배열, 스마트 따옴표, 스키마 위반 케이스 통과.
+- [ ] `[N]` 10-2 검증: 개수 누락 → 존재하는 것만 채택, 길이 비율 `[0.2, 5]` 밖 → 그 항목 `failed`, 청크의 20% 초과 → 청크 전체 파싱 실패, 숫자 소실 → `failed`, 동방 숫자(`٣`)는 `3` 과 같다.
+- [ ] `[N]` 상태 기계(fetch 스텁): 429 → `exhausted` + 자동 재시도 **0건**, 500 → 1회 재시도 후 `cooldown`, 401 → `no-key`, `REGION` → `region`(키 설정 유도 없음), 타임아웃 30초 → `cooldown`, 같은 키 동시 요청 → Promise 공유(호출 1건).
+- [ ] `[N]` 캐시: 같은 `Unit.src` 는 탭 경로·낭독 경로에서 같은 키. 캐시 상한 초과 시 `createdAt` 오래된 순 정리. 문서 삭제 시 그 `docId` 항목 전부 삭제.
+- [ ] `[N]` 프롬프트: 원문·대상 언어 이름이 값에서 들어간다. `targetLang = 'ko'` 로 만든 지시문에 아랍어 예시가 없다. `grep -n "Arabic\|'ar'" js/ai/pipeline.js js/ai/readalong.js` 0건(`prompts.js` 의 언어 이름·예시 표는 예외).
+- [ ] `[D]` 온디바이스 Translator가 있는 Chrome(데스크톱)에서 탭 번역이 네트워크 요청 없이 되고 `ondeviceHits`가 증가한다. 없는 환경에서는 원격으로 폴백하며 콘솔 예외 없음. (낭독 동반 번역은 Android 가 기본 경로라 온디바이스를 쓰지 않아도 된다 `[가정]` — 쓰면 원문 언어를 `doc.lang` 으로 넘긴다.)
+
+#### 16-D3. 8b — 낭독 동반 번역·자막 띠
+
+순수·스텁(`[N]`, `tests/readalong.test.mjs`·`tests/speaker-tr.test.mjs`):
+- [ ] `[N]` RA1 `effectiveMode` 가 7-8-1 표의 모든 줄을 그 순서대로 판정한다(위 줄이 이긴다).
+- [ ] `[N]` RA2 `[수정 2026-09-28 — 글자 기준]` 선행 요청: 덮인 거리가 `READ_AHEAD_CHARS − MAX_REQ_CHARS`(3,000자) 초과인 동안 요청 0건, 그 이하로 떨어진 첫 `onProgress` 에서 정확히 1건, 응답 전 진행 이벤트가 더 와도 1건(떠 있는 요청 최대 1).
+- [ ] `[N]` RA3 `[수정 2026-09-28 — 글자 기준]` **창 경계**: 20,000자 넘게 낭독하는 동안 매 요청 시점에 요청된 모든 문장의 `dist` < `READ_AHEAD_CHARS`(9,000). `loadParas` 스파이에 **첫 문장의 `dist` 가 9,000 이상인 쪽**이 한 번도 없다. 떠 있는 요청 수가 2를 넘은 적이 없고, 2인 것은 냉시작 직후뿐이다.
+- [ ] `[N]` RA4 원격 `exhausted`(또는 `capped`·`offline`·`region`)에서 쪽 10개를 지나도 `pipeline.translate` 호출 0건, 상태 알림 이벤트 1건.
+- [ ] `[N]` RA5 `offline` → `online`: 창 안의 "보내지 않은 것"은 한 번 보내지고, "보냈다가 실패한 것"은 [다시 시도] 전까지 다시 보내지지 않는다.
+- [ ] `[N]` RA6 냉시작: 첫 호출(head)의 문장들이 커서 문장부터 시작하고 합이 `HEAD_CHARS` 이하, 둘째 호출은 head 바로 다음 문장부터, 두 호출의 문장이 겹치지 않는다.
+- [ ] `[N]` RA12 `[신설 2026-09-28 — 추가 지침 4]` 청크 병합(스텁 문서, `HEAD_CHARS = 0` 으로 head 를 끄고, 캐시 없음, 문서 끝까지 낭독):
+  - **작은 쪽**: 1,900자 × 3쪽(문서가 3쪽뿐) → `pipeline.translate` **1회**, 그 호출의 문장이 세 쪽에 걸친다.
+  - **큰 쪽**: 6,800자 1쪽 → **2회**(6,000자 이하 + 나머지).
+  - **캐시가 절반 찬 창**: 문서 전체 8,000자 중 앞 약 3,000자가 이미 캐시 → 나머지 약 5,000자만 **1회**, 캐시된 문장은 요청에 없다.
+  - **미추출 쪽에서 끊김**: `p` = 1,900자, `loadParas(p+1)` 이 `null` → 첫 호출의 문장이 전부 `p` 의 것이고 `loadParas` 를 기다리지 않는다. 뒤에 `loadParas(p+1)` 이 데이터를 주면 다음 `onProgress` 에서 `p+1` 문장이 요청된다.
+- [ ] `[N]` RA13 `[신설 2026-09-28]` **청크 경계와 캐시 독립**: 같은 문서를 `MAX_REQ_CHARS` 6,000 으로 한 번, 2,000 으로 한 번 낭독 → 두 번째 실행에서 첫 실행이 받은 문장은 전부 캐시 적중(요청 0), 캐시 키 목록이 같다.
+- [ ] `[N]` RA14 `[신설 2026-09-28]` 쪽 경계의 `frag: 'head'`·`'tail'` 두 조각이 한 청크 안에서 **각각 하나의 segment** 로 나란히 간다(합쳐지지 않는다 — R2 유지).
+- [ ] `[N]` RA7 발화 순서(스텁 synth): `speak`+ready → `[src, tr, src, tr, …]`. pending 이 1초 뒤 도착 → 그 `tr` 을 읽는다. 도착 안 함 → `TR_WAIT_MS` 뒤 다음 `src`, 그 문장의 `tr` 은 끝까지 없다. failed → 대기 0. `tr` 중 `pause()`→`resume()` → 같은 `tr` 처음부터. `tr-wait` 중 `stop()` 뒤 번역이 도착해도 아무것도 읽지 않는다(세대).
+- [ ] `[N]` RA8 문장 반복(2회) + `speak` → `[src, tr, src, tr]` 뒤 다음 문장. `markDone` 은 두 번째 `tr` 이 끝난 뒤 1회.
+- [ ] `[N]` RA9 번역문 음성 없음 → 유효 `show` + 알림 1회. 음성 목록이 비었을 때 첫 `tr` 발화 오류 → `show` 로 내려가고 알림 1회, 이후 `tr` 발화 0건.
+- [ ] `[N]` RA10 `speakSource = false`: 원문 발화 0건, 하이라이트(`show`) 이벤트는 문장마다 1건, 번역 없는 문장은 원문으로 읽는다.
+- [ ] `[N]` RA11 번역문 300자 분할이 `،`·`؛` 에서 끊는다.
+
+화면(`[D]` — DevTools 기기 모드 360×800·800×360, 글자 16·22·40px, 테마 5종):
+- [ ] `[D]` B1 **띠 높이 = 토큰**: `#trBand.getBoundingClientRect().height` 와 `getComputedStyle` 로 푼 `--tr-band-h` 의 차이 ≤ 0.5px(글자 16·22·40 각각). 기대값 110.2·119.9·142.6px(세로), 가로 800×360 은 79.2px.
+- [ ] `[D]` B2 **겹침 없음**: `trBand.bottom ≤ ttsBar.top + 0.5` 이고 `trBand.top ≥ 본문 영역 안`. 띠가 꺼지면 `--reader-chrome-bottom` 이 138px 로 돌아오고 빈 자리가 남지 않는다.
+- [ ] `[D]` B3 **원본 뷰가 잘리지 않는다**(10b 결함 재발 방지): 띠 켠 상태에서 `.original-scroll` 을 끝까지 스크롤하면 canvas 아래변 ≤ 띠 윗변 + 0.5px. 360×800·800×360·배율 0.8×·1.5× 각각. 그 쪽의 마지막 줄 오버레이에 도달할 수 있다.
+- [ ] `[D]` B4 **리플로우 본문을 가리지 않는다**: 낭독 20문장 연속 관찰에서 하이라이트 구간의 마지막 `getClientRects()` 아래변 ≤ 띠 윗변 − 4px, 윗변 ≥ `--bar-top`. 위반 0.
+- [ ] `[D]` B5 가로 스크롤 0(`documentElement.scrollWidth ≤ innerWidth`), 글자 40px·띠 켬.
+- [ ] `[D]` B6 `.tr-text` 의 `dir`·`lang` 이 `ai.translationLang` 에서 온다: 개발 콘솔로 `ko` 로 바꾸면 코드 수정 없이 `dir="ltr" lang="ko"`. 번역 삽입이 `textContent` 뿐(모의 응답 `<img src=x onerror=…>` 가 글자로 보인다).
+- [ ] `[D]` B7 번역이 띠 3줄을 넘치면 발화 경과에 따라 띠 안이 스크롤되고, 띠를 만지면 그 문장 동안 멈춘다. `prefers-reduced-motion` 에서 부드러운 스크롤 없음.
+- [ ] `[D]` B8 띠 대비 4.5:1 이상(고대비 7:1), 테마 5종.
+
+실기기(`[M]` — Z Fold 7 접힘·펼침, 그리고 **Nour 기기**):
+- [ ] `[M]` `speak` 모드로 20문장 연속: 문장마다 원문 → 번역문 순서로 들리고, 번역문 동안 하이라이트가 원문 문장에 머물며, 멈춤·중복 재생 0.
+- [ ] `[M]` 쪽 경계를 3번 넘는 동안(쪽이 작은 책이면 청크 경계를 2번 이상 넘는 동안) 다음 쪽 첫 문장의 번역문이 기다림 없이 나온다(선행 요청이 제때 도착). 건너뛴 문장 수를 기록한다.
+- [ ] `[M]` 아랍어 음성이 없는 기기(또는 음성 데이터 삭제)에서 "…음성이 없어 화면에만 표시" 가 한 번 뜨고 번역은 띠에 계속 보인다.
+- [ ] `[M]` 낭독 중 429(키 한도 소진 또는 로컬 오버라이드) → 원문 낭독이 끊기지 않고 쪽을 3번 넘기는 동안 상태 바 안내는 **1번**, 네트워크 요청은 **0건**.
+- [ ] `[M]` 번역문 발화 중 일시정지 → 재개 10회: 같은 번역문 처음부터, 무반응·소실 없음. 다른 앱 전환 → 복귀도 16-C 와 같다.
+
+#### 16-D4. 8c — 탭 번역·사용량·상한
 
 - [ ] `[D]` 키 없이 줄을 탭하면 [키 설정] 안내가 뜨고 앱이 죽지 않는다.
-- [ ] `[D]` 유효한 Gemini 키(구형 `AIza…` 또는 신형 `AQ.…`)로 검증이 통과하고, 형식이 다른 문자열도 경고만 하고 저장된다.
-- [ ] `[D]` 줄 탭 → 그 줄이 속한 문장의 아랍어 번역이 줄 아래 RTL로 표시된다. 같은 문단의 다른 줄을 탭하면 **네트워크 요청 0건**(캐시).
+- [ ] `[D]` 멈춘 상태에서 줄 탭 → 그 줄 문장의 번역이 **띠**에 뜬다([×]로 닫힘). 같은 문단의 다른 줄을 탭하면 **네트워크 요청 0건**. 낭독 동반 번역이 이미 받은 쪽에서는 첫 탭도 0건(같은 키).
 - [ ] `[D]` 새로고침 후 같은 줄 탭 → 네트워크 요청 0건, 사용량의 cacheHits 증가.
-- [ ] `[D]` [요약 보기] → 아랍어·영어 요약 두 단락. [이 페이지 요약] 1회 호출로 여러 문단 요약이 캐시되고 이후 개별 [요약 보기]가 요청 0건.
 - [ ] `[D]` 응답을 DevTools로 429로 바꾸면(로컬 오버라이드) 상태 바에 "오늘 무료 한도…" 문구가 뜨고, 자동 재시도 요청이 **0건**이며, 낭독·퀴즈는 계속 동작한다.
 - [ ] `[D]` 500 응답 → 1회 재시도 후 cooldown 안내. 네트워크 차단(오프라인 모드) → `offline` 안내. 잘린 JSON 응답 → 파싱 실패 안내, 캐시 저장 없음.
-- [ ] `[N]` `jsonrepair.test.mjs`: 코드펜스, 후행 쉼표, 잘린 배열, 스마트 따옴표, 스키마 위반 케이스 통과.
-- [ ] `[D]` 온디바이스 Translator가 있는 Chrome(데스크톱)에서 번역이 네트워크 요청 없이 되고 `ondeviceHits`가 증가한다. 없는 환경에서는 원격으로 폴백하며 콘솔 예외 없음.
-- [ ] `[D]` 요청 URL에 키가 없고(헤더만), 콘솔·토스트·에러 문자열 어디에도 키 문자열이 나타나지 않는다(의도적으로 잘못된 엔드포인트로 에러를 유발해 확인).
-- [ ] `[D]` "낭독 중 문단 끝 자동 요약"이 기본 OFF이고, 켜면 경고가 뜬다.
+- [ ] `[D]` `[수정 2026-09-28 — 글자 기준]` 사용량 화면: "낭독 번역 n회 · m자 → 호출당 평균 k자 · 1만 자당 x.x회" 의 n 이 네트워크 탭의 실제 요청 수와, m 이 요청 본문 `segments[].text` 글자 수 합과 일치한다. 냉시작 1회 뒤 20,000자 넘게 연속 낭독하면 호출당 평균 ≥ 4,000자 — 밑돌면 병합이 깨진 것이다.
+- [ ] `[D]` `[신설 2026-09-28]` "오늘 상한까지 약 n쪽" 이 **그 책의** `readStats` 쪽당 글자로 계산된다: 쪽당 글자가 다른 두 문서(스텁 `readStats`)에서 같은 남은 호출 수에 대해 n 이 쪽당 글자에 반비례한다. `readStats.pages < 5` 면 숨는다.
+- [ ] `[D]` 상한을 3으로 두고 낭독하면 3번째 호출 뒤 `capped` — 원문 낭독은 계속, 이후 요청 0건(쪽을 넘겨도), 안내 1회. 80% 경고 1회.
+- [ ] `[D]` 코드·spec 어디에도 무료 티어 한도 숫자가 없다(16-J grep 그대로).
+
+#### 16-D5. 후순위 — 요약 `[후순위 2026-09-28]`
+
+이번 7b·8 단계의 수용 기준이 **아니다**(7-3). 요약을 붙이는 단계에서 되살린다.
+- `[D]` [요약 보기] → 아랍어·영어 요약 두 단락. [이 페이지 요약] 1회 호출로 여러 문단 요약이 캐시되고 이후 개별 [요약 보기]가 요청 0건.
+- `[D]` "낭독 중 문단 끝 자동 요약"이 기본 OFF이고, 켜면 경고가 뜬다.
 
 ### 16-E. 퀴즈(📕)
 
@@ -1906,9 +2357,14 @@ article.reflow[dir=ltr][lang=en]
 
 ---
 
-## 17. Phase 2·3 개요와 확장 지점
+## 17. Phase 2·3 개요와 확장 지점 `[수정 2026-09-28]`
 
 상세 설계는 하지 않는다. Phase 1 설계가 막지 않도록 경계만 적는다.
+
+`[신설 2026-09-28]` **NotebookLM 과의 역할 분담.** Nour 는 NotebookLM(운영자가 소개)을 이미 쓴다. 공개 BYOK API 가 없으므로 연동하지 않는다.
+- NotebookLM 이 이미 잘하는 것: 자료 **전체**에 대한 질문·요약·오디오 개요.
+- MedReader 만 하는 것: 원서를 **한 문장씩 낭독 + 하이라이트 + 그 문장의 번역(띠·번역문 낭독)**, 리플로우(눈 피로), 오프라인 읽기, 원서 문제 퀴즈.
+- 그래서 요약(7-3·10-3)은 후순위로 미뤘다(사용자 결정 2026-09-28). 17절 표의 "섹션 종합 복습·개념 지도"처럼 자료 전체를 다루는 AI 기능도 같은 이유로 우선순위를 다시 볼 대상이다.
 
 | 기능 | 확장 지점 (Phase 1에 이미 준비됨) |
 |---|---|
@@ -1929,7 +2385,7 @@ article.reflow[dir=ltr][lang=en]
 
 ---
 
-## 18. 미결정 사항과 판단
+## 18. 미결정 사항과 판단 `[수정 2026-09-28]`
 
 | 쟁점 | 결정 | 이유 |
 |---|---|---|
@@ -1941,16 +2397,44 @@ article.reflow[dir=ltr][lang=en]
 | 대용량 초기 추출 | 열람 페이지 우선 + 백그라운드 전체 추출(진행 표시·재개) | 첫 화면 3초 목표와 "섹션 퀴즈·검색이 전체 텍스트를 요구"를 동시에 만족. 추출 결과는 pages에 영구 저장되어 두 번째부터 0비용 |
 | 온보딩 길이·키 강제 | 3화면, 키 입력 없음. 키는 첫 AI 기능 사용 시 딥링크 | 비용 제로 원칙상 키 없이 낭독·읽기·퀴즈가 전부 되어야 하고, 첫 경험이 키 발급 장벽에 막히면 안 된다 |
 | 낭독 단위 | **문장 기본, 줄 선택 가능** `[수정 2026-09-21 — 실기기 검증으로 뒤집음]` | 초판은 줄 기본이었다(사용자가 "각 줄"을 명시했기 때문). `[실기기 검증]` 실제 원서 페이지를 읽어 본 사용자 판단으로 뒤집는다 — **"문장 단위가 낫다. 줄 단위로 읽으면 다시 거꾸로 읽게 되는 경향이 크다"**. 이 책은 2단 조판이라 원본 줄이 8~10단어로 짧고, 낭독은 화면(리플로우)의 긴 줄이 아니라 **원본 PDF의 짧은 줄**을 따르므로 한 문장이 3~4번 쪼개진다. 줄 모드는 하이라이트가 정확히 따라오는 장점이 있어 선택지로 남긴다 |
-| 줄 조각 vs 문장 번역 | 문장 단위 번역, 문단 단위 요청 | 줄 조각 번역은 아랍어 어순상 무의미. 문단 1회 호출이 같은 문단 내 재탭을 0회로 만든다 |
+| 줄 조각 vs 문장 번역 | 문장 단위 번역, 문단 단위 요청. `[수정 2026-09-28]` 낭독 동반 번역은 **청크(글자 수) 단위** 요청(7-8-3), 탭은 문단 그대로 | 줄 조각 번역은 아랍어 어순상 무의미. 문단 1회 호출이 같은 문단 내 재탭을 0회로 만든다. 낭독은 글을 통째로 지나가므로 꽉 찬 청크가 호출 수를 최소로 한다 |
 | `pages`에 아이템 저장 여부 | 저장하지 않음(줄·문단·영역·run 경계만) | 용량 5~8배 차이. 원본 뷰 오버레이·표 재구성에 필요한 정보는 줄 수준에 있다 |
 | ES modules vs 클래식 | ES modules(`file://` 포기) | 모듈 40개·Node 테스트·pdf.js ESM. 배포·테스트 환경이 모두 http(s) |
 | 서비스 워커 | Phase 1 제외 | 추출된 텍스트 읽기는 SW 없이도 오프라인. pdf.js 오프라인 캐시는 P2에서 가치 대비 검토 |
 | 블로그 카드 임베드 | iframe 실행이 아니라 **스크린샷 + 새 탭 열기 링크** 권장 | 파일 선택·TTS·Wake Lock·IndexedDB 25MB를 카드 크기 iframe 안에서 쓰는 것은 경험이 나쁘다. Embed 단계에서 결정 |
 | 다단 3열 이상 | 미지원(경고만) | 대상 서적에 없음. 알고리즘은 거터 배열을 받도록 시그니처를 두어 확장 여지만 남김 |
+| 자동 번역의 경계 `[수정 2026-09-28 — 실사용자 요구로 뒤집음]` | **옛 결정**: "자동 전체 번역 금지 — 탭한 줄의 문단만" → **새 결정**: 낭독이 번역을 끌고 간다. 스스로 요청하는 범위는 커서부터 `READ_AHEAD_CHARS`(9,000자) 미만, 낭독 중일 때만(7-1·7-8-3). (같은 날 초안의 창 `{p, p+1}` 은 아래 "요청 단위: 쪽 → 글자 수" 행으로 바뀌었다) | Nour 의 확인된 요구가 "책을 읽으면서 각 줄을 소리 내어 번역"이다. 탭 방식은 문장마다 손을 대야 해 낭독과 양립하지 않는다. 그래도 문서·장 전체를 미리 번역하지는 않는다 — 비용이 읽은 글자 수에 비례하게 두는 것이 "비용 0원·자동 전체 번역 금지"의 취지다 |
+| 낭독 동반 번역 기본 모드 `[신설 2026-09-28]` | **`speak`(표시 + 번역문 낭독)**, 원문도 읽기 켬. 번역문 음성이 없으면 유효 모드가 `show` 로 내려감 | 요구가 문자 그대로 "소리 내어 번역". 키를 넣는 화면에 모드 선택이 있어 바꾸기 쉽다. 대가는 발화 시간 약 2.4배 `[추정]` — 속도 팝오버에서 한 번에 바꾸고, `speakSource` 를 끄면 약 1.4배. `speakSource` 기본 `true` — **사용자 확정 2026-09-28**(원문 → 번역문 둘 다) |
+| 번역 표시 위치 `[수정 2026-09-28 — 인라인 블록을 뒤집음]` | **옛 결정**: 줄 아래 인라인 블록(`div.inline-tr`), 원본 뷰는 하단 시트 → **새 결정**: 두 뷰 모두 **하단 자막 띠**(높이 고정 토큰, 3줄, 넘치면 띠 안 스크롤) | 문장마다 번역이 바뀌는 낭독 동반 번역에서 인라인 블록은 본문을 문장마다 오르내리게 한다(눈 피로). 문장 끝에 블록을 끼우려면 줄 span 텍스트 노드를 쪼개야 해 10a 하이라이트와 6a 이음새 문제를 다시 연다. 원본 뷰는 어차피 하단이다. 대가(본문 −20% 안팎)는 7-7 예산과 16-D3 B1~B4 로 잰다 |
+| 번역 단위와 조회 `[신설 2026-09-28]` | 번역 단위 = 낭독 단위(`Unit.seg`). 분할 함수는 `tts/text.js` 의 `buildUnits` 하나. 조회는 번호가 아니라 **문장 원문**으로 | 분할이 두 벌이면 번역이 한 문장씩 밀린다. 원문 키 조회는 설령 큐가 달라져도 "엉뚱한 번역" 대신 "번역 없음"으로 끝나게 한다 |
+| 쪽을 넘는 문장 `[수정 2026-09-28 — 7-2 continuesNext 이어 붙이기를 뒤집음]` | 이어 붙이지 않는다. 조각마다 번역하고 `frag` 표시만 | 낭독 큐가 쪽마다 따로라 이어 붙이면 번역 1개 ↔ 발화 2개가 되어 1:1 계약이 깨진다. 손실은 쪽 경계마다 최대 1문장. 청크가 쪽을 넘으므로 두 조각은 대개 같은 요청 안에 나란히 간다 |
+| 번역문 대기 상한 `[신설 2026-09-28]` | `speak` 모드에서 번역이 없으면 최대 4초 기다리고 건너뜀. 되돌아가 읽지 않음 | 원문 낭독을 멈추지 않는 것이 우선. 4초 넘는 침묵은 "멈춤"으로 느껴진다. 7b [시험 번역]의 실측 지연으로 8b 에서 조정 |
+| 원문 언어 `[수정 2026-09-28 — 'en' 고정을 뒤집음]` | `documents.lang`(기본 en, 휴리스틱 추정, 서재에서 변경). 지원 en·fr·ko, 중·일·아랍어 원서 미지원 | 여러 권·여러 언어가 온다. 온디바이스 `LanguageDetector` 는 Android 미지원 `[가정]` 이라 경로를 하나(문자 체계 + 기능어)로 둔다. fr·ko 추출 품질은 실물 측정 후 |
+| 지역 제한 오류 `[신설 2026-09-28]` | `REGION` 을 `AUTH` 와 다른 코드·상태·문구로. 판정은 `AUTH`·`BAD_REQUEST` 보다 먼저 | Nour 는 시리아에 있다. 지역 제한을 "키가 틀렸다"로 안내하면 키만 다시 넣는다. 결론은 Nour 기기 실호출(16-D0) |
+| 요약 기능 `[후순위 2026-09-28 — 사용자 결정]` | 7-3·10-3 설계는 보존하되 7b·8 단계에서 뺀다(요약 칩·[이 페이지 요약]·수용 기준). 파이프라인은 `kind` 로 나중에 올라탈 수 있게 | NotebookLM 이 자료 전체 요약·질문을 이미 한다. 무료 한도를 낭독 동반 번역에 몰아 쓴다 |
+| 캐시 상한 기본값 `[수정 2026-09-28]` | 50MB → **200MB** | 낭독 동반 번역은 읽은 글 전부를 캐시한다. `[실측 2026-09-28]` 1,000자당 약 10.6문장 ≈ 10.6KB → 50MB ≈ 470만 자(CMDT 반 권)에서 옛 번역을 지워 다시 읽을 때 또 돈을 낸다. 200MB ≈ 1,890만 자 ≈ CMDT 약 2권, 기기 quota 의 0.07% |
+| 호출 효율 표시 `[신설 2026-09-28]` `[수정 2026-09-28 — 쪽 → 글자]` | 사용량 화면에 **호출당 평균 글자·1만 자당 호출** + "오늘 상한까지 약 n쪽"(그 책의 실측 쪽당 글자로 환산). 초안의 "쪽당 호출 수"는 버렸다 | 병합이 작동하는지 한 숫자로 보인다. "쪽당"은 쪽 크기가 책마다 2배 넘게 달라(1,907 vs 4,511자) 뜻이 흔들린다. 사용자 자신의 상한으로 남은 양을 계산하며 무료 티어 숫자는 쓰지 않는다 |
+| 요청 단위: 쪽 → 글자 수 `[수정 2026-09-28 — 추가 지침 4, 사용자 결정]` | **옛 결정**(같은 날 초안): 창 `{p, p+1}`, 쪽 단위 1회 호출(`MAX_REQ_CHARS` 초과 시 분할), 다음 쪽은 지금 쪽 발화 절반에서 → **새 결정**: 창 = 커서부터 `READ_AHEAD_CHARS`(= `MAX_REQ_CHARS` × 1.5 = 9,000자) 미만, 요청 = 미캐시 문장을 **쪽 경계를 넘어** 6,000자 이하로 묶은 청크, 덮인 거리가 3,000자 이하로 떨어지면 다음 청크, 떠 있는 요청 최대 1개(+냉시작 head), 미추출 쪽에서 끊고 보냄 | `[실측 2026-09-28]` CMDT 2021(5,051쪽, 612×792, 본문 14.4pt, 1단 100%)은 쪽당 1,907자(중앙값 2,006·최대 3,054·19문장), CMDT 2026 은 4,511자(쪽당 1.2회), Harrison 4,031자. 두 CMDT 는 책 전체가 약 960만 대 890만 자로 거의 같은데 쪽 단위면 한 권 ≈ 5,000회 대 2,360회 — **같은 공부량에 무료 한도를 2배 넘게 쓴다.** 청크면 CMDT 2021 ≈ 1,600회. 창을 `MAX_REQ_CHARS` 와 같게 두면 선행 요청 자리가 청크의 절반뿐이라 청크가 늘 반쪽이 되므로 1.5배로 둔다 |
+| 지역 제한 시 대안 프로바이더 `[신설 2026-09-28 — 위치만]` | xAI Grok(`openai-compat`, `https://api.x.ai/v1`)을 19절에 위치만. Copilot·NotebookLM 은 공개 BYOK API 가 없어 제외 | CORS·무료 여부·시리아 지역 제한이 전부 `[가정]`. 유료면 "비용 0원" 원칙과 충돌하므로 사용자 판단이 먼저다 |
 
 ---
 
-## 19. 구현 순서 (Build 권장)
+## 19. 구현 순서 (Build 권장) `[수정 2026-09-28]`
+
+`[수정 2026-09-28]` 1~6·9·10 일부는 완료·배포됐고 7a 도 끝났다(인계 문서). **남은 7·8 단계를 아래처럼 다시 쪼갠다.** 각 단계는 한 번의 Build → Review 로 검증 가능한 크기이고, 수용 기준은 16-D 의 같은 이름 묶음이다. 앞 단계가 통과해야 다음으로 간다.
+
+| 단계 | 범위 | 수용 기준 | 비고 |
+|---|---|---|---|
+| **7b** 설정 AI 탭 + 실제 호출 | ① **가장 먼저: 실제 Gemini 호출 확인**(8-3) — 설정 AI 탭의 [검증]·[시험 번역]을 먼저 만들고 사용자가 한국 PC·**Nour 기기**에서 누른다. ② `REGION` 코드(8-2)·검증 다섯 갈래(8-4)·`ai.state.region`(14-2). ③ 12-7 나머지(키·기억·모델·상한·캐시). ④ 번역 따라가기 모드·원문 읽기 토글(저장만)·번역 언어 표시·번역문 음성 유무. ⑤ 서재·리더에서 설정으로 가는 입구 | 16-D0 | 7a 의 `provider`·`keys`·`redact`·`assertNoKeyInUrl` 위에 얹는다(재구현 금지). **시험 키(사용자 확정 2026-09-28): Nour 본인 키 먼저. 키 발급 단계에서 막히면 운영자 키로 Nour 기기에서 1회만 시험하고 지운다.** 키 입력은 사람이 직접 한다. **Nour 기기 결과가 `REGION` 이면 8a 로 가기 전에 아래 "지역 제한 시 대안"을 진행한다** |
+| **7c** 원문 언어 | `documents.lang`·`langSource`·`langGuess`, `text/lang.js`, 서재 [⋯] 원문 언어, 하드코딩 `'en'` 치환(9-2 목록), 원문 음성·`TTS_SYMBOLS` 언어별, `splitSentences(text, {lang})`(영어 불변) | 16-D1, 16-C 새 두 항목 | AI 호출 없음. 7b 와 독립이라 순서를 바꿔도 된다. 4절 추출 알고리즘은 건드리지 않는다 |
+| **8a** 파이프라인·캐시·상태 기계 | `ai/prompts.js`(10-1·10-2 — 요약 프롬프트는 후순위), `ai/jsonrepair.js`, `ai/cache.js`, `ai/pipeline.js`(7-6 + `region` + "보내지 않은 것/실패한 것"), `tts/text.js` 의 `Unit.src/seg/kind` + `sentencesOf`(7-8-2), `ui/reader.js` 의 `flowParasOf` 분리 | 16-D2 | UI 없음. 전부 `node --test` 와 fetch 스텁으로 검증. `kind` 는 `'translate'|'readalong'` 이고 요약이 나중에 올라탈 자리를 남긴다 |
+| **8b** 낭독 동반 번역 | `ai/readalong.js`(글자 수 창·청크 병합(쪽 경계를 넘음)·선행 요청·냉시작 head·여러 쪽 `loadParas`·미추출 쪽에서 끊기·조회·`effectiveMode`·`readStats` 누적), `tts/speaker.js` 의 `tr`·`tr-wait` 단계(6-1·6-2), `ui/trband.js` + 토큰(7-7), 편안 영역·scroll-padding(6-5), 속도 팝오버 모드 줄, 표 안내 발화의 UI 언어 음성(6-1) | 16-D3 | **실기기 확인을 여기서 즉시**(5단계와 같다). 아랍어 음성 초당 글자 수(`CHARS_PER_SEC_TR`)와 `TR_WAIT_MS` 를 실측으로 맞춘다 |
+| **8c** 탭 번역·사용량·상한 | 줄 탭/길게 누르기 → 띠(7-2), `ui/usage.js`(15절 + 호출당 평균 글자·1만 자당 호출·책별 쪽당 글자로 환산한 남은 쪽), 일일 상한·80% 경고, 캐시 용량 표시·비우기 | 16-D4 | 요약 칩·[이 페이지 요약]·자동 요약은 **넣지 않는다** |
+| 후순위 | 요약(7-3·10-3, 16-D5) | — | 10단계 이후 또는 Phase 2. NotebookLM 이 자료 전체 요약을 이미 한다(17절) |
+| 책별 자동 측정 (위치만) `[신설 2026-09-28]` | 2-4 `BOOK_PROFILE`·`dev/profile.mjs` 의 측정을 앱 안으로 들이는 단계. 이 단계에 **"이미지 표·그림 자리표시(원본으로 보기)"** 를 둔다 — 쪽에 텍스트 없는 이미지 영역(표·그림)이 있으면 리플로우에 자리표시 블록 + [원본으로 보기]를 낸다 | — | **이번 Build 범위 아님. 4절 알고리즘은 건드리지 않는다.** 근거는 20절 "이미지 표가 리플로우에서 사라짐" |
+| 지역 제한 시 대안 (위치만) | **순서(사용자 확정 2026-09-28): ① 무료 BYOK — OpenRouter `:free`·Mistral 실험 티어(`openai-compat`) → ② 안 되면 비용을 확인한 뒤 xAI Grok.** `adapters/xai.js` = `openai-compat` + base `https://api.x.ai/v1` | 16-D0 과 같은 방식(Nour 기기에서 [검증]·[시험 번역]) | **이번 Build 범위 아님.** CORS·무료 여부·시리아 지역 제한 전부 `[가정]`. 유료면 "비용 0원"과 충돌 — 사용자가 먼저 정한다. 10단계의 "나머지 어댑터"(openai-compat 계열)와 같은 작업이다 |
+
+아래는 초판 순서다(1~6·9 완료, 7·8 은 위 표로 대체).
 
 1. **`text/*` 순수 모듈 + `tests/` + `dev/proto-lines.html`** — 4-11 통과까지. 다른 것은 만들지 않는다.
 2. `config.js`, `db.js`(스키마 v1 전부), `hash.js`, `pdf/loader.js`, `pdf/extract.js` — 가져오기 → 추출 → `pages` 저장까지 콘솔로 확인.
@@ -1963,7 +2447,7 @@ article.reflow[dir=ltr][lang=en]
 9. `quiz/parser.js`(+ 테스트) + 섹션 인덱스 + 퀴즈 화면.
 10. 나머지 어댑터(openai-compat 계열·anthropic), fr·ko 번역 완성, manifest, 접근성 마감, 16절 전수 점검.
 
-## 20. 예상되는 함정
+## 20. 예상되는 함정 `[수정 2026-09-28]`
 
 | 함정 | 대응 |
 |---|---|
@@ -1986,3 +2470,11 @@ article.reflow[dir=ltr][lang=en]
 | 아랍어 UI에서 원서 본문이 RTL로 뒤집힘 | 본문 컨테이너 `dir="ltr" lang="en"` 고정(11-3) |
 | 사용자 PDF 커밋 | 픽스처는 JSON 발췌만, Review가 `git status` 확인 |
 | 무료 한도 숫자 하드코딩 | 대시보드는 사용자 상한만, 외부 한도는 링크로 안내(15) |
+| `[신설 2026-09-28]` 문장 분할이 두 벌이라 번역이 한 문장씩 밀림 | 분할은 `buildUnits` 하나, 조회는 문장 원문 키, R1~R6 + 변이 테스트(7-8-2) |
+| `[신설 2026-09-28]` 자막 띠가 원본 쪽 아래·읽는 문장을 가림(10b 재발) | 띠 높이 = 토큰(`block-size`), `--reader-chrome-bottom` 하나에 합산, 편안 영역·scroll-padding 을 본문 영역 기준으로(6-5·7-7), 16-D3 B1~B4 |
+| `[신설 2026-09-28]` 아랍어 음성이 없는데 `speak` 모드로 침묵 | `pickVoice(target)` null 이면 `show` 로 내려가고 한 번 안내. 목록이 비면 첫 발화 오류로 판정(7-8-5) |
+| `[신설 2026-09-28]` 429·상한·지역 제한 중 쪽마다 요청·안내 반복 | 원격 상태가 ready 가 아니면 `refill` 이 요청 0건, 안내는 상태 전이에서만(7-6·14-2). 원문 낭독은 계속 |
+| `[신설 2026-09-28]` 지역 제한을 "키 무효"로 안내 | `REGION` 을 `AUTH` 보다 먼저 판정, 문구에 [키 설정] 없음(8-2) |
+| `[신설 2026-09-28]` 쪽 단위 요청이라 쪽이 작은 책에서 호출 수가 2배 넘게 늚 | 요청 단위·창을 글자 수로(7-8-3, 18절 "요청 단위: 쪽 → 글자 수"), RA12 |
+| `[신설 2026-09-28 — 기록만]` **이미지 표가 리플로우에서 흔적 없이 사라짐** | `[실측 2026-09-28]` CMDT 2021 은 표·그림이 **이미지**다. 캡션은 쪽 끝에 텍스트로 있고 표 자체는 다음 쪽 이미지다(p1171→p1172, p1181→p1182). 표본 쪽의 24.5% 에 이미지가 있다. 4-8 표 감지는 텍스트 표만 보므로 이 책에서 region 0 → 리플로우에는 캡션만 남고 표는 없다. **대응은 위치만**: 19절 "책별 자동 측정" 단계의 이미지 표·그림 자리표시(원본으로 보기). 이번 Build 는 4절을 건드리지 않는다 |
+| `[신설 2026-09-28]` 모델이 번역을 한 칸씩 밀어 씀(개수는 맞음) | 길이 비율·숫자 보존 검사로 명백한 어긋남만 거름(10-2) |
