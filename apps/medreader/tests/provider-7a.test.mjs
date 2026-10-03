@@ -150,7 +150,9 @@ test('★ 서버가 키를 되비춰 줘도 오류 메시지로 새지 않는다
   assert.ok(err instanceof ProviderError, 'ProviderError 로 감싸야 한다');
   assert.equal(err.message.includes(OLD_KEY), false, '오류 메시지로 키가 샜다: ' + err.message);
   assert.equal(err.message.includes('[KEY]'), true, '지워졌다는 흔적이 남아야 한다');
-  assert.equal(err.code, CODES.BAD_REQUEST);
+  // `[수정 2026-10-03 — 7b Review R1]` "API key not valid" 메시지는 이제 AUTH 다(무효 키).
+  // 이 테스트의 요지는 코드가 아니라 **키가 새지 않는다**이다.
+  assert.equal(err.code, CODES.AUTH);
   assert.equal(err.status, 400);
   // 직렬화해도 새지 않는다(에러 리포트·`JSON.stringify` 경로).
   assert.equal(JSON.stringify(err).includes(OLD_KEY), false);

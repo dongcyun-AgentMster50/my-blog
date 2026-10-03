@@ -133,6 +133,27 @@ export const gemini = Object.freeze({
   errorParser(status, json) {
     const s = Number(status) || 0;
     const gs = json && json.error && typeof json.error.status === 'string' ? json.error.status : '';
+    const msg = json && json.error && typeof json.error.message === 'string' ? json.error.message : '';
+
+    // 8-2 `[신설 2026-09-28]` 지역 제한 — AUTH·BAD_REQUEST 보다 **먼저** 본다.
+    // 이것을 AUTH 로 안내하면 사용자는 멀쩡한 키를 영원히 다시 넣는다(시리아의 Nour).
+    // 쓸 수 있는 재료: s(HTTP 상태), gs(`error.status` 예: 'FAILED_PRECONDITION'), msg(`error.message`).
+    // 알려진 형태 `[가정]`: 400 + FAILED_PRECONDITION, 403 + "User location is not supported ..."
+    // 사용자 결정(방법 B): 문구는 느슨하게 찾는다 — 놓치면 Nour 가 키 오류로 오해해 갇힌다.
+    // 실제 거절 원문을 Nour 기기에서 받으면 이 판정을 그 원문에 맞춰 다시 본다.
+    const m = msg.toLowerCase();
+    if (m.indexOf('location') >= 0 && m.indexOf('not supported') >= 0) return 'REGION';
+    if (s === 400 && gs === 'FAILED_PRECONDITION') return 'REGION';
+
+    // 7b Review R1 — 무효 키. Gemini 는 틀린 키에 **400** `INVALID_ARGUMENT` +
+    // `details[].reason:'API_KEY_INVALID'` + "API key not valid…" 를 준다(`[가정]`, 실물 확인 전).
+    // 아래 BAD_REQUEST 로 떨어지면 "확인 불가 · 저장 가능"이 되어 **틀린 키가 저장된다.**
+    // REGION 판정 **뒤**에 둔다 — 지역 문구가 섞인 응답은 여전히 REGION 이다.
+    const details = json && json.error && Array.isArray(json.error.details) ? json.error.details : [];
+    for (let i = 0; i < details.length; i++) {
+      if (details[i] && details[i].reason === 'API_KEY_INVALID') return 'AUTH';
+    }
+    if (m.indexOf('api key not valid') >= 0) return 'AUTH';
 
     if (s === 429 || gs === 'RESOURCE_EXHAUSTED') return 'RATE_LIMIT';
     if (s === 401 || s === 403 || gs === 'UNAUTHENTICATED' || gs === 'PERMISSION_DENIED') return 'AUTH';

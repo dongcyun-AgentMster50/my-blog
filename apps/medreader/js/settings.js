@@ -53,6 +53,11 @@ export const DEFAULTS = Object.freeze({
   'tts.autoSummarize': false,   // 9-3 — 기본 false. 자동 호출 금지(18절)
   'tts.wakeLock': true,
 
+  /* 낭독 동반 번역 (7-8-1) — `[신설 2026-09-28]`. 7b 는 **저장만** 하고 동작은 8b 가 붙인다.
+     설정 AI 탭과 리더 속도 팝오버가 **이 두 키 하나씩**을 같은 그리기 함수로 보인다. */
+  'readalong.mode': 'speak',    // 'off' | 'show' | 'speak'. 기본 표시+낭독(요구가 "소리 내어 번역")
+  'readalong.speakSource': true, // speak 모드에서 원문도 소리 내어 읽는가 — 기본 true(사용자 확정)
+
   /* AI (7·8단계) */
   'ai.provider': 'gemini',
   'ai.model': '',
@@ -61,7 +66,7 @@ export const DEFAULTS = Object.freeze({
   'ai.useOnDevice': true,
   'ai.dailyCap': 100,
   'ai.warnAt': 0.8,
-  'ai.cacheLimitMB': 50,
+  'ai.cacheLimitMB': 200,      // `[수정 2026-09-28]` 9-3 · 7-5 — 50 → 200
   'ai.maxReqChars': 6000,
   'ai.proxyUrl': '',
 

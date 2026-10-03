@@ -408,3 +408,214 @@
 
 /* 제목이 이동 바를 밀어내지 않게 — 줄이는 쪽은 제목이다. */
 [data-screen="quiz"] .topbar .title { min-inline-size: 0; }
+
+/* ════ 설정 — AI 탭 (12-7) · 번역 따라가기 (7-8-1) — 7b 단계 ═══════
+   ★ 논리 속성만(16-H). 아랍어 UI 에서 저절로 거울이 된다.
+   ★ 모든 조작 요소 48px 이상(16-G). 360px 에서 가로 스크롤이 생기지 않게
+     입력칸·선택칸은 `inline-size: 100%` + `min-inline-size: 0` 이다.
+   ──────────────────────────────────────────────────────── */
+.settings-card h2 { margin-block: 0 var(--sp-3); font-size: var(--fs-lg); }
+
+.settings-screen .field { margin-block-end: var(--sp-4); }
+
+.settings-screen .field > label,
+.settings-screen .field-label {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  margin-block-end: var(--sp-1);
+}
+
+.settings-screen select,
+.settings-screen input[type="password"],
+.settings-screen input[type="text"],
+.settings-screen input[type="number"] {
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+/* 키 입력 줄 — [입력칸][보기][붙여넣기]. 좁으면 버튼이 다음 줄로 내려간다. */
+.key-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+
+.key-row input { flex: 1 1 12em; inline-size: auto; }
+.key-row button { flex: 0 0 auto; }
+.key-row button[aria-pressed="true"] { border-color: var(--c-accent); }
+
+.key-stored {
+  margin-block: var(--sp-2);
+  overflow-wrap: anywhere;
+}
+
+/* 키 형식 경고·"이 기기에 기억" 경고 — 차단이 아니라 안내다. */
+.warn-note {
+  background: var(--c-warn-bg);
+  color: var(--c-warn-text);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  margin-block: var(--sp-2);
+}
+
+.warn-note[hidden] { display: none; }
+
+/* 12-7 piiWarning() — 아랍어 줄이 늘 먼저다. 줄마다 자기 방향으로 정렬된다. */
+.pii-warning {
+  border-inline-start: 4px solid var(--c-danger);
+  padding-inline-start: var(--sp-3);
+  margin-block: var(--sp-2);
+}
+
+.pii-warning .pii-line {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.pii-warning .pii-line:lang(ar) { font-family: var(--font-ar); }
+
+.action-row { margin-block: var(--sp-3); }
+.action-row button { flex: 1 1 10em; }
+
+/* 검증·시험 번역 결과 — 갈래마다 테두리 색이 다르다(색만으로 구별하지 않는다 — 문구가 다르다). */
+.ai-result {
+  border: 1px solid var(--c-border);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  margin-block-end: var(--sp-3);
+  overflow-wrap: anywhere;
+}
+
+.ai-result[hidden] { display: none; }
+.ai-result p { margin-block: var(--sp-1); }
+.ai-result .ai-result-text { font-weight: 600; }
+.ai-result .ai-result-hint { white-space: pre-line; }
+.ai-result .ai-result-meta { font-variant-numeric: tabular-nums; }
+.ai-result[data-outcome="valid"] { border-inline-start-color: var(--c-ok); }
+.ai-result[data-outcome="limited"],
+.ai-result[data-outcome="region"],
+.ai-result[data-outcome="unknown"],
+.ai-result[data-outcome="noKey"] { border-inline-start-color: var(--c-warn-text); }
+.ai-result[data-outcome="invalid"] { border-inline-start-color: var(--c-danger); }
+
+.ai-sample { color: var(--c-text-dim); }
+
+.ai-translation {
+  font-size: var(--fs-lg);
+  line-height: 1.6;
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.ai-translation:lang(ar) { font-family: var(--font-ar); }
+
+.readalong-info { margin-block: var(--sp-2); }
+.readalong-info bdi:lang(ar) { font-family: var(--font-ar); }
+
+/* ── 번역 따라가기 줄 — 설정 AI 탭과 속도 팝오버가 같이 쓴다 ──
+   `typeset-row` · `typeset-choices` 를 그대로 물려받고, 스위치 하나를 더한다. */
+.readalong-row .readalong-label { font-size: var(--fs-sm); color: var(--c-text-dim); }
+
+/* 7b Review R2 — 모드 세 개는 **한 줄짜리 분절 컨트롤**이다. 360px 팝오버에서 두 줄로
+   접히면 세로 56px 를 더 먹었다. 낱말이 길면 버튼 **안에서** 줄을 바꾼다(높이 48 유지). */
+.readalong-row .readalong-modes {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+
+.readalong-row .readalong-modes button {
+  flex: 1 1 0;
+  min-inline-size: var(--tap);
+  padding-inline: var(--sp-1);
+  font-size: var(--fs-sm);
+  line-height: 1.25;
+  border-radius: 0;
+}
+
+.readalong-row .readalong-modes button + button { border-inline-start-width: 0; }
+
+.readalong-row .readalong-modes button:first-child {
+  border-start-start-radius: var(--radius-sm);
+  border-end-start-radius: var(--radius-sm);
+}
+
+.readalong-row .readalong-modes button:last-child {
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  inline-size: 100%;
+  margin-block-start: var(--sp-2);
+  text-align: start;
+}
+
+/* 스위치의 상자 — 켜지면 채워진다. 글자 방향과 무관한 모양이라 RTL 에서도 그대로다. */
+.switch::before {
+  content: "";
+  flex: 0 0 auto;
+  inline-size: 20px;
+  block-size: 20px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.switch[aria-checked="true"]::before {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  box-shadow: inset 0 0 0 3px var(--c-surface);
+}
+
+.switch:disabled { opacity: 0.5; }
+
+/* 7b Review R2 — 속도 팝오버의 [번역 설정]·[닫기] 한 줄. 팝오버 안을 스크롤해도
+   **아래에 붙어 있다**(sticky). 팝오버의 아래 안쪽 여백(--sp-4)만큼 음수로 당겨
+   테두리에 닿게 하고, 배경을 깔아 뒤로 지나가는 줄을 가린다. */
+.tts-rate-foot {
+  position: sticky;
+  inset-block-end: calc(-1 * var(--sp-4));
+  z-index: 1;
+  display: flex;
+  gap: var(--sp-2);
+  margin-block: var(--sp-2) calc(-1 * var(--sp-4));
+  margin-inline: calc(-1 * var(--sp-4));
+  padding: var(--sp-2) var(--sp-4) var(--sp-4);
+  background: var(--c-surface);
+  border-block-start: 1px solid var(--c-border);
+}
+
+.tts-rate-foot button {
+  flex: 1 1 0;
+  min-inline-size: var(--tap);
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-sm);
+  line-height: 1.25;
+}
+
+/* 16-G — 확인란 자체는 24px 이다. 줄 전체(라벨)를 48px 짜리 누를 곳으로 만든다. */
+.settings-screen .consent-row { align-items: center; }
+.settings-screen .consent-row label {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap);
+}

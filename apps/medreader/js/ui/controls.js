@@ -25,6 +25,8 @@ import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
   onLineTap, onPageRender
 } from './reader.js';
+// 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
+import { renderReadalongRow } from './settings.js';
 
 let els = null;
 let speaker = null;
@@ -63,6 +65,7 @@ export function initControls() {
     spanChoices: root.querySelector('#ttsSpanChoices'),
     spanOut: root.querySelector('#ttsSpanOut'),
     rateClose: root.querySelector('#ttsRateClose'),
+    readalongHost: root.querySelector('#ttsReadalongRow'),
     progress: root.querySelector('#ttsProgress')
   };
   if (!els.bar) { els = null; return; }
@@ -328,6 +331,9 @@ function paintRatePanel() {
   paintRate();
   paintUnit();
   paintRepeat();
+  // 7b — 열 때마다 설정값에서 다시 그린다. 설정 AI 탭에서 바꾼 값이 여기에 그대로 보인다.
+  // 저장만 한다 — 낭독 동작은 8b 가 붙인다(`speaker` 를 건드리지 않는다).
+  if (els.readalongHost) renderReadalongRow(els.readalongHost);
 }
 
 /**

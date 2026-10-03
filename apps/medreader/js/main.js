@@ -18,6 +18,7 @@ import { initOnboarding, showOnboarding, persistState } from './ui/onboarding.js
 import { initLibrary, showLibrary, openFilePicker, relabel } from './ui/library.js';
 import { initReader, showReader, leaveReader } from './ui/reader.js';
 import { initQuizScreen, showQuiz, leaveQuiz } from './ui/quiz.js';
+import { initSettingsScreen, showSettings, leaveSettings } from './ui/settings.js';
 
 /* ────────────────────────────────────────────────────────
    14절 배너 — 서비스 계층이 낸 **코드**를 여기서 문장으로 바꾼다(3-2).
@@ -50,7 +51,24 @@ function showBanner(detail) {
   p.textContent = i18n.t(key, params);
   bar.appendChild(p);
 
+  /* 7b — 안내에 딸린 이동 버튼(예: 키 없음 안내의 [키 설정] → `#/settings/ai`).
+     동작은 **`data-nav` 전역 위임**이 맡는다 — 여기서 `onclick` 을 붙이지 않는다.
+     지역 제한 안내(`ai.state.region`)는 이 목록이 비어 있다(14-2 — [키 설정] 없음). */
+  const actions = Array.isArray(detail.actions) ? detail.actions : [];
+  for (let i = 0; i < actions.length; i++) {
+    const a = actions[i] || {};
+    if (typeof a.nav !== 'string' || a.nav.charAt(0) !== '#' || !a.key) continue;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'banner-action';
+    b.setAttribute('data-nav', a.nav);
+    b.setAttribute('data-i18n', String(a.key));
+    b.textContent = i18n.t(a.key);
+    bar.appendChild(b);
+  }
+
   const close = document.createElement('button');
+  close.className = 'banner-close';
   close.type = 'button';
   close.textContent = i18n.t('common.dismiss');
   close.setAttribute('aria-label', i18n.t('common.dismiss'));
@@ -72,11 +90,40 @@ function relabelBanners() {
     try { params = raw ? JSON.parse(raw) : null; } catch (e) { params = null; }
     const p = bar.querySelector('.banner-text');
     if (p) p.textContent = i18n.t(key, params);
-    const btn = bar.querySelector('button');
+    const btn = bar.querySelector('button.banner-close');
     if (btn) {
       btn.textContent = i18n.t('common.dismiss');
       btn.setAttribute('aria-label', i18n.t('common.dismiss'));
     }
+    const acts = bar.querySelectorAll('button.banner-action[data-i18n]');
+    for (let i = 0; i < acts.length; i++) acts[i].textContent = i18n.t(acts[i].getAttribute('data-i18n'));
+  }
+}
+
+/**
+ * `[7b Review R3]` 이월 결함 3 — 배너가 있으면 리더의 팝오버(Aa·속도)가 상단바를
+ * 덮었다. 팝오버 높이는 CSS `calc` 로 정해지는데 배너 높이를 몰랐기 때문이다.
+ * 배너 상자(`#banners`)의 **실제 높이**를 `--banners-h` 로 내보내고 `reader.css`
+ * 가 그만큼 뺀다. 높이를 재는 것은 이 한 곳뿐이다(문구·언어·창 폭이 바뀌어도
+ * `ResizeObserver` 가 따라간다).
+ */
+function watchBannerHeight() {
+  const host = document.getElementById('banners');
+  if (!host) return;
+  const root = document.documentElement;
+  const apply = () => {
+    const h = Math.ceil(host.getBoundingClientRect().height) || 0;
+    root.style.setProperty('--banners-h', h + 'px');
+  };
+  apply();
+  // 둘 다 건다. MutationObserver 는 배너가 붙고·떨어지고·언어가 바뀌는 순간(마이크로태스크)에,
+  // ResizeObserver 는 창 폭이 바뀌어 줄바꿈이 달라질 때 따라간다. ResizeObserver 는 화면이
+  // 그려질 때만 돌아서, 그것 하나로는 그리기가 멈춘 탭에서 값이 0 에 머문다(실측).
+  if (typeof MutationObserver === 'function') {
+    new MutationObserver(apply).observe(host, { childList: true, subtree: true, characterData: true });
+  }
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(apply).observe(host);
   }
 }
 
@@ -122,12 +169,16 @@ async function boot() {
   initOnboarding({ onImport: openFilePicker });
   initReader();
   initQuizScreen();
+  initSettingsScreen();
 
   // 정적 이동 버튼 — 해시만 바꾼다(뒤로가기가 그대로 동작한다).
   document.addEventListener('click', (ev) => {
     const btn = ev.target.closest('[data-nav]');
     if (btn) go(btn.getAttribute('data-nav'));
   });
+
+  /* 7b Review R3 — 배너 높이를 CSS 변수로 알린다(팝오버가 상단바를 덮지 않게). */
+  watchBannerHeight();
 
   /* 5. 라우터 */
   startRouter({ resolve: resolveRoute, onRoute: onRoute });
@@ -174,6 +225,8 @@ function onRoute(route) {
   if (route.name !== 'reader') leaveReader();
   // 퀴즈도 같다 — 문항 카드와 크롭 이미지를 들고 있다(9b).
   if (route.name !== 'quiz') leaveQuiz();
+  // 설정을 떠나면 진행 중인 호출을 끊고 입력칸의 원문 키를 지운다(13절).
+  if (route.name !== 'settings') leaveSettings();
 
   switch (route.name) {
     case 'onboarding':
@@ -189,6 +242,10 @@ function onRoute(route) {
     case 'quiz':
       // 9b — 한 번에 문항 하나. `ui/quiz.js` 가 그린다(5-5).
       showQuiz(route.params);
+      break;
+    case 'settings':
+      // 7b — 설정 AI 탭(12-7). `#/settings` 와 `#/settings/ai` 가 같은 화면이다.
+      showSettings(route.params);
       break;
     default:
       break;

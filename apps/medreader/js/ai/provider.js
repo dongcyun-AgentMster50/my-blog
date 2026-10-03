@@ -30,10 +30,15 @@ import { gemini } from './adapters/gemini.js';
 /** 8-1 — 등록된 어댑터. 7a 는 gemini 하나다(나머지는 8-2 표에 설계만 있다). */
 export const ADAPTERS = Object.freeze({ gemini: gemini });
 
-/** 오류 코드. 8-2 의 여섯 가지 + 네트워크/취소/키없음. */
+/** 오류 코드. 8-2 의 일곱 가지 + 네트워크/취소/키없음. */
 export const CODES = Object.freeze({
   RATE_LIMIT: 'RATE_LIMIT',
   AUTH: 'AUTH',
+  /* 8-2 `[신설 2026-09-28]` 지역 제한. **`AUTH` 와 다른 코드다** — 이것을 키 오류로
+     안내하면 사용자는 멀쩡한 키를 영원히 다시 넣는다. 판정은 어댑터의
+     `errorParser` 가 하고, 이 파일은 그 코드를 **고치지 않고 그대로 흘려보낸다**
+     (`complete()` 는 `ProviderError.code`, `verifyKey()` 는 `{code:'REGION', canSave:true}`). */
+  REGION: 'REGION',
   SERVER: 'SERVER',
   BAD_REQUEST: 'BAD_REQUEST',
   SAFETY: 'SAFETY',
@@ -441,13 +446,20 @@ export async function complete(req, opts) {
 /**
  * 8-4 — **가장 싼 요청 1회**(gemini: `GET /v1beta/models?pageSize=1`, 토큰 0).
  *
- * 네 갈래:
+ * 다섯 갈래(8-4 `[수정 2026-09-28]`):
  *   200            → `{ok:true}`
  *   401/403        → `{ok:false, code:'AUTH'}`            키가 틀렸다
  *   429            → `{ok:true,  code:'RATE_LIMIT', limited:true}`
  *                    **키는 유효하다.** 한도에 걸렸을 뿐이므로 ok 로 친다(8-4).
+ *   지역 제한      → `{ok:false, code:'REGION', canSave:true}`
+ *                    키는 판정 불가 — "키 문제가 아닙니다". 저장은 막지 않는다
+ *                    (키는 멀쩡할 수 있고 다른 경로에서 쓸 수 있다).
  *   네트워크 실패  → `{ok:false, code:'UNKNOWN', maybeBlocked:true}`
  *                    "확인 불가, 나중에 다시" — **저장은 허용**(`canSave:true`).
+ *
+ * 실패 갈래에는 `message` 가 붙는다 — 서버 메시지를 **실제 키로 지운 것**이다.
+ * 8-2: 지역 제한 문구는 `[가정]` 이라 실물 응답으로 확정해야 하고, 그 근거를
+ * `dev.debug` 일 때 화면에 보이기 위한 것이다(문구 선택은 UI 몫).
  *
  * ★ 8-3: CORS 차단과 네트워크 오류는 브라우저가 구별해 주지 않는다. 구별하려
  *   들지 않는다. `maybeBlocked` 만 세우고 문구 선택은 호출자에게 맡긴다.
@@ -535,13 +547,21 @@ export async function verifyKey(key, opts) {
   await bumpUsage({ errors: 1 }, { db: o.db, now: o.now });
   await started;
 
+  // ★ 서버 메시지는 **실제 키로** 지운 뒤에만 내보낸다(13절 — 되비춤 대비).
+  const message = redactString(messageOf(json), { keys: [raw, key] });
+
   if (code === CODES.AUTH) {
     // 유일하게 "저장하면 안 된다"가 분명한 갈래.
-    return { ok: false, code: CODES.AUTH, status: status, canSave: false };
+    return { ok: false, code: CODES.AUTH, status: status, canSave: false, message: message };
+  }
+
+  if (code === CODES.REGION) {
+    // 8-4 — 키는 판정 불가. **저장을 막지 않는다**(`AUTH` 와 반대).
+    return { ok: false, code: CODES.REGION, status: status, canSave: true, message: message };
   }
 
   // 500·400 등 — 키 문제라고 단정할 수 없다. 저장은 막지 않는다(8-4 의 태도).
-  return { ok: false, code: code, status: status, canSave: true };
+  return { ok: false, code: code, status: status, canSave: true, message: message };
 }
 
 /**
