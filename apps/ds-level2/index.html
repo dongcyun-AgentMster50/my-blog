@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="데이터 사이언스 레벨2 시험 대비 학습앱 — 요약 카드, 필기 퀴즈, Jupyter 실습, 오답 노트, 복습, 모의고사, 용어 사전">
+  <title>데이터 사이언스 레벨2 학습</title>
+  <script>
+    /* FOUC 방지: 스타일시트보다 먼저 테마·글자 크기·임베드 모드를 <html> 에 박는다.
+       설정 키는 블로그의 "theme" 키와 섞이지 않는 자체 네임스페이스. localStorage 접근 자체가
+       예외일 수 있어(샌드박스 iframe) 전부 try/catch. 로직은 app.js 의 applyTheme 와 같아야 한다. */
+    (function () {
+      var html = document.documentElement;
+      var settings = {};
+      try { settings = JSON.parse(localStorage.getItem('apps.ds-level2.settings.v1') || '{}') || {}; } catch (e) { settings = {}; }
+      var q = {};
+      try { location.search.slice(1).split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); }); } catch (e) { /* 무시 */ }
+      var theme = (q.theme === 'light' || q.theme === 'dark') ? q.theme : settings.theme;
+      if (theme !== 'light' && theme !== 'dark') {
+        var dark = false;
+        try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { /* 무시 */ }
+        theme = dark ? 'dark' : 'light';
+      }
+      html.setAttribute('data-theme', theme);
+      if (settings.fontScale === 1.15) html.setAttribute('data-font', 'large');
+      var embedded = q.embed === '1';
+      try { embedded = embedded || window.self !== window.top; } catch (e) { embedded = true; }
+      if (embedded) html.setAttribute('data-embed', '');
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#view">본문으로 건너뛰기</a>
+
+  <div class="shell">
+    <!-- 데스크톱 사이드바 (모바일에서는 숨김) -->
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#/">DS 레벨2</a>
+      <nav class="sidenav" aria-label="주 메뉴" id="sidenav">
+        <a href="#/" data-nav="home">홈</a>
+        <a href="#/tree" data-nav="tree">커리큘럼 트리</a>
+        <a href="#/review" data-nav="review">오늘 복습 <span class="badge" id="side-review-count" hidden></span></a>
+        <a href="#/wrong" data-nav="wrong">오답 노트 <span class="badge" id="side-wrong-count" hidden></span></a>
+        <a href="#/exam" data-nav="exam">모의고사</a>
+        <a href="#/glossary" data-nav="glossary">용어 사전</a>
+        <a href="#/settings" data-nav="settings">설정</a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="topbar" id="topbar">
+        <button type="button" class="icon-btn" id="btn-back" aria-label="뒤로">‹</button>
+        <h1 class="topbar-title" id="topbar-title">데이터 사이언스 레벨2</h1>
+        <div class="topbar-actions">
+          <span class="topbar-progress" id="topbar-progress" hidden></span>
+          <button type="button" class="btn btn-sm" id="btn-quit" hidden>종료</button>
+          <button type="button" class="icon-btn" id="btn-theme" aria-label="테마 전환" title="테마 전환">◐</button>
+          <button type="button" class="icon-btn" id="btn-menu" aria-label="메뉴" aria-expanded="false" aria-controls="more-sheet" hidden>☰</button>
+        </div>
+      </header>
+      <main id="view" class="view" tabindex="-1" aria-live="off"></main>
+    </div>
+  </div>
+
+  <!-- 모바일 하단 탭바 -->
+  <nav class="tabbar" id="tabbar" aria-label="하단 메뉴">
+    <a href="#/" data-nav="home"><span class="tab-icon" aria-hidden="true">⌂</span>홈</a>
+    <a href="#/tree" data-nav="tree"><span class="tab-icon" aria-hidden="true">☷</span>트리</a>
+    <a href="#/review" data-nav="review"><span class="tab-icon" aria-hidden="true">↻</span>복습<span class="badge tab-badge" id="tab-review-count" hidden></span></a>
+    <a href="#/glossary" data-nav="glossary"><span class="tab-icon" aria-hidden="true">≡</span>사전</a>
+    <button type="button" data-nav="more" id="tab-more" aria-expanded="false" aria-controls="more-sheet"><span class="tab-icon" aria-hidden="true">⋯</span>더보기</button>
+  </nav>
+
+  <!-- 더보기 시트: 오답·모의고사·설정 (임베드 모드에서는 햄버거 메뉴 역할도 한다) -->
+  <div class="sheet-backdrop" id="more-backdrop" hidden></div>
+  <div class="sheet sheet-menu" id="more-sheet" role="dialog" aria-modal="true" aria-label="더보기 메뉴" hidden>
+    <nav class="sheet-nav" aria-label="더보기">
+      <a href="#/" data-nav="home" class="embed-only">홈</a>
+      <a href="#/tree" data-nav="tree" class="embed-only">커리큘럼 트리</a>
+      <a href="#/review" data-nav="review" class="embed-only">오늘 복습</a>
+      <a href="#/wrong" data-nav="wrong">오답 노트 <span class="badge" id="more-wrong-count" hidden></span></a>
+      <a href="#/exam" data-nav="exam">모의고사</a>
+      <a href="#/glossary" data-nav="glossary" class="embed-only">용어 사전</a>
+      <a href="#/settings" data-nav="settings">설정</a>
+    </nav>
+    <button type="button" class="btn btn-block" id="more-close">닫기</button>
+  </div>
+
+  <!-- 용어 바텀 시트 / 팝오버 -->
+  <div class="sheet-backdrop" id="term-backdrop" hidden></div>
+  <div class="sheet sheet-term" id="term-sheet" role="dialog" aria-modal="true" aria-labelledby="term-title" hidden>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <h2 class="term-title" id="term-title"></h2>
+    <p class="term-def" id="term-def"></p>
+    <p class="term-meta" id="term-meta"></p>
+    <div class="sheet-actions">
+      <a class="btn btn-sm" id="term-link" href="#/glossary">사전에서 보기</a>
+      <button type="button" class="btn btn-sm" id="term-close">닫기</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="sr-only" id="live" role="status" aria-live="polite"></div>
+
+  <!-- 로드 순서(spec 1절): registry → curriculum → data/* → 엔진 → app. 전부 클래식 스크립트.
+       data/ 11개는 파일이 아직 없어도 404 로 넘어가고 앱은 뜬다(해당 노드는 "준비 중"). -->
+  <script src="js/registry.js"></script>
+  <script src="js/curriculum.js"></script>
+  <script src="data/a1-sql.js"></script>
+  <script src="data/a2-pandas-1.js"></script>
+  <script src="data/a2-pandas-2.js"></script>
+  <script src="data/a3-libs-1.js"></script>
+  <script src="data/a3-libs-2.js"></script>
+  <script src="data/a4-composite.js"></script>
+  <script src="data/b1-python.js"></script>
+  <script src="data/b2-pandas.js"></script>
+  <script src="data/b3-pattern.js"></script>
+  <script src="data/b4-regression.js"></script>
+  <script src="data/b5-hypothesis.js"></script>
+  <script src="data/_sample.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/format.js"></script>
+  <script src="js/grader.js"></script>
+  <script src="js/leitner.js"></script>
+  <script src="js/exam.js"></script>
+  <script src="js/ipynb.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
