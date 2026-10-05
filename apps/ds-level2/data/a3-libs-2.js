@@ -1312,7 +1312,7 @@
         def: "사용자 정의 함수의 모수를 비선형 최소제곱으로 데이터에 맞추는 함수. 최적 모수 popt와 공분산 pcov를 돌려준다.",
         nodes: ["a-3-6"], related: ["least-squares"] },
       { id: "interpolation", ko: "보간", en: "interpolation",
-        def: "알려진 데이터 점 사이의 값을 추정하는 방법. scipy.interpolate.interp1d, pandas interpolate()가 대표적이다.",
+        def: "알려진 이웃 값(데이터 점) 사이의 값을 추정해 결측을 채우는 방법. pandas interpolate() 의 기본 method='linear' 는 행 위치 기준, method='time' 은 실제 시간 간격에 비례하며, scipy.interpolate.interp1d 도 같은 일을 한다.",
         nodes: ["a-3-6"], related: [] },
 
       /* 수동 구현 */

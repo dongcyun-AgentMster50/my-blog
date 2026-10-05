@@ -971,12 +971,12 @@
       },
       {
         id: "a-3-3-q06", node: "a-3-3", type: "mcq", kind: "bug", difficulty: 2,
-        prompt: "90점 이상 'A', 80점 이상 'B', 나머지 'C'를 만들려 했는데 80점 미만 행에 `0`이 들어갔다. 원인과 수정으로 옳은 것은?",
+        prompt: "90점 이상 'A', 80점 이상 'B', 나머지 'C'를 만들려 했는데 80점 미만 행이 'C'가 되지 않는다(numpy 1.x에서는 `'0'`이 들어가고, numpy 2.x에서는 `TypeError: Choicelist and default value do not have a common dtype`가 난다). 원인과 수정으로 옳은 것은?",
         code: [
           "import numpy as np, pandas as pd",
           "df = pd.DataFrame({'score': [95, 85, 70]})",
           "df['grade'] = np.select([df['score'] >= 90, df['score'] >= 80], ['A', 'B'])",
-          "print(df['grade'].tolist())   # ['A', 'B', '0']"
+          "print(df['grade'].tolist())   # numpy 1.x: ['A', 'B', '0'] / numpy 2.x: TypeError"
         ],
         lang: "python",
         choices: [
@@ -987,7 +987,7 @@
         ],
         answer: 2,
         explanation: [
-          "**정답: ③** [[np-select|np.select(condlist, choicelist, default=0)]]는 어느 조건도 만족하지 않는 위치에 `default`를 넣는데 기본값이 **0**이다. `default='C'`를 주면 의도대로 'A', 'B', 'C'가 된다.",
+          "**정답: ③** [[np-select|np.select(condlist, choicelist, default=0)]]는 어느 조건도 만족하지 않는 위치에 `default`를 넣는데 기본값이 **0**이다. `default='C'`를 주면 의도대로 'A', 'B', 'C'가 된다. numpy 2.x는 문자열 선택값과 정수 기본값 0의 dtype이 맞지 않아 아예 TypeError를 내지만 원인은 같다.",
           "",
           "- ① 조건과 선택값은 같은 순서로 짝지어져 있어 바꾸면 오히려 틀린다.",
           "- ② `np.select`는 불리언 Series를 그대로 받는다.",
@@ -1667,8 +1667,8 @@
       { id: "melt", ko: "멜트 (wide → long)", en: "melt",
         def: "여러 열을 variable(열 이름)·value(값) 두 열로 쌓아 넓은(wide) 표를 긴(long) 표로 바꾸는 연산. pivot의 역변환이다.",
         nodes: ["a-3-3"], related: ["pivot-table"] },
-      { id: "window-function", ko: "윈도 함수", en: "window function (rolling / shift / cumsum)",
-        def: "행 수를 줄이지 않고 각 행 주변 또는 그룹 내 누적 범위의 값으로 계산하는 연산. pandas의 rolling, shift, diff, cumsum, rank가 해당한다.",
+      { id: "window-function", ko: "윈도 함수", en: "window function",
+        def: "행 수를 원본과 같게 유지하면서 각 행 주변 또는 그룹 내 범위의 값으로 계산하는 연산. SQL 은 OVER() 절(순위·누적합·LAG 등)로 쓰고, pandas 는 rolling, shift, diff, cumsum, rank, groupby().transform 이 해당한다.",
         nodes: ["a-3-3"], related: ["transform", "groupby"] },
       { id: "merge", ko: "병합 (조인)", en: "merge / join",
         def: "두 DataFrame을 공통 키 컬럼으로 가로로 결합하는 연산. how(inner·left·right·outer)로 남길 키를 정하며 기본은 inner다.",
@@ -1708,8 +1708,8 @@
       { id: "label-encoding", ko: "라벨 인코딩", en: "label encoding / LabelEncoder",
         def: "범주를 0, 1, 2… 정수로 바꾸는 인코딩. sklearn LabelEncoder는 1차원 타깃(y)용이며 순서가 없는 입력 특성에는 원핫 인코딩이 적절하다.",
         nodes: ["a-3-4"], related: ["one-hot-encoding"] },
-      { id: "imputation", ko: "결측값 대치", en: "imputation / SimpleImputer",
-        def: "결측값을 평균·중위수·최빈값 등 추정값으로 채우는 전처리. SimpleImputer(strategy='mean'|'median'|'most_frequent')로 수행하며 학습 세트 통계로 fit한다.",
+      { id: "imputation", ko: "결측값 대치", en: "imputation",
+        def: "결측값을 평균·중앙값·최빈값·앞뒤 값·모델 예측값 등 추정값으로 채우는 처리. pandas 의 fillna, ffill, bfill 이 기본 도구이고 sklearn 의 SimpleImputer(strategy='mean'|'median'|'most_frequent') 는 학습 세트 통계로 fit 해 적용한다.",
         nodes: ["a-3-4"], related: ["missing-value", "data-leakage"] },
       { id: "column-transformer", ko: "컬럼 변환기", en: "ColumnTransformer",
         def: "컬럼 그룹마다 다른 변환기(수치형 스케일러, 범주형 인코더 등)를 적용하고 결과를 이어 붙이는 sklearn.compose 클래스. 지정하지 않은 컬럼은 remainder로 처리한다.",

@@ -623,7 +623,7 @@
         choices: [
           "`s.dt.tz_convert('Asia/Seoul')`을 바로 호출하면 된다.",
           "`tz_localize`는 시간대를 바꾸고, `tz_convert`는 시간대를 처음 붙인다.",
-          "`s.dt.tz_localize('Asia/Seoul')`은 시각 값은 그대로 두고 시간대 정보만 붙인다.",
+          "`s.dt.tz_localize('Asia/Seoul')`은 시각 값을 UTC 기준으로 9시간 앞당겨 바꾼다.",
           "`s.dt.tz_localize('UTC').dt.tz_convert('Asia/Seoul')`을 쓰면 UTC 기준 값이 한국 시각으로 변환되며, naive 값에 `tz_convert`를 바로 쓰면 TypeError가 난다."
         ],
         answer: 3,
@@ -632,7 +632,7 @@
           "",
           "- ① naive 값에는 `tz_convert`를 쓸 수 없다. 먼저 localize 해야 한다.",
           "- ② 역할이 뒤바뀌었다. `tz_localize`가 붙이는 것, `tz_convert`가 바꾸는 것.",
-          "- ③ 문장 자체는 맞지만(localize는 시각 숫자를 바꾸지 않고 라벨만 붙인다) 원래 데이터가 UTC 기록이라면 이렇게 하면 9시간이 틀어진다. 질문의 상황(한국 시간으로 표시)에 대한 완전한 설명은 ④다.",
+          "- ③ `tz_localize`는 시각 숫자를 **바꾸지 않고** 시간대 라벨만 붙인다. 값이 환산되는 것은 `tz_convert`다. (원래 데이터가 UTC 기록인데 'Asia/Seoul'로 바로 localize 하면 9시간이 틀어진다.)",
           "",
           "시험에서는 'localize = 붙인다, convert = 바꾼다'와 naive → convert 오류를 개념 문제로 묻는다."
         ],
@@ -1287,7 +1287,7 @@
         def: "특정 시점이 아니라 '2024년 2월'처럼 일정 길이의 구간을 나타내는 pandas 자료형. to_period('M')로 변환하며 월·분기 단위 집계 라벨로 쓴다.",
         nodes: ["a-2-5"], related: ["frequency-alias", "datetime"] },
       { id: "interpolation", ko: "보간", en: "interpolation",
-        def: "결측값을 앞뒤 값 사이에서 추정해 채우는 방법. method='linear'는 행 위치 기준, method='time'은 실제 시간 간격에 비례해 채운다.",
+        def: "알려진 이웃 값(데이터 점) 사이의 값을 추정해 결측을 채우는 방법. pandas interpolate() 의 기본 method='linear' 는 행 위치 기준, method='time' 은 실제 시간 간격에 비례하며, scipy.interpolate.interp1d 도 같은 일을 한다.",
         nodes: ["a-2-5"], related: ["missing-value", "asfreq"] },
       { id: "frequency-alias", ko: "빈도 별칭", en: "frequency alias / offset alias",
         def: "D(일), W(주), MS(월초), QS(분기초), h(시) 같이 시간 간격을 나타내는 문자열 코드. date_range, resample, asfreq의 freq 인자에 쓴다.",
