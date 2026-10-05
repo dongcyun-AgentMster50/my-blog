@@ -17,13 +17,13 @@
         title: "pandas 문법 익히기",
         summary: [
           "pandas 시험 문제는 기능을 아는지가 아니라 **함정을 아는지**를 묻는다.",
-          "`df['a']`는 [[series|Series]], `df[['a']]`는 [[dataframe|DataFrame]] — 괄호 하나로 반환 타입이 바뀐다.",
+          "`df['a']`는 [[series|Series]], `df[ ['a'] ]`는 [[dataframe|DataFrame]] — 괄호 하나로 반환 타입이 바뀐다.",
           "[[loc|loc]]는 끝 레이블을 **포함**하고 [[iloc|iloc]]는 끝 위치를 **제외**한다. 조건 결합은 `&`·`|`·`~`와 괄호, `and`/`or`를 쓰면 `ValueError`다.",
           "`inplace=True`는 `None`을 돌려주고, `NaN == NaN`은 `False`이며, `astype(int)`는 결측값이 있으면 실패한다.",
           "[[groupby|groupby]]·[[merge|merge]]·[[concat|concat]]은 **결과의 길이와 인덱스 구조**가 출제 포인트다."
         ],
         concepts: [
-          "**Series vs DataFrame 반환**: 컬럼 하나를 문자열로 고르면 Series, 리스트로 고르면 DataFrame. `df.loc[0]`은 Series, `df.loc[[0]]`은 DataFrame. 이후 `.str`·`.dt`·`value_counts()`가 되는지 안 되는지가 여기서 갈린다.",
+          "**Series vs DataFrame 반환**: 컬럼 하나를 문자열로 고르면 Series, 리스트로 고르면 DataFrame. `df.loc[0]`은 Series, `df.loc[ [0] ]`은 DataFrame. 이후 `.str`·`.dt`·`value_counts()`가 되는지 안 되는지가 여기서 갈린다.",
           "**loc/iloc 끝 포함**: `s.loc['b':'d']`는 b·c·d 3개, `s.iloc[1:3]`은 위치 1·2 두 개. [[loc|레이블 기반(label-based)]]은 끝 포함, [[iloc|위치 기반(integer-location)]]은 파이썬 슬라이스 규칙.",
           "**불리언 인덱싱(boolean indexing) 결합**: 조건마다 괄호, 연결은 `&`·`|`·`~`. `and`/`or`는 Series 전체의 참·거짓을 묻는 꼴이어서 `ValueError: The truth value of a Series is ambiguous`.",
           "**체인 인덱싱(chained indexing)**: `df[cond]['b'] = 0`처럼 두 번 꺾어 대입하면 원본이 안 바뀔 수 있다. 대입은 항상 `df.loc[cond, 'b'] = 0` 한 번으로.",
@@ -104,22 +104,22 @@
       /* ===== b-2 (12) : mcq 7 / ox 2 / short 3, 난이도 4:6:2 ===== */
       {
         id: "b-2-q01", node: "b-2", type: "mcq", kind: "concept", difficulty: 1,
-        prompt: "`df`가 DataFrame일 때 `df['a']`와 `df[['a']]`의 반환 타입으로 옳은 것은?",
+        prompt: "`df`가 DataFrame일 때 `df['a']`와 `df[ ['a'] ]`의 반환 타입으로 옳은 것은?",
         choices: [
           "둘 다 Series",
-          "`df['a']`는 Series, `df[['a']]`는 DataFrame",
-          "`df['a']`는 DataFrame, `df[['a']]`는 Series",
+          "`df['a']`는 Series, `df[ ['a'] ]`는 DataFrame",
+          "`df['a']`는 DataFrame, `df[ ['a'] ]`는 Series",
           "둘 다 DataFrame"
         ],
         answer: 1,
         explanation: [
           "**정답: ②** 컬럼 이름을 **문자열 하나**로 넘기면 1차원 [[series|시리즈(Series)]]가, **리스트**로 넘기면 컬럼이 하나여도 2차원 [[dataframe|데이터프레임(DataFrame)]]이 돌아온다. 대괄호가 두 겹인지가 기준이다.",
           "",
-          "- ① `df[['a']]`는 리스트 선택이므로 DataFrame이다.",
+          "- ① `df[ ['a'] ]`는 리스트 선택이므로 DataFrame이다.",
           "- ③ 반대로 적었다. 문자열 → Series, 리스트 → DataFrame.",
           "- ④ `df['a']`는 Series라 `.str`·`.value_counts()` 같은 Series 메서드가 바로 된다.",
           "",
-          "시험에서는 \"다음 중 DataFrame을 반환하는 것은?\" 형태로 `df['a']`, `df[['a']]`, `df.loc[0]`, `df.loc[[0]]`을 섞어 낸다. 리스트로 고르면 항상 DataFrame이다."
+          "시험에서는 \"다음 중 DataFrame을 반환하는 것은?\" 형태로 `df['a']`, `df[ ['a'] ]`, `df.loc[0]`, `df.loc[ [0] ]`을 섞어 낸다. 리스트로 고르면 항상 DataFrame이다."
         ],
         terms: ["series", "dataframe"],
         tags: ["selection"]
