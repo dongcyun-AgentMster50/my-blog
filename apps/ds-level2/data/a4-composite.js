@@ -1657,11 +1657,12 @@
           "import numpy as np, pandas as pd",
           "from sklearn.datasets import load_breast_cancer",
           "X, y = load_breast_cancer(return_X_y=True)",
+          "seed = 0   # DecisionTreeClassifier(random_state=seed) 에 사용",
           "X.shape, np.bincount(y)"
         ],
         hint: [
           "파이프라인 단계 이름이 `'tree'` 라면 param_grid 키는 `'tree__max_depth'` (밑줄 두 개).",
-          "`gs.best_params_['tree__max_depth']`. `pd.DataFrame(gs.cv_results_)[['params', 'mean_test_score']]` 로 전체 표를 확인하자."
+          "`gs.best_params_['tree__max_depth']`. `pd.DataFrame(gs.cv_results_).loc[:, ['params', 'mean_test_score']]` 로 전체 표를 확인하자."
         ],
         answer: { type: "int", value: 2 },
         solution: [
@@ -1669,7 +1670,7 @@
           "from sklearn.preprocessing import StandardScaler",
           "from sklearn.tree import DecisionTreeClassifier",
           "from sklearn.model_selection import GridSearchCV",
-          "pipe = Pipeline([('scaler', StandardScaler()), ('tree', DecisionTreeClassifier(random_state=0))])",
+          "pipe = Pipeline([('scaler', StandardScaler()), ('tree', DecisionTreeClassifier(random_state=seed))])",
           "grid = {'tree__max_depth': [1, 2, 3, 4, 5, 6, 8]}",
           "gs = GridSearchCV(pipe, grid, cv=5, scoring='accuracy').fit(X, y)",
           "int(gs.best_params_['tree__max_depth'])"
@@ -1693,6 +1694,7 @@
           "import numpy as np, pandas as pd",
           "from sklearn.datasets import load_wine",
           "X, y = load_wine(return_X_y=True)",
+          "seed = 42   # KMeans(random_state=seed) 에 사용",
           "X.shape"
         ],
         hint: [
@@ -1707,7 +1709,7 @@
           "from sklearn.metrics import silhouette_score",
           "Xs = StandardScaler().fit_transform(X)",
           "X2 = PCA(n_components=2).fit_transform(Xs)",
-          "km = KMeans(n_clusters=3, n_init=10, random_state=42).fit(X2)",
+          "km = KMeans(n_clusters=3, n_init=10, random_state=seed).fit(X2)",
           "round(float(silhouette_score(X2, km.labels_)), 2)"
         ],
         explanation: [
@@ -1809,7 +1811,7 @@
           "df['y'].mean()"
         ],
         hint: [
-          "`model = sm.Logit(df['y'], sm.add_constant(df[['x1', 'x2']])).fit(disp=0)`",
+          "`model = sm.Logit(df['y'], sm.add_constant(df.loc[:, ['x1', 'x2']])).fit(disp=0)`",
           "`np.exp(model.params['x1'])`."
         ],
         answer: { type: "number", value: 1.946, decimals: 3 },

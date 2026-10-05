@@ -28,7 +28,7 @@
           "**반복문 vs 벡터화**: `iterrows`(행을 Series로, 느림·dtype 깨짐) < `itertuples`(namedtuple, 더 빠름) < `zip(df['a'], df['b'])` < **벡터 연산** 순으로 빨라진다. 100만 행이면 반복문은 피한다.",
           "**조건 집계**: `(df['x'] > 0).sum()`은 조건을 만족하는 행 수, `(df['x'] > 0).mean()`은 **비율**이다. True=1, False=0으로 계산되는 [[conditional-aggregation|조건 집계]] 패턴."
         ],
-        terms: ["apply", "lambda", "map", "dictionary", "list-comprehension", "np-where", "np-select", "zip", "transform", "flatten-columns", "iterrows", "str-extract", "to-dict", "pipe", "conditional-aggregation"],
+        terms: ["apply", "lambda", "map", "dictionary", "list-comprehension", "np-select", "zip", "transform", "flatten-columns", "iterrows", "str-extract", "conditional-aggregation"],
         patterns: [
           {
             title: "행 단위 apply — 여러 컬럼을 람다에서 사용",
@@ -375,11 +375,11 @@
       },
       {
         id: "b-3-2-q02", node: "b-3-2", type: "ox", kind: "concept", difficulty: 1,
-        prompt: "`df[['a', 'b']] = df[['b', 'a']].to_numpy()`는 라벨 정렬 없이 **위치대로** 값을 넣으므로 두 컬럼의 값이 서로 맞바뀐다.",
+        prompt: "`cols = ['a', 'b']`일 때 `df[cols] = df[cols[::-1]].to_numpy()`는 라벨 정렬 없이 **위치대로** 값을 넣으므로 두 컬럼 `a`, `b`의 값이 서로 맞바뀐다.",
         answer: true,
         explanation: [
           "**정답: O** 우변을 `to_numpy()`(또는 `.values`)로 ndarray로 바꾸면 컬럼 라벨이 사라져 pandas가 **정렬(alignment)** 을 하지 않고 위치 순서대로 대입한다. 그래서 `a`에는 옛 `b`, `b`에는 옛 `a`가 들어가 교환된다.",
-          "반면 `df.loc[:, ['a', 'b']] = df[['b', 'a']]`처럼 DataFrame을 그대로 넘기면 라벨 기준으로 맞춰 넣어 **아무것도 바뀌지 않는다**. 리스트로 여러 컬럼을 한 번에 다루는 [[multi-column-assignment|다중 컬럼 할당]]의 대표 함정이다.",
+          "반면 `df.loc[:, cols] = df[cols[::-1]]`처럼 DataFrame을 그대로 넘기면 라벨 기준으로 맞춰 넣어 **아무것도 바뀌지 않는다**. 리스트로 여러 컬럼을 한 번에 다루는 [[multi-column-assignment|다중 컬럼 할당]]의 대표 함정이다.",
           "",
           "시험에서는 \"두 컬럼 값 맞바꾸기\" 코드에서 `.values`/`.to_numpy()`가 왜 필요한지를 묻는다."
         ],
@@ -451,16 +451,16 @@
           "print(r.tolist())"
         ],
         lang: "python",
-        choices: ["[3, 3]", "[[3, 2, 3]]", "[1, 2, 3, 3, 2, 1]", "[3, 2, 3]"],
+        choices: ["[3, 3]", "(3, 2, 3)", "[1, 2, 3, 3, 2, 1]", "[3, 2, 3]"],
         answer: 3,
         explanation: [
           "**정답: ④** `axis=1`이므로 [[lambda|람다]]는 각 행 Series를 받아 `a`, `b` 중 큰 값을 **스칼라**로 돌려준다. 스칼라 반환이면 결과는 행 수와 같은 길이의 Series: 행 0 → max(1, 3) = 3, 행 1 → max(2, 2) = 2, 행 2 → max(3, 1) = 3.",
           "",
           "- ① `[3, 3]`은 `axis=0`으로 컬럼마다 최대를 구했을 때의 값이다(그 경우 `row['a']`는 KeyError지만 `row.max()`였다면 이 결과).",
-          "- ② 중첩 리스트가 되지 않는다. `tolist()`는 1차원 리스트를 준다.",
+          "- ② `tolist()`는 튜플이 아니라 **리스트**를 돌려준다. 값은 같아도 타입 표기가 다르다.",
           "- ③ 두 컬럼을 이어 붙인 길이 6이 될 이유가 없다. [[apply|apply]]는 행 수를 보존한다.",
           "",
-          "시험에서는 \"여러 컬럼을 쓰는 람다는 `axis=1`\"과 \"스칼라 반환 → Series\"를 결합한 출력 문제로 나온다. 벡터화 대안은 `df[['a', 'b']].max(axis=1)`이다."
+          "시험에서는 \"여러 컬럼을 쓰는 람다는 `axis=1`\"과 \"스칼라 반환 → Series\"를 결합한 출력 문제로 나온다. 벡터화 대안은 `df.loc[:, ['a', 'b']].max(axis=1)`이다."
         ],
         terms: ["apply", "lambda", "axis"]
       },
@@ -811,7 +811,7 @@
         ],
         hint: [
           "`df.columns = [c.lower() for c in df.columns]`",
-          "`lambda row: max(row['q1'], row['q2'], row['q3'])` — 스칼라 반환이라 결과는 Series. 벡터화 대안은 `df[['q1','q2','q3']].max(axis=1)`.",
+          "`lambda row: max(row['q1'], row['q2'], row['q3'])` — 스칼라 반환이라 결과는 Series. 벡터화 대안은 `df.loc[:, ['q1', 'q2', 'q3']].max(axis=1)`.",
           "`df.groupby('team')['best'].transform(lambda s: (s - s.mean()) / s.std())` 뒤에 `(df['z'] > 1).sum()`."
         ],
         answer: { type: "int", value: 40 },
@@ -855,7 +855,7 @@
         def: "튜플·리스트의 원소를 여러 변수에 한 번에 나눠 담는 문법(a, b = pair). zip 순회나 다중 컬럼 할당에서 쓴다.",
         nodes: ["b-3", "b-1"], related: ["zip", "multi-column-assignment"] },
       { id: "multi-column-assignment", ko: "다중 컬럼 할당", en: "multi-column assignment",
-        def: "df[['a', 'b']] = 값 형태로 여러 컬럼에 한 번에 대입하는 방법. 우변이 DataFrame이면 라벨 정렬이, ndarray면 위치 대입이 일어난다.",
+        def: "df[cols] = 값(cols는 컬럼명 리스트) 형태로 여러 컬럼에 한 번에 대입하는 방법. 우변이 DataFrame이면 라벨 정렬이, ndarray면 위치 대입이 일어난다.",
         nodes: ["b-3"], related: ["unpacking"] },
       { id: "axis", ko: "축", en: "axis",
         def: "연산이 진행되는 방향. axis=0은 행 방향(각 컬럼에 적용), axis=1은 열 방향(각 행에 적용)이다. apply(axis=1)이 행 단위 적용이다.",

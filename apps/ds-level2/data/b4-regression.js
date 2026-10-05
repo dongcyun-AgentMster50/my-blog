@@ -238,16 +238,16 @@
         choices: [
           "`sm.OLS`의 인수 순서가 `(X, y)`여야 한다.",
           "`fit()` 대신 `fit_regularized()`를 호출해야 한다.",
-          "`sm.add_constant(df[['x']])`로 상수 컬럼을 추가하지 않아 절편 없는 회귀가 되었다.",
-          "`df[['x']]` 대신 `df['x']`로 1차원 Series를 넘겨야 한다."
+          "`sm.add_constant(...)`로 설명변수에 상수 컬럼을 추가하지 않아 절편 없는 회귀가 되었다.",
+          "설명변수를 `df['x']`처럼 1차원 Series로 넘겨야 한다."
         ],
         answer: 2,
         explanation: [
-          "**정답: ③** statsmodels의 배열 API `sm.OLS(endog, exog)`는 [[intercept|절편]]을 자동으로 넣지 않는다. `exog = sm.add_constant(df[['x']])`로 값이 1인 `const` 컬럼을 추가해야 `const` 행이 summary에 나타난다. 빠뜨리면 원점을 지나는 회귀가 되어 R²도 왜곡된다.",
+          "**정답: ③** statsmodels의 배열 API `sm.OLS(endog, exog)`는 [[intercept|절편]]을 자동으로 넣지 않는다. `exog = sm.add_constant(X)`로 값이 1인 `const` 컬럼을 추가해야 `const` 행이 summary에 나타난다. 빠뜨리면 원점을 지나는 회귀가 되어 R²도 왜곡된다.",
           "",
           "- ① `sm.OLS(endog=y, exog=X)` 순서가 맞다. sklearn의 `fit(X, y)`와 반대라는 점은 함정이지만 이 코드의 문제는 아니다.",
           "- ② `fit_regularized`는 라쏘·릿지 벌점 회귀용이다. 절편과 무관하다.",
-          "- ④ `df[['x']]`(DataFrame)든 `df['x']`(Series)든 OLS는 받는다. 절편 유무와 무관하다.",
+          "- ④ 2차원 DataFrame이든 1차원 Series `df['x']`든 OLS는 받는다. 절편 유무와 무관하다.",
           "",
           "시험에서는 `add_constant`의 역할(절편 추가), formula API `smf.ols('y ~ x', data=df)`는 절편을 자동으로 넣는다는 점이 짝으로 나온다. [[ols|OLS]] 적합 시 상수항 확인은 반드시 하라."
         ],
@@ -502,13 +502,13 @@
         ],
         answer: 0,
         explanation: [
-          "**정답: ①** sklearn의 모든 추정기는 특성 행렬 X를 `(n_samples, n_features)` 2차원으로 요구한다. 특성이 하나뿐이면 `x.reshape(-1, 1)` 또는 `df[['x']]`(이중 대괄호)로 열 벡터를 만들어야 한다. 오류 메시지가 이 해법을 직접 알려 준다.",
+          "**정답: ①** sklearn의 모든 추정기는 특성 행렬 X를 `(n_samples, n_features)` 2차원으로 요구한다. 특성이 하나뿐이면 `x.reshape(-1, 1)` 또는 컬럼을 리스트로 고른 DataFrame(이중 대괄호 선택)으로 열 벡터를 만들어야 한다. 오류 메시지가 이 해법을 직접 알려 준다.",
           "",
           "- ② 타깃 y는 1차원 배열이 정상이다. 2차원으로 바꾸면 경고가 나거나 다중출력 회귀로 취급된다.",
           "- ③ sklearn의 `LinearRegression`은 `fit_intercept=True`가 기본이어서 [[intercept|절편]]을 스스로 추정한다. `add_constant`는 statsmodels용이다.",
           "- ④ 순서는 `fit(X, y)`가 맞다. 바꾸면 의미가 뒤집힌다.",
           "",
-          "시험에서는 `df['x']`(1차원 Series)와 `df[['x']]`(2차원 DataFrame)의 차이, 그리고 statsmodels(`add_constant` 필요)와 sklearn(절편 자동)의 차이가 [[ols|OLS]] 코드 오류 문제로 나온다."
+          "시험에서는 `df['x']`(1차원 Series)와 이중 대괄호로 고른 2차원 DataFrame의 차이, 그리고 statsmodels(`add_constant` 필요)와 sklearn(절편 자동)의 차이가 [[ols|OLS]] 코드 오류 문제로 나온다."
         ],
         terms: ["ols", "intercept"]
       },
@@ -681,7 +681,7 @@
       },
       {
         id: "b-4-2-q17", node: "b-4-2", type: "short", kind: "fill", difficulty: 2,
-        prompt: "빈칸에 들어갈 statsmodels 함수 이름을 쓰시오. 설명변수 행렬에 절편용 상수 컬럼을 추가한다: `X = sm.____(df[['x1', 'x2']])`",
+        prompt: "빈칸에 들어갈 statsmodels 함수 이름을 쓰시오. 설명변수 행렬에 절편용 상수 컬럼을 추가한다: `X = sm.____(df.drop(columns='y'))`",
         answer: "add_constant",
         accept: ["add_constant()", "sm.add_constant"],
         explanation: [
