@@ -27,7 +27,7 @@
           "**슬라이싱(slicing)**: `a[start:stop:step]`에서 `stop`은 미포함, 범위를 넘으면 예외 없이 잘라낸다(`'abc'[1:100] == 'bc'`, `a[10:] == []`). 음수 인덱스는 뒤에서부터, `[::-1]`은 역순. 단일 인덱스 초과만 `IndexError`.",
           "**예외 흐름**: `try` → 예외 없으면 `else` → 항상 `finally`. `return`이 있어도 `finally`는 실행된다. 어떤 코드가 어떤 [[exception|예외]]를 내는지 외운다: `int('3.5')`→ValueError, `[1][5]`→IndexError, `d['없는키']`→KeyError, `'a'+1`→TypeError, `1/0`→ZeroDivisionError, 반복 중 dict 크기 변경→RuntimeError."
         ],
-        terms: ["mutable", "immutable", "hashable", "shallow-copy", "deep-copy", "identity", "slicing", "comprehension", "generator", "iterator", "closure", "exception", "counter", "itertools", "floating-point"],
+        terms: ["mutable", "immutable", "hashable", "shallow-copy", "identity", "slicing", "generator", "iterator", "exception", "counter", "itertools", "floating-point"],
         patterns: [
           {
             title: "다중 키 정렬 — 점수 내림차순, 같으면 이름 오름차순",
