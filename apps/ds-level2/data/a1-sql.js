@@ -100,7 +100,7 @@
           "**집합 연산**: UNION(중복 제거 — BigQuery 는 `UNION DISTINCT`로 명시), UNION ALL(그대로 이어붙임, 빠름), INTERSECT(공통), EXCEPT/MINUS(차집합). 컬럼 수·타입이 같아야 한다.",
           "**CTE(WITH)**: `WITH t AS (SELECT ...) SELECT ... FROM t`. 서브쿼리에 이름을 붙여 위에서 아래로 읽게 한다. 여러 개는 쉼표로 이어 쓴다."
         ],
-        terms: ["inner-join", "left-join", "right-join", "full-outer-join", "self-join", "cross-join", "anti-join", "subquery", "correlated-subquery", "exists", "union", "union-all", "cte"],
+        terms: ["inner-join", "left-join", "full-outer-join", "self-join", "cross-join", "anti-join", "subquery", "correlated-subquery", "exists", "union", "union-all", "cte"],
         patterns: [
           {
             title: "LEFT JOIN + 오른쪽 조건은 ON 에",
@@ -278,7 +278,7 @@
           "**윈도 함수 ↔ transform/rank/shift/cumsum**: `SUM() OVER (PARTITION BY k)` ↔ `groupby('k')['v'].transform('sum')`; `RANK()` ↔ `rank(method='min', ascending=False)`; `DENSE_RANK()` ↔ `rank(method='dense')`; `ROW_NUMBER()` ↔ `rank(method='first')` 또는 `cumcount()+1`; `LAG()` ↔ `groupby('k')['v'].shift(1)`; 누적합 ↔ `groupby('k')['v'].cumsum()`; 이동평균 ↔ `rolling(7).mean()`.",
           "**read_sql / to_sql**: `pd.read_sql(sql, con)`(DB-API 연결 또는 SQLAlchemy 엔진), `df.to_sql('t', con, index=False, if_exists='fail'|'replace'|'append')`. `index=False`를 빼면 인덱스가 컬럼으로 들어간다."
         ],
-        terms: ["boolean-indexing", "query-method", "groupby", "aggregation", "merge", "sort-values", "drop-duplicates", "concat", "transform", "rank-method", "shift", "read-sql", "to-sql"],
+        terms: ["boolean-indexing", "query-method", "groupby", "merge", "sort-values", "drop-duplicates", "concat", "transform", "rank-method", "shift", "read-sql", "to-sql"],
         patterns: [
           {
             title: "같은 질의를 SQL 과 pandas 로",
@@ -1020,3 +1020,711 @@
         ],
         terms: ["recursive-cte", "cte", "union-all"]
       },
+      /* ───────── a-1-4 SQL ↔ Pandas ───────── */
+      {
+        id: "a-1-4-q01", node: "a-1-4", type: "mcq", kind: "concept", difficulty: 1,
+        prompt: "SQL `SELECT * FROM emp WHERE age > 30 AND dept = 'A'` 에 대응하는 pandas 코드로 옳은 것은?",
+        choices: [
+          "`df[df['age'] > 30 and df['dept'] == 'A']`",
+          "`df[(df['age'] > 30) & (df['dept'] == 'A')]`",
+          "`df.where('age > 30 and dept == \"A\"')`",
+          "`df.filter(age > 30, dept == 'A')`"
+        ],
+        answer: 1,
+        explanation: [
+          "**정답: ②** WHERE 는 pandas 의 [[boolean-indexing|불리언 인덱싱]]에 대응한다. 조건 두 개는 원소별 연산자 `&`(AND), `|`(OR), `~`(NOT) 으로 묶고, 연산자 우선순위 때문에 각 조건을 **괄호**로 감싼다. 같은 뜻을 [[query-method|query]] 로 쓰면 `df.query(\"age > 30 and dept == 'A'\")` 다.",
+          "",
+          "- ① 파이썬 `and` 는 Series 전체의 참/거짓을 묻기 때문에 `ValueError: The truth value of a Series is ambiguous` 가 난다.",
+          "- ③ `DataFrame.where` 는 조건이 거짓인 칸을 NaN 으로 바꾸는 메서드라 행을 거르지 않고, 문자열 조건도 받지 않는다.",
+          "- ④ `DataFrame.filter` 는 컬럼/인덱스 **이름**을 고르는 메서드이지 행 조건이 아니다.",
+          "",
+          "시험에서는 WHERE ↔ 불리언 인덱싱/`query` 대응과 `and` 대신 `&` 를 써야 하는 이유가 반복된다."
+        ],
+        terms: ["boolean-indexing", "query-method", "where-clause"]
+      },
+      {
+        id: "a-1-4-q02", node: "a-1-4", type: "mcq", kind: "output", difficulty: 1,
+        prompt: "다음 코드의 출력은? (SQL `COUNT(DISTINCT dept)` 와 같은 값을 내는 것이 무엇인지 생각하라)",
+        code: [
+          "import pandas as pd",
+          "df = pd.DataFrame({'dept': ['A', 'B', 'A', None, 'C', 'B']})",
+          "print(df['dept'].nunique(), df['dept'].nunique(dropna=False), len(df['dept'].unique()))"
+        ],
+        lang: "python",
+        choices: ["3 3 3", "3 4 4", "4 4 4", "3 4 3"],
+        answer: 1,
+        explanation: [
+          "**정답: ②** `nunique()` 는 기본 `dropna=True` 라 결측값(missing value)을 빼고 {A, B, C} = 3 — SQL `COUNT(DISTINCT dept)` 와 같다. `nunique(dropna=False)` 는 None 도 하나의 값으로 세어 4. `unique()` 는 결측값을 **포함**한 배열을 돌려주므로 길이 4 다. [[drop-duplicates|drop_duplicates]] 도 기본적으로 NaN 을 하나의 값으로 남긴다.",
+          "",
+          "- ① `unique()` 와 `nunique(dropna=False)` 는 결측값을 포함한다.",
+          "- ③ `nunique()` 기본값은 결측값을 제외한다.",
+          "- ④ `unique()` 는 None 을 포함해 길이가 4 다.",
+          "",
+          "시험에서는 `COUNT(DISTINCT col)` 의 pandas 대응이 `nunique()` 라는 점과 NaN 처리 차이를 묻는다."
+        ],
+        terms: ["drop-duplicates", "distinct"]
+      },
+      {
+        id: "a-1-4-q03", node: "a-1-4", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "다음 코드의 출력은?",
+        code: [
+          "import pandas as pd",
+          "a = pd.DataFrame({'k': [1, 2, 2, 3]})",
+          "b = pd.DataFrame({'k': [2, 3, 3, 4]})",
+          "print(len(pd.merge(a, b, on='k', how='inner')),",
+          "      len(pd.merge(a, b, on='k', how='left')),",
+          "      len(pd.merge(a, b, on='k', how='outer')))"
+        ],
+        lang: "python",
+        choices: ["2 4 5", "3 4 5", "4 5 6", "4 4 6"],
+        answer: 2,
+        explanation: [
+          "**정답: ③** [[merge|merge]] 는 SQL [[inner-join|JOIN]] 과 똑같이 **매칭 쌍마다** 행을 만든다. k=2 는 a 에 2개 × b 에 1개 = 2행, k=3 은 1 × 2 = 2행 → inner 4. left 는 매칭 없는 a 의 k=1 이 NaN 과 함께 1행 추가 → 5. outer 는 b 에만 있는 k=4 까지 → 6.",
+          "",
+          "- ① 중복 키를 1:1 로 세면 2 가 나오지만 조인은 곱으로 늘어난다.",
+          "- ② k=2 가 2행, k=3 이 2행이므로 inner 는 4 다.",
+          "- ④ left 는 k=1 행이 추가되어 inner 보다 1 많은 5 다.",
+          "",
+          "시험에서는 `how='inner'|'left'|'outer'` 가 각각 INNER/LEFT/FULL OUTER JOIN 이라는 대응과 중복 키의 행 폭발을 함께 묻는다. `validate='1:1'` 로 폭발을 사전에 막을 수 있다."
+        ],
+        terms: ["merge", "inner-join", "left-join", "full-outer-join"]
+      },
+      {
+        id: "a-1-4-q04", node: "a-1-4", type: "mcq", kind: "concept", difficulty: 2,
+        prompt: "SQL 구문과 pandas 메서드의 대응으로 **옳지 않은** 것은?",
+        choices: [
+          "`ORDER BY col DESC` ↔ `df.sort_values('col', ascending=False)`",
+          "`SELECT DISTINCT a, b` ↔ `df.drop_duplicates(subset=['a', 'b'])`",
+          "`UNION ALL` ↔ `pd.concat([a, b])`",
+          "`FULL OUTER JOIN` ↔ `pd.merge(a, b, on='k', how='full')`"
+        ],
+        answer: 3,
+        explanation: [
+          "**정답: ④** [[merge|merge]] 의 `how` 는 `'inner' | 'left' | 'right' | 'outer' | 'cross'` 만 받는다. FULL OUTER JOIN 은 `how='outer'` 이며 `'full'` 은 ValueError 다.",
+          "",
+          "- ① ORDER BY ↔ [[sort-values|sort_values]], DESC ↔ `ascending=False`. 옳다.",
+          "- ② DISTINCT 는 컬럼 조합 기준 중복 제거 ↔ [[drop-duplicates|drop_duplicates(subset=)]]. 옳다.",
+          "- ③ [[concat|concat]] 은 중복을 제거하지 않으므로 UNION ALL 에 대응한다. 옳다(UNION 이면 뒤에 `drop_duplicates()`).",
+          "",
+          "시험에서는 이런 대응표에서 하나만 틀린 보기를 찾게 한다. `how='outer'` 가 FULL OUTER 라는 점이 가장 자주 틀린다."
+        ],
+        terms: ["merge", "sort-values", "drop-duplicates", "concat"]
+      },
+      {
+        id: "a-1-4-q05", node: "a-1-4", type: "mcq", kind: "bug", difficulty: 2,
+        prompt: "다음 코드는 `ValueError: The truth value of a Series is ambiguous` 를 낸다. 원인과 수정으로 옳은 것은?",
+        code: [
+          "import pandas as pd",
+          "df = pd.DataFrame({'age': [25, 35, 45], 'dept': ['A', 'A', 'B']})",
+          "df[df['age'] > 30 and df['dept'] == 'A']"
+        ],
+        lang: "python",
+        choices: [
+          "`and` 는 Series 두 개를 원소별로 비교하지 못한다. `(df['age'] > 30) & (df['dept'] == 'A')` 로 고친다.",
+          "`==` 로 문자열을 비교할 수 없다. `df['dept'].str.contains('A')` 로 고친다.",
+          "`df[...]` 안에는 조건을 하나만 쓸 수 있다. 두 번에 나눠 인덱싱해야 한다.",
+          "`age` 컬럼이 정수라 `> 30` 비교가 불가능하다. `float` 로 변환한다."
+        ],
+        answer: 0,
+        explanation: [
+          "**정답: ①** 파이썬 `and` 는 피연산자 전체를 하나의 참/거짓으로 바꾸려 하는데, 길이 3 의 불리언 Series 는 참인지 거짓인지 정의되지 않아 ValueError 가 난다. [[boolean-indexing|불리언 인덱싱]]의 복합 조건은 원소별 연산자 `&`/`|`/`~` 와 괄호로 쓴다. [[query-method|query]] 를 쓰면 `df.query('age > 30 and dept == \"A\"')` 처럼 `and` 를 문자열 안에서 쓸 수 있다.",
+          "",
+          "- ② Series 와 문자열의 `==` 비교는 정상 동작한다.",
+          "- ③ 조건 개수 제한은 없다. 연산자가 문제다.",
+          "- ④ 정수 비교는 문제없다.",
+          "",
+          "시험에서는 이 에러 메시지를 보여 주고 원인을 고르게 한다. SQL 의 AND/OR 를 pandas 로 옮길 때 가장 흔한 실수다."
+        ],
+        terms: ["boolean-indexing", "query-method"]
+      },
+      {
+        id: "a-1-4-q06", node: "a-1-4", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "다음 코드의 출력은? (SQL `RANK() OVER (ORDER BY v DESC)` 와 `DENSE_RANK()` 에 대응하는 값이다)",
+        code: [
+          "import pandas as pd",
+          "s = pd.Series([300, 300, 200])",
+          "print(s.rank(method='min', ascending=False).tolist())",
+          "print(s.rank(method='dense', ascending=False).tolist())"
+        ],
+        lang: "python",
+        choices: [
+          "[1.0, 1.0, 3.0] / [1.0, 1.0, 2.0]",
+          "[1.5, 1.5, 3.0] / [1.0, 1.0, 2.0]",
+          "[1.0, 2.0, 3.0] / [1.0, 1.0, 2.0]",
+          "[1.0, 1.0, 2.0] / [1.0, 1.0, 3.0]"
+        ],
+        answer: 0,
+        explanation: [
+          "**정답: ①** [[rank-method|rank(method=)]] 에서 `'min'` 은 동률에 **최소 순위**를 주고 다음 순위를 건너뛰므로 SQL [[rank|RANK]](1,1,3) 과 같고, `'dense'` 는 건너뛰지 않아 [[dense-rank|DENSE_RANK]](1,1,2) 와 같다. pandas 의 rank 결과는 float 다.",
+          "",
+          "- ② `[1.5, 1.5, 3.0]` 은 기본값 `method='average'` 의 결과다. SQL 에는 대응 함수가 없다.",
+          "- ③ `[1.0, 2.0, 3.0]` 은 `method='first'` 로, ROW_NUMBER 에 대응한다.",
+          "- ④ 두 줄이 뒤바뀌었다.",
+          "",
+          "시험에서는 `method` 네 가지(average/min/dense/first) 중 SQL 순위 함수 세 개와 짝을 맞추게 한다."
+        ],
+        terms: ["rank-method", "rank", "dense-rank"]
+      },
+      {
+        id: "a-1-4-q07", node: "a-1-4", type: "mcq", kind: "concept", difficulty: 3,
+        prompt: "SQL 의 안티 조인 `SELECT e.* FROM emp e LEFT JOIN dept d ON e.dept_id = d.id WHERE d.id IS NULL` (dept 에 없는 직원) 을 pandas 로 가장 정확히 옮긴 것은?",
+        choices: [
+          "`pd.merge(emp, dept, left_on='dept_id', right_on='id', how='inner')`",
+          "`pd.merge(emp, dept, left_on='dept_id', right_on='id', how='outer').dropna()`",
+          "`m = pd.merge(emp, dept, left_on='dept_id', right_on='id', how='left', indicator=True); m[m['_merge'] == 'left_only']`",
+          "`emp[emp['dept_id'].isin(dept['id'])]`"
+        ],
+        answer: 2,
+        explanation: [
+          "**정답: ③** [[merge|merge]] 에 `indicator=True` 를 주면 `_merge` 컬럼에 각 행의 출처(`left_only` / `right_only` / `both`)가 기록된다. `how='left'` 후 `left_only` 만 남기는 것이 LEFT JOIN + `IS NULL` [[anti-join|안티 조인]]의 정확한 번역이다. 더 짧게는 `emp[~emp['dept_id'].isin(dept['id'])]` 도 같은 결과다.",
+          "",
+          "- ① inner 는 매칭되는 직원만 남긴다. 반대 집합이다.",
+          "- ② outer 뒤 `dropna()` 는 어느 쪽이든 NaN 이 있는 행을 **버리므로** 사실상 inner 와 같아진다.",
+          "- ④ `isin` 에 `~`(부정)이 빠져 매칭되는 직원을 고른다(semi join).",
+          "",
+          "시험에서는 `indicator=True` 의 `_merge` 값 세 가지와 `~isin` 이 같은 결과를 낸다는 점을 묻는다."
+        ],
+        terms: ["merge", "anti-join", "left-join"]
+      },
+      {
+        id: "a-1-4-q08", node: "a-1-4", type: "ox", kind: "concept", difficulty: 1,
+        prompt: "`pd.concat([a, b])` 는 SQL `UNION ALL` 처럼 두 DataFrame 을 세로로 이어붙이며 중복 행을 제거하지 않는다.",
+        answer: true,
+        explanation: [
+          "**정답: O** [[concat|concat]] 은 축(axis=0) 방향으로 그대로 쌓는다. 중복 제거는 하지 않으므로 [[union-all|UNION ALL]] 에 대응하고, UNION(중복 제거)을 원하면 `pd.concat([a, b]).drop_duplicates()` 를 쓴다. 인덱스가 겹치면 `ignore_index=True` 로 새로 매긴다.",
+          "",
+          "시험에서는 \"concat 은 UNION 인가 UNION ALL 인가\" 로 나오며 답은 UNION ALL 이다."
+        ],
+        terms: ["concat", "union-all"]
+      },
+      {
+        id: "a-1-4-q09", node: "a-1-4", type: "ox", kind: "concept", difficulty: 2,
+        prompt: "`df.sort_values('v')` 는 기본적으로 결측값(NaN)을 맨 **앞**에 둔다.",
+        answer: false,
+        explanation: [
+          "**정답: X** [[sort-values|sort_values]] 의 기본값은 `na_position='last'` 라 오름차순이든 내림차순이든 NaN 이 **맨 뒤**에 온다. 앞에 두려면 `na_position='first'`. SQL 의 [[order-by|ORDER BY]] 는 DBMS 마다 NULL 위치가 달라(SQLite·MySQL 은 가장 작은 값, PostgreSQL·Oracle 은 가장 큰 값) `NULLS FIRST/LAST` 로 명시한다.",
+          "",
+          "시험에서는 정렬 결과의 NaN 위치, 그리고 SQL 과 pandas 의 기본 동작이 다를 수 있다는 점을 묻는다."
+        ],
+        terms: ["sort-values", "order-by", "null"]
+      },
+      {
+        id: "a-1-4-q10", node: "a-1-4", type: "short", kind: "fill", difficulty: 1,
+        prompt: "빈칸에 들어갈 매개변수 이름을 쓰시오. SQL LEFT JOIN 과 같게 만든다: `pd.merge(emp, dept, on='dept_id', ____='left')`",
+        answer: "how",
+        explanation: [
+          "**정답: how** [[merge|merge]] 의 `how` 매개변수가 조인 종류를 정한다: `'inner'`(기본, INNER JOIN), `'left'`, `'right'`, `'outer'`(FULL OUTER JOIN), `'cross'`. 키 이름이 다르면 `left_on`/`right_on` 을 쓴다.",
+          "",
+          "시험에서는 `how` 의 기본값이 `'inner'` 라서 아무 것도 안 주면 매칭 없는 행이 사라진다는 점을 함정으로 낸다."
+        ],
+        terms: ["merge", "left-join"]
+      },
+      {
+        id: "a-1-4-q11", node: "a-1-4", type: "short", kind: "output", difficulty: 2,
+        prompt: "다음 코드의 출력 값을 쓰시오. (`transform('sum')` 은 SQL `SUM(v) OVER (PARTITION BY k)` 에 대응한다)",
+        code: [
+          "import pandas as pd",
+          "df = pd.DataFrame({'k': ['a', 'b', 'a', 'c'], 'v': [1, 2, 3, 4]})",
+          "print((df.groupby('k')['v'].transform('sum') > 3).sum())"
+        ],
+        lang: "python",
+        answer: "3",
+        explanation: [
+          "**정답: 3** [[transform|transform('sum')]] 은 그룹 합을 **원본 길이**로 돌려준다: a 그룹 합 4, b 는 2, c 는 4 → `[4, 2, 4, 4]`. 이는 윈도 함수 `SUM(v) OVER (PARTITION BY k)` 와 같은 모양이다. `> 3` 인 행은 a, a, c 세 개이므로 불리언 합은 3.",
+          "",
+          "시험에서는 `agg`(그룹당 1행, GROUP BY) 와 `transform`(원본 길이, 윈도 함수) 의 길이 차이를 SQL 대응과 함께 묻는다."
+        ],
+        terms: ["transform", "groupby", "partition-by"]
+      },
+      {
+        id: "a-1-4-q12", node: "a-1-4", type: "short", kind: "fill", difficulty: 3,
+        prompt: "빈칸에 들어갈 메서드 이름을 쓰시오. SQL `AVG(salary) OVER (PARTITION BY dept)` 처럼 부서 평균을 각 행에 붙인다: `df['dept_avg'] = df.groupby('dept')['salary'].____('mean')`",
+        answer: "transform",
+        accept: ["transform()"],
+        explanation: [
+          "**정답: transform** 윈도 함수처럼 **행 수를 유지**하며 그룹 계산값을 붙이는 것은 [[transform|transform]] 이다. `agg('mean')` 은 그룹당 한 행(GROUP BY)이라 길이가 맞지 않아 새 컬럼으로 대입할 수 없다. 순위는 `rank()`, 이전 행은 [[shift|shift(1)]], 누적합은 `cumsum()` 을 같은 `groupby(...)[col]` 뒤에 붙인다.",
+          "",
+          "시험에서는 윈도 함수 ↔ `groupby().transform/rank/shift/cumsum` 대응표에서 빈칸으로 출제된다."
+        ],
+        terms: ["transform", "shift", "partition-by"]
+      }
+    ],
+
+    practices: [
+      {
+        id: "a-1-1-p01", node: "a-1-1",
+        title: "급여 6000 이상 직원 수 (WHERE + COUNT)",
+        difficulty: 1,
+        task: [
+          "인메모리 SQLite 의 `emp` 테이블에서 급여(`salary`)가 **6000 이상**인 직원 수를 `pd.read_sql` 로 구해 **정수**로 입력하시오."
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1101)",
+          "n = 200",
+          "emp = pd.DataFrame({",
+          "    'id': np.arange(1, n + 1),",
+          "    'dept_id': rng.choice([10, 20, 30, 40, 50], size=n),",
+          "    'salary': rng.integers(3000, 9001, size=n),",
+          "})",
+          "con = sqlite3.connect(':memory:')",
+          "emp.to_sql('emp', con, index=False)",
+          "pd.read_sql('SELECT * FROM emp LIMIT 5', con)"
+        ],
+        hint: ["`SELECT COUNT(*) AS n FROM emp WHERE salary >= 6000` 을 `pd.read_sql(sql, con)` 에 넣고 `['n'][0]` 으로 값을 꺼낸다."],
+        answer: { type: "int", value: 103 },
+        solution: [
+          "sql = \"SELECT COUNT(*) AS n FROM emp WHERE salary >= 6000\"",
+          "int(pd.read_sql(sql, con)['n'][0])"
+        ],
+        explanation: [
+          "[[where-clause|WHERE]] 로 행을 거른 뒤 [[aggregate-function|COUNT(*)]] 로 센다. pandas 로는 `(emp['salary'] >= 6000).sum()` 과 같아야 한다 — 두 값이 일치하는지 확인하는 습관이 1-4 절의 핵심이다.",
+          "`read_sql` 결과는 항상 DataFrame 이므로 값 하나를 꺼내려면 컬럼명과 행 번호를 지정한다."
+        ],
+        terms: ["where-clause", "aggregate-function", "read-sql"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      },
+      {
+        id: "a-1-1-p02", node: "a-1-1",
+        title: "인원 40명 이상 부서 중 최고 평균 급여 (GROUP BY + HAVING)",
+        difficulty: 2,
+        task: [
+          "`emp` 테이블을 부서(`dept_id`)별로 묶어 **인원이 40명 이상**인 부서만 남기고, 그 부서들의 평균 급여 중 **최댓값**을 소수 둘째 자리까지 반올림해 입력하시오."
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1101)",
+          "n = 200",
+          "emp = pd.DataFrame({",
+          "    'id': np.arange(1, n + 1),",
+          "    'dept_id': rng.choice([10, 20, 30, 40, 50], size=n),",
+          "    'salary': rng.integers(3000, 9001, size=n),",
+          "})",
+          "con = sqlite3.connect(':memory:')",
+          "emp.to_sql('emp', con, index=False)",
+          "pd.read_sql('SELECT dept_id, COUNT(*) AS n FROM emp GROUP BY dept_id', con)"
+        ],
+        hint: [
+          "`GROUP BY dept_id HAVING COUNT(*) >= 40` 으로 그룹을 거른 뒤 `AVG(salary)` 를 `ORDER BY ... DESC LIMIT 1` 로 뽑는다.",
+          "인원 조건은 WHERE 가 아니라 HAVING 에 둔다(집계 결과 조건)."
+        ],
+        answer: { type: "number", value: 6218.42, decimals: 2 },
+        solution: [
+          "sql = \"\"\"",
+          "SELECT dept_id, AVG(salary) AS avg_salary",
+          "FROM emp",
+          "GROUP BY dept_id",
+          "HAVING COUNT(*) >= 40",
+          "ORDER BY avg_salary DESC",
+          "LIMIT 1",
+          "\"\"\"",
+          "round(float(pd.read_sql(sql, con)['avg_salary'][0]), 2)"
+        ],
+        explanation: [
+          "[[group-by|GROUP BY]] 로 부서별 한 행을 만들고 [[having|HAVING]] 에서 `COUNT(*)` 조건으로 그룹을 거른다. 이 조건을 WHERE 에 쓰면 오류다(그룹이 아직 없음). 정렬 후 `LIMIT 1` 로 최댓값 행만 남긴다.",
+          "pandas 대응: `g = emp.groupby('dept_id')['salary'].agg(['count', 'mean']); g[g['count'] >= 40]['mean'].max()`."
+        ],
+        terms: ["group-by", "having", "aggregate-function"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      },
+      {
+        id: "a-1-2-p01", node: "a-1-2",
+        title: "부서 테이블과 매칭되는 직원 수 (INNER JOIN)",
+        difficulty: 1,
+        task: [
+          "`emp` 와 `dept` 를 `emp.dept_id = dept.id` 로 **INNER JOIN** 했을 때 결과 행 수(부서 정보가 있는 직원 수)를 **정수**로 입력하시오."
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1201)",
+          "n = 180",
+          "emp = pd.DataFrame({",
+          "    'id': np.arange(1, n + 1),",
+          "    'dept_id': rng.choice([10, 20, 30, 40, 60], size=n),   # 60 은 dept 에 없다",
+          "    'salary': rng.integers(3000, 9001, size=n),",
+          "})",
+          "dept = pd.DataFrame({'id': [10, 20, 30, 40, 50], 'name': ['HR', 'IT', 'Sales', 'R&D', 'Legal']})",
+          "con = sqlite3.connect(':memory:')",
+          "emp.to_sql('emp', con, index=False)",
+          "dept.to_sql('dept', con, index=False)",
+          "pd.read_sql('SELECT * FROM dept', con)"
+        ],
+        hint: ["`SELECT COUNT(*) AS n FROM emp e INNER JOIN dept d ON e.dept_id = d.id`"],
+        answer: { type: "int", value: 143 },
+        solution: [
+          "sql = \"SELECT COUNT(*) AS n FROM emp e INNER JOIN dept d ON e.dept_id = d.id\"",
+          "int(pd.read_sql(sql, con)['n'][0])"
+        ],
+        explanation: [
+          "[[inner-join|INNER JOIN]] 은 양쪽에 키가 있는 행만 남긴다. dept_id 가 60 인 직원은 dept 에 없어 빠지고, dept 의 50(Legal)은 직원이 없어 결과에 기여하지 않는다. dept.id 가 고유하므로 행 수는 매칭되는 직원 수와 같다.",
+          "pandas 대응: `emp['dept_id'].isin(dept['id']).sum()` 또는 `len(pd.merge(emp, dept, left_on='dept_id', right_on='id'))`."
+        ],
+        terms: ["inner-join", "read-sql"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      },
+      {
+        id: "a-1-2-p02", node: "a-1-2",
+        title: "부서 정보가 없는 직원 수 (LEFT JOIN 안티 조인)",
+        difficulty: 2,
+        task: [
+          "`emp` 를 기준으로 `dept` 를 **LEFT JOIN** 한 뒤, 부서가 매칭되지 않은(dept 쪽이 NULL 인) 직원 수를 **정수**로 입력하시오."
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1201)",
+          "n = 180",
+          "emp = pd.DataFrame({",
+          "    'id': np.arange(1, n + 1),",
+          "    'dept_id': rng.choice([10, 20, 30, 40, 60], size=n),   # 60 은 dept 에 없다",
+          "    'salary': rng.integers(3000, 9001, size=n),",
+          "})",
+          "dept = pd.DataFrame({'id': [10, 20, 30, 40, 50], 'name': ['HR', 'IT', 'Sales', 'R&D', 'Legal']})",
+          "con = sqlite3.connect(':memory:')",
+          "emp.to_sql('emp', con, index=False)",
+          "dept.to_sql('dept', con, index=False)",
+          "pd.read_sql('SELECT * FROM dept', con)"
+        ],
+        hint: [
+          "`LEFT JOIN dept d ON e.dept_id = d.id WHERE d.id IS NULL` 패턴.",
+          "`NOT EXISTS` 로 써도 같은 값이 나와야 한다."
+        ],
+        answer: { type: "int", value: 37 },
+        solution: [
+          "sql = \"\"\"",
+          "SELECT COUNT(*) AS n",
+          "FROM emp e LEFT JOIN dept d ON e.dept_id = d.id",
+          "WHERE d.id IS NULL",
+          "\"\"\"",
+          "int(pd.read_sql(sql, con)['n'][0])"
+        ],
+        explanation: [
+          "[[left-join|LEFT JOIN]] 으로 직원 180 명을 모두 유지하면 매칭 없는 행의 `d.id` 는 NULL 이다. `WHERE d.id IS NULL` 이 그 행만 남기는 [[anti-join|안티 조인]]이다. 앞 과제의 143 과 더하면 180 이 되어야 한다.",
+          "pandas 대응: `(~emp['dept_id'].isin(dept['id'])).sum()` 또는 `merge(..., how='left', indicator=True)` 후 `_merge == 'left_only'`."
+        ],
+        terms: ["left-join", "anti-join", "null"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      },
+      {
+        id: "a-1-3-p01", node: "a-1-3",
+        title: "부서별 급여 1위 직원의 급여 합 (ROW_NUMBER)",
+        difficulty: 1,
+        task: [
+          "`ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC, id)` 로 부서마다 급여 1위 직원(동률이면 id 가 작은 쪽)을 뽑고, 그 직원들의 급여 **합계**를 **정수**로 입력하시오."
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1301)",
+          "n = 200",
+          "emp = pd.DataFrame({",
+          "    'id': np.arange(1, n + 1),",
+          "    'dept_id': rng.choice([10, 20, 30, 40, 50], size=n),",
+          "    'salary': rng.integers(3000, 9001, size=n),",
+          "})",
+          "con = sqlite3.connect(':memory:')",
+          "emp.to_sql('emp', con, index=False)",
+          "pd.read_sql('SELECT * FROM emp LIMIT 5', con)"
+        ],
+        hint: [
+          "CTE 에서 `rn` 을 만들고 바깥에서 `WHERE rn = 1` 로 거른 뒤 `SUM(salary)`.",
+          "WHERE 에 윈도 함수를 직접 쓰면 오류가 난다."
+        ],
+        answer: { type: "int", value: 44676 },
+        solution: [
+          "sql = \"\"\"",
+          "WITH ranked AS (",
+          "  SELECT id, dept_id, salary,",
+          "         ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC, id) AS rn",
+          "  FROM emp",
+          ")",
+          "SELECT SUM(salary) AS total FROM ranked WHERE rn = 1",
+          "\"\"\"",
+          "int(pd.read_sql(sql, con)['total'][0])"
+        ],
+        explanation: [
+          "[[top-n-per-group|그룹별 상위 N]] 의 표준 패턴이다. [[row-number|ROW_NUMBER]] 를 [[cte|CTE]] 안에서 계산하고 바깥 쿼리에서 `rn = 1` 로 거른다. 이 과제는 1위 한 명만 필요하므로 `GROUP BY dept_id` + `MAX(salary)` 의 합과 같은 값이 나온다 — 검산에 쓰자.",
+          "pandas 대응: `emp.groupby('dept_id')['salary'].max().sum()`, 또는 `emp.sort_values(['salary', 'id'], ascending=[False, True]).groupby('dept_id').head(1)['salary'].sum()`."
+        ],
+        terms: ["row-number", "top-n-per-group", "cte"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      },
+      {
+        id: "a-1-3-p02", node: "a-1-3",
+        title: "7일 이동평균의 최댓값 (윈도 프레임)",
+        difficulty: 2,
+        task: [
+          "`sales` 테이블(day 1~60, amount)에서 `ROWS BETWEEN 6 PRECEDING AND CURRENT ROW` 프레임으로 **7일 이동평균**을 구하고, 7일이 온전히 모이는 `day >= 7` 구간에서 이동평균의 **최댓값**을 소수 둘째 자리까지 반올림해 입력하시오."
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1302)",
+          "sales = pd.DataFrame({",
+          "    'day': np.arange(1, 61),",
+          "    'amount': rng.integers(100, 1001, size=60),",
+          "})",
+          "con = sqlite3.connect(':memory:')",
+          "sales.to_sql('sales', con, index=False)",
+          "pd.read_sql('SELECT * FROM sales LIMIT 5', con)"
+        ],
+        hint: [
+          "`AVG(amount) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS ma7` 을 서브쿼리로 감싸고 바깥에서 `MAX(ma7)`.",
+          "pandas `sales['amount'].rolling(7).mean().max()` 와 같은 값이어야 한다."
+        ],
+        answer: { type: "number", value: 802.71, decimals: 2 },
+        solution: [
+          "sql = \"\"\"",
+          "SELECT MAX(ma7) AS m FROM (",
+          "  SELECT day,",
+          "         AVG(amount) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS ma7",
+          "  FROM sales",
+          ") WHERE day >= 7",
+          "\"\"\"",
+          "round(float(pd.read_sql(sql, con)['m'][0]), 2)"
+        ],
+        explanation: [
+          "`6 PRECEDING` 은 앞 6행 + 현재 행 = 7행 [[window-frame|프레임]]이다. 윈도 함수는 WHERE 에서 쓸 수 없으므로 서브쿼리로 감싼 뒤 바깥에서 집계한다. SQL 은 처음 6일도 가용 행만으로 평균을 내므로 `day >= 7` 조건으로 pandas `rolling(7)`(처음 6행 NaN)과 비교 범위를 맞췄다.",
+          "[[moving-average|이동평균]]은 ROWS 프레임, [[running-total|누적합]]은 `SUM() OVER (ORDER BY day)` 로 쓴다."
+        ],
+        terms: ["moving-average", "window-frame", "window-function"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      },
+      {
+        id: "a-1-4-p01", node: "a-1-4",
+        title: "GROUP BY ↔ groupby: 최다 인원 부서의 인원 수",
+        difficulty: 1,
+        task: [
+          "SQL `SELECT dept_id, COUNT(*) FROM emp GROUP BY dept_id` 와 pandas `emp.groupby('dept_id').size()` 가 같은 결과를 주는지 확인한 뒤, **가장 인원이 많은 부서의 인원 수**를 **정수**로 입력하시오."
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1401)",
+          "n = 200",
+          "emp = pd.DataFrame({",
+          "    'id': np.arange(1, n + 1),",
+          "    'dept_id': rng.choice([10, 20, 30, 40, 50], size=n),",
+          "    'salary': rng.integers(3000, 9001, size=n),",
+          "})",
+          "con = sqlite3.connect(':memory:')",
+          "emp.to_sql('emp', con, index=False)",
+          "pd.read_sql('SELECT * FROM emp LIMIT 5', con)"
+        ],
+        hint: ["두 결과의 최댓값이 같아야 한다: `pd.read_sql(...)['n'].max()` 와 `emp.groupby('dept_id').size().max()`."],
+        answer: { type: "int", value: 51 },
+        solution: [
+          "sq = pd.read_sql(\"SELECT dept_id, COUNT(*) AS n FROM emp GROUP BY dept_id\", con)",
+          "pdv = emp.groupby('dept_id').size()",
+          "assert (sq.set_index('dept_id')['n'] == pdv).all()",
+          "int(pdv.max())"
+        ],
+        explanation: [
+          "SQL [[group-by|GROUP BY]] + `COUNT(*)` 는 pandas [[groupby|groupby]] 의 `size()` 와 같다(`count()` 는 컬럼별 결측 제외 개수라 다를 수 있다). `as_index=False` 를 주면 SQL 결과처럼 dept_id 가 컬럼으로 남는다.",
+          "[[read-sql|read_sql]] 결과와 pandas 결과를 `assert` 로 대조하는 습관이 이 노드의 목적이다."
+        ],
+        terms: ["group-by", "groupby", "aggregation", "read-sql"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      },
+      {
+        id: "a-1-4-p02", node: "a-1-4",
+        title: "윈도 함수 ↔ transform: 부서 평균보다 급여가 높은 직원 수",
+        difficulty: 2,
+        task: [
+          "SQL `AVG(salary) OVER (PARTITION BY dept_id)` 와 pandas `groupby('dept_id')['salary'].transform('mean')` 으로 각각 부서 평균을 각 행에 붙이고, **자기 부서 평균보다 급여가 높은 직원 수**를 **정수**로 입력하시오. (두 방식의 값이 같아야 한다)"
+        ],
+        setup: [
+          "import sqlite3, numpy as np, pandas as pd",
+          "rng = np.random.default_rng(1401)",
+          "n = 200",
+          "emp = pd.DataFrame({",
+          "    'id': np.arange(1, n + 1),",
+          "    'dept_id': rng.choice([10, 20, 30, 40, 50], size=n),",
+          "    'salary': rng.integers(3000, 9001, size=n),",
+          "})",
+          "con = sqlite3.connect(':memory:')",
+          "emp.to_sql('emp', con, index=False)",
+          "pd.read_sql('SELECT * FROM emp LIMIT 5', con)"
+        ],
+        hint: [
+          "SQL: 윈도 함수를 서브쿼리에 두고 바깥에서 `WHERE salary > dept_avg` 로 센다.",
+          "pandas: `(emp['salary'] > emp.groupby('dept_id')['salary'].transform('mean')).sum()`."
+        ],
+        answer: { type: "int", value: 98 },
+        solution: [
+          "sql = \"\"\"",
+          "SELECT COUNT(*) AS n FROM (",
+          "  SELECT salary, AVG(salary) OVER (PARTITION BY dept_id) AS dept_avg FROM emp",
+          ") WHERE salary > dept_avg",
+          "\"\"\"",
+          "n_sql = int(pd.read_sql(sql, con)['n'][0])",
+          "n_pd = int((emp['salary'] > emp.groupby('dept_id')['salary'].transform('mean')).sum())",
+          "assert n_sql == n_pd",
+          "n_pd"
+        ],
+        explanation: [
+          "ORDER BY 없는 `AVG() OVER (PARTITION BY dept_id)` 는 부서 평균을 **모든 행**에 붙인다. pandas 에서 같은 모양을 만드는 것이 [[transform|transform]] 이다(`agg` 는 부서당 1행이라 비교할 수 없다). 윈도 함수는 WHERE 에서 쓸 수 없으므로 서브쿼리로 감쌌다.",
+          "1-2 의 상관 서브쿼리 `WHERE salary > (SELECT AVG(salary) FROM emp WHERE dept_id = e.dept_id)` 로도 같은 값이 나온다."
+        ],
+        terms: ["transform", "partition-by", "window-function", "groupby"],
+        verified: { by: "python", at: "2026-10-05", env: "pandas 3.0.6 / numpy 2.4.6 / sqlite 3.45.1" }
+      }
+    ],
+
+    terms: [
+      /* ── 1-1 기초 ── */
+      { id: "sql-execution-order", ko: "SQL 실행 순서", en: "logical processing order",
+        def: "SELECT 문이 평가되는 논리적 순서. FROM → WHERE → GROUP BY → HAVING → SELECT → DISTINCT → ORDER BY → LIMIT. 별칭·집계함수를 쓸 수 있는 절이 이 순서로 결정된다.",
+        nodes: ["a-1-1", "a-1-3"], related: ["where-clause", "having", "order-by"] },
+      { id: "where-clause", ko: "WHERE 절", en: "WHERE clause",
+        def: "그룹화 전에 개별 행을 조건으로 거르는 절. 집계함수와 SELECT 별칭을 쓸 수 없다.",
+        nodes: ["a-1-1", "a-1-4"], related: ["having", "boolean-indexing"] },
+      { id: "group-by", ko: "GROUP BY", en: "GROUP BY",
+        def: "지정한 컬럼 값이 같은 행을 한 그룹으로 묶어 그룹당 한 행의 집계 결과를 내는 절.",
+        nodes: ["a-1-1", "a-1-4"], related: ["having", "aggregate-function", "groupby"] },
+      { id: "having", ko: "HAVING 절", en: "HAVING clause",
+        def: "GROUP BY 로 만든 그룹에 집계 조건을 걸어 그룹을 거르는 절. WHERE 와 달리 집계함수를 쓸 수 있다.",
+        nodes: ["a-1-1"], related: ["where-clause", "group-by"] },
+      { id: "aggregate-function", ko: "집계함수", en: "aggregate function",
+        def: "여러 행의 값을 하나로 요약하는 함수(COUNT, SUM, AVG, MIN, MAX). COUNT(*) 를 제외하고 NULL 을 무시한다.",
+        nodes: ["a-1-1"], related: ["group-by", "null", "aggregation"] },
+      { id: "null", ko: "NULL(결측)", en: "NULL",
+        def: "값이 없음(알 수 없음)을 나타내는 표식. 비교·산술 결과가 UNKNOWN/NULL 이 되며 IS NULL 로만 판별한다(3치 논리).",
+        nodes: ["a-1-1", "a-1-2"], related: ["coalesce", "aggregate-function"] },
+      { id: "coalesce", ko: "COALESCE", en: "COALESCE / IFNULL / NVL",
+        def: "인수 중 첫 번째 NULL 이 아닌 값을 돌려주는 함수. NULL 을 기본값으로 치환할 때 쓴다.",
+        nodes: ["a-1-1"], related: ["null"] },
+      { id: "distinct", ko: "DISTINCT(중복 제거)", en: "DISTINCT",
+        def: "SELECT 목록의 컬럼 조합 기준으로 중복 행을 제거하는 키워드. COUNT(DISTINCT col) 은 서로 다른 값의 수.",
+        nodes: ["a-1-1", "a-1-4"], related: ["drop-duplicates", "group-by"] },
+      { id: "order-by", ko: "ORDER BY(정렬)", en: "ORDER BY",
+        def: "결과 행을 지정 컬럼 기준으로 정렬하는 절. 기본 오름차순(ASC), DESC 로 내림차순. NULL 의 위치는 DBMS 마다 다르다.",
+        nodes: ["a-1-1", "a-1-4"], related: ["sort-values", "sql-execution-order"] },
+      { id: "case-expression", ko: "CASE 식", en: "CASE expression",
+        def: "CASE WHEN 조건 THEN 값 ... ELSE 값 END 형태의 조건식. 파생 컬럼과 조건부 집계(피벗)에 쓴다.",
+        nodes: ["a-1-1", "a-1-3"], related: ["pivot", "aggregate-function"] },
+
+      /* ── 1-2 중급 ── */
+      { id: "inner-join", ko: "내부 조인", en: "INNER JOIN",
+        def: "조인 조건을 만족하는 양쪽 행의 조합만 돌려주는 조인. 키가 중복되면 결과 행이 곱으로 늘어난다.",
+        nodes: ["a-1-2", "a-1-4"], related: ["left-join", "merge"] },
+      { id: "left-join", ko: "왼쪽 외부 조인", en: "LEFT (OUTER) JOIN",
+        def: "왼쪽 테이블의 모든 행을 유지하고, 오른쪽에 매칭이 없으면 오른쪽 컬럼을 NULL 로 채우는 조인.",
+        nodes: ["a-1-2", "a-1-4"], related: ["inner-join", "right-join", "anti-join"] },
+      { id: "right-join", ko: "오른쪽 외부 조인", en: "RIGHT (OUTER) JOIN",
+        def: "오른쪽 테이블의 모든 행을 유지하는 조인. 테이블 순서를 바꾼 LEFT JOIN 과 같은 행 집합을 돌려준다.",
+        nodes: ["a-1-2"], related: ["left-join"] },
+      { id: "full-outer-join", ko: "완전 외부 조인", en: "FULL OUTER JOIN",
+        def: "양쪽 테이블의 모든 행을 유지하고 매칭이 없는 쪽을 NULL 로 채우는 조인. pandas merge(how='outer') 에 대응.",
+        nodes: ["a-1-2", "a-1-4"], related: ["left-join", "merge"] },
+      { id: "self-join", ko: "셀프 조인", en: "SELF JOIN",
+        def: "같은 테이블을 서로 다른 별칭으로 두 번 참조해 조인하는 것. 상사-부하, 같은 테이블 내 행 비교에 쓴다.",
+        nodes: ["a-1-2"], related: ["inner-join"] },
+      { id: "cross-join", ko: "교차 조인", en: "CROSS JOIN (Cartesian product)",
+        def: "조인 조건 없이 두 테이블의 모든 행 조합을 만드는 조인. 결과 행 수는 두 테이블 행 수의 곱.",
+        nodes: ["a-1-2"], related: ["inner-join"] },
+      { id: "anti-join", ko: "안티 조인", en: "anti join",
+        def: "한쪽 테이블에는 있고 다른 쪽에는 매칭이 없는 행만 고르는 패턴. LEFT JOIN + IS NULL 또는 NOT EXISTS 로 구현한다.",
+        nodes: ["a-1-2", "a-1-4"], related: ["left-join", "exists", "merge"] },
+      { id: "subquery", ko: "서브쿼리", en: "subquery",
+        def: "다른 쿼리 안에 포함된 SELECT 문. 값 하나(스칼라), 목록(IN), 파생 테이블(FROM) 형태로 쓴다.",
+        nodes: ["a-1-2"], related: ["correlated-subquery", "cte", "exists"] },
+      { id: "correlated-subquery", ko: "상관 서브쿼리", en: "correlated subquery",
+        def: "바깥 쿼리의 행을 참조해 바깥 행마다 다시 평가되는 서브쿼리. EXISTS 와 함께 자주 쓴다.",
+        nodes: ["a-1-2"], related: ["subquery", "exists"] },
+      { id: "exists", ko: "EXISTS", en: "EXISTS / NOT EXISTS",
+        def: "서브쿼리가 한 행이라도 돌려주면 참이 되는 연산자. NOT IN 과 달리 NULL 에 영향받지 않는다.",
+        nodes: ["a-1-2"], related: ["in-operator", "correlated-subquery", "anti-join"] },
+      { id: "in-operator", ko: "IN 연산자", en: "IN / NOT IN",
+        def: "값이 목록(또는 서브쿼리 결과)에 포함되는지 검사하는 연산자. NOT IN 은 목록에 NULL 이 있으면 결과가 항상 비게 된다.",
+        nodes: ["a-1-2"], related: ["exists", "null"] },
+      { id: "union", ko: "UNION(합집합)", en: "UNION",
+        def: "두 SELECT 결과를 세로로 합치고 중복 행을 제거하는 집합 연산. 컬럼 수와 타입이 맞아야 한다.",
+        nodes: ["a-1-2"], related: ["union-all", "intersect-except", "concat"] },
+      { id: "union-all", ko: "UNION ALL", en: "UNION ALL",
+        def: "두 SELECT 결과를 중복 제거 없이 그대로 이어붙이는 집합 연산. UNION 보다 빠르며 pandas concat 에 대응.",
+        nodes: ["a-1-2", "a-1-4"], related: ["union", "concat"] },
+      { id: "intersect-except", ko: "INTERSECT / EXCEPT", en: "INTERSECT / EXCEPT (MINUS)",
+        def: "INTERSECT 는 두 결과에 공통인 행, EXCEPT(MINUS) 는 첫 결과에만 있는 행을 돌려주는 집합 연산. 둘 다 중복을 제거한다.",
+        nodes: ["a-1-2"], related: ["union"] },
+      { id: "cte", ko: "공통 테이블 식(CTE)", en: "CTE / WITH clause",
+        def: "WITH 이름 AS (SELECT ...) 로 서브쿼리에 이름을 붙여 뒤따르는 쿼리에서 테이블처럼 쓰는 구문.",
+        nodes: ["a-1-2", "a-1-3"], related: ["subquery", "recursive-cte"] },
+
+      /* ── 1-3 고급 ── */
+      { id: "recursive-cte", ko: "재귀 CTE", en: "recursive CTE (WITH RECURSIVE)",
+        def: "앵커 쿼리와 자기 자신을 참조하는 재귀 쿼리를 UNION ALL 로 이어 종료 조건까지 반복하는 CTE. 계층 구조·수열 생성에 쓴다.",
+        nodes: ["a-1-3"], related: ["cte", "union-all"] },
+      { id: "window-function", ko: "윈도 함수", en: "window function",
+        def: "OVER() 절로 지정한 행 집합(윈도)에 대해 계산하되 결과 행 수를 원본과 같게 유지하는 함수. 순위·누적합·이전 값 등에 쓴다.",
+        nodes: ["a-1-3", "a-1-4"], related: ["partition-by", "window-frame", "transform"] },
+      { id: "partition-by", ko: "PARTITION BY", en: "PARTITION BY",
+        def: "윈도 함수의 계산 범위를 그룹별로 나누는 OVER 절의 구문. GROUP BY 와 달리 행 수를 줄이지 않는다.",
+        nodes: ["a-1-3", "a-1-4"], related: ["window-function", "group-by"] },
+      { id: "row-number", ko: "ROW_NUMBER", en: "ROW_NUMBER()",
+        def: "윈도 안에서 정렬 순서대로 1부터 고유한 번호를 매기는 순위 함수. 동률도 서로 다른 번호를 받는다.",
+        nodes: ["a-1-3"], related: ["rank", "dense-rank", "top-n-per-group"] },
+      { id: "rank", ko: "RANK", en: "RANK()",
+        def: "동률에 같은 순위를 주고 다음 순위를 동률 인원수만큼 건너뛰는 순위 함수(1,1,3). pandas rank(method='min') 에 대응.",
+        nodes: ["a-1-3", "a-1-4"], related: ["dense-rank", "row-number", "rank-method"] },
+      { id: "dense-rank", ko: "DENSE_RANK", en: "DENSE_RANK()",
+        def: "동률에 같은 순위를 주되 다음 순위를 건너뛰지 않는 순위 함수(1,1,2). pandas rank(method='dense') 에 대응.",
+        nodes: ["a-1-3", "a-1-4"], related: ["rank", "row-number"] },
+      { id: "lag-lead", ko: "LAG / LEAD", en: "LAG() / LEAD()",
+        def: "정렬 기준 n행 앞(LAG) 또는 뒤(LEAD)의 값을 현재 행에 가져오는 윈도 함수. 경계 행은 기본값(NULL)을 받는다.",
+        nodes: ["a-1-3"], related: ["window-function", "shift"] },
+      { id: "window-frame", ko: "윈도 프레임", en: "window frame (ROWS / RANGE BETWEEN)",
+        def: "윈도 함수가 집계할 행 범위를 현재 행 기준으로 지정하는 절. ORDER BY 가 있을 때 기본값은 RANGE UNBOUNDED PRECEDING ~ CURRENT ROW.",
+        nodes: ["a-1-3"], related: ["moving-average", "running-total"] },
+      { id: "running-total", ko: "누적합", en: "running total / cumulative sum",
+        def: "정렬 순서대로 처음부터 현재 행까지의 합. SUM() OVER (ORDER BY ...) 또는 pandas cumsum() 으로 구한다.",
+        nodes: ["a-1-3", "a-1-4"], related: ["window-frame", "moving-average"] },
+      { id: "moving-average", ko: "이동평균", en: "moving average / rolling mean",
+        def: "현재 행과 앞 n-1 행의 평균. ROWS BETWEEN n-1 PRECEDING AND CURRENT ROW 프레임 또는 pandas rolling(n).mean() 으로 구한다.",
+        nodes: ["a-1-3", "a-1-4"], related: ["window-frame", "running-total"] },
+      { id: "top-n-per-group", ko: "그룹별 상위 N", en: "top-N per group",
+        def: "그룹마다 상위 N 행을 뽑는 패턴. ROW_NUMBER() OVER (PARTITION BY 그룹 ORDER BY 값 DESC) 를 CTE 에서 계산해 rn <= N 으로 거른다.",
+        nodes: ["a-1-3"], related: ["row-number", "cte"] },
+      { id: "pivot", ko: "피벗", en: "pivot",
+        def: "행에 있던 범주 값을 열로 펼쳐 교차표를 만드는 변환. 표준 SQL 은 SUM(CASE WHEN ...) 으로 구현하고 pandas 는 pivot_table 을 쓴다.",
+        nodes: ["a-1-3"], related: ["case-expression"] },
+
+      /* ── 1-4 SQL ↔ Pandas ── */
+      { id: "boolean-indexing", ko: "불리언 인덱싱", en: "boolean indexing",
+        def: "참/거짓 Series 를 df[...] 에 넣어 참인 행만 고르는 pandas 행 선택 방식. SQL WHERE 에 대응하며 복합 조건은 &, |, ~ 와 괄호로 쓴다.",
+        nodes: ["a-1-4"], related: ["query-method", "where-clause"] },
+      { id: "query-method", ko: "query 메서드", en: "DataFrame.query()",
+        def: "조건을 문자열로 받아 행을 거르는 pandas 메서드. 문자열 안에서 and/or 를 쓸 수 있고 외부 변수는 @ 로 참조한다.",
+        nodes: ["a-1-4"], related: ["boolean-indexing"] },
+      { id: "groupby", ko: "그룹화", en: "groupby / group-by",
+        def: "키 컬럼 값이 같은 행끼리 묶어 각 묶음에 함수를 적용하는 연산. 분할-적용-결합 패턴의 구현.",
+        nodes: ["a-1-4"], related: ["aggregation", "transform", "group-by"] },
+      { id: "aggregation", ko: "집계", en: "aggregation / agg",
+        def: "여러 값을 하나의 대표값(합·평균·개수 등)으로 줄이는 연산. 그룹당 결과가 하나다.",
+        nodes: ["a-1-4"], related: ["groupby", "transform", "aggregate-function"] },
+      { id: "transform", ko: "변환", en: "transform",
+        def: "그룹별 계산 결과를 원본과 같은 길이로 돌려주는 groupby 메서드. 그룹 통계를 각 행에 붙일 때 쓴다.",
+        nodes: ["a-1-4"], related: ["aggregation", "window-function"] },
+      { id: "merge", ko: "병합(merge)", en: "pd.merge / DataFrame.merge",
+        def: "키 컬럼을 기준으로 두 DataFrame 을 가로로 합치는 pandas 함수. how='inner'|'left'|'right'|'outer' 가 SQL JOIN 종류에 대응한다.",
+        nodes: ["a-1-4"], related: ["inner-join", "left-join", "full-outer-join", "anti-join"] },
+      { id: "sort-values", ko: "sort_values(정렬)", en: "DataFrame.sort_values()",
+        def: "지정 컬럼 기준으로 행을 정렬하는 pandas 메서드. ascending 으로 방향, na_position(기본 'last') 으로 NaN 위치를 정한다. SQL ORDER BY 에 대응.",
+        nodes: ["a-1-4"], related: ["order-by"] },
+      { id: "drop-duplicates", ko: "drop_duplicates(중복 제거)", en: "drop_duplicates / unique / nunique",
+        def: "중복 행을 제거하는 pandas 메서드(subset 으로 기준 컬럼 지정). SQL DISTINCT 에 대응하며 nunique() 는 COUNT(DISTINCT) 에 해당.",
+        nodes: ["a-1-4"], related: ["distinct"] },
+      { id: "concat", ko: "concat(이어붙이기)", en: "pd.concat",
+        def: "여러 DataFrame 을 축 방향으로 이어붙이는 pandas 함수. 중복을 제거하지 않으므로 SQL UNION ALL 에 대응.",
+        nodes: ["a-1-4"], related: ["union-all", "union"] },
+      { id: "rank-method", ko: "rank 메서드 옵션", en: "Series.rank(method=)",
+        def: "pandas rank() 의 동률 처리 방식. 'min' 은 RANK, 'dense' 는 DENSE_RANK, 'first' 는 ROW_NUMBER 에 대응하고 기본 'average' 는 동률의 평균 순위.",
+        nodes: ["a-1-4"], related: ["rank", "dense-rank", "row-number"] },
+      { id: "shift", ko: "shift(행 이동)", en: "Series.shift()",
+        def: "값을 n행 앞뒤로 밀어 이전·다음 행의 값을 가져오는 pandas 메서드. groupby 뒤에 붙이면 SQL LAG/LEAD 에 대응.",
+        nodes: ["a-1-4"], related: ["lag-lead"] },
+      { id: "read-sql", ko: "read_sql", en: "pd.read_sql()",
+        def: "SQL 쿼리를 DB 연결로 실행해 결과를 DataFrame 으로 돌려주는 pandas 함수.",
+        nodes: ["a-1-4", "a-1-1"], related: ["to-sql"] },
+      { id: "to-sql", ko: "to_sql", en: "DataFrame.to_sql()",
+        def: "DataFrame 을 DB 테이블로 쓰는 pandas 메서드. index=False 로 인덱스 저장을 막고 if_exists='fail'|'replace'|'append' 로 기존 테이블 처리를 정한다.",
+        nodes: ["a-1-4"], related: ["read-sql"] }
+    ]
+  });
+})();
