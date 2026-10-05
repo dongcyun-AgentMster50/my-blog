@@ -46,8 +46,9 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
   };
-  var liveEl = document.getElementById('live');
-  app.announce = function (msg) { liveEl.textContent = ''; setTimeout(function () { liveEl.textContent = msg; }, 30); };
+  var liveEl = document.getElementById('live'), liveFlip = false;
+  // 같은 문구가 연속되면 스크린리더가 다시 읽지 않으므로 보이지 않는 문자를 번갈아 붙인다.
+  app.announce = function (msg) { liveFlip = !liveFlip; liveEl.textContent = msg + (liveFlip ? '​' : ''); };
 
   /* ── 상단바 ───────────────────────────────────────────── */
   var titleEl = document.getElementById('topbar-title'), progressEl = document.getElementById('topbar-progress'),

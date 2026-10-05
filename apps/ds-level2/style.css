@@ -120,7 +120,9 @@ button { cursor: pointer; }
 .view {
   flex: 1; width: 100%; max-width: var(--content-max); margin: 0 auto;
   padding: 1rem 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 1.5rem);
+  overflow-wrap: anywhere; /* 긴 인라인 코드·용어 라벨이 폰 폭을 넘지 않게. <pre> 는 white-space: pre 라 영향 없음 */
 }
+.term { white-space: normal; text-align: left; }
 html[data-session] .view { padding-bottom: 1.5rem; }
 
 /* 하단 탭바 */

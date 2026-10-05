@@ -331,7 +331,7 @@
     var rec = S.get().quiz[q0.id];
     s.selected = null; s.revealed = false;
     app().setSession(true, { progress: (s.idx + 1) + '/' + s.qs.length, onQuit: quitSession });
-    var html = '<div class="quiz" id="quiz">' + questionMeta(q0, rec) + questionBody(q0) + choicesHtml(q0) +
+    var html = '<div class="quiz" id="quiz" data-qid="' + esc(q0.id) + '">' + questionMeta(q0, rec) + questionBody(q0) + choicesHtml(q0) +
       '<div class="quiz-actions"><button type="button" class="btn btn-primary" id="btn-check" disabled>정답 확인</button></div>' +
       '<div id="quiz-result"></div></div>';
     s.view.innerHTML = html;
@@ -695,7 +695,7 @@
       var q0 = DS2.question(qid);
       if (!q0) { run.idx = Math.min(run.idx + 1, total - 1); return render(); }
       var given = run.answers[qid];
-      var html = '<div class="quiz" id="exam-q">' +
+      var html = '<div class="quiz" id="exam-q" data-qid="' + esc(qid) + '">' +
         '<div class="quiz-meta"><span class="tag">문제 ' + (run.idx + 1) + '/' + total + '</span><span class="tag">' + esc(partLetter(q0.node) + ' ' + nodeTitle(q0.node)) + '</span><span class="dots">' + DOTS[q0.difficulty] + '</span></div>' +
         questionBody(q0) + choicesHtml(q0) +
         '<div class="quiz-actions"><button type="button" class="btn" id="ex-prev"' + (run.idx === 0 ? ' disabled' : '') + '>← 이전</button>' +
