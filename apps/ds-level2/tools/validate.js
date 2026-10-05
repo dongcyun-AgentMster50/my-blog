@@ -89,7 +89,10 @@
     return true;
   }
   var RE_LINK = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g;
+  /** 텍스트 속 [[term]] 링크 id 목록. 코드 블록(```…```)과 인라인 코드(`…`) 안의 [[ 는
+      df[['a','b']] 같은 코드이므로 먼저 걷어 낸다 — format.js 도 코드 안은 이스케이프만 한다(spec 3-1). */
   function links(s) {
+    s = String(s).replace(/```[\s\S]*?```/g, ' ').replace(/`[^`\n]*`/g, ' ');
     var out = [], m;
     RE_LINK.lastIndex = 0;
     while ((m = RE_LINK.exec(s))) out.push(m[1].trim());

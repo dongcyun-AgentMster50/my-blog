@@ -173,7 +173,10 @@
     var t = e.target.closest('[data-term]');
     if (t) { e.preventDefault(); app.openTerm(t.getAttribute('data-term'), t); return; }
     var c = e.target.closest('[data-copy]');
-    if (c) { e.preventDefault(); app.copyText(c.getAttribute('data-copy'), c); }
+    if (c) { e.preventDefault(); app.copyText(c.getAttribute('data-copy'), c); return; }
+    // 현재 해시와 같은 링크(세션 종료 화면의 "퀴즈 탭으로" 등)는 hashchange 가 안 나므로 직접 디스패치
+    var a = e.target.closest('a[href^="#/"]');
+    if (a && a.getAttribute('href') === root.location.hash) { e.preventDefault(); R.go(a.getAttribute('href')); }
   });
 
   /* ── 내비게이션 하이라이트·배지 ──────────────────────── */

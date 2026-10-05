@@ -144,9 +144,13 @@
 
   /** 마크업을 떼어 낸 평문(aria-label, 목록 미리보기용) */
   function plain(src, max) {
-    var s = text(src).replace(/```[a-zA-Z]*\n[\s\S]*?```/g, ' [코드] ').replace(/`([^`]+)`/g, '$1')
-      .replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\[\[([a-z0-9-]+)\|([^\]]*)\]\]/g, '$2')
+    // 용어 링크는 코드를 벗기기 전에 치환한다 — 코드 안의 [[ (df[['a','b']]) 는 링크가 아니다
+    var s = text(src).replace(/```[a-zA-Z]*\n[\s\S]*?```/g, ' [코드] ');
+    var slots = [];
+    s = s.replace(/`([^`\n]+)`/g, function (_, c) { slots.push(c); return '\u0001' + (slots.length - 1) + '\u0001'; });
+    s = s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\[\[([a-z0-9-]+)\|([^\]]*)\]\]/g, '$2')
       .replace(/\[\[([a-z0-9-]+)\]\]/g, function (_, id) { var t = root.DS2 && root.DS2.term(id); return t ? t.ko : id; })
+      .replace(/\u0001(\d+)\u0001/g, function (_, i) { return slots[Number(i)]; })
       .replace(/\s+/g, ' ').trim();
     if (max && s.length > max) s = s.slice(0, max - 1) + '…';
     return s;

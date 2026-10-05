@@ -345,3 +345,455 @@
     },
 
     questions: [
+      /* ───────── a-1-1 SQL 기초 ───────── */
+      {
+        id: "a-1-1-q01", node: "a-1-1", type: "mcq", kind: "concept", difficulty: 1,
+        prompt: "다음 중 SELECT 문의 **논리적 실행 순서(logical processing order)** 로 옳은 것은?",
+        choices: [
+          "SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY",
+          "FROM → SELECT → WHERE → GROUP BY → HAVING → ORDER BY",
+          "FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY",
+          "FROM → GROUP BY → WHERE → HAVING → SELECT → ORDER BY"
+        ],
+        answer: 2,
+        explanation: [
+          "**정답: ③** SQL 은 쓰는 순서(SELECT 가 맨 앞)와 달리 `FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT` 순으로 평가된다. 이 [[sql-execution-order|실행 순서]] 때문에 WHERE 에서는 SELECT 의 별칭(alias)과 집계함수(aggregate function)를 쓸 수 없고, ORDER BY 에서는 별칭을 쓸 수 있다.",
+          "",
+          "- ① SELECT 는 작성 순서상 첫 줄이지만 실행은 HAVING 뒤다.",
+          "- ② WHERE 는 SELECT 보다 먼저 실행된다. 그래서 WHERE 에서 별칭을 못 쓴다.",
+          "- ④ WHERE(행 필터)는 GROUP BY(그룹화)보다 먼저다. 그룹화 후 조건은 HAVING.",
+          "",
+          "시험에서는 \"WHERE 절에 집계함수를 쓸 수 없는 이유\" 또는 \"별칭을 쓸 수 있는 절은?\" 형태로 실행 순서를 묻는다."
+        ],
+        terms: ["sql-execution-order", "where-clause", "having"]
+      },
+      {
+        id: "a-1-1-q02", node: "a-1-1", type: "mcq", kind: "output", difficulty: 1,
+        prompt: "`emp` 테이블이 아래와 같을 때, 다음 쿼리의 출력은? (dept 가 NULL 인 행이 2개 있다)",
+        code: [
+          "-- emp(name, dept)",
+          "-- ('kim','A'), ('lee',NULL), ('park','B'), ('choi',NULL), ('jung','A')",
+          "SELECT COUNT(*), COUNT(dept), COUNT(DISTINCT dept) FROM emp;"
+        ],
+        lang: "sql",
+        choices: ["5, 5, 2", "5, 3, 2", "3, 3, 2", "5, 3, 3"],
+        answer: 1,
+        explanation: [
+          "**정답: ②** `COUNT(*)`는 [[null|NULL]] 여부와 무관하게 **행 수** 5, `COUNT(dept)`는 dept 가 NULL 이 아닌 행 3, `COUNT(DISTINCT dept)`는 서로 다른 값 {A, B} 의 개수 2다. [[aggregate-function|집계함수]]는 NULL 을 세지 않는다.",
+          "",
+          "- ① `COUNT(dept)`가 5 가 되려면 NULL 도 세어야 하는데 집계함수는 NULL 을 무시한다.",
+          "- ③ `COUNT(*)`는 NULL 행도 포함해 5 다.",
+          "- ④ DISTINCT 집계에서도 NULL 은 값으로 세지 않으므로 3 이 아니라 2 다.",
+          "",
+          "시험에서는 `COUNT(*) - COUNT(col)` = col 의 NULL 개수라는 공식으로 자주 나온다."
+        ],
+        terms: ["aggregate-function", "null", "distinct"]
+      },
+      {
+        id: "a-1-1-q03", node: "a-1-1", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "다음 쿼리의 결과 행을 순서대로 나열한 것은?",
+        code: [
+          "-- sales(region, amount)",
+          "-- ('E',100),('E',200),('W',50),('W',70),('W',30),('N',500)",
+          "SELECT region, SUM(amount) AS total",
+          "FROM sales",
+          "GROUP BY region",
+          "HAVING COUNT(*) >= 2",
+          "ORDER BY total DESC;"
+        ],
+        lang: "sql",
+        choices: [
+          "N 500 / E 300 / W 150",
+          "W 150 / E 300",
+          "E 300 / N 500",
+          "E 300 / W 150"
+        ],
+        answer: 3,
+        explanation: [
+          "**정답: ④** [[group-by|GROUP BY]] 로 region 별 합계를 내면 E=300, W=150, N=500. [[having|HAVING]] `COUNT(*) >= 2`는 행이 2개 이상인 그룹만 남기므로 행이 1개뿐인 N 이 탈락한다. 남은 E 300, W 150 을 total 내림차순으로 정렬하면 E, W 순이다.",
+          "",
+          "- ① N 은 행이 1개라 HAVING 조건에서 탈락한다.",
+          "- ② `ORDER BY total DESC`이므로 300 이 150 보다 먼저 온다.",
+          "- ③ N 은 탈락했고 W 가 빠져 있다.",
+          "",
+          "시험에서는 HAVING 이 **그룹 단위** 조건이고 `COUNT(*)`가 그룹 내 행 수라는 점, 그리고 별칭 `total`을 ORDER BY 에서 쓸 수 있다는 점을 함께 묻는다."
+        ],
+        terms: ["group-by", "having", "order-by"]
+      },
+      {
+        id: "a-1-1-q04", node: "a-1-1", type: "mcq", kind: "concept", difficulty: 2,
+        prompt: "WHERE 절과 HAVING 절에 대한 설명으로 옳은 것은?",
+        choices: [
+          "HAVING 은 GROUP BY 전에 행을 걸러내고, WHERE 는 그룹을 걸러낸다.",
+          "WHERE 절에는 집계함수를 쓸 수 있지만 HAVING 절에는 쓸 수 없다.",
+          "둘 다 같은 시점에 실행되므로 어느 쪽에 조건을 써도 결과는 항상 같다.",
+          "WHERE 는 그룹화 전 개별 행에, HAVING 은 그룹화 후 집계 결과에 조건을 건다."
+        ],
+        answer: 3,
+        explanation: [
+          "**정답: ④** [[where-clause|WHERE]] 는 [[group-by|GROUP BY]] **전**에 행(row) 단위로 평가되고, [[having|HAVING]] 은 그룹화 **후** 집계 결과(group) 에 조건을 건다. 그래서 집계함수(aggregate function)는 HAVING 에서만 쓸 수 있다.",
+          "",
+          "- ① 순서가 반대다. WHERE 가 먼저(행), HAVING 이 나중(그룹).",
+          "- ② 반대다. 집계함수는 HAVING 에서만 가능하다. WHERE 는 아직 그룹이 없다.",
+          "- ③ 집계 조건이 아닌 단순 행 조건이라면 결과가 같을 수 있지만, WHERE 가 먼저 행을 줄이므로 성능이 다르고 집계 조건은 WHERE 에 쓸 수 없다.",
+          "",
+          "시험에서는 \"평균 급여가 5000 이상인 부서\" 를 구하는 쿼리에서 조건을 어느 절에 두어야 하는지로 출제된다."
+        ],
+        terms: ["where-clause", "having", "aggregate-function"]
+      },
+      {
+        id: "a-1-1-q05", node: "a-1-1", type: "mcq", kind: "bug", difficulty: 2,
+        prompt: "부서(dept)가 비어 있는(NULL) 직원 수를 구하려는 쿼리다. 실행하면 오류 없이 **0** 이 나온다. 원인과 수정으로 옳은 것은?",
+        code: [
+          "SELECT COUNT(*) FROM emp WHERE dept = NULL;"
+        ],
+        lang: "sql",
+        choices: [
+          "`= NULL` 비교 결과는 참이 아니라 UNKNOWN 이라 어떤 행도 통과하지 못한다. `dept IS NULL` 로 고친다.",
+          "`COUNT(*)`가 NULL 행을 세지 않는다. `COUNT(dept)` 로 고친다.",
+          "NULL 은 문자열이므로 `dept = 'NULL'` 로 따옴표를 붙인다.",
+          "WHERE 대신 HAVING 을 써야 NULL 비교가 된다."
+        ],
+        answer: 0,
+        explanation: [
+          "**정답: ①** [[null|NULL]] 은 '값 없음/모름'이라 `dept = NULL`은 참(TRUE)도 거짓(FALSE)도 아닌 UNKNOWN 으로 평가되고, WHERE 는 TRUE 인 행만 통과시킨다. 그래서 오류 없이 0 행이다. NULL 판별은 `IS NULL / IS NOT NULL` 뿐이다(3치 논리, three-valued logic).",
+          "",
+          "- ② `COUNT(*)`는 NULL 행도 센다. 문제는 WHERE 에서 이미 모든 행이 탈락한 것이다.",
+          "- ③ NULL 은 문자열 'NULL' 이 아니다. 따옴표를 붙이면 그런 문자열을 가진 행만 찾는다.",
+          "- ④ HAVING 은 그룹 조건용이며 NULL 비교 방식과 무관하다.",
+          "",
+          "시험에서는 \"다음 쿼리가 항상 0 행을 돌려주는 이유\" 또는 `<> NULL` 변형으로 나온다. 둘 다 UNKNOWN 이다."
+        ],
+        terms: ["null", "where-clause"]
+      },
+      {
+        id: "a-1-1-q06", node: "a-1-1", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "다음 쿼리의 출력은?",
+        code: [
+          "-- emp(name, bonus): ('kim',100), ('lee',NULL), ('park',200), ('choi',NULL)",
+          "SELECT AVG(bonus),",
+          "       AVG(COALESCE(bonus, 0)),",
+          "       SUM(CASE WHEN bonus IS NULL THEN 1 ELSE 0 END)",
+          "FROM emp;"
+        ],
+        lang: "sql",
+        choices: ["75, 75, 2", "150, 75, 2", "150, 150, 0", "150, 75, 0"],
+        answer: 1,
+        explanation: [
+          "**정답: ②** `AVG(bonus)`는 [[null|NULL]] 을 **무시**하므로 (100+200)/2 = 150. [[coalesce|COALESCE]]`(bonus, 0)`로 NULL 을 0 으로 바꾸면 (100+0+200+0)/4 = 75. [[case-expression|CASE]] 로 NULL 행을 1 로 표시해 더하면 2 다.",
+          "",
+          "- ① 첫 번째 AVG 는 분모가 2(NULL 제외)라 75 가 아니라 150 이다.",
+          "- ③ COALESCE 로 0 을 채우면 분모가 4 가 되어 75. NULL 행은 2개다.",
+          "- ④ NULL 인 행은 lee, choi 두 명이므로 0 이 아니다.",
+          "",
+          "시험에서는 `AVG(col)` 과 `AVG(COALESCE(col, 0))` 이 다른 이유(분모 차이)가 단골이다. BigQuery 에서는 `IFNULL` 도 같은 역할을 한다."
+        ],
+        terms: ["aggregate-function", "coalesce", "case-expression", "null"]
+      },
+      {
+        id: "a-1-1-q07", node: "a-1-1", type: "mcq", kind: "concept", difficulty: 3,
+        prompt: "표준 SQL 기준으로 다음 중 **오류 없이 실행되는** 쿼리는? (emp 테이블에 name, salary 컬럼이 있다)",
+        choices: [
+          "`SELECT name, salary * 12 AS annual FROM emp WHERE annual > 60000;`",
+          "`SELECT name, MAX(salary) FROM emp WHERE MAX(salary) > 5000;`",
+          "`SELECT name, salary * 12 AS annual FROM emp ORDER BY annual DESC;`",
+          "`SELECT DISTINCT name FROM emp ORDER BY salary;`"
+        ],
+        answer: 2,
+        explanation: [
+          "**정답: ③** SELECT 의 별칭(alias) `annual`은 [[sql-execution-order|실행 순서]]상 SELECT 뒤에 오는 [[order-by|ORDER BY]] 에서만 참조할 수 있다. ③ 은 그 규칙을 지킨 정상 쿼리다.",
+          "",
+          "- ① WHERE 는 SELECT 보다 먼저 실행되어 `annual`이 아직 존재하지 않는다(표준 SQL 에서 오류. SQLite·MySQL 은 확장으로 허용하기도 하지만 시험은 표준 기준).",
+          "- ② WHERE 절에는 집계함수(aggregate function)를 쓸 수 없다. 집계 조건은 HAVING 으로.",
+          "- ④ `SELECT DISTINCT` 를 쓰면 ORDER BY 컬럼이 SELECT 목록에 있어야 한다(표준 SQL). `salary`가 없어 오류.",
+          "",
+          "시험에서는 \"오류가 나는 쿼리를 고르시오\" 형태로 별칭 참조 위치와 DISTINCT-ORDER BY 제약을 묻는다."
+        ],
+        terms: ["sql-execution-order", "order-by", "distinct"]
+      },
+      {
+        id: "a-1-1-q08", node: "a-1-1", type: "ox", kind: "concept", difficulty: 1,
+        prompt: "`SUM(col)` 은 col 의 NULL 을 0 으로 간주해 더하므로, 모든 값이 NULL 이면 결과는 0 이다.",
+        answer: false,
+        explanation: [
+          "**정답: X** [[aggregate-function|집계함수]]는 [[null|NULL]] 을 0 으로 바꾸는 것이 아니라 **무시(skip)** 한다. 그래서 값이 전부 NULL 이면 더할 것이 없어 결과도 NULL 이다(`COUNT`만 예외로 0). 0 을 원하면 `COALESCE(SUM(col), 0)` 또는 `SUM(COALESCE(col, 0))` 을 쓴다.",
+          "",
+          "시험에서는 \"전부 NULL 인 컬럼의 SUM/AVG/MAX 결과는?\" 으로 나오며 답은 NULL, `COUNT(col)` 만 0 이다."
+        ],
+        terms: ["aggregate-function", "null", "coalesce"]
+      },
+      {
+        id: "a-1-1-q09", node: "a-1-1", type: "ox", kind: "concept", difficulty: 2,
+        prompt: "`SELECT DISTINCT dept, job FROM emp` 는 dept 값이 같은 행을 모두 하나로 합쳐, 결과 행 수가 서로 다른 dept 의 개수와 같다.",
+        answer: false,
+        explanation: [
+          "**정답: X** [[distinct|DISTINCT]] 는 SELECT 목록에 적은 **모든 컬럼의 조합** 기준으로 중복을 제거한다. (dept, job) 쌍이 다르면 dept 가 같아도 별개 행이다. 결과 행 수 = 서로 다른 (dept, job) 조합 수이며, 서로 다른 dept 수(`COUNT(DISTINCT dept)`)보다 크거나 같다.",
+          "",
+          "시험에서는 \"DISTINCT 가 첫 컬럼에만 적용된다\" 는 오해를 유도하는 보기로 나온다. DISTINCT 는 컬럼 하나가 아니라 행 전체에 걸린다."
+        ],
+        terms: ["distinct"]
+      },
+      {
+        id: "a-1-1-q10", node: "a-1-1", type: "short", kind: "fill", difficulty: 1,
+        prompt: "빈칸에 들어갈 키워드를 쓰시오. 직원 테이블에서 서로 다른 부서 이름만 중복 없이 뽑는다: `SELECT ____ dept FROM emp;`",
+        answer: "DISTINCT",
+        explanation: [
+          "**정답: DISTINCT** [[distinct|DISTINCT]] 는 결과 행의 중복을 제거하는 키워드로 SELECT 바로 뒤에 쓴다. 같은 일을 `GROUP BY dept` 로도 할 수 있지만 집계 없이 중복 제거만 할 때는 DISTINCT 가 관용적이다.",
+          "",
+          "시험에서는 pandas 의 `drop_duplicates()`/`unique()` 와 짝지어 묻는다(1-4 참고)."
+        ],
+        terms: ["distinct"]
+      },
+      {
+        id: "a-1-1-q11", node: "a-1-1", type: "short", kind: "output", difficulty: 2,
+        prompt: "다음 쿼리의 결과를 쓰시오. (값이 없으면 `NULL` 이라고 쓴다)",
+        code: ["SELECT COALESCE(NULL, 10) + NULLIF(5, 5);"],
+        lang: "sql",
+        answer: "NULL",
+        accept: ["None", "null"],
+        explanation: [
+          "**정답: NULL** [[coalesce|COALESCE]]`(NULL, 10)` 은 첫 번째 NULL 이 아닌 값 10 을 돌려준다. `NULLIF(5, 5)` 는 두 인수가 같으면 [[null|NULL]] 을 돌려준다. `10 + NULL` 은 NULL 과의 산술이라 결과는 NULL 이다. 15 가 아니다.",
+          "",
+          "시험에서는 COALESCE/NULLIF 의 뜻과 \"NULL 과 연산하면 NULL\" 규칙을 한 식에 섞어 출력을 묻는다. BigQuery 의 `SAFE_DIVIDE(a, 0)` 가 NULL 을 돌려주는 것도 같은 맥락이다."
+        ],
+        terms: ["coalesce", "null"]
+      },
+      {
+        id: "a-1-1-q12", node: "a-1-1", type: "short", kind: "fill", difficulty: 3,
+        prompt: "빈칸에 들어갈 표준 SQL 함수 이름을 쓰시오. bonus 가 NULL 인 직원을 0 으로 쳐서 **전체 인원 기준** 평균 보너스를 구한다: `SELECT AVG(____(bonus, 0)) FROM emp;`",
+        answer: "COALESCE",
+        accept: ["IFNULL", "NVL"],
+        explanation: [
+          "**정답: COALESCE** `AVG(bonus)` 는 [[null|NULL]] 행을 분모에서 빼므로 '전체 인원 기준' 평균이 되지 않는다. [[coalesce|COALESCE]]`(bonus, 0)` 로 NULL 을 0 으로 치환하면 모든 행이 분모에 들어간다. `IFNULL`(MySQL/SQLite/BigQuery), `NVL`(Oracle) 은 같은 역할의 방언이다.",
+          "",
+          "시험에서는 \"NULL 을 0 으로 치환해 평균을 구하라\" 는 지문에서 함수 이름을 묻거나, 두 평균이 왜 다른지를 묻는다."
+        ],
+        terms: ["coalesce", "null", "aggregate-function"]
+      },
+      /* ───────── a-1-2 SQL 중급 ───────── */
+      {
+        id: "a-1-2-q01", node: "a-1-2", type: "mcq", kind: "concept", difficulty: 1,
+        prompt: "`emp LEFT JOIN dept ON emp.dept_id = dept.id` 의 결과에 대한 설명으로 옳은 것은?",
+        choices: [
+          "dept 에 매칭되는 직원 행만 남는다.",
+          "emp 의 모든 행이 남고, 매칭되는 부서가 없으면 dept 쪽 컬럼은 NULL 이 된다.",
+          "dept 의 모든 행이 남고, 직원이 없는 부서는 emp 쪽 컬럼이 NULL 이 된다.",
+          "두 테이블의 모든 행이 남고, 어느 쪽이든 매칭이 없으면 NULL 로 채워진다."
+        ],
+        answer: 1,
+        explanation: [
+          "**정답: ②** [[left-join|LEFT (OUTER) JOIN]] 은 **왼쪽 테이블(emp)** 의 모든 행을 유지한다. ON 조건에 맞는 부서가 없는 직원도 결과에 남으며, 그 행의 dept 쪽 컬럼은 [[null|NULL]] 로 채워진다.",
+          "",
+          "- ① 매칭되는 행만 남는 것은 [[inner-join|INNER JOIN]] 이다.",
+          "- ③ 오른쪽(dept) 전체를 유지하는 것은 RIGHT JOIN 이다.",
+          "- ④ 양쪽을 모두 유지하는 것은 FULL OUTER JOIN 이다.",
+          "",
+          "시험에서는 조인(join) 4종의 결과 행 수를 벤 다이어그램 또는 작은 표로 예측하게 한다. 'LEFT' 가 가리키는 쪽이 전부 살아남는다고 기억하면 된다."
+        ],
+        terms: ["left-join", "inner-join", "full-outer-join"]
+      },
+      {
+        id: "a-1-2-q02", node: "a-1-2", type: "mcq", kind: "output", difficulty: 1,
+        prompt: "다음 쿼리의 출력은?",
+        code: [
+          "-- emp(id, name, dept_id): (1,'kim',10),(2,'lee',20),(3,'park',NULL),(4,'choi',30),(5,'jung',10)",
+          "-- dept(id, name):          (10,'HR'),(20,'IT'),(40,'R&D')",
+          "SELECT COUNT(*) FROM emp e INNER JOIN dept d ON e.dept_id = d.id;"
+        ],
+        lang: "sql",
+        choices: ["3", "4", "5", "2"],
+        answer: 0,
+        explanation: [
+          "**정답: ①** [[inner-join|INNER JOIN]] 은 ON 조건이 참인 쌍만 남긴다. dept_id 10(kim, jung)과 20(lee)은 dept 에 있지만, 30(choi)은 dept 에 없고 park 의 dept_id 는 [[null|NULL]] 이라 어떤 행과도 매칭되지 않는다. 따라서 3 행이다.",
+          "",
+          "- ② choi(30) 는 dept 에 30 이 없어 탈락한다.",
+          "- ③ emp 전체 5 행이 남는 것은 LEFT JOIN 일 때다.",
+          "- ④ dept_id 10 인 직원이 두 명(kim, jung)이라 HR 이 두 번 매칭된다.",
+          "",
+          "시험에서는 작은 두 표를 주고 INNER/LEFT 각각의 행 수를 묻는다. NULL 키는 `=` 비교가 UNKNOWN 이라 절대 매칭되지 않는다는 점이 함정이다."
+        ],
+        terms: ["inner-join", "null"]
+      },
+      {
+        id: "a-1-2-q03", node: "a-1-2", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "앞 문제와 같은 emp, dept 테이블에서 다음 쿼리의 출력은?",
+        code: [
+          "SELECT e.name",
+          "FROM emp e LEFT JOIN dept d ON e.dept_id = d.id",
+          "WHERE d.id IS NULL",
+          "ORDER BY e.name;"
+        ],
+        lang: "sql",
+        choices: ["park", "choi, park", "kim, lee, jung", "(빈 결과)"],
+        answer: 1,
+        explanation: [
+          "**정답: ②** [[left-join|LEFT JOIN]] 으로 emp 5 행을 모두 유지한 뒤 `WHERE d.id IS NULL` 로 **매칭되지 않은 행만** 남기는 [[anti-join|안티 조인]] 패턴이다. 매칭이 없는 직원은 dept_id 가 30 인 choi 와 NULL 인 park. 이름순 정렬이라 choi, park.",
+          "",
+          "- ① park 뿐 아니라 dept 에 없는 30 번 부서의 choi 도 매칭되지 않는다.",
+          "- ③ kim, lee, jung 은 매칭된 직원들로 `d.id IS NULL` 조건에서 걸러진다.",
+          "- ④ LEFT JOIN 이므로 매칭 없는 행이 NULL 로 남아 결과가 비지 않는다.",
+          "",
+          "시험에서는 \"부서 정보가 없는 직원\" 을 찾는 쿼리로 나오며, `NOT EXISTS` 와 같은 결과라는 점을 함께 묻는다."
+        ],
+        terms: ["left-join", "anti-join", "null"]
+      },
+      {
+        id: "a-1-2-q04", node: "a-1-2", type: "mcq", kind: "concept", difficulty: 2,
+        prompt: "집합 연산자(set operator)에 대한 설명으로 옳은 것은?",
+        choices: [
+          "UNION 은 중복을 유지하고 UNION ALL 은 중복을 제거한다.",
+          "INTERSECT 는 첫 쿼리에만 있는 행을 돌려준다.",
+          "UNION 은 두 결과를 합치면서 중복 행을 제거하므로 UNION ALL 보다 비용이 크다.",
+          "집합 연산은 두 쿼리의 컬럼 수가 달라도 자동으로 맞춰 준다."
+        ],
+        answer: 2,
+        explanation: [
+          "**정답: ③** [[union|UNION]] 은 두 결과를 세로로 이어붙인 뒤 **중복 행을 제거**한다(정렬·해시 비용). [[union-all|UNION ALL]] 은 그대로 이어붙여 중복이 남고 더 빠르다. BigQuery 는 `UNION DISTINCT`/`UNION ALL` 로 명시해야 한다.",
+          "",
+          "- ① 반대다. UNION 이 제거, UNION ALL 이 유지.",
+          "- ② 첫 쿼리에만 있는 행은 EXCEPT(MINUS). INTERSECT 는 양쪽에 공통인 행이다.",
+          "- ④ 집합 연산은 컬럼 수와 타입(순서대로)이 맞아야 하며 자동으로 맞춰 주지 않는다.",
+          "",
+          "시험에서는 \"두 테이블을 합친 행 수\" 를 물으며 UNION 인지 UNION ALL 인지로 답이 달라진다."
+        ],
+        terms: ["union", "union-all"]
+      },
+      {
+        id: "a-1-2-q05", node: "a-1-2", type: "mcq", kind: "bug", difficulty: 2,
+        prompt: "'IT 부서가 아닌 직원' 을 부서가 없는 직원까지 포함해 모두 보려고 했다. 그런데 결과에 부서가 없는 직원(park, choi)이 빠진다. 올바른 수정은?",
+        code: [
+          "SELECT e.name, d.name AS dept_name",
+          "FROM emp e LEFT JOIN dept d ON e.dept_id = d.id",
+          "WHERE d.name <> 'IT';"
+        ],
+        lang: "sql",
+        choices: [
+          "LEFT JOIN 을 RIGHT JOIN 으로 바꾼다.",
+          "`WHERE d.name <> 'IT'` 를 `WHERE d.name != 'IT'` 로 바꾼다.",
+          "`<>` 대신 `NOT IN ('IT')` 를 쓴다.",
+          "조건을 ON 절로 옮기거나(`ON ... AND d.name <> 'IT'`) `OR d.name IS NULL` 을 덧붙인다."
+        ],
+        answer: 3,
+        explanation: [
+          "**정답: ④** [[left-join|LEFT JOIN]] 으로 살아남은 매칭 없는 행은 dept 쪽 컬럼이 [[null|NULL]] 이다. `NULL <> 'IT'` 는 UNKNOWN 이라 WHERE 에서 탈락하고, 결과적으로 INNER JOIN 과 같아진다. 오른쪽 테이블 조건은 ON 절에 두거나 `OR d.name IS NULL` 로 NULL 행을 명시적으로 살려야 한다.",
+          "",
+          "- ① RIGHT JOIN 은 dept 를 전부 유지하므로 직원이 빠지는 문제가 더 커진다.",
+          "- ② `!=` 와 `<>` 는 같은 연산자다. NULL 비교가 UNKNOWN 인 것은 변하지 않는다.",
+          "- ③ `NOT IN` 도 NULL 과 비교하면 UNKNOWN 이다.",
+          "",
+          "시험에서는 \"LEFT JOIN 인데 왜 INNER JOIN 처럼 동작하는가\" 로 출제되는 대표 함정이다. 답은 항상 'WHERE 의 오른쪽 컬럼 조건'."
+        ],
+        terms: ["left-join", "null", "inner-join"]
+      },
+      {
+        id: "a-1-2-q06", node: "a-1-2", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "`t1.v` 가 1,2,2,3 이고 `t2.v` 가 2,3,4 일 때, 아래 세 쿼리의 결과 행 수를 (a), (b), (c) 순서로 나열한 것은?",
+        code: [
+          "SELECT v FROM t1 UNION     SELECT v FROM t2;   -- (a)",
+          "SELECT v FROM t1 UNION ALL SELECT v FROM t2;   -- (b)",
+          "SELECT v FROM t1 EXCEPT    SELECT v FROM t2;   -- (c)"
+        ],
+        lang: "sql",
+        choices: ["4, 7, 1", "5, 7, 1", "4, 7, 2", "4, 4, 1"],
+        answer: 0,
+        explanation: [
+          "**정답: ①** (a) [[union|UNION]] 은 중복 제거 → {1,2,3,4} = 4 행. (b) [[union-all|UNION ALL]] 은 4 + 3 = 7 행 그대로. (c) EXCEPT 는 t1 에 있고 t2 에 없는 값 {1} = 1 행(중복도 제거).",
+          "",
+          "- ② UNION 은 t1 내부의 중복 2 도 제거하므로 5 가 아니라 4 다.",
+          "- ③ EXCEPT 결과는 1 뿐이다. 2 는 t2 에도 있어 빠진다.",
+          "- ④ UNION ALL 은 중복을 제거하지 않으므로 7 이다.",
+          "",
+          "시험에서는 INTERSECT(여기서는 {2,3} = 2 행)까지 넷을 한 번에 묻는다. 집합 연산 결과는 UNION ALL 을 빼고 모두 중복이 제거된다."
+        ],
+        terms: ["union", "union-all", "intersect-except"]
+      },
+      {
+        id: "a-1-2-q07", node: "a-1-2", type: "mcq", kind: "concept", difficulty: 3,
+        prompt: "'직원이 한 명도 없는 부서' 를 찾는 두 쿼리가 있다. emp.dept_id 에 NULL 이 하나 이상 있을 때의 결과로 옳은 것은? (표준 SQL 기준)",
+        code: [
+          "-- (A)",
+          "SELECT * FROM dept WHERE id NOT IN (SELECT dept_id FROM emp);",
+          "-- (B)",
+          "SELECT * FROM dept d WHERE NOT EXISTS (SELECT 1 FROM emp e WHERE e.dept_id = d.id);"
+        ],
+        lang: "sql",
+        choices: [
+          "(A)와 (B)는 항상 같은 결과를 낸다.",
+          "(A)는 오류가 나고 (B)만 실행된다.",
+          "(A)는 한 행도 돌려주지 않고, (B)는 직원 없는 부서를 올바르게 돌려준다.",
+          "(B)는 한 행도 돌려주지 않고, (A)만 올바르게 돌려준다."
+        ],
+        answer: 2,
+        explanation: [
+          "**정답: ③** `id NOT IN (10, 20, NULL)` 은 `id <> 10 AND id <> 20 AND id <> NULL` 과 같고, 마지막 항이 UNKNOWN 이라 전체가 TRUE 가 될 수 없다. 따라서 (A)는 **빈 결과**다. [[exists|NOT EXISTS]] 는 상관 [[subquery|서브쿼리]]가 행을 돌려주는지만 보므로 [[null|NULL]] 에 영향받지 않는다.",
+          "",
+          "- ① 서브쿼리에 NULL 이 없을 때만 같다.",
+          "- ② (A)는 문법적으로 정상이며 오류 없이 0 행을 돌려준다 — 그래서 더 위험하다.",
+          "- ④ 반대다. NOT EXISTS 가 안전한 쪽이다.",
+          "",
+          "시험에서는 \"NOT IN 서브쿼리가 비어 보이는 이유\" 로 출제된다. 대응: `NOT EXISTS`, 또는 서브쿼리에 `WHERE dept_id IS NOT NULL` 추가."
+        ],
+        terms: ["exists", "in-operator", "subquery", "null"]
+      },
+      {
+        id: "a-1-2-q08", node: "a-1-2", type: "ox", kind: "concept", difficulty: 1,
+        prompt: "조건 없이 `FROM a CROSS JOIN b` 로 조인하면 결과 행 수는 a 의 행 수와 b 의 행 수의 곱이다.",
+        answer: true,
+        explanation: [
+          "**정답: O** [[cross-join|CROSS JOIN]] 은 ON 조건 없이 두 테이블의 **모든 조합**(카티션 곱, Cartesian product)을 만든다. a 가 3 행, b 가 4 행이면 12 행. `FROM a, b` 에 WHERE 를 빼먹은 경우도 같은 결과가 나와 행이 폭발하는 원인이 된다.",
+          "",
+          "시험에서는 \"조인 조건을 빠뜨리면 몇 행이 나오는가\" 또는 날짜×상품 조합 표를 만드는 용도로 나온다."
+        ],
+        terms: ["cross-join"]
+      },
+      {
+        id: "a-1-2-q09", node: "a-1-2", type: "ox", kind: "concept", difficulty: 2,
+        prompt: "`a RIGHT JOIN b ON cond` 는 테이블 순서를 바꾼 `b LEFT JOIN a ON cond` 와 같은 행 집합을 돌려준다.",
+        answer: true,
+        explanation: [
+          "**정답: O** [[right-join|RIGHT JOIN]] 은 오른쪽 테이블(b)의 모든 행을 유지하는 외부 조인(outer join)이고, [[left-join|LEFT JOIN]] 은 왼쪽을 유지한다. 유지되는 쪽이 같으면 행 집합은 같고 컬럼 순서만 다를 수 있다. 그래서 실무·pandas(`how='right'`)에서는 대부분 LEFT 로 통일한다.",
+          "",
+          "시험에서는 \"RIGHT JOIN 을 LEFT JOIN 으로 바꿔 쓰시오\" 또는 SQLite 구버전·일부 엔진이 RIGHT JOIN 을 지원하지 않는 이유로 나온다."
+        ],
+        terms: ["right-join", "left-join"]
+      },
+      {
+        id: "a-1-2-q10", node: "a-1-2", type: "short", kind: "fill", difficulty: 1,
+        prompt: "빈칸에 들어갈 키워드를 쓰시오. 부서가 없는 직원도 결과에 남기고 싶다: `SELECT e.name, d.name FROM emp e ____ JOIN dept d ON e.dept_id = d.id;`",
+        answer: "LEFT",
+        accept: ["LEFT OUTER", "LEFTOUTER"],
+        explanation: [
+          "**정답: LEFT** 기준 테이블 emp 가 FROM 바로 뒤(왼쪽)에 있으므로 emp 의 모든 행을 유지하려면 [[left-join|LEFT (OUTER) JOIN]] 이다. OUTER 는 생략 가능하다. INNER 라면 부서 없는 직원이 빠진다.",
+          "",
+          "시험에서는 \"모든 직원을 유지\" 라는 표현이 LEFT, \"모든 부서를 유지\" 가 RIGHT 의 힌트다."
+        ],
+        terms: ["left-join"]
+      },
+      {
+        id: "a-1-2-q11", node: "a-1-2", type: "short", kind: "output", difficulty: 2,
+        prompt: "다음 쿼리의 결과 값을 쓰시오.",
+        code: [
+          "-- emp(name, salary): ('kim',300), ('lee',500), ('park',400), ('choi',200)",
+          "SELECT COUNT(*) FROM emp",
+          "WHERE salary > (SELECT AVG(salary) FROM emp);"
+        ],
+        lang: "sql",
+        answer: "2",
+        explanation: [
+          "**정답: 2** 괄호 안은 값 하나를 돌려주는 스칼라 [[subquery|서브쿼리]](scalar subquery)로, 전체 평균 (300+500+400+200)/4 = 350 이다. 350 보다 큰 급여는 lee(500), park(400) 두 명이다. WHERE 에 집계함수를 직접 쓸 수 없으므로 이렇게 서브쿼리로 감싼다.",
+          "",
+          "시험에서는 \"평균보다 높은 직원 수\" 가 WHERE + 스칼라 서브쿼리의 대표 예제이며, 부서별 평균과 비교하면 상관 서브쿼리(correlated subquery)가 된다."
+        ],
+        terms: ["subquery", "aggregate-function"]
+      },
+      {
+        id: "a-1-2-q12", node: "a-1-2", type: "short", kind: "fill", difficulty: 3,
+        prompt: "빈칸에 들어갈 키워드를 쓰시오. 직원이 한 명이라도 있는 부서만 고른다(NULL 에 안전한 방식): `SELECT * FROM dept d WHERE ____ (SELECT 1 FROM emp e WHERE e.dept_id = d.id);`",
+        answer: "EXISTS",
+        explanation: [
+          "**정답: EXISTS** [[exists|EXISTS]] 는 괄호 안 [[correlated-subquery|상관 서브쿼리]]가 **한 행이라도** 돌려주면 참이다. 바깥 행 `d.id` 를 참조하므로 부서마다 재평가된다. `SELECT 1` 은 관용 표현으로 컬럼 내용은 의미가 없다. `IN (SELECT dept_id FROM emp)` 도 같은 결과지만 NOT 을 붙일 때 NULL 문제가 생기므로 EXISTS 가 안전하다.",
+          "",
+          "시험에서는 EXISTS 와 IN 의 차이, 그리고 \"SELECT 1\" 의 의미(행 존재 여부만 확인)를 묻는다."
+        ],
+        terms: ["exists", "correlated-subquery"]
+      },
