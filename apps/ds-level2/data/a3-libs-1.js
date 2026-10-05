@@ -118,7 +118,7 @@
         ],
         concepts: [
           "**생성**: `pd.DataFrame({'a': [...], 'b': [...]})`, `pd.Series([...], index=[...])`. `df.shape`, `df.dtypes`, `df.info()`, `df.describe()`로 구조 확인.",
-          "**선택**: `df['a']`(Series), `df[['a', 'b']]`(DataFrame), `df.loc[행라벨, 열라벨]`(끝 포함), `df.iloc[행위치, 열위치]`(끝 미포함).",
+          "**선택**: `df['a']`(Series), `df[ ['a', 'b'] ]`(컬럼 리스트 → DataFrame), `df.loc[행라벨, 열라벨]`(끝 포함), `df.iloc[행위치, 열위치]`(끝 미포함).",
           "**필터**: `df[df['a'] > 3]`. 두 조건은 `&`, `|`, `~`와 **괄호** 필수. `and`/`or`는 ValueError.",
           "**정렬**: `df.sort_values('a', ascending=False)`, `df.sort_index()`. 정렬 뒤 인덱스는 뒤섞인 채 남는다 → `reset_index(drop=True)`.",
           "**기초 통계**: `mean/median/sum/count/std/min/max/nunique/value_counts`. `count()`는 결측값(missing value)을 빼고 센다.",
@@ -204,7 +204,7 @@
           "**재구조화**: `pivot_table(index, columns, values, aggfunc='mean')`(기본 mean) ↔ `melt(id_vars, var_name, value_name)`. `pivot`은 중복 조합이 있으면 에러.",
           "**윈도 함수**: `rolling(3).mean()`(앞 2개 NaN), `shift(1)`, `groupby('g')['v'].cumsum()`. **merge**: 기본 `how='inner'`, 키 중복이면 행이 늘어난다."
         ],
-        terms: ["groupby", "aggregation", "transform", "np-where", "np-select", "isin", "between", "pivot-table", "melt", "window-function", "merge", "method-chaining", "vectorization", "str-accessor", "dt-accessor"],
+        terms: ["groupby", "aggregation", "transform", "np-where", "np-select", "isin", "between", "pivot-table", "melt", "window-function", "merge", "method-chaining"],
         patterns: [
           {
             title: "다층 집계 (named aggregation)",
@@ -305,7 +305,7 @@
           "**교차검증**: `cross_val_score(model, X, y, cv=5)`, `KFold`, `StratifiedKFold`(분류 기본). `GridSearchCV(model, param_grid, cv)` → `best_params_`, `best_score_`.",
           "**데이터 누수(leakage)**: 테스트 데이터 정보가 학습 과정에 들어가는 것. 스케일러·대치기를 전체 데이터에 `fit`하는 것이 대표 사례."
         ],
-        terms: ["fit-transform-predict", "train-test-split", "stratified-sampling", "standardization", "min-max-scaling", "one-hot-encoding", "label-encoding", "imputation", "column-transformer", "pipeline", "hyperparameter", "overfitting", "regularization", "accuracy", "precision", "recall", "f1-score", "roc-auc", "confusion-matrix", "mse", "r2-score", "cross-validation", "k-fold", "grid-search", "data-leakage"],
+        terms: ["fit-transform-predict", "train-test-split", "standardization", "one-hot-encoding", "column-transformer", "pipeline", "hyperparameter", "overfitting", "f1-score", "confusion-matrix", "cross-validation", "data-leakage"],
         patterns: [
           {
             title: "분할 → 스케일 → 학습 → 평가 (누수 없는 순서)",
@@ -1157,9 +1157,9 @@
         explanation: [
           "**정답: ③** [[standardization|표준화(standardization)]]는 `(x - mean) / std`다. 평균은 2.0, 표준편차는 **모표준편차**(n으로 나눔) √(2/3) ≈ 0.8165이므로 4.0은 (4 - 2) / 0.8165 ≈ 2.45로 변환된다. 학습된 값은 `mean_`, `scale_` 속성에 저장된다.",
           "",
-          "- ① 1.0은 표준편차를 2로 잡은 경우다.",
-          "- ② 2.0은 표준편차 1(스케일 없음)로 계산한 경우다.",
-          "- ④ 1.63은 표본표준편차(n-1로 나눔, 1.0이 아닌 √1 = 1 → 2.0)와도 맞지 않는 값이다. `StandardScaler`는 `np.std(ddof=0)`을 쓴다.",
+          "- ① 1.0은 표준편차를 2(범위)로 잡은 경우다.",
+          "- ② 2.0은 **표본표준편차**(n-1로 나눔, 이 예에서 1.0)로 나눈 값이다. `StandardScaler`는 `np.std(ddof=0)`, 즉 모표준편차를 쓴다.",
+          "- ④ 1.63은 어떤 표준편차 정의로도 나오지 않는 값이다.",
           "",
           "시험에서는 `StandardScaler`가 `ddof=0`(모표준편차)을 쓴다는 점과, 새 데이터(4.0)는 학습 통계로만 변환된다는 점을 묻는다."
         ],
@@ -1357,7 +1357,7 @@
           "words[:10]"
         ],
         hint: ["`Counter(words).most_common(1)`은 `[(단어, 빈도)]` 형태의 리스트다."],
-        answer: { type: "int", value: 65 },
+        answer: { type: "int", value: 52 },
         solution: ["Counter(words).most_common(1)[0][1]"],
         explanation: [
           "[[counter|Counter]]는 원소 빈도를 세는 딕셔너리다. `most_common(1)`은 길이 1의 리스트이고 그 첫 원소가 `(단어, 빈도)` 튜플이므로 `[0][1]`로 빈도를 꺼낸다.",
@@ -1383,7 +1383,7 @@
           "`for name, dept, sal in records:` 로 튜플을 언패킹한다.",
           "딕셔너리 컴프리헨션 `{d: sum(v) / len(v) for d, v in by.items()}` 뒤에 `max(...values())`."
         ],
-        answer: { type: "number", value: 5887.47, decimals: 2 },
+        answer: { type: "number", value: 6111.0, decimals: 2 },
         solution: [
           "by = defaultdict(list)",
           "for name, dept, sal in records:",
@@ -1433,7 +1433,7 @@
           "df.shape"
         ],
         hint: ["`df.loc[df['alcohol'] > 13, 'color_intensity'].mean()`"],
-        answer: { type: "number", value: 6.47, decimals: 2 },
+        answer: { type: "number", value: 6.16, decimals: 2 },
         solution: ["round(df.loc[df['alcohol'] > 13, 'color_intensity'].mean(), 2)"],
         explanation: [
           "[[loc-iloc|loc]]의 첫 인수에 불리언 조건, 둘째 인수에 컬럼명을 넣으면 필터와 선택을 한 번에 한다.",
@@ -1458,7 +1458,7 @@
           "df.head()"
         ],
         hint: ["`df['region'].isin([...]) & df['amount'].between(100, 200)` 을 마스크로 쓴다."],
-        answer: { type: "int", value: 59 },
+        answer: { type: "int", value: 65 },
         solution: ["int((df['region'].isin(['East', 'West']) & df['amount'].between(100, 200)).sum())"],
         explanation: [
           "[[isin|isin]]은 SQL `IN`, [[between|between]]은 SQL `BETWEEN`(양 끝 포함)에 대응한다. 두 불리언 Series를 `&`로 결합하면 원소별 AND가 된다.",
@@ -1486,7 +1486,7 @@
           "`pd.pivot_table(df, index='region', columns='month', values='amount', aggfunc='sum')`",
           "DataFrame 전체의 최댓값은 `.max().max()` 또는 `.to_numpy().max()`."
         ],
-        answer: { type: "int", value: 3012 },
+        answer: { type: "int", value: 3400 },
         solution: [
           "pt = pd.pivot_table(df, index='region', columns='month', values='amount', aggfunc='sum')",
           "int(pt.to_numpy().max())"
@@ -1513,7 +1513,7 @@
           "X_tr.shape, X_te.shape"
         ],
         hint: ["`model.fit(X_tr, y_tr)` → `accuracy_score(y_te, model.predict(X_te))`"],
-        answer: { type: "number", value: 0.91, decimals: 2 },
+        answer: { type: "number", value: 0.98, decimals: 2 },
         solution: [
           "knn = KNeighborsClassifier(n_neighbors=5).fit(X_tr, y_tr)",
           "round(accuracy_score(y_te, knn.predict(X_te)), 2)"
