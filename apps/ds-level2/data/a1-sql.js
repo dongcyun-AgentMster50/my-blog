@@ -797,3 +797,226 @@
         ],
         terms: ["exists", "correlated-subquery"]
       },
+      /* ───────── a-1-3 SQL 고급 ───────── */
+      {
+        id: "a-1-3-q01", node: "a-1-3", type: "mcq", kind: "concept", difficulty: 1,
+        prompt: "순위 윈도 함수(ranking window function)에 대한 설명으로 옳은 것은?",
+        choices: [
+          "ROW_NUMBER 는 동률(tie)에 같은 번호를 준다.",
+          "RANK 는 동률 뒤의 순위를 건너뛰지 않는다.",
+          "DENSE_RANK 는 동률 뒤의 순위를 건너뛴다.",
+          "RANK 는 동률 뒤 순위를 건너뛰고(1,1,3), DENSE_RANK 는 건너뛰지 않는다(1,1,2)."
+        ],
+        answer: 3,
+        explanation: [
+          "**정답: ④** 세 함수의 차이는 동률 처리다. [[row-number|ROW_NUMBER]] 는 동률이어도 1,2,3 고유 번호, [[rank|RANK]] 는 동률에 같은 순위를 주고 다음 순위를 인원수만큼 건너뛴다(1,1,3), [[dense-rank|DENSE_RANK]] 는 건너뛰지 않는다(1,1,2).",
+          "",
+          "- ① ROW_NUMBER 는 항상 고유 번호다. 동률의 순서는 ORDER BY 2차 키로 정한다.",
+          "- ② RANK 는 건너뛴다. 건너뛰지 않는 것이 DENSE_RANK.",
+          "- ③ 반대다. DENSE('촘촘한') 는 빈 순위가 없다는 뜻.",
+          "",
+          "시험에서는 급여 300, 300, 200 같은 작은 표로 세 함수의 출력을 나란히 묻는다."
+        ],
+        terms: ["row-number", "rank", "dense-rank", "window-function"]
+      },
+      {
+        id: "a-1-3-q02", node: "a-1-3", type: "mcq", kind: "output", difficulty: 1,
+        prompt: "다음 쿼리에서 **park** 행의 (r, d) 값은?",
+        code: [
+          "-- emp(name, salary): ('kim',300), ('lee',300), ('park',200)",
+          "SELECT name,",
+          "       RANK()       OVER (ORDER BY salary DESC) AS r,",
+          "       DENSE_RANK() OVER (ORDER BY salary DESC) AS d",
+          "FROM emp;"
+        ],
+        lang: "sql",
+        choices: ["(2, 2)", "(3, 2)", "(3, 3)", "(2, 3)"],
+        answer: 1,
+        explanation: [
+          "**정답: ②** kim 과 lee 가 300 으로 공동 1위다. [[rank|RANK]] 는 동률 2명 뒤의 순위를 건너뛰어 park 가 **3**, [[dense-rank|DENSE_RANK]] 는 건너뛰지 않아 park 가 **2** 다. (ROW_NUMBER 라면 kim 1, lee 2, park 3.)",
+          "",
+          "- ① r 이 2 가 되려면 건너뛰지 않아야 하는데 RANK 는 건너뛴다.",
+          "- ③ d 가 3 이면 DENSE 가 아니다.",
+          "- ④ r 과 d 가 뒤바뀌었다.",
+          "",
+          "시험에서는 이 세 줄짜리 표가 거의 그대로 나온다. '동률 인원 + 1' 이 RANK 의 다음 값이라고 기억한다."
+        ],
+        terms: ["rank", "dense-rank"]
+      },
+      {
+        id: "a-1-3-q03", node: "a-1-3", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "다음 쿼리의 `run` 컬럼을 결과 순서대로 나열한 것은?",
+        code: [
+          "-- sales(dept, day, amt): ('A',1,10),('A',2,20),('A',3,30),('B',1,5),('B',2,15)",
+          "SELECT dept, day,",
+          "       SUM(amt) OVER (PARTITION BY dept ORDER BY day) AS run",
+          "FROM sales",
+          "ORDER BY dept, day;"
+        ],
+        lang: "sql",
+        choices: ["10, 30, 60, 5, 20", "10, 30, 60, 65, 80", "60, 60, 60, 20, 20", "10, 20, 30, 5, 15"],
+        answer: 0,
+        explanation: [
+          "**정답: ①** [[partition-by|PARTITION BY]] dept 로 부서마다 따로 계산하고, ORDER BY day 가 있으므로 파티션 시작부터 현재 행까지의 [[running-total|누적합]]이 된다. A: 10, 30, 60 / B: 5, 20.",
+          "",
+          "- ② PARTITION BY 가 없을 때의 전체 누적합이다. 부서가 바뀌면 누적이 다시 시작한다.",
+          "- ③ ORDER BY 를 뺀 `SUM(amt) OVER (PARTITION BY dept)` 의 결과(파티션 총합이 모든 행에)다.",
+          "- ④ 원본 amt 그대로다. 윈도 함수가 적용되지 않은 값.",
+          "",
+          "시험에서는 ORDER BY 유무로 '누적합' 과 '그룹 총합' 이 갈린다는 점을 출력으로 묻는다."
+        ],
+        terms: ["partition-by", "running-total", "window-function"]
+      },
+      {
+        id: "a-1-3-q04", node: "a-1-3", type: "mcq", kind: "concept", difficulty: 2,
+        prompt: "GROUP BY 집계와 윈도 함수(window function) `OVER (PARTITION BY ...)` 의 차이로 옳은 것은?",
+        choices: [
+          "둘 다 그룹당 한 행으로 결과를 줄인다.",
+          "윈도 함수는 GROUP BY 와 함께 쓸 수 없다.",
+          "GROUP BY 는 그룹당 한 행으로 줄이지만, 윈도 함수는 원본 행 수를 유지한 채 각 행에 그룹 계산 결과를 붙인다.",
+          "윈도 함수는 WHERE 절에서 바로 필터 조건으로 쓸 수 있다."
+        ],
+        answer: 2,
+        explanation: [
+          "**정답: ③** [[group-by|GROUP BY]] 는 그룹을 한 행으로 **축약**하고, [[window-function|윈도 함수]]는 행을 줄이지 않고 각 행 옆에 그룹 계산값(합·순위·이전 값 등)을 **붙인다**. pandas 로 말하면 `agg` 와 `transform` 의 관계다.",
+          "",
+          "- ① 윈도 함수는 행 수를 줄이지 않는다.",
+          "- ② 함께 쓸 수 있다. GROUP BY 로 집계한 결과 위에 윈도 함수를 다시 적용하는 것도 가능하다.",
+          "- ④ 윈도 함수는 SELECT·ORDER BY 단계에서 계산되므로 WHERE 에서 쓸 수 없다. 서브쿼리/CTE 로 감싼다.",
+          "",
+          "시험에서는 \"부서 평균을 각 직원 행 옆에 붙이려면?\" 이라는 지문에서 GROUP BY 가 아닌 윈도 함수를 고르게 한다."
+        ],
+        terms: ["window-function", "group-by", "partition-by"]
+      },
+      {
+        id: "a-1-3-q05", node: "a-1-3", type: "mcq", kind: "bug", difficulty: 2,
+        prompt: "급여 상위 2명을 뽑으려는 쿼리가 `misuse of window function` 류의 오류를 낸다. 올바른 수정은?",
+        code: [
+          "SELECT name FROM emp",
+          "WHERE ROW_NUMBER() OVER (ORDER BY salary DESC) <= 2;"
+        ],
+        lang: "sql",
+        choices: [
+          "ROW_NUMBER 를 RANK 로 바꾼다.",
+          "윈도 함수를 서브쿼리(또는 CTE)의 SELECT 에서 계산하고, 바깥 쿼리의 WHERE 에서 `rn <= 2` 로 거른다.",
+          "WHERE 를 HAVING 으로 바꾼다.",
+          "`OVER (ORDER BY salary DESC)` 에 `PARTITION BY name` 을 추가한다."
+        ],
+        answer: 1,
+        explanation: [
+          "**정답: ②** [[window-function|윈도 함수]]는 [[sql-execution-order|실행 순서]]상 SELECT 단계에서 계산되므로 그보다 먼저 실행되는 WHERE/GROUP BY/HAVING 에서는 쓸 수 없다. `WITH t AS (SELECT name, ROW_NUMBER() OVER (ORDER BY salary DESC) AS rn FROM emp) SELECT name FROM t WHERE rn <= 2` 처럼 한 겹 감싼다. 그룹별 [[top-n-per-group|상위 N]] 도 같은 구조다.",
+          "",
+          "- ① 함수 종류와 무관하게 WHERE 에서 윈도 함수를 쓰는 것 자체가 문제다.",
+          "- ③ HAVING 도 SELECT 보다 먼저 실행되므로 같은 오류다.",
+          "- ④ PARTITION BY name 은 이름마다 순위 1 을 줘서 의미가 깨지고, 오류도 그대로다.",
+          "",
+          "시험에서는 \"그룹별 상위 N 을 구하는 올바른 쿼리\" 에서 CTE + ROW_NUMBER + 바깥 WHERE 구조를 고르게 한다."
+        ],
+        terms: ["window-function", "top-n-per-group", "cte"]
+      },
+      {
+        id: "a-1-3-q06", node: "a-1-3", type: "mcq", kind: "output", difficulty: 2,
+        prompt: "다음 쿼리의 `diff` 컬럼을 day 순서대로 나열한 것은?",
+        code: [
+          "-- price(day, p): (1,100), (2,120), (3,90)",
+          "SELECT day, p - LAG(p) OVER (ORDER BY day) AS diff",
+          "FROM price;"
+        ],
+        lang: "sql",
+        choices: ["0, 20, -30", "20, -30, NULL", "NULL, -20, 30", "NULL, 20, -30"],
+        answer: 3,
+        explanation: [
+          "**정답: ④** [[lag-lead|LAG(p)]] 는 정렬 기준 **바로 앞 행**의 p 를 돌려준다. 첫 행은 앞 행이 없어 [[null|NULL]] 이고, `100 - NULL` 도 NULL. 2일: 120 - 100 = 20, 3일: 90 - 120 = -30.",
+          "",
+          "- ① 첫 행이 0 이 되려면 `LAG(p, 1, 0)` 처럼 기본값을 줘야 한다. 그래도 100 - 0 = 100 이지 0 이 아니다.",
+          "- ② LEAD 를 쓴 것처럼 한 칸 당겨져 있다. LEAD 는 뒤 행을 본다.",
+          "- ③ 부호가 반대다. `p - LAG(p)` 는 현재 - 이전.",
+          "",
+          "시험에서는 LAG/LEAD 의 첫/마지막 행 NULL 과 세 번째 인수(default)의 의미를 함께 묻는다."
+        ],
+        terms: ["lag-lead", "null"]
+      },
+      {
+        id: "a-1-3-q07", node: "a-1-3", type: "mcq", kind: "concept", difficulty: 3,
+        prompt: "`SUM(v) OVER (ORDER BY v)` 처럼 ORDER BY 는 있고 프레임(frame) 절을 생략한 윈도 함수에 대한 설명으로 옳은 것은? (표준 SQL 기준)",
+        choices: [
+          "기본 프레임은 `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` 라서 정렬 값이 같은 동률 행이 한꺼번에 누적된다.",
+          "기본 프레임은 `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` 라서 항상 행 하나씩 누적된다.",
+          "프레임을 생략하면 파티션 전체가 프레임이 되어 모든 행에 총합이 붙는다.",
+          "ORDER BY 가 있으면 프레임 절은 반드시 써야 하므로 오류가 난다."
+        ],
+        answer: 0,
+        explanation: [
+          "**정답: ①** ORDER BY 가 있을 때 기본 [[window-frame|프레임]]은 `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` 다. RANGE 는 **값** 기준이라 현재 행과 정렬 값이 같은 동률(peer) 행까지 포함한다. v = 10, 10, 20 이면 결과는 20, 20, 40 (ROWS 라면 10, 20, 40). 행 단위 누적이 필요하면 `ROWS BETWEEN ...` 을 명시한다.",
+          "",
+          "- ② ROWS 가 기본이라고 착각하기 쉽지만 표준 기본값은 RANGE 다.",
+          "- ③ 파티션 전체가 프레임이 되는 것은 **ORDER BY 를 생략**했을 때다.",
+          "- ④ 프레임 절은 선택이며 생략 시 기본값이 적용된다.",
+          "",
+          "시험에서는 동률이 있는 작은 표의 누적합 출력으로 ROWS 와 RANGE 의 차이를 묻는다. [[moving-average|이동평균]]은 `ROWS BETWEEN n PRECEDING AND CURRENT ROW` 로 쓴다."
+        ],
+        terms: ["window-frame", "running-total", "moving-average"]
+      },
+      {
+        id: "a-1-3-q08", node: "a-1-3", type: "ox", kind: "concept", difficulty: 1,
+        prompt: "`OVER (PARTITION BY dept)` 는 GROUP BY dept 처럼 결과 행 수를 부서 수만큼으로 줄인다.",
+        answer: false,
+        explanation: [
+          "**정답: X** [[partition-by|PARTITION BY]] 는 계산 범위를 나눌 뿐 행을 합치지 않는다. [[window-function|윈도 함수]]의 결과는 항상 **원본과 같은 행 수**이며, 각 행에 자기 파티션의 계산값이 붙는다. 행 수를 줄이는 것은 GROUP BY 다.",
+          "",
+          "시험에서는 \"윈도 함수 결과의 행 수는?\" 이라는 질문에 '원본과 같다' 가 답이다."
+        ],
+        terms: ["partition-by", "window-function"]
+      },
+      {
+        id: "a-1-3-q09", node: "a-1-3", type: "ox", kind: "concept", difficulty: 2,
+        prompt: "`SUM(amt) OVER (PARTITION BY dept)` 처럼 ORDER BY 없이 PARTITION BY 만 쓰면, 각 행에는 자기 부서의 **총합**이 붙는다.",
+        answer: true,
+        explanation: [
+          "**정답: O** ORDER BY 가 없으면 [[window-frame|프레임]]이 파티션 전체가 되어 모든 행에 파티션 총합이 붙는다. ORDER BY 를 추가하면 [[running-total|누적합]]으로 바뀐다. 이 성질로 `amt * 1.0 / SUM(amt) OVER (PARTITION BY dept)` 같은 '부서 내 비율' 을 한 줄로 구한다(BigQuery 는 `SAFE_DIVIDE` 로 0 나눗셈을 피한다).",
+          "",
+          "시험에서는 ORDER BY 유무에 따라 '총합' 과 '누적합' 이 바뀌는 출력 문제로 나온다."
+        ],
+        terms: ["partition-by", "window-frame", "running-total"]
+      },
+      {
+        id: "a-1-3-q10", node: "a-1-3", type: "short", kind: "fill", difficulty: 1,
+        prompt: "빈칸에 들어갈 윈도 함수 이름을 쓰시오. 전날 매출을 같은 행에 붙인다: `SELECT day, amount, ____(amount, 1) OVER (ORDER BY day) AS prev_amount FROM sales;`",
+        answer: "LAG",
+        explanation: [
+          "**정답: LAG** [[lag-lead|LAG(x, n)]] 은 정렬 기준 n 행 **앞**의 값, LEAD 는 n 행 **뒤**의 값을 돌려준다. 첫 행의 LAG 는 NULL 이며 세 번째 인수로 기본값을 줄 수 있다. pandas 의 `shift(1)` 에 대응한다.",
+          "",
+          "시험에서는 '전일 대비 증감' 을 구하는 식 `amount - LAG(amount) OVER (ORDER BY day)` 에서 함수 이름을 묻는다."
+        ],
+        terms: ["lag-lead"]
+      },
+      {
+        id: "a-1-3-q11", node: "a-1-3", type: "short", kind: "output", difficulty: 2,
+        prompt: "다음 쿼리에서 **day = 3** 행의 `ma` 값을 쓰시오.",
+        code: [
+          "-- s(day, v): (1,10), (2,20), (3,60), (4,20)",
+          "SELECT day,",
+          "       AVG(v) OVER (ORDER BY day ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS ma",
+          "FROM s;"
+        ],
+        lang: "sql",
+        answer: "30",
+        accept: ["30.0"],
+        explanation: [
+          "**정답: 30** `ROWS BETWEEN 2 PRECEDING AND CURRENT ROW` 는 현재 행과 앞 2행, 총 3행 [[window-frame|프레임]]의 [[moving-average|이동평균]]이다. day 3 에서는 (10 + 20 + 60) / 3 = 30. day 1 은 가용 행이 1개라 10, day 2 는 (10+20)/2 = 15, day 4 는 (20+60+20)/3 ≈ 33.33.",
+          "",
+          "시험에서는 'n PRECEDING' 이 **앞 n행** 이므로 프레임 크기가 n+1 이라는 점을 묻는다. pandas `rolling(3).mean()` 은 처음 2행이 NaN 인 점이 다르다."
+        ],
+        terms: ["moving-average", "window-frame"]
+      },
+      {
+        id: "a-1-3-q12", node: "a-1-3", type: "short", kind: "fill", difficulty: 3,
+        prompt: "빈칸에 들어갈 키워드를 쓰시오. 1 부터 5 까지 숫자를 생성한다: `WITH ____ seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 5) SELECT n FROM seq;`",
+        answer: "RECURSIVE",
+        explanation: [
+          "**정답: RECURSIVE** 자기 자신(seq)을 참조하는 [[recursive-cte|재귀 CTE]] 는 `WITH RECURSIVE` 로 선언한다(SQLite·PostgreSQL·MySQL 8. SQL Server·BigQuery 는 RECURSIVE 없이도 재귀를 허용하거나 별도 구문). 구조는 **앵커(SELECT 1) UNION ALL 재귀 부분(seq 참조)** 이며, `WHERE n < 5` 가 없으면 무한 루프다.",
+          "",
+          "시험에서는 재귀 CTE 의 세 요소(앵커, UNION ALL, 종료 조건)와 조직도·연속 날짜 생성 같은 용도를 묻는다."
+        ],
+        terms: ["recursive-cte", "cte", "union-all"]
+      },
