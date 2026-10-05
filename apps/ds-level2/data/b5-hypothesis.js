@@ -649,7 +649,7 @@
         lang: "python",
         answer: true,
         explanation: [
-          "**정답: O** [[shapiro-wilk-test|Shapiro-Wilk 검정]]의 귀무가설은 \"자료가 정규분포를 따른다\"이다. 지수분포(exponential)는 오른�쪽으로 크게 치우친 분포이고 n = 200 이면 검정력이 충분해 p-value 가 10⁻¹² 수준으로 거의 0 이 된다. 따라서 `p < 0.05` 는 `True`, 즉 정규성이 기각된다.",
+          "**정답: O** [[shapiro-wilk-test|Shapiro-Wilk 검정]]의 귀무가설은 \"자료가 정규분포를 따른다\"이다. 지수분포(exponential)는 오른쪽으로 크게 치우친 분포이고 n = 200 이면 검정력이 충분해 p-value 가 10⁻¹² 수준으로 거의 0 이 된다. 따라서 `p < 0.05` 는 `True`, 즉 정규성이 기각된다.",
           "정규성이 깨졌을 때는 [[nonparametric-test|비모수 검정]](Mann-Whitney, Kruskal-Wallis 등)으로 넘어가거나 로그 변환을 고려한다.",
           "",
           "시험에서는 \"Shapiro p < 0.05 → 정규성 기각 → 비모수\" 흐름을, 그리고 H0가 '정규분포다'라는 점을 뒤집어 묻는다."
