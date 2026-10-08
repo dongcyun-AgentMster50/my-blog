@@ -428,7 +428,7 @@ export const AI = Object.freeze({
 
   /* 8-4 `listModels()` 가 실패했을 때의 폴백 목록. 기본 모델이 맨 앞. */
   STATIC_MODELS: Object.freeze({
-    gemini: Object.freeze(['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'])
+    gemini: Object.freeze(['gemini-3.5-flash-lite', 'gemini-3.5-flash'])
   }),
 
   /* 8-5 요청 하나의 상한(입력 + maxOutputTokens). 넘으면 파이프라인(8단계)이 쪼갠다. */

@@ -67,9 +67,10 @@ const gen = (id, extra) => Object.assign({ name: 'models/' + id, supportedGenera
    1. 기본 모델 · 낡은 저장값
    ══════════════════════════════════════════════════════ */
 
-test('D1 ★ 기본 모델 = gemini-3.5-flash-lite, 정적 목록 세 개(기본이 맨 앞)', () => {
+test('D1 ★ 기본 모델 = gemini-3.5-flash-lite, 정적 목록은 안정판 두 개(기본이 맨 앞, 예전 3.1 없음)', () => {
   assert.equal(AI.DEFAULT_MODEL.gemini, DEF);
-  assert.deepEqual([...AI.STATIC_MODELS.gemini], ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash']);
+  // `[수정 2026-10-08 — 운영자 결정 "예전 모델은 필요 없다"]` 3.1 을 뺐다.
+  assert.deepEqual([...AI.STATIC_MODELS.gemini], ['gemini-3.5-flash-lite', 'gemini-3.5-flash']);
   assert.equal(gemini.defaultModel, DEF);
   assert.ok(gemini.endpoint(undefined).endsWith('/models/' + DEF + ':generateContent'));
 });

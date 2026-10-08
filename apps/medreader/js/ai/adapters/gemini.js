@@ -24,11 +24,24 @@ const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const MODELS_PAGE_SIZE = 1000;
 
 /**
- * `[신설 2026-10-08]` 번역에 맞지 않는 계열 — 음성 합성·이미지·실시간·임베딩·받아쓰기·
- * 영상·음악·질의응답 전용. `generateContent` 를 지원해도 고를 이유가 없다.
- * 모델 이름의 **낱말 단위**로 본다(`-`·`.`·`_` 경계).
+ * `[수정 2026-10-08 — 운영자 결정 "안정판만"]` **허용 목록**: `gemini-<버전>-flash-lite|flash|pro` 꼴만 남긴다.
+ * 처음엔 번역에 맞지 않는 계열을 빼는 **제외 목록**이었는데, 실제 목록에는 `Nano Banana`(이미지)·
+ * `Robotics-ER`·`Omni`·`gemma-*`·`*-latest` 별칭·`*-preview` 처럼 이름을 미리 알 수 없는 것이 섞여
+ * 그대로 통과했다(2026-10-08 실키 확인 캡처). 형식을 맞히는 쪽만 통과시키면 새 계열이 생겨도 새지 않는다.
+ * `-preview`·`-latest`·날짜 접미는 이 꼴에 맞지 않으므로 저절로 빠진다.
  */
-const UNFIT_FAMILY = /(^|[-._])(tts|image|live|embedding|transcribe|veo|lyria|imagen|aqa)([-._]|$)/i;
+const STABLE_MODEL = /^gemini-(\d+(?:\.\d+)?)-(flash-lite|flash|pro)$/;
+
+/** `'3.5'` → `[3, 5]`. 비교용. */
+function versionOf(id) {
+  const m = STABLE_MODEL.exec(id);
+  if (!m) return null;
+  const p = m[1].split('.');
+  return { family: m[2], major: Number(p[0]) || 0, minor: Number(p[1] || 0) || 0 };
+}
+
+/** 계열 표시 순서 — 가벼운 것부터(번역 기본은 flash-lite). */
+const FAMILY_ORDER = Object.freeze(['flash-lite', 'flash', 'pro']);
 
 export const gemini = Object.freeze({
   id: 'gemini',
@@ -200,7 +213,8 @@ export const gemini = Object.freeze({
    *
    * `[수정 2026-10-08]`
    * - `supportedGenerationMethods` 에 `generateContent` 가 **있는 것만**(없거나 빠졌으면 뺀다).
-   * - 번역에 맞지 않는 계열(`UNFIT_FAMILY`)을 뺀다.
+   * - **안정판 꼴(`STABLE_MODEL`)만** 남긴다(`[수정 2026-10-08]` 제외 목록 → 허용 목록).
+   *   계열마다 최신 하나로 줄이는 일은 **여러 쪽을 합친 뒤** `curateModels` 가 한다.
    * - 기본 모델을 맨 앞에(여러 쪽을 합친 뒤 `provider.listModels` 가 한 번 더 정렬한다).
    * - `nextPageToken` 을 함께 돌려준다 — 다음 쪽을 부를지는 `provider.js` 가 정한다.
    *
@@ -215,13 +229,43 @@ export const gemini = Object.freeze({
       const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
       if (methods.indexOf('generateContent') < 0) continue;
       const id = m.name.indexOf('models/') === 0 ? m.name.slice(7) : m.name;
-      if (!SAFE_MODEL.test(id) || UNFIT_FAMILY.test(id)) continue;
+      if (!SAFE_MODEL.test(id) || !STABLE_MODEL.test(id)) continue;
       out.push({ id: id, label: typeof m.displayName === 'string' && m.displayName ? m.displayName : id });
     }
     const def = AI.DEFAULT_MODEL.gemini;
     out.sort((a, b) => (a.id === def ? -1 : b.id === def ? 1 : 0));
     const next = json && typeof json.nextPageToken === 'string' ? json.nextPageToken : '';
     if (next) out.nextPageToken = next;
+    return out;
+  },
+
+  /**
+   * `[신설 2026-10-08 — 운영자 결정 "필요한 몇 개만, 예전 모델은 필요 없다"]`
+   * 합친 목록에서 **계열(flash-lite·flash·pro)마다 가장 높은 버전 하나**만 남긴다.
+   * 기본 모델은 더 새 버전이 있어도 남긴다(사용자가 고른 기준점). 순서: 기본 → flash-lite → flash → pro.
+   * 쪽마다 하면 "가장 높은 버전"을 잘못 고르므로 쪽을 다 합친 뒤에 부른다.
+   * @param {{id:string,label:string}[]} models
+   * @param {string} def 기본 모델 id
+   */
+  curateModels(models, def) {
+    const list = Array.isArray(models) ? models : [];
+    const best = {};
+    let defEntry = null;
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
+      const v = m && versionOf(m.id);
+      if (!v) continue;
+      if (m.id === def) defEntry = m;
+      const cur = best[v.family];
+      if (!cur || v.major > cur.v.major || (v.major === cur.v.major && v.minor > cur.v.minor)) {
+        best[v.family] = { m: m, v: v };
+      }
+    }
+    const out = defEntry ? [defEntry] : [];
+    for (let f = 0; f < FAMILY_ORDER.length; f++) {
+      const b = best[FAMILY_ORDER[f]];
+      if (b && b.m.id !== def) out.push(b.m);
+    }
     return out;
   }
 });

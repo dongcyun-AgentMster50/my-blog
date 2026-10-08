@@ -340,9 +340,14 @@ export function reconcileModel(saved, models, def) {
  * 드롭다운은 2.5 를, 요청은 기본 모델을 쓰는 어긋남이 생겼다(브라우저 스텁으로 재현).
  * @param {{id:string}[]} models
  */
-export function usableModels(models) {
+export function usableModels(models, adapter) {
   const list = Array.isArray(models) ? models : [];
-  return list.filter((m) => !!m && !settings.isRetired('ai.model', m.id));
+  const live = list.filter((m) => !!m && !settings.isRetired('ai.model', m.id));
+  // `[수정 2026-10-08 — 운영자 결정 "안정판만, 필요한 몇 개만"]` 계열마다 최신 하나.
+  // 어떤 이름이 안정판인지는 어댑터가 안다(프로바이더마다 이름 규칙이 다르다).
+  return adapter && typeof adapter.curateModels === 'function'
+    ? adapter.curateModels(live, adapter.defaultModel)
+    : live;
 }
 
 function nowMs() {
@@ -1060,10 +1065,10 @@ async function refreshModels(key, pid) {
   let m = null;
   try { m = await provider.listModels(key, { provider: pid }); } catch (e) { m = null; }
   if (!m || !m.fromRemote || !els) return;
-  const usable = usableModels(m.models);
+  const a = adapterOf(pid);
+  const usable = usableModels(m.models, a);
   if (!usable.length) return;
   remoteModels = { pid: pid, models: usable };
-  const a = adapterOf(pid);
   const def = a ? a.defaultModel : '';
   const r = reconcileModel(settings.get('ai.model'), usable, def);
   if (r.replaced) {
