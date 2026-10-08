@@ -37,6 +37,7 @@ import { AI, TTS } from '../config.js';
 import { t, applyTranslations, formatNumber, onLangChange, BUNDLES, dirOf } from '../i18n/index.js';
 import { loadVoices, pickVoice } from '../tts/voices.js';
 import { piiWarning } from './notice.js';
+import { ltrRuns } from '../text/bidi.js';
 
 const CODES = provider.CODES;
 
@@ -978,6 +979,30 @@ function paintResult(kind) {
  * JSON 파싱에 실패했으면 응답 문자열을 **그대로** 한 블록으로(`dir=auto`).
  * ★ AI 응답은 **textContent** 로만(13절).
  */
+/**
+ * `[신설 2026-10-08 — 운영자 결정]` 번역문을 넣는다. 오른쪽→왼쪽 블록이면 라틴 문자 구간
+ * (영어 원어 괄호 등)을 `<bdi dir="ltr">` 로 격리한다 — 그냥 넣으면 줄바꿈 지점에서
+ * "(C-" / "reactive protein)" 처럼 갈라지고 괄호가 뒤집혔다(실키 확인 캡처).
+ * 조각마다 **textContent** 다(13절 — AI 응답을 HTML 로 해석하지 않는다).
+ * 8b 자막 띠도 같은 규칙(`text/bidi.js` 의 `ltrRuns`)을 쓴다.
+ */
+function appendBidiText(el, text, dir) {
+  const s = String(text == null ? '' : text);
+  if (dir !== 'rtl') { el.textContent = s; return; }
+  const doc = el.ownerDocument;
+  const runs = ltrRuns(s);
+  for (let i = 0; i < runs.length; i++) {
+    if (runs[i].ltr) {
+      const iso = doc.createElement('bdi');
+      iso.dir = 'ltr';
+      iso.textContent = runs[i].text;
+      el.appendChild(iso);
+    } else {
+      el.appendChild(doc.createTextNode(runs[i].text));
+    }
+  }
+}
+
 function paintTestOutput(out, r) {
   while (out.firstChild) out.removeChild(out.firstChild);
   out.removeAttribute('lang');
@@ -1002,7 +1027,7 @@ function paintTestOutput(out, r) {
       body.className = 'ai-tr-text';
       body.lang = a.lang;
       body.dir = a.dir;
-      body.textContent = r.pair[code];
+      appendBidiText(body, r.pair[code], a.dir);
       block.appendChild(name);
       block.appendChild(body);
       out.appendChild(block);
