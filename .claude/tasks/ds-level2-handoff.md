@@ -1,11 +1,11 @@
 # 인수인계 — 데이터 사이언스 레벨2 학습앱 (ds-level2)
 
-> 새 세션은 이 문서를 먼저 읽는다. 작성 시점: 2026-10-05.
+> 새 세션은 이 문서를 먼저 읽는다. 작성 시점: 2026-10-05. 갱신: 2026-10-08(pandas 2.x 실습 재검증, PR 생성).
 > 이 문서는 지시가 아니라 상태 기록이다. 다음에 무엇을 할지는 사용자가 정한다.
 
 ## 1. 한 줄 요약
 
-`CLAUDE.md`의 작업 사이클(Plan → Build → Review → Embed)을 **전부 마쳤다**. 앱은 브랜치에 푸시되어 있고, **main 병합(=GitHub Pages 공개)과 PR 생성은 아직 하지 않았다**(사용자가 요청하지 않음).
+`CLAUDE.md`의 작업 사이클(Plan → Build → Review → Embed)을 **전부 마쳤다**. 앱은 브랜치에 푸시되어 있고, 2026-10-08 main 으로 가는 **PR을 만들었다**. **main 병합(=GitHub Pages 공개)은 아직 하지 않았다**(사용자가 결정).
 
 ## 2. 저장소 상태
 
@@ -13,8 +13,7 @@
 |---|---|
 | 저장소 | `dongcyun-AgentMster50/my-blog` |
 | 작업 브랜치 | `claude/data-science-level2-app-7uduft` (원격과 동기화됨, 미커밋 변경 없음) |
-| main 대비 | 커밋 19개 앞섬, PR 없음 |
-| 마지막 커밋 | `블로그 메인에 데이터 사이언스 레벨2 학습앱 카드 추가` |
+| main 대비 | 커밋 21개 앞섬, PR 열림(병합 대기). main 쪽 새 커밋과 겹치는 파일 없음(`git merge-tree` 충돌 0) |
 | 블로그 본체 변경 | 루트 `index.html`에 앱 카드 1개 추가뿐. `css/`, `js/`, `posts/`, `vendor/`, `apps/2048/`, `.nojekyll` 무변경 |
 
 GitHub Pages는 main을 서비스하므로 **main에 병합되기 전까지 블로그에는 보이지 않는다**.
@@ -66,7 +65,7 @@ ID 규칙: 노드 `a-2-3`, 문제 `a-2-3-q07`, 실습 `a-2-3-p01`, 용어는 영
 | 검사 | 결과 |
 |---|---|
 | `validate.js` 전체 | ERRORS 0 / WARNINGS 113 (용어 문구 차이 110, 무시 가능 3) |
-| 실습 62개 Python 재실행 | 62/62 PASS |
+| 실습 62개 Python 재실행 | 62/62 PASS (pandas 3.0.6 컨테이너, pandas 2.2.3 사용자 PC 양쪽) |
 | 출력 예측 문제 실행 | 152/152 정답과 일치 (SQL 12개는 sqlite3) |
 | 브라우저 하네스 | 123/123 통과, 콘솔 에러 0, 외부 요청 0 |
 | `.ipynb` | `nbformat.validate` 통과 |
@@ -76,13 +75,9 @@ ID 규칙: 노드 `a-2-3`, 문제 `a-2-3-q07`, 실습 `a-2-3-p01`, 용어는 영
 
 ## 6. 남은 일 (우선순위순, 전부 사용자 결정 대기)
 
-1. **main 병합 또는 PR 생성.** 블로그에 공개하려면 필요하다. 사용자가 요청할 때만 한다.
-2. **pandas 2.x 환경 재검증.** 사용자의 데스크톱 Jupyter가 2.x일 가능성이 크다. 아래 명령을 사용자 PC에서 한 번 돌리도록 안내한다. 흔들릴 수 있는 후보는 sklearn 기반 실습(`a-3-4-p02`, `a-4-2-*`, `a-4-3-*`)이다.
-   ```
-   node apps/ds-level2/tools/extract_practice.js apps/ds-level2/data/*.js > p.json
-   python apps/ds-level2/tools/verify_practice.py p.json
-   ```
-3. **안전 후크 경로 수정 제안.** `.claude/settings.json`의 PreToolUse 후크가 상대경로(`python .claude/hooks/...`)라 셸 작업 디렉터리가 하위 폴더로 바뀌면 모든 Bash가 차단된다. `python "$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous-commands.py"`로 바꾸는 안을 사용자에게 제안만 했다. 안전장치 파일이므로 승인 없이 고치지 않는다.
+1. **PR 병합.** PR은 2026-10-08에 만들었다. 병합하면 GitHub Pages에 공개된다. 사용자가 요청할 때만 한다.
+2. ~~pandas 2.x 환경 재검증~~ — **실습은 완료(2026-10-08).** 사용자 PC(Windows)의 Anaconda(`C:/Users/YDC/anaconda3/python.exe`, pandas 2.2.3 / sklearn 1.6.1)에서 62/62 PASS. 이 PC의 기본 `python`(3.14)에는 pandas가 없으니 Anaconda 경로를 지정하고 `PYTHONUTF8=1`을 붙인다. 남은 것은 output 문제 152개의 2.x 재실행(전용 도구 없음).
+3. ~~안전 후크 경로 수정~~ — **main에서 이미 해결.** main의 `.claude/settings.json`은 후크를 절대경로로 부른다. 이 브랜치는 해당 커밋 이전에서 갈라졌으므로 병합하면 함께 맞춰진다.
 4. **개념·빈칸 문제 2차 표본 검사.** 출력·버그 문제 179개는 실행으로 전수 확인했지만, 개념·빈칸 문제 233개는 형식 검사와 표본만 거쳤다.
 5. **용어 문구 차이 110건 정리.** 동작 문제는 없다(먼저 등록된 파일의 정의가 표시됨). 의미가 다른 5건은 Review에서 이미 통일했다.
 6. **실기기 확인.** iOS Safari 노트북 다운로드, 홈 화면 추가, Android 숫자 키패드.

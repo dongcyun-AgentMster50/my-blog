@@ -11,7 +11,8 @@
 - 엔진: 하네스 123/123 통과, 콘솔 에러 0, 외부 요청 0, `file://` 동작, 노트북 4종 `nbformat.validate` 통과. 엔진 코드 수정 0건.
 - 콘텐츠: `validate.js` ERRORS 0, `verify_practice.py` 62/62 PASS, output 문제 152/152 실행 결과가 정답과 일치, bug 문제의 "오류가 난다" 전제 27/27 실제 재현(1건 numpy 버전 의존 → 수정). 표본 62문제 중 결함 3건(복수 정답 가능 1, 버전 의존 전제 1, 해설 서술 오류 1) 발견·수정. 용어 정의 충돌 118건 중 **의미가 다른 5개 id(8건)** 를 통일해 110건(문구 차이만)으로 줄임.
 - 실습 11개를 학습자처럼 풀어 전부 일치. 과제 문장 수정 필요 없음.
-- 못 한 것: pandas 2.x 환경 재검증(컨테이너에 3.0만 설치), iOS 실기기, 실제 Jupyter GUI 열기(스키마 검증으로 대체). 아래 "남은 리스크".
+- 추가 검증(2026-10-08): pandas 2.x 환경에서 실습 62/62 PASS. 아래 "남은 리스크" 1.
+- 못 한 것: iOS 실기기, 실제 Jupyter GUI 열기(스키마 검증으로 대체), output 문제의 pandas 2.x 재실행. 아래 "남은 리스크".
 
 ## A. 엔진 검증
 
@@ -87,7 +88,7 @@
 
 ## 남은 리스크 / 검증하지 못한 것
 
-1. **pandas 2.x 재검증 미실시** — 컨테이너에 pandas 3.0.6 만 있고 오프라인이라 2.x 를 설치하지 못했다. 코드를 정독한 범위에서 3.0 특유 동작(CoW, `str` dtype 표기, `observed` 기본값, `'ME'` 별칭)에 정답이 의존하는 문제·실습은 없고 빈도 별칭은 `'D'`, `'W'`, `'MS'`, `'W-MON'`, `to_period('M')` 만 쓴다. 다만 실습 62개 값은 사용자의 데스크톱 Jupyter(pandas 2.x)에서 `node tools/extract_practice.js > p.json && python tools/verify_practice.py p.json` 으로 한 번 돌려 보기를 권한다. 특히 sklearn 모델 기반(`a-3-4-p02` 0.98, `a-4-3-*`, `a-4-2-*`)은 버전에 따라 소수 셋째 자리가 흔들릴 수 있다(앱 설정 화면의 "미검증 실습" 표시는 현재 0).
+1. **pandas 2.x 재검증 — 실습은 완료, output 문제는 미실시.** 2026-10-08 사용자 데스크톱(Windows, Anaconda Python 3.13.5 + pandas 2.2.3 / numpy 2.1.3 / scikit-learn 1.6.1 / scipy 1.15.3 / statsmodels 0.14.4)에서 `verify_practice.py` 를 돌려 **62/62 PASS**(FAIL·ERROR 0). 걱정했던 sklearn 기반 `a-3-4-p02`(0.98), `a-4-2-p01~p03`, `a-4-3-p01~p03` 도 값이 같다. output 문제 152개는 이 환경에서 다시 돌리지 않았다(전용 도구 없음). 아래는 최초 Review 때의 기록이다. 컨테이너에 pandas 3.0.6 만 있고 오프라인이라 2.x 를 설치하지 못했다. 코드를 정독한 범위에서 3.0 특유 동작(CoW, `str` dtype 표기, `observed` 기본값, `'ME'` 별칭)에 정답이 의존하는 문제·실습은 없고 빈도 별칭은 `'D'`, `'W'`, `'MS'`, `'W-MON'`, `to_period('M')` 만 쓴다. 다만 실습 62개 값은 사용자의 데스크톱 Jupyter(pandas 2.x)에서 `node tools/extract_practice.js > p.json && python tools/verify_practice.py p.json` 으로 한 번 돌려 보기를 권한다. 특히 sklearn 모델 기반(`a-3-4-p02` 0.98, `a-4-3-*`, `a-4-2-*`)은 버전에 따라 소수 셋째 자리가 흔들릴 수 있다(앱 설정 화면의 "미검증 실습" 표시는 현재 0).
 2. numpy 1.x 사용자에게는 `a-3-3-q06` 의 두 현상 중 "`'0'`이 들어간다"가, 2.x 사용자에게는 TypeError 가 보인다 — 프롬프트에 둘 다 적어 두었다.
 3. 용어 충돌 110건은 문구 차이로 남겨 두었다. 사전에서는 선등록 파일의 정의가 보이며, 관련 노드·관련 용어는 합집합으로 병합된다.
 4. 실기기 미검증: iOS Safari 의 Blob 다운로드(새 탭 열림)·홈 화면 추가, Android Chrome 숫자 키패드(`inputmode="decimal"` 은 마크업으로 확인). 실제 Jupyter GUI 로 노트북을 열지는 못했고 `nbformat.validate` 와 구조 검사로 대체했다.
