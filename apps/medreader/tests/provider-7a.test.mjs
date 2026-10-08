@@ -98,7 +98,7 @@ test('★ complete: 키가 URL 에 없다 — 그리고 헤더로는 실제로 �
   // (c) 8-2 표의 엔드포인트 그대로.
   assert.equal(
     url,
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'
   );
   assert.equal(init.method, 'POST');
 });
@@ -286,7 +286,7 @@ test('200 — 텍스트와 usage 를 돌려준다', async () => {
   assert.equal(r.text, '{"t":"ok"}');
   assert.deepEqual(r.usage, { input: 11, output: 7 });
   assert.equal(r.provider, 'gemini');
-  assert.equal(r.model, 'gemini-2.5-flash-lite');
+  assert.equal(r.model, 'gemini-3.5-flash-lite');   // [수정 2026-10-08] 기본 모델 변경
 });
 
 test('401 · 403 → AUTH', async () => {
@@ -666,7 +666,7 @@ test('listModels 실패 → staticModels 로 떨어지고 던지지 않는다', 
   const r = await listModels(KEY, { fetch: f });
   assert.equal(r.fromRemote, false);
   assert.equal(r.models.length > 0, true);
-  assert.equal(r.models[0].id, 'gemini-2.5-flash-lite');
+  assert.equal(r.models[0].id, 'gemini-3.5-flash-lite');   // [수정 2026-10-08] 기본 모델 변경
 });
 
 test('getAdapter 는 모르는 프로바이더에 ProviderError 를 낸다', () => {

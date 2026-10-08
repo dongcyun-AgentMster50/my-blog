@@ -8,7 +8,8 @@
      2. `provider.js` 가 `REGION` 을 **고치지 않고 그대로** 흘려보낸다
         (`verifyKey` → `{ok:false, code:'REGION', canSave:true}`, `complete` → `ProviderError.code`).
      3. 검증 결과 다섯 갈래가 **서로 다른 문구**이고, 지역 제한 문구·안내에 [키 설정]이 없다.
-     4. [시험 번역] — 고정 예문 2문장, `json:false`, 걸린 시간 ms, usage `kind:'translate'`.
+     4. [시험 번역] — 고정 예문 2문장, 걸린 시간 ms, usage `kind:'translate'`.
+        `[수정 2026-10-08]` `json:true` + 스키마 `{ar, ko}` — 새 동작은 `settings-7b-fix.test.mjs`.
      5. 번역 따라가기 기본값(`speak` · 원문 읽기 켜짐)과 **같은 그리기 함수**.
      6. 키가 결과·메시지 어디에도 나가지 않는다.
 
@@ -242,31 +243,44 @@ test('V7 걸린 시간은 주입한 시계로 잰다 · 코드 표시에 키가 
    4. [시험 번역] (12-7 1번)
    ══════════════════════════════════════════════════════ */
 
-test('T1 ★ 고정 예문은 지어낸 두 문장이고, JSON 강제를 끈다', () => {
+test('T1 ★ 고정 예문은 지어낸 **의학** 두 문장이고, 한 번에 아랍어·한국어를 JSON 으로 받는다 [수정 2026-10-08]', () => {
   assert.equal(TEST_SAMPLE.length, 2);
   for (const s of TEST_SAMPLE) assert.match(s, /^[A-Z][^.?!]*[.?!]$/, '한 문장이어야 한다: ' + s);
-  const req = buildTestRequest('ar');
-  assert.equal(req.json, false, 'JSON 파싱은 8a 몫 — 여기서는 문자열을 그대로 보인다');
-  assert.equal(req.user, TEST_SAMPLE.join(' '));
-  assert.match(req.system, /Arabic/);
-  // 본문에 json 강제가 실제로 빠졌는가 — 어댑터 본문으로 확인한다.
-  const body = gemini.bodyBuilder(req, 'gemini-2.5-flash-lite');
-  assert.equal(body.generationConfig.responseMimeType, undefined);
+  const all = TEST_SAMPLE.join(' ');
+  // 질환명·약물명·숫자/단위가 들어 있다 — 일상문으로는 의학 번역 품질을 볼 수 없었다.
+  assert.match(all, /arthritis/i);
+  assert.match(all, /methotrexate|adalimumab/i);
+  assert.match(all, /\d+\s*(mg\/L|minutes)/);
+  // 치료 지시·용량 권고로 읽히지 않는다.
+  assert.ok(!/\b(take|should|must|dose of|daily)\b/i.test(all), '지시·용량 권고처럼 읽힌다: ' + all);
+  // 이전 일상문은 사라졌다.
+  assert.ok(!/glass of water/i.test(all));
+
+  const req = buildTestRequest();
+  assert.equal(req.json, true, '[수정 2026-10-08] JSON 으로 두 언어를 받는다');
+  assert.deepEqual([...req.schema.required], ['ar', 'ko']);
+  assert.ok(req.user.includes('<<<DOC\n' + all + '\n>>>'), '예문은 DOC 구분자 안에 있다(10-1)');
+  // 본문에 json 강제와 스키마가 실제로 실렸는가 — 어댑터 본문으로 확인한다.
+  const body = gemini.bodyBuilder(req, 'gemini-3.5-flash-lite');
+  assert.equal(body.generationConfig.responseMimeType, 'application/json');
+  assert.deepEqual(Object.keys(body.generationConfig.responseSchema.properties), ['ar', 'ko']);
 });
 
 test('T2 ★ 성공 — 번역문·걸린 시간·결과 코드, usage 는 kind:translate (12-7)', async () => {
   let now = 50;
   const db = stubDb();
+  const pair = { ar: 'التهاب المفاصل الروماتويدي (rheumatoid arthritis)', ko: '류마티스 관절염(rheumatoid arthritis)' };
   const f = stubFetch(() => {
     now += 1234;
     return jsonRes(200, {
-      candidates: [{ content: { parts: [{ text: '  اشرب كوبًا من الماء قبل كل وجبة.  ' }] }, finishReason: 'STOP' }],
+      candidates: [{ content: { parts: [{ text: '  ' + JSON.stringify(pair) + '  ' }] }, finishReason: 'STOP' }],
       usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 15 }
     });
   });
-  const r = await runTestTranslation({ key: NEW_KEY, fetch: f, db, clock: () => now, targetLang: 'ar' });
+  const r = await runTestTranslation({ key: NEW_KEY, fetch: f, db, clock: () => now });
   assert.equal(r.outcome, OUTCOME.VALID);
-  assert.equal(r.text, 'اشرب كوبًا من الماء قبل كل وجبة.');
+  assert.equal(r.text, JSON.stringify(pair));
+  assert.deepEqual(r.pair, pair);
   assert.equal(r.ms, 1234);
   assert.equal(r.code, 'OK');
   assert.equal(f.calls.length, 1, '1회만 보낸다');

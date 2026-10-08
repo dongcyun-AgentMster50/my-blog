@@ -2497,3 +2497,110 @@ viewport 크기 분포:
 3. [검증] → [시험 번역] 순서로 누르고 **두 결과를 따로** 스크린샷(문구 + 메타 줄). 모델 목록은 통과하고 생성만 막히는 경우를 가른다.
 4. 셋 중 하나로 기록: 통과 / 지역 제한(아랍어 "لا يمكن استخدام واجهة برمجة التطبيقات (API) …", [키 설정] 유도 없음) / 그 밖(코드·HTTP 상태).
 5. 가능하면(원격 디버깅) `__medreader.settings.set('dev.debug', true)` 뒤 다시 눌러 **키가 지워진 서버 원문**을 받는다 — 8-2 의 `REGION` 판정을 실물에 맞추는 근거.
+
+---
+
+# Review — MedReader 7b-fix (실키 확인 결함 수정 + 번역 언어 선택) · 2026-10-08
+
+검증자: Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-7b-fix.md`. Build 보고(`medreader-build-7b-report.md` "실키 확인 반영")는 검증 대상으로만 읽고 전부 다시 쟀다. 커밋하지 않았다. 실제 키는 쓰지 않았다(가짜 키는 실행 중에 이어 붙여 만들었고 소스·저장소에 남기지 않았다 — 끝에 `localStorage`·`sessionStorage` 에 가짜 키 0 확인). 차단 훅에 막힌 명령 없음.
+
+## 7b-fix-1. 결론
+
+**조건부 통과.** Build 의 다섯 가지 수정은 모두 주장대로 동작한다. 다만 결함 두 개를 찾아 고쳤다(① 키 앞뒤 공백 때문에 `assertNoKeyInUrl` 이 목록 쪽 넘김에서 빗나감, ② 원격 목록에 `gemini-2.5-*` 가 남아 골라도 화면은 2.5·요청은 3.5 로 어긋남). 고친 뒤 전체 테스트 **659/659 통과**(Build 657 + Review 2). 남은 조건: `preview` 모델을 목록에 남길지 운영자 결정, 실키 재확인(아래 7).
+
+## 7b-fix-2. 항목별 결과와 확인 방법
+
+| 항목 | 결과 | 확인 방법 · 수치 |
+|---|---|---|
+| 기본 모델 `gemini-3.5-flash-lite`, 정적 목록 3개 | 통과 | `config.js` diff · 테스트 D1. 다른 상수 변경 없음(diff 가 `DEFAULT_MODEL`·`STATIC_MODELS` 만) |
+| 2.5 저장값 → 기본값 | 통과 | 브라우저: `ai.model='gemini-2.5-flash-lite'` 저장 → IndexedDB 행은 2.5 그대로, `settings.get` 은 `''`, 드롭다운 `gemini-3.5-flash-lite (default)`. [시험 번역] 요청 URL `…/models/gemini-3.5-flash-lite:generateContent` |
+| 2.5 를 **드롭다운에서 고르면** | **결함 → 고침** | 원격 목록 스텁에 `gemini-2.5-flash-lite` 를 넣자 드롭다운에 나왔고, 고르면 드롭다운은 2.5 인데 요청 URL 은 3.5(저장값이 "설정 안 됨"으로 읽힘). 고친 뒤 드롭다운에서 2.5 가 빠짐 |
+| 목록 엔드포인트 | 통과 | 실제 요청: `GET …/models?pageSize=1`(검증) → `GET …/models?pageSize=1000` → `…&pageToken=NEXT`. 키는 헤더 `x-goog-api-key` 로만 |
+| `pageToken` 인코딩 | 통과 | 노드 스텁 `nextPageToken:'tok/=+2'` → `pageToken=tok%2F%3D%2B2` |
+| 쪽마다 `assertNoKeyInUrl` | **결함 → 고침** | 코드상 쪽마다 걸림(provider.js `listModels` 루프). 그러나 `assertNoKeyInUrl` 이 **trim 안 된 키**를 받아, 키에 앞뒤 공백·줄바꿈이 있으면 `nextPageToken` 에 섞인 키가 둘째 요청 URL 로 **나갔다**(노드 스텁: 앞 공백, 뒤 줄바꿈, 앞 탭+뒤 공백 세 경우 모두 누출). 화면 경로는 입력을 `trim()` 해 넘기므로 지금 UI 로는 닿지 않지만 provider 가 마지막 방어선이라 고쳤다 |
+| 목록 필터 | 통과(의견 있음) | 지침 예시 스텁(2쪽) → 남은 것 `3.5-flash-lite · 3.1-flash-lite · 3.5-flash · 3.5-pro-preview · 3.5-flash-lite-preview-09-2026`. 빠진 것 `3.8-flash-tts · 3.1-flash-image · 3.5-live-translate-preview · 3.5-transcribe · text-embedding-004 · veo-3.1-generate-preview · lyria-3.5`(+ 고친 뒤 2.5 둘). 기본이 맨 앞 |
+| `preview` 처리 | 기록 · 의견 | **지금은 남긴다**(`preview` 를 거르는 규칙 없음). 노드 스텁으로 더 넣어 보니 `gemma-3-27b-it`·`gemini-robotics-er-1.5-preview`·`gemini-3.5-computer-use-preview`·`nano-banana-pro-preview`(이름에 `image` 가 없는 이미지 모델)·`gemini-flash-latest` 도 남는다. 의견은 6절 |
+| 판정 순서 | 통과 | REGION 두 줄 → R1 AUTH → `MODEL_UNAVAILABLE` → 나머지(소스 순서·E2). 노드 확인: 404+지역 문구 → REGION, 404+`API_KEY_INVALID` → AUTH, 400 `INVALID_ARGUMENT` → BAD_REQUEST, 404 본문 없음 → MODEL_UNAVAILABLE |
+| 다른 404 경로 | 통과(작은 기록) | [검증]이 404 → `verifyOutcome` 이 "확인 불가 · 키는 저장할 수 있습니다". 메타 줄은 `MODEL_UNAVAILABLE · HTTP 404`(문구와 코드 이름이 다르지만 진단엔 도움). 목록이 404 → 정적 목록(던지지 않음) |
+| 404 문구 | 통과 | 영어 "This model is not available. Choose another model.", 아랍어 "هذا النموذج غير متاح. اختر نموذجًا آخر." — 키 이야기 없음. `data-outcome="model"`, 그 뒤 목록 새로고침 2쪽 요청 |
+| 목록에 없는 저장 모델 | 통과 | `gemini-9-gone` 저장 → [시험 번역] 404 → 목록 새로고침 → 경고 한 줄(아랍어 "…تم التبديل إلى gemini-3.5-flash-lite.") · 저장값 `''` · 드롭다운 기본 |
+| [시험 번역] 두 블록 | 통과 | 호출 1회. 블록 `ar/rtl`, `ko/ltr`, 각 위에 자국어 이름. 요청 `generationConfig` = `responseMimeType application/json` + `responseSchema {ar,ko}` required, `maxOutputTokens 2048`, `temperature 0.2`. 메타 "2 ms · gemini-3.5-flash-lite · OK / Input tokens 412 · output tokens 138" |
+| JSON 실패 | 통과 | 잘린 JSON(`MAX_TOKENS`) → 원문 한 블록 `dir=auto`, 메타에 `· MAX_TOKENS`. 코드펜스 JSON → 원문 그대로 한 블록(8a jsonrepair 몫). 배열 JSON·`ko` 빠진 JSON → 원문 한 블록. 화면 깨짐 없음 |
+| `<img onerror>` | 통과 | 두 블록 안·원문 블록 안 모두 문자 그대로 보임. 출력 안 `img/script/b` 요소 0, 스텁이 심은 전역 플래그 0 |
+| 번역 언어 선택 | 통과 | [العربية]·[한국어] `aria-pressed`, 각 버튼 `lang`·`dir` 이 그 언어. 한국어로 → `ai.translationLang='ko'`(IndexedDB 행 확인), "Translation voice: not available → available"(이 PC 는 ko 음성만). 새로고침 뒤 `ko=true` 유지 |
+| 속도 팝오버와 어긋남 | 해당 없음 | 팝오버의 번역 줄(`renderReadalongRow`)은 모드·원문 낭독 스위치만 그리고 **번역 언어를 표시하지 않는다** — 어긋날 값이 없다 |
+| 지시문 한 곳 | 통과 | `TEST_PROMPT` 한 상수(COMMON·TASK·LANG_RULES·SCHEMA), 주석에 8a `prompts.js` 이전 명시. 예문은 지어낸 류마티스 관절염 두 문장(지시·용량 권고 없음) |
+
+## 7b-fix-3. 키 누출 검사 (기계 검사 — `includes`)
+
+가짜 키를 입력칸에 넣고 각 갈래를 일으킨 뒤 **요청 URL·요청 본문·`document.documentElement.outerHTML`(aria 속성 포함)** 을 검사했다.
+
+| 갈래 | URL | 본문 | DOM |
+|---|---|---|---|
+| 검증 404 / 무효(400 `API_KEY_INVALID`) / 지역(400 `FAILED_PRECONDITION`) / 429 | 0 | 0 | 0 |
+| 시험 번역 404(+목록 2쪽) / 500(오류 메시지에 키 포함) / 지역(403) | 0 | 0 | 0 |
+| 모델 칸에 키가 저장된 경우(T5 경로) | 요청 자체가 나가지 않음(`[KEY] · BAD_REQUEST`) | — | 0 |
+| 목록 2쪽(`pageToken`) | 0 | — | 0 |
+| 노드: `nextPageToken` = 키, 키 그대로 | 둘째 요청 안 나감 | — | — |
+| 노드: `nextPageToken` = 키, 키에 앞뒤 공백 | **고치기 전 누출 → 고친 뒤 0** | — | — |
+
+콘솔: 모든 흐름에서 메시지 0. 소스·테스트에 실제 형식의 키 덩어리 없음(grep `AIza`·`AQ.Ab` — 주석·패턴뿐, 테스트 키는 문자열을 이어 붙여 만든다).
+
+## 7b-fix-4. 화면 실측
+
+미리보기 `preview_start blog`, 바뀐 파일은 `fetch(…,{cache:'reload'})` 후 쿼리를 바꿔 이동. [시험 번역] 두 블록이 펼쳐진 상태에서 쟀다. 미리보기 창 배율 때문에 폭이 361 로 잡힌 경우가 있다(그때도 `scrollWidth == clientWidth`).
+
+| 뷰포트 · UI | `scrollWidth`/`clientWidth` | 화면 밖 요소 | [검증] | [시험 번역] | [العربية] | [한국어] | 모델 칸 | 번역 블록 폭 |
+|---|---|---|---|---|---|---|---|---|
+| 360×800 영어 | 360/360 | 0 | 294×48 | 294×48 | 141×48 | 145×48 | 294×48 | 241 · 241 |
+| 360×740 영어 | 361/361 | 0 | 295×48 | 295×48 | 142×48 | 145×48 | 295×48 | 243 · 243 |
+| 360×740 아랍어(`dir=rtl`) | 361/361 | 0 | 295×48 | 295×48 | 142×48 | 145×48 | 295×48 | 243 · 243 |
+| 360×800 아랍어(404·경고 줄 표시) | 361/361 | 0 | 295×48 | 295×48 | 142×48 | 145×48 | 295×48 | — |
+
+- 48px 미만으로 잡힌 것은 체크박스 `#aiRemember`·`#aiOnDevice`(24×24)뿐 — `label[for]` 높이 48, 줄 294×64 라 누를 자리는 48 이상. 7b 부터 있던 구조(이번 변경 아님).
+- 아랍어 UI 에서 언어 버튼이 거울 배치(العربية 오른쪽), 한국어 블록만 `ltr`. 콘솔 0. 끝나고 뷰포트 desktop 으로 되돌림, 미리보기 설정값·가짜 키 지움.
+
+## 7b-fix-5. 변이 테스트 (원본은 스크래치패드에 복사, 복사본으로 되돌리고 md5 일치 확인)
+
+| 변이 | 출처 | 빨개진 테스트 |
+|---|---|---|
+| M1 `MODEL_UNAVAILABLE` 판정 삭제 | Build 재현 | 3 (E1·E2·E3) |
+| M2a 목록 `MODELS_PAGE_SIZE = 1` | Build 재현 | 2 (L1·L2) |
+| M3 2.5 무효화 삭제 | Build 재현 | 1 (D2) |
+| M5 불필요 계열 필터 삭제 | Build 재현 | 1 (L3) |
+| N1 목록 쪽 넘김에서 `assertNoKeyInUrl` 빼기 | Review 새로 | 1 (L5) |
+| N2 `parseTestPair` 의 `try` 제거 | Review 새로 | 1 (J2) |
+| N3 결과 블록 `textContent` → `innerHTML` | Review 새로 | 1 (C5 — 소스 검사) |
+| N4 쪽 수 상한 제거 | Review 새로 | 테스트 파일 실패(L4 무한 쪽) |
+| N5 같은 토큰 반복 멈춤 제거 | Review 새로 | 1 (L4) |
+| N6 번역 언어 normalize 무력화 | Review 새로 | 1 (G1) |
+| N7 MODEL 문구를 "확인 불가" 키로 | Review 새로 | 1 (E3) |
+| R-a 고친 `assertNoKeyInUrl` 을 수정 전으로 | Review 수정 검증 | 1 (R1) |
+| R-b `usableModels` 필터 제거 | Review 수정 검증 | 1 (R2) |
+
+모든 변이에서 빨개지는 테스트가 있었다. 되돌린 뒤 659 통과.
+
+## 7b-fix-6. 고친 것 / 기록만 한 것
+
+### 고친 것
+1. **`js/ai/provider.js` `assertNoKeyInUrl`** — 비교할 키를 `trim()` 한다. 틀렸던 점: `listModels`·`verifyKey` 는 헤더에 `trim()` 한 키를 싣고 `assertNoKeyInUrl` 에는 원문 키를 넘겨, 키에 앞뒤 공백이 있으면 `indexOf` 가 빗나갔다. 목록 쪽 넘김은 서버가 준 `pageToken` 을 URL 에 싣는 **처음 경로**라 이 빈틈이 실제 누출로 이어질 수 있었다. 테스트 R1.
+2. **`js/ui/settings.js` `usableModels`(신설)·`refreshModels`** — 원격 목록에서 `settings.isRetired('ai.model', id)`(지금 `gemini-2.5-*`)를 뺀다. 틀렸던 점: 목록에 2.5 가 있으면 드롭다운에 나오고, 고르면 저장은 되지만 읽을 때 "설정 안 됨"이라 화면(2.5)과 요청(3.5)이 어긋났다. 걸러서 비면 원격 목록을 쓰지 않는다(정적 목록 유지). 테스트 R2.
+3. `tests/settings-7b-fix.test.mjs` 끝에 R1·R2 추가(가짜 키는 기존의 쪼갠 상수 재사용).
+
+### 기록만 (범위 밖이거나 결정이 필요한 것)
+- **`preview` 모델 처리** — 지침에 없음. 지금은 남는다. 의견: 드롭다운은 **안정판만**(예: `gemini-<버전>-flash-lite` · `-flash` · `-pro`; `preview`·`exp`·`latest`·`gemma`·`robotics`·`computer-use`·`nano-banana` 제외) 보이는 **허용 목록** 방식이 낫다고 본다. 이유 — preview 는 짧은 예고로 내려가 다시 404 를 부르고, 한도도 다르며, Nour 는 이름만 보고 고를 수 없다. 지금 거부 목록(`UNFIT_FAMILY`)은 `nano-banana-pro-preview` 같은 새 이름을 놓친다. 다만 `MODEL_UNAVAILABLE` 이 이제 안내·새로고침을 하므로 급하지 않다 — 운영자 결정.
+- `errorParser` 에서 `gs === 'NOT_FOUND'` 가 상태 코드보다 먼저라 `429/403/5xx + NOT_FOUND` 같은 (현실에 드문) 조합도 `MODEL_UNAVAILABLE` 이 된다. 실물 응답에서 보이면 다시 본다.
+- [검증] 404 의 메타 줄은 `MODEL_UNAVAILABLE · HTTP 404`, 문구는 "확인 불가". 해롭지 않음.
+- 모델 교체 경고(아랍어)에서 LTR 모델 이름이 문장 끝에 와 마침표 위치가 어색할 수 있다(`bdi` 없음). 작은 표시 문제.
+- 코드펜스로 감싼 JSON 은 원문 한 블록으로 보인다 — 8a jsonrepair 몫.
+- `tests/provider-7a.test.mjs` 기대값 3곳은 Build 가 범위 밖으로 알리고 고친 것(기본 모델 변경의 직접 결과) — 확인함, 다른 단언 변화 없음.
+- REGION 두 줄·R1 AUTH 판정·`spec.md` 는 손대지 않았다.
+
+## 7b-fix-7. 운영자 재확인 절차 (배포본, 실제 키)
+
+1. 배포 뒤 설정 AI 탭을 **캐시 우회 새로고침**. 모델 칸 `gemini-3.5-flash-lite (기본)` 확인(예전 2.5 저장값은 자동 무시).
+2. [검증] → "키가 유효합니다". 이어서 모델 드롭다운이 **여러 개**인지, `tts`·`image`·`embedding`·**`gemini-2.5-*`** 가 없는지 본다. **`preview` 가 들어간 이름이 몇 개인지 적어 둔다**(목록 정책 결정의 근거).
+3. [시험 번역] → 결과 줄 **ms · 모델 · 코드 · 입력/출력 토큰** 기록. 404 면 "이 모델은 쓸 수 없습니다"가 떠야 하고, 드롭다운에서 `gemini-3.1-flash-lite` 로 바꿔 다시.
+4. 한국어 블록으로 품질 판단 — 질환명·약물명(methotrexate·adalimumab)·숫자/단위(30분, 10 mg/L) 보존, 의학 용어 뒤 영어 괄호, 원문에 없는 내용 없음. 아랍어 블록은 같은 자리의 괄호 영어·숫자·약물명만 견주고, 가능하면 Nour 에게 "الفصحى 로 자연스러운가" 확인.
+5. 블록이 하나뿐이고 `{` 나 코드펜스로 시작하면 JSON 파싱 실패 — 원문과 결과 줄(특히 `MAX_TOKENS`)을 기록. 400 `INVALID_ARGUMENT` 면 `responseSchema` 대문자 타입 `[가정]` 부터 의심.
+6. "번역 언어"를 한국어/아랍어로 바꿔 "번역문 음성: 있음/없음"이 바뀌는지, 새로고침 뒤 선택이 유지되는지 본다.

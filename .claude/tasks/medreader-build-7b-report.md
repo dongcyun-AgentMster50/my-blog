@@ -134,3 +134,64 @@ Review 가 고친 `js/i18n/ar.js` 문구와 테스트 C8·V8 은 건드리지 �
 - 콘솔 메시지 0. 가로 스크롤 없음(360).
 
 바꾼 파일(이번 절): `js/ai/adapters/gemini.js`(지시된 한 곳), `tests/settings-7b.test.mjs`(K1~K5 추가), `tests/provider-7a.test.mjs`(기대 코드 1줄 — 위에 알림), `index.html`(팝오버 아래 줄 묶음), `css/screens.css`, `css/reader.css`(두 줄), `js/main.js`.
+
+---
+
+## 실키 확인 반영(2026-10-08)
+
+지침: `.claude/tasks/medreader-build-7b-fix.md`. 계기 — 운영자가 배포본에서 실제 키로 [검증] 200(CORS 직접 호출 확인), [시험 번역] **404 → "확인 불가 · 키는 저장할 수 있습니다"**. 원인은 `gemini-2.5-flash-lite` 지원 종료(새 키 404). 커밋하지 않았다. 실제 키는 어디에도 넣지 않았다.
+
+### 바꾼 파일
+| 파일 | 한 줄 |
+|---|---|
+| `js/config.js` | `DEFAULT_MODEL.gemini` → `gemini-3.5-flash-lite`, `STATIC_MODELS` → `[3.5-flash-lite, 3.1-flash-lite, 3.5-flash]`. 다른 상수는 손대지 않음 |
+| `js/settings.js` | `RETIRED_VALUES`·`isRetired` — 저장된 `ai.model` 이 `gemini-2.5-` 로 시작하면 `readValue` 가 기본값(`''`)으로 읽음. 저장 행은 지우지 않음 |
+| `js/ai/adapters/gemini.js` | `errorParser` 에 `MODEL_UNAVAILABLE`(REGION 두 줄·R1 AUTH **아래**, 나머지 위), 목록 전용 `modelsEndpoint(pageToken)`(`pageSize=1000`), `modelsParser` 필터·기본 모델 맨 앞·`nextPageToken` |
+| `js/ai/provider.js` | `CODES.MODEL_UNAVAILABLE`, `listModels` 가 목록 엔드포인트로 여러 쪽을 따라감(최대 10쪽, 같은 토큰 반복 시 멈춤, 쪽마다 `assertNoKeyInUrl`), 중복 제거·기본 모델 맨 앞 |
+| `js/ui/settings.js` | 번역 언어 선택(ar/ko), [시험 번역] 한 번 호출로 아랍어·한국어 두 블록, 지시문 상수 `TEST_PROMPT`, 새 예문, 결과 줄(ms·모델·코드·토큰), 404 갈래·모델 목록 새로고침·모델 교체 경고 |
+| `js/i18n/{ar,en,fr,ko}.js` | 새 키 4개(`settings.ai.test.modelUnavailable`·`.meta`·`.tokens`, `settings.ai.model.replaced`), `settings.readalong.target` 은 `{lang}` 없는 라벨로. 네 파일 키 집합 동일 |
+| `css/screens.css` | 언어 선택 줄, 두 블록 결과, `data-outcome="model"` 테두리, 결과 줄 `pre-line`, 한국어 블록 `word-break: keep-all`. 논리 속성만 |
+| `tests/settings-7b-fix.test.mjs` | **새 파일** 19개 |
+| `tests/settings-7b.test.mjs` | T1·T2 를 새 방식(JSON 두 언어·의학 예문)으로 |
+| `tests/provider-7a.test.mjs` | **범위 밖 — 알린다**: 기본 모델 문자열을 단언한 3곳만 `gemini-3.5-flash-lite` 로(기본 모델 변경의 직접 결과). 다른 단언은 그대로 |
+
+### 고친 것 1~5 결과
+1. **기본 모델** — 통과. 브라우저에서 `ai.model = 'gemini-2.5-flash-lite'` 를 저장해 두고 열었더니 `settings.get('ai.model')` 이 `''`, 드롭다운은 `gemini-3.5-flash-lite (기본)` 선택. [시험 번역] 요청 URL 도 `/models/gemini-3.5-flash-lite:generateContent`.
+2. **모델 목록 1개 결함** — 통과. 목록은 `GET /models?pageSize=1000`(+ `&pageToken=…`), 검증은 그대로 `?pageSize=1`. 브라우저 스텁(2쪽, tts·embedding·imagen 섞음) → 드롭다운 `3.5-flash-lite · 3.5-flash · 3.1-flash-lite`(기본 맨 앞, 불필요 계열 0). `supportedGenerationMethods` 가 없는 항목도 뺀다. 저장 모델이 목록에 없으면(`gemini-9-gone`) 기본 모델로 바꾸고 모델 칸 아래 경고 한 줄 "저장된 모델을 이 키로 쓸 수 없어 gemini-3.5-flash-lite(으)로 바꿨습니다." — 기본 모델로 바꿀 때는 `''`(설정 안 됨)로 저장한다. 기본 모델도 목록에 없으면 목록의 첫 모델로(지침이 이 경우를 정하지 않아 내가 정함).
+3. **404 안내** — 통과. 404·`NOT_FOUND` → `MODEL_UNAVAILABLE` → "이 모델은 쓸 수 없습니다. 다른 모델을 고르세요."(네 언어, "키" 이야기 없음 — 테스트로 고정) + 모델 목록 새로고침. 결과 줄 `… · gemini-3.5-flash-lite · MODEL_UNAVAILABLE · HTTP 404`. REGION 두 줄·R1 AUTH 판정은 **글자 하나 바꾸지 않았다**(E2 가 원문 문자열과 순서를 고정). 기존 BAD_REQUEST 줄에서 이제 닿지 않는 `404`·`NOT_FOUND` 조건만 뺐다(400 `INVALID_ARGUMENT` → BAD_REQUEST 는 그대로). [검증]에서 404 가 나면 모델 탓이 아니므로 "확인 불가"로 둔다.
+4. **번역 언어 선택** — 통과. 설정 AI 탭 "번역 언어" 아래 [العربية]·[한국어] 버튼(48px, `aria-pressed`, `data-action="target-lang"` — 화면의 기존 위임 하나). 값 `ai.translationLang`. 블록 `lang`·`dir` 은 `translationBlockAttrs(lang)` → `dirOf` 에서 유도(`ko` → `ltr`). 한국어로 바꾸자 "번역문 음성: 없음 → 있음"(이 PC 에는 ko-KR 음성만 있음) — 선택한 언어로 판정.
+5. **[시험 번역] 아랍어·한국어 나란히** — 통과. 호출 1회, `responseMimeType: application/json` + `responseSchema {ar: STRING, ko: STRING}`(required). 성공 → 두 블록(아랍어 `dir=rtl lang=ar`, 한국어 `dir=ltr lang=ko`, 각 블록 위에 자국어 이름). JSON 이 아니면 응답 문자열을 그대로 한 블록(`dir=auto`). 결과 줄 `845ms · gemini-3.5-flash-lite · OK` + `입력 토큰 412 · 출력 토큰 138`(응답에 있을 때만), `finishReason` 이 `STOP` 이 아니면 코드 옆에 붙임(잘림 진단). 예문은 지어낸 류마티스 관절염 두 문장(질환명·methotrexate/adalimumab·30 minutes·10 mg/L, 지시·용량 권고 없음). 지시문은 `TEST_PROMPT` 한 상수(10-1 공통 블록 + 아랍어: 현대 표준 아랍어(الفصحى)·표준 의학 용어·첫 등장 영어 원어 괄호·약물명/숫자/단위 그대로, 한국어: 같은 원칙), 주석에 "8a `prompts.js` 로 옮겨 갈 것".
+
+### 테스트
+- `node --test "apps/medreader/tests/*.test.mjs"`: **638 → 657 전부 통과**(새 파일 19개, 7b T1·T2 고침, 7a 3곳 기대값 갱신).
+- **변이 테스트**(각각 적용 → 전체 실행 → 원복, 원복 뒤 657 통과 재확인):
+
+| 변이 | 빨개진 테스트 |
+|---|---|
+| M1 `MODEL_UNAVAILABLE` 판정 삭제 | 3 (E1·E2·E3) |
+| M2a 목록 엔드포인트를 `pageSize=1` 로 | 2 (L1·L2) |
+| M2b `listModels` 가 `verifyEndpoint()` 재사용(7b 원래 결함) | 2 (L1·L5) |
+| M3 2.5 무효화 삭제 | 1 (D2) |
+| M4 `MODEL_UNAVAILABLE` 을 REGION 위로 | 1 (E2) |
+| M5 불필요 계열 필터 삭제 | 1 (L3) |
+| M6 번역 블록 `dir` 을 `rtl` 로 박기 | 1 (G1) |
+
+### 브라우저(`preview_start blog`, 고친 파일 `cache:'reload'` 후 쿼리 바꿔 이동, fetch 스텁·가짜 키)
+- 404 → 새 문구·`data-outcome="model"`·목록 새로고침 2쪽 요청(URL 에 키 0). 여러 모델 목록 → 드롭다운. [시험 번역] → 두 블록. JSON 실패 → 원문 한 블록.
+- 360×800: `scrollWidth == clientWidth`(가로 스크롤 0). 아랍어 UI(`dir=rtl`)에서 결과·언어 버튼 거울 배치, 한국어 블록만 `ltr`. 콘솔 오류 0.
+- 확인 뒤 미리보기의 설정값·가짜 키는 지웠다.
+
+### spec 과 다르게 한 것·판단한 것
+- **9-3 "7b 는 번역 언어를 보여 주기만"** → 운영자 결정으로 선택. spec 수정은 오케스트레이터 몫이라 손대지 않았다.
+- 10-1 규칙 4 의 "notes 필드" 문장만 뺐다 — 지침 스키마가 `{ar, ko}` 뿐이다.
+- `maxOutputTokens: 2048`, `temperature: 0.2`(10-2). 상한을 넉넉히 둔 이유: 두 언어 + 사고 토큰을 상한에서 함께 쓰는 모델이면 JSON 이 잘린다. `[가정]` — 3.5 계열의 사고 토큰 동작은 실키로 확인 필요.
+- `responseSchema` 의 타입은 대문자(`OBJECT`·`STRING`) — Gemini REST 형식 `[가정]`. 실키에서 400 `INVALID_ARGUMENT` 가 나면 이것부터 의심.
+- 셸 메모: Bash heredoc 안의 `\\` 가 한 번 풀려 테스트 두 줄이 깨졌던 것을 바로 고쳤다. 차단 훅에 막힌 명령은 없었다.
+
+### 운영자가 다시 할 확인(배포본, 한국 PC → Nour 기기)
+1. 배포 후 설정 AI 탭을 **캐시 우회 새로고침**으로 연다. 모델 칸이 `gemini-3.5-flash-lite (기본)` 인지 본다(예전 2.5 저장값은 자동으로 무시된다).
+2. [검증] → "키가 유효합니다" · ms. 그 뒤 **모델 드롭다운이 여러 개**로 늘었는지, tts·image·embedding 이 없는지 본다. 모델 칸 아래 "…바꿨습니다" 줄이 떴다면 그 문장을 기록한다.
+3. [시험 번역] → 결과 줄의 **ms · 모델 · 코드 · 입력/출력 토큰**을 기록한다. 404 면 "이 모델은 쓸 수 없습니다"가 떠야 한다(그때 드롭다운에서 `gemini-3.1-flash-lite` 로 바꿔 다시).
+4. **한국어 블록으로 품질을 판단**한다 — 질환명·약물명(methotrexate·adalimumab)·숫자/단위(30분, 10 mg/L)가 그대로인지, 의학 용어 뒤 영어 원어 괄호가 붙는지, 원문에 없는 말이 더해지지 않았는지. 아랍어 블록은 같은 자리에 괄호 영어·숫자·약물명이 있는지만 견주고, 가능하면 Nour 에게 "الفصحى 로 자연스러운가" 한 마디를 받는다.
+5. 블록이 하나뿐이고 `{` 로 시작하는 글이 보이면 JSON 파싱 실패다 — 그 원문과 결과 줄(특히 `MAX_TOKENS` 표시)을 기록해 넘긴다.
+6. "번역 언어"를 한국어/아랍어로 바꿔 "번역문 음성: 있음/없음"이 언어에 따라 바뀌는지 본다.

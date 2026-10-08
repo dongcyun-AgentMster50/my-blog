@@ -419,13 +419,16 @@ export const AI = Object.freeze({
   /* 9-3 `ai.provider` 기본값과 같아야 한다. */
   DEFAULT_PROVIDER: 'gemini',
 
-  /* 8-4 `[가정]` 가장 저렴·경량 Flash 계열. 설정에서 바꾼다.
-     **무료 티어 한도 수치는 코드 어디에도 적지 않는다**(8-4). */
-  DEFAULT_MODEL: Object.freeze({ gemini: 'gemini-2.5-flash-lite' }),
+  /* 8-4 가장 저렴·경량 Flash 계열. 설정에서 바꾼다.
+     **무료 티어 한도 수치는 코드 어디에도 적지 않는다**(8-4).
+     `[수정 2026-10-08]` 운영자 결정 — `gemini-3.5-flash-lite`("아랍어가 잘 나와야 한다").
+     `gemini-2.5-flash-lite` 는 지원 종료 단계라 **새 키에는 404** 였다(2026-10-05 실키 확인).
+     저장된 `gemini-2.5-*` 는 `settings.js` 가 "설정 안 됨"으로 읽는다. */
+  DEFAULT_MODEL: Object.freeze({ gemini: 'gemini-3.5-flash-lite' }),
 
-  /* 8-4 `listModels()` 가 실패했을 때의 폴백 목록. */
+  /* 8-4 `listModels()` 가 실패했을 때의 폴백 목록. 기본 모델이 맨 앞. */
   STATIC_MODELS: Object.freeze({
-    gemini: Object.freeze(['gemini-2.5-flash-lite', 'gemini-2.5-flash'])
+    gemini: Object.freeze(['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'])
   }),
 
   /* 8-5 요청 하나의 상한(입력 + maxOutputTokens). 넘으면 파이프라인(8단계)이 쪼갠다. */

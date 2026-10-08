@@ -504,10 +504,11 @@
 .ai-result p { margin-block: var(--sp-1); }
 .ai-result .ai-result-text { font-weight: 600; }
 .ai-result .ai-result-hint { white-space: pre-line; }
-.ai-result .ai-result-meta { font-variant-numeric: tabular-nums; }
+.ai-result .ai-result-meta { font-variant-numeric: tabular-nums; white-space: pre-line; }
 .ai-result[data-outcome="valid"] { border-inline-start-color: var(--c-ok); }
 .ai-result[data-outcome="limited"],
 .ai-result[data-outcome="region"],
+.ai-result[data-outcome="model"],
 .ai-result[data-outcome="unknown"],
 .ai-result[data-outcome="noKey"] { border-inline-start-color: var(--c-warn-text); }
 .ai-result[data-outcome="invalid"] { border-inline-start-color: var(--c-danger); }
@@ -619,3 +620,37 @@
   align-items: center;
   min-block-size: var(--tap);
 }
+
+/* ── [2026-10-08] 번역 언어 선택 — `#aiTargetLang` 안에 화면 코드가 버튼을 만든다 ──
+   `typeset-choices` 의 48px 버튼을 그대로 쓴다. 그릇이 `<p>` 라 묶음은 `span` 이다. */
+#aiTargetLang .readalong-label {
+  display: block;
+  margin-block-end: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+#aiTargetLang .target-langs button[lang="ar"] { font-family: var(--font-ar); }
+
+/* [시험 번역] 결과 — 아랍어·한국어 두 블록. 블록마다 `lang`·`dir` 은 언어에서 온다. */
+.ai-translation .ai-tr-block {
+  display: block;
+  padding-block: var(--sp-1);
+}
+
+.ai-translation .ai-tr-block + .ai-tr-block {
+  border-block-start: 1px solid var(--c-border);
+  margin-block-start: var(--sp-1);
+}
+
+.ai-translation .ai-tr-lang {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+.ai-translation .ai-tr-text { display: block; }
+/* 한국어는 어절 단위로 줄을 바꾼다(기본값은 음절 사이에서도 끊는다). */
+.ai-translation .ai-tr-text:lang(ko) { word-break: keep-all; }
+.ai-translation .ai-tr-text:lang(ar),
+.ai-translation .ai-tr-lang:lang(ar) { font-family: var(--font-ar); }

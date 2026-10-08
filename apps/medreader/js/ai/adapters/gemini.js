@@ -20,6 +20,16 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 /** URL 경로에 실릴 수 있는 모델 이름의 모양. 이보다 넓힐 이유가 없다. */
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
+/** 모델 목록 한 쪽의 크기. 한 번에 다 오도록 넉넉히(다음 쪽이 있으면 따라간다). */
+const MODELS_PAGE_SIZE = 1000;
+
+/**
+ * `[신설 2026-10-08]` 번역에 맞지 않는 계열 — 음성 합성·이미지·실시간·임베딩·받아쓰기·
+ * 영상·음악·질의응답 전용. `generateContent` 를 지원해도 고를 이유가 없다.
+ * 모델 이름의 **낱말 단위**로 본다(`-`·`.`·`_` 경계).
+ */
+const UNFIT_FAMILY = /(^|[-._])(tts|image|live|embedding|transcribe|veo|lyria|imagen|aqa)([-._]|$)/i;
+
 export const gemini = Object.freeze({
   id: 'gemini',
   label: 'Google Gemini',
@@ -55,6 +65,22 @@ export const gemini = Object.freeze({
     return BASE + '/models?pageSize=1';
   },
   verifyMethod: 'GET',
+
+  /**
+   * `[신설 2026-10-08]` 모델 **목록** 전용 엔드포인트. **키를 받지 않는다.**
+   *
+   * 7b 는 `listModels` 가 `verifyEndpoint()`(`pageSize=1`)를 재사용해 모델이 **1개만**
+   * 왔다. 검증은 가장 싼 요청이어야 하므로 `pageSize=1` 을 그대로 두고, 목록은 따로 간다.
+   * 다음 쪽이 있으면 `pageToken` 을 붙인다 — 서버가 준 값이라 `encodeURIComponent`
+   * 하고, 키가 섞였는지는 `provider.js` 의 `assertNoKeyInUrl` 이 다시 본다.
+   */
+  modelsEndpoint(pageToken) {
+    const tok = typeof pageToken === 'string' && pageToken !== ''
+      ? '&pageToken=' + encodeURIComponent(pageToken)
+      : '';
+    return BASE + '/models?pageSize=' + MODELS_PAGE_SIZE + tok;
+  },
+  modelsMethod: 'GET',
 
   /** 8-2 인증 헤더. 이 객체는 **로그에 찍히면 안 된다**. */
   headers(key) {
@@ -125,7 +151,7 @@ export const gemini = Object.freeze({
 
   /**
    * 8-2 — 상태 코드(+ 본문)를 코드로 바꾼다.
-   * `'RATE_LIMIT' | 'AUTH' | 'SERVER' | 'BAD_REQUEST' | 'SAFETY' | 'UNKNOWN'`
+   * `'REGION' | 'AUTH' | 'MODEL_UNAVAILABLE' | 'RATE_LIMIT' | 'SERVER' | 'BAD_REQUEST' | 'UNKNOWN'`
    *
    * 상태 코드를 먼저 보고, 애매할 때만 본문의 `error.status` 를 본다.
    * (Google API 는 400 에 `FAILED_PRECONDITION`·`INVALID_ARGUMENT` 등을 섞어 준다.)
@@ -155,16 +181,30 @@ export const gemini = Object.freeze({
     }
     if (m.indexOf('api key not valid') >= 0) return 'AUTH';
 
+    // `[신설 2026-10-08]` 모델을 쓸 수 없다 — 지원 종료·이름 오타·이 키에 열리지 않은 모델.
+    // 실키 확인(2026-10-05)에서 `gemini-2.5-flash-lite` 가 새 키에 **404** 였고, 이것이
+    // BAD_REQUEST("확인 불가 · 키는 저장할 수 있습니다")로 안내됐다. 키 문제가 아니다.
+    // REGION·R1 AUTH **아래**, 나머지 판정 **위**(지역·무효 키 표지가 섞이면 그쪽이 먼저다).
+    if (s === 404 || gs === 'NOT_FOUND') return 'MODEL_UNAVAILABLE';
+
     if (s === 429 || gs === 'RESOURCE_EXHAUSTED') return 'RATE_LIMIT';
     if (s === 401 || s === 403 || gs === 'UNAUTHENTICATED' || gs === 'PERMISSION_DENIED') return 'AUTH';
     if (s >= 500) return 'SERVER';
-    if (s === 400 || s === 404 || gs === 'INVALID_ARGUMENT' || gs === 'NOT_FOUND') return 'BAD_REQUEST';
+    if (s === 400 || gs === 'INVALID_ARGUMENT') return 'BAD_REQUEST';
     return 'UNKNOWN';
   },
 
   /**
-   * 8-4 모델 목록. `GET /v1beta/models` 응답에서 생성 가능한 것만 추린다.
+   * 8-4 모델 목록 **한 쪽**. `GET /v1beta/models` 응답에서 번역에 쓸 수 있는 것만 추린다.
    * 이름은 `models/gemini-…` 로 오므로 접두사를 뗀다.
+   *
+   * `[수정 2026-10-08]`
+   * - `supportedGenerationMethods` 에 `generateContent` 가 **있는 것만**(없거나 빠졌으면 뺀다).
+   * - 번역에 맞지 않는 계열(`UNFIT_FAMILY`)을 뺀다.
+   * - 기본 모델을 맨 앞에(여러 쪽을 합친 뒤 `provider.listModels` 가 한 번 더 정렬한다).
+   * - `nextPageToken` 을 함께 돌려준다 — 다음 쪽을 부를지는 `provider.js` 가 정한다.
+   *
+   * @returns {{id:string,label:string}[] & {nextPageToken?: string}}
    */
   modelsParser(json) {
     const arr = json && Array.isArray(json.models) ? json.models : [];
@@ -172,11 +212,16 @@ export const gemini = Object.freeze({
     for (let i = 0; i < arr.length; i++) {
       const m = arr[i];
       if (!m || typeof m.name !== 'string') continue;
-      const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : null;
-      if (methods && methods.indexOf('generateContent') < 0) continue;
+      const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+      if (methods.indexOf('generateContent') < 0) continue;
       const id = m.name.indexOf('models/') === 0 ? m.name.slice(7) : m.name;
+      if (!SAFE_MODEL.test(id) || UNFIT_FAMILY.test(id)) continue;
       out.push({ id: id, label: typeof m.displayName === 'string' && m.displayName ? m.displayName : id });
     }
+    const def = AI.DEFAULT_MODEL.gemini;
+    out.sort((a, b) => (a.id === def ? -1 : b.id === def ? 1 : 0));
+    const next = json && typeof json.nextPageToken === 'string' ? json.nextPageToken : '';
+    if (next) out.nextPageToken = next;
     return out;
   }
 });

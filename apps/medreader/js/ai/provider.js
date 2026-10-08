@@ -39,6 +39,10 @@ export const CODES = Object.freeze({
      `errorParser` 가 하고, 이 파일은 그 코드를 **고치지 않고 그대로 흘려보낸다**
      (`complete()` 는 `ProviderError.code`, `verifyKey()` 는 `{code:'REGION', canSave:true}`). */
   REGION: 'REGION',
+  /* `[신설 2026-10-08]` 이 모델을 쓸 수 없다(404·`NOT_FOUND` — 지원 종료·오타·이 키에 열리지
+     않은 모델). **키 문제가 아니고 "확인 불가"도 아니다** — UI 는 "다른 모델을 고르세요"로
+     안내하고 모델 목록을 새로 받는다. 판정은 어댑터, 이 파일은 그대로 흘려보낸다. */
+  MODEL_UNAVAILABLE: 'MODEL_UNAVAILABLE',
   SERVER: 'SERVER',
   BAD_REQUEST: 'BAD_REQUEST',
   SAFETY: 'SAFETY',
@@ -230,7 +234,10 @@ function shallowUsage(prev, day) {
  */
 function assertNoKeyInUrl(url, key) {
   const u = String(url == null ? '' : url);
-  const k = String(key == null ? '' : key);
+  // `[Review 7b-fix]` 앞뒤 공백을 떼고 본다. 호출자는 키를 `trim()` 해 헤더에 싣는데
+  // 여기에 공백 붙은 원문이 오면 `indexOf` 가 빗나가, 서버가 준 `pageToken` 에 키가
+  // 섞였을 때 그대로 나갔다(목록 쪽 넘김 — 스텁으로 재현).
+  const k = String(key == null ? '' : key).trim();
   // 너무 짧은 값은 본문과 우연히 겹친다. 키라고 부를 만한 길이만 본다.
   if (k.length < 8) return u;
   if (u.indexOf(k) >= 0 || u.indexOf(encodeURIComponent(k)) >= 0) {
@@ -564,8 +571,17 @@ export async function verifyKey(key, opts) {
   return { ok: false, code: code, status: status, canSave: true, message: message };
 }
 
+/** 모델 목록을 따라갈 최대 쪽 수. 서버가 `nextPageToken` 을 끝없이 주어도 멈춘다. */
+const MAX_MODEL_PAGES = 10;
+
 /**
  * 8-4 모델 목록. 실패하면 `staticModels` 로 떨어진다. **던지지 않는다.**
+ *
+ * `[수정 2026-10-08]` 7b 는 `verifyEndpoint()`(`pageSize=1`)를 재사용해 **모델이 1개만**
+ * 왔다. 이제 어댑터의 목록 전용 `modelsEndpoint(pageToken)` 을 쓰고, `nextPageToken`
+ * 이 있으면 따라간다(최대 `MAX_MODEL_PAGES` 쪽). 검증(`verifyKey`)은 그대로 `pageSize=1`.
+ * 쪽마다 `assertNoKeyInUrl` 을 건다 — `pageToken` 은 서버가 준 값이다.
+ * 합친 목록은 중복을 빼고 **기본 모델을 맨 앞에** 둔다.
  *
  * @returns {Promise<{models: {id:string,label:string}[], fromRemote: boolean}>}
  */
@@ -584,19 +600,40 @@ export async function listModels(key, opts) {
 
   const raw = typeof key === 'string' ? key.trim() : '';
   const doFetch = pickFetch(o);
-  if (raw === '' || !doFetch || typeof adapter.modelsParser !== 'function') return fallback();
+  if (raw === '' || !doFetch || typeof adapter.modelsParser !== 'function' ||
+      typeof adapter.modelsEndpoint !== 'function') return fallback();
 
   try {
-    const res = await doFetch(assertNoKeyInUrl(adapter.verifyEndpoint(), key), {
-      method: adapter.verifyMethod || 'GET',
-      headers: adapter.headers(raw),
-      signal: o.signal || undefined
-    });
-    const ok = !!(res && (res.ok === true || (res.ok === undefined && res.status >= 200 && res.status < 300)));
-    if (!ok) return fallback();
-    const json = await readJson(res);
-    const models = adapter.modelsParser(json);
-    return models && models.length ? { models: models, fromRemote: true } : fallback();
+    const seen = new Set();
+    const models = [];
+    let token = '';
+    for (let page = 0; page < MAX_MODEL_PAGES; page++) {
+      const res = await doFetch(assertNoKeyInUrl(adapter.modelsEndpoint(token), key), {
+        method: adapter.modelsMethod || 'GET',
+        headers: adapter.headers(raw),
+        signal: o.signal || undefined
+      });
+      const ok = !!(res && (res.ok === true || (res.ok === undefined && res.status >= 200 && res.status < 300)));
+      if (!ok) {
+        // 첫 쪽부터 실패하면 정적 목록. 중간 쪽이 실패하면 받은 데까지 쓴다.
+        if (models.length === 0) return fallback();
+        break;
+      }
+      const json = await readJson(res);
+      const part = adapter.modelsParser(json) || [];
+      for (let i = 0; i < part.length; i++) {
+        if (!part[i] || seen.has(part[i].id)) continue;
+        seen.add(part[i].id);
+        models.push(part[i]);
+      }
+      const next = part.nextPageToken || (json && typeof json.nextPageToken === 'string' ? json.nextPageToken : '');
+      if (!next || next === token) break;
+      token = next;
+    }
+    if (!models.length) return fallback();
+    const def = adapter.defaultModel;
+    models.sort((a, b) => (a.id === def ? -1 : b.id === def ? 1 : 0));
+    return { models: models, fromRemote: true };
   } catch (e) {
     return fallback();
   }

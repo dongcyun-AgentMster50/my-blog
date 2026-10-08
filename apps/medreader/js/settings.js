@@ -83,8 +83,27 @@ export const DEFAULTS = Object.freeze({
 export const KEYS = Object.freeze(Object.keys(DEFAULTS));
 
 /**
+ * `[신설 2026-10-08]` **낡은 저장값** — 이 모양이면 "설정되지 않은 것"으로 읽는다(기본값).
+ *
+ * `gemini-2.5-*` 는 지원 종료 단계라 새 키에는 404 가 난다(2026-10-05 실키 확인).
+ * 운영자 기기에는 7b 시절 기본값 `gemini-2.5-flash-lite` 가 이미 저장돼 있을 수 있고,
+ * 그대로 두면 [시험 번역]이 영원히 404 다. 저장된 행을 지우지는 않는다 — 읽을 때만
+ * 무시한다(사용자가 새 모델을 고르면 그 값이 덮어쓴다).
+ */
+export const RETIRED_VALUES = Object.freeze({
+  'ai.model': /^gemini-2\.5-/
+});
+
+/** 저장값이 낡은 모양인가. */
+export function isRetired(key, v) {
+  const re = RETIRED_VALUES[key];
+  return !!re && typeof v === 'string' && re.test(v);
+}
+
+/**
  * 저장된 값 맵에서 한 키를 읽는다. **순수 함수** — 테스트가 이것을 고정한다.
  * 저장값이 없거나(`undefined`) 맵에 키가 없으면 기본값으로 떨어진다.
+ * 낡은 저장값(`RETIRED_VALUES`)도 기본값으로 떨어진다.
  *
  * `null` 은 **유효한 저장값**이다(`ui.lang: null` 은 "아직 안 골랐다"를 뜻하고
  * `privacy.consentedAt: null` 도 마찬가지다). 그래서 `undefined` 만 비어 있음으로 본다.
@@ -96,7 +115,7 @@ export function readValue(map, key) {
   const has = map instanceof Map ? map.has(key) : (map && Object.prototype.hasOwnProperty.call(map, key));
   if (has) {
     const v = map instanceof Map ? map.get(key) : map[key];
-    if (v !== undefined) return v;
+    if (v !== undefined && !isRetired(key, v)) return v;
   }
   return defaultFor(key);
 }
