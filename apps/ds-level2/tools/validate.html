@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ds-level2 콘텐츠 검증</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif; margin: 1rem; background: #fcfcfd; color: #16181d; }
+    pre { font: 0.8rem/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; background: #f4f6f8; padding: 0.75rem; border-radius: 6px; overflow: auto; }
+    .ok { color: #1a7f37; font-weight: 700; } .bad { color: #c62828; font-weight: 700; }
+    button { font: inherit; padding: 0.4rem 0.9rem; }
+    @media (prefers-color-scheme: dark) { body { background: #121417; color: #e6e8ec; } pre { background: #191c21; } }
+  </style>
+</head>
+<body>
+  <h1>ds-level2 콘텐츠 검증</h1>
+  <p>data/*.js 를 <code>&lt;script&gt;</code> 로 로드한 뒤 <code>tools/validate.js</code> 의 검사를 돌린다(Node 와 같은 코드). 없는 파일은 건너뛴다.
+     백틱 검사는 파일 텍스트가 필요해 <code>fetch</code> 가 되는 http 에서만 수행된다(file:// 에서는 생략).</p>
+  <p id="status">로드 중…</p>
+  <pre id="out"></pre>
+
+  <script src="../js/registry.js"></script>
+  <script src="../js/curriculum.js"></script>
+  <script>
+    // 데이터 파일을 순서대로 로드. 각 파일 로드 전에 __currentFile 을 세팅해 레지스트리가 파일명을 알게 한다.
+    var FILES = ['a1-sql.js', 'a2-pandas-1.js', 'a2-pandas-2.js', 'a3-libs-1.js', 'a3-libs-2.js', 'a4-composite.js',
+      'b1-python.js', 'b2-pandas.js', 'b3-pattern.js', 'b4-regression.js', 'b5-hypothesis.js'];
+    var loaded = [], missing = [], broken = [];
+    window.addEventListener('error', function (e) { if (e.filename && /\/data\//.test(e.filename)) broken.push(e.filename.split('/').pop() + ': ' + e.message); }, true);
+    function loadNext(i) {
+      if (i >= FILES.length) return loadValidator();
+      var s = document.createElement('script');
+      DS2.__currentFile = FILES[i];
+      s.src = '../data/' + FILES[i];
+      s.onload = function () { loaded.push(FILES[i]); loadNext(i + 1); };
+      s.onerror = function () { missing.push(FILES[i]); loadNext(i + 1); };
+      document.body.appendChild(s);
+    }
+    function loadValidator() {
+      DS2.__currentFile = undefined;
+      var s = document.createElement('script');
+      s.src = 'validate.js';
+      s.onload = run;
+      document.body.appendChild(s);
+    }
+    function run() {
+      var files = loaded.map(function (n) { return { name: n }; });
+      // http 라면 텍스트도 받아 백틱 검사까지
+      var fetches = files.map(function (f) {
+        if (location.protocol === 'file:' || typeof fetch !== 'function') return Promise.resolve();
+        return fetch('../data/' + f.name).then(function (r) { return r.ok ? r.text() : null; }).then(function (t) { if (t) f.text = t; }).catch(function () {});
+      });
+      Promise.all(fetches).then(function () {
+        var result = DS2Validate.run(DS2, files, { all: true });
+        broken.forEach(function (b) { result.errors.unshift({ file: b.split(':')[0], id: '-', msg: '로드 실패: ' + b }); });
+        var txt = DS2Validate.format(result);
+        if (missing.length) txt = '없는 파일(건너뜀): ' + missing.join(', ') + '\n\n' + txt;
+        document.getElementById('out').textContent = txt;
+        var st = document.getElementById('status');
+        st.innerHTML = result.errors.length ? '<span class="bad">ERRORS ' + result.errors.length + '</span> · WARNINGS ' + result.warnings.length : '<span class="ok">ERRORS 0</span> · WARNINGS ' + result.warnings.length;
+      });
+    }
+    loadNext(0);
+  </script>
+</body>
+</html>
