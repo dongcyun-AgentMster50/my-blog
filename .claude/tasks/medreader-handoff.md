@@ -665,3 +665,12 @@ CMDT 의 `bboxDegenerate` 303건(9-27 미추적)과 같은 원인일 수 있다.
   캡처의 실제 아랍어로 브라우저 확인: 괄호 8개 모두 격리, "(C-reactive protein)" 한 줄 유지, 괄호 방향 정상. 긴 괄호("(chronic / autoimmune disease)")는 줄바꿈되지만 **읽는 순서가 맞다** — 한 줄 고정(`nowrap`)은 좁은 화면 가로 스크롤(16-F) 때문에 하지 않았다.
   테스트 670(`tests/bidi.test.mjs` B1~B6). 변이: 화면에서 bdi 격리 빼기 → 1 빨강, 괄호 묶음 규칙 빼기 → 2 빨강. (처음 sed 변이가 적용되지 않아 "0 빨강"이 나왔다 — **변이가 실제로 적용됐는지 grep 으로 확인하고 결과를 읽을 것.**)
   주의: 기존 순수성 검사(16-A)는 **주석까지** 훑는다 — 주석에 `document`·`window` 를 쓰면 걸린다.
+
+## 2026-10-09 — Nour 피드백 · 사용 가이드
+
+- **Nour: 아랍어 번역 품질 "좋다"**(운영자 전달). 지시문(`TEST_PROMPT` — 현대 표준 아랍어·첫 등장 영어 병기)은 그대로 8a `prompts.js` 로 옮긴다.
+- **Nour 용 사용 가이드(Artifact, 아랍어 기본·영어·한국어)**: https://claude.ai/artifact/WkrV9JoQZfWiD7o5yVosZB
+  바로 시작하기 · 지금 필요한 폰 확인(VPN 켬/끔 기록) · 결과 문구의 뜻 · 기능별 설명 · 곧 나올 기능 · 문제 해결. 앱의 실제 i18n 문구로 썼다.
+  **기능이 바뀌면 이 가이드도 고쳐야 한다**(스크래치패드의 `medreader-guide.html` 을 같은 경로로 다시 publish 하거나, 다른 세션이면 URL 로).
+- 가이드를 쓰며 확인한 사실: **줄 "길게 누르기"는 구현돼 있지 않다**(spec 12-3·16-G 에는 있다). 지금은 낭독 중 줄 탭 = 그 줄로 이동, 낭독 중이 아니면 탭은 아무 일도 안 한다(`reader.js` pointerup). 8c 탭 번역 때 정한다.
+  **한국어 UI 번역이 일부만 돼 있다** — `ko.js` 에 영어 값이 남은 키가 많다(Settings, Import a PDF, Library, Previous/Next …). spec 10단계 "fr·ko 번역 완성" 몫.
