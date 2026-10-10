@@ -93,6 +93,16 @@ export function joinPieces(lines) {
 }
 
 /**
+ * `[7c — spec 6-1]` 원문 언어의 기호 표. 언어가 없으면 en(지금까지와 같다),
+ * 표에 없는 언어(미지원 `und` 등)는 **빈 표** — 영어 낱말을 끼워 넣지 않는다.
+ */
+export function symbolsFor(lang) {
+  if (lang == null || lang === '') return TTS_SYMBOLS.en;
+  const k = String(lang);
+  return Object.prototype.hasOwnProperty.call(TTS_SYMBOLS, k) ? TTS_SYMBOLS[k] : {};
+}
+
+/**
  * 낭독용 정규화. **원서 텍스트를 바꾸지 않는다** — 사본만 바꾼다.
  *   1. URL·이메일 → "link"
  *   2. `TTS_SYMBOLS` 의 기호 → 낱말 (앞뒤에 공백을 둔다)
@@ -100,7 +110,7 @@ export function joinPieces(lines) {
  * 연속 대문자 약어(NSAIDs)는 **건드리지 않는다**(6-1).
  */
 export function normalizeSpeech(text, symbols) {
-  const table = symbols || TTS_SYMBOLS;
+  const table = symbols || TTS_SYMBOLS.en;
   let s = str(text).replace(URL_RE, 'link');
   const keys = Object.keys(table);
   for (let i = 0; i < keys.length; i++) {
@@ -140,6 +150,8 @@ export function splitLong(text, max) {
  *
  * @param {Array} paras  `reader.flowParas()` — `[{id, kind, lines:[{id,text,hyphen}]}]`
  * @param {'sentence'|'line'} unit
+ * @param {{lang?:string}} [opts] `[7c]` 원문 언어(`documents.lang`). 문장 분할 규칙과
+ *   기호 표(`TTS_SYMBOLS`)를 고른다. **없거나 'en' 이면 지금까지와 한 글자도 다르지 않다.**
  * @returns {Unit[]} 읽기 순서
  *
  * `'line'` 모드에서도 **하이픈으로 이어지는 줄들은 한 발화**다(6-1). 그래서
@@ -148,9 +160,11 @@ export function splitLong(text, max) {
  * 문장이 걸친 **모든 줄**을 `lineIds` 로 돌려준다(자동 스크롤·쪽 넘김이 쓴다).
  * 하이라이트가 칠할 자리는 `ranges` 가 따로 준다(10a — 줄이 아니라 글자 구간).
  */
-export function buildUnits(paras, unit) {
+export function buildUnits(paras, unit, opts) {
   const list = Array.isArray(paras) ? paras : [];
   const mode = unit === 'line' ? 'line' : 'sentence';
+  const lang = opts && typeof opts.lang === 'string' && opts.lang ? opts.lang : 'en';
+  const symbols = symbolsFor(lang);
   const out = [];
   // ★ 8a — 쪽 안의 문장 번호. 실제로 발화가 나온 문장만 번호를 받는다(빈 문장은 건너뛴다).
   const seq = { next: 0 };
@@ -159,7 +173,7 @@ export function buildUnits(paras, unit) {
     const para = list[p] || {};
     const lines = Array.isArray(para.lines) ? para.lines : [];
     if (!lines.length) continue;
-    const meta = { kind: para.kind ? String(para.kind) : 'body', seq: seq };
+    const meta = { kind: para.kind ? String(para.kind) : 'body', seq: seq, symbols: symbols };
 
     if (mode === 'line') {
       let group = [];
@@ -177,7 +191,7 @@ export function buildUnits(paras, unit) {
     }
 
     const joined = joinPieces(lines);
-    const sentences = splitSentences(joined.text);
+    const sentences = splitSentences(joined.text, { lang: lang });
     if (!sentences.length) { emit(out, joined, para.id, undefined, undefined, meta); continue; }
 
     // `splitSentences` 는 공백 하나로 정확히 되붙는다(그 함수의 계약). 그래서
@@ -244,13 +258,14 @@ export function localRange(sp, from, to) {
  *
  * @param {number} [from] `joined.spans` 와 같은 좌표계의 구간 시작(문장 모드)
  * @param {number} [to]   같은 구간 끝. 주지 않으면 **덩어리 전체**(줄 모드)다.
- * @param {{kind:string, seq:{next:number}}} [meta] ★ 8a — 문단 kind 와 쪽 안의 문장 번호 계수기
+ * @param {{kind:string, seq:{next:number}, symbols?:Object}} [meta] ★ 8a — 문단 kind 와 쪽 안의 문장 번호 계수기
+ *   (`[7c]` `symbols` = 원문 언어의 기호 표. 없으면 en 표)
  */
 function emit(out, joined, paraId, from, to, meta) {
   const ids = [];
   for (let i = 0; i < joined.spans.length; i++) ids.push(joined.spans[i].id);
 
-  const spoken = normalizeSpeech(joined.text);
+  const spoken = normalizeSpeech(joined.text, meta && meta.symbols);
   if (!spoken) return;
 
   // ★ 8a — `src` 는 정규화(기호 → 낱말)·300자 분할 **이전**의 문장 원문이다(7-8-2).

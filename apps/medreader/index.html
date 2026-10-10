@@ -132,8 +132,9 @@
   <!-- ════ 리더 — 리플로우 뷰 (12-3 · 12-4) ═══════════ -->
   <!--
     본문은 `#readerMount` 안에 `js/ui/reader.js` 가 그린다. 그 안의
-    `article.reflow` 는 **`dir="ltr" lang="en"` 고정**이다 — UI 가
-    아랍어여도 원서 본문은 LTR 이다(11-3). 줄은 전부
+    `article.reflow` 는 **`dir="ltr"` 고정**이다 — UI 가
+    아랍어여도 원서 본문은 LTR 이다(11-3). `lang` 은 문서의 원문 언어
+    (`documents.lang`, 7c)이고, 서재 [⋯]·자동 추정으로 바뀌면 새로고침 없이 따라간다. 줄은 전부
     `span.line[data-line-id]` 이고 5단계 하이라이트가 그것을 잡는다(6-5).
   -->
   <section class="screen" data-screen="reader" hidden>

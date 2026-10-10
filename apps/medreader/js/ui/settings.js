@@ -64,6 +64,7 @@ export const OUTCOME = Object.freeze({
   LIMITED: 'limited',    // 한도 (RATE_LIMIT — 키는 유효)
   REGION: 'region',      // 지역 제한 (REGION — 키 문제가 아니다)
   MODEL: 'model',        // 이 모델을 쓸 수 없다 (MODEL_UNAVAILABLE — 키 문제가 아니다) `[신설 2026-10-08]`
+  KEY_IN_URL: 'keyInUrl', // 모델 칸에 키가 들어 있어 보내지 않았다 (KEY_IN_URL — 네트워크 탓이 아니다) `[신설 2026-10-10]`
   UNKNOWN: 'unknown',    // 확인 불가 (네트워크·CORS·서버·그 밖)
   NO_KEY: 'noKey',       // 누르기 전에 걸린다 — 키가 없다
   ABORTED: 'aborted'     // 화면을 떠났다 — 아무 것도 보이지 않는다
@@ -139,6 +140,7 @@ export function errorOutcome(code) {
     case CODES.RATE_LIMIT: return OUTCOME.LIMITED;
     case CODES.REGION: return OUTCOME.REGION;
     case CODES.MODEL_UNAVAILABLE: return OUTCOME.MODEL;
+    case CODES.KEY_IN_URL: return OUTCOME.KEY_IN_URL;
     case CODES.NO_KEY: return OUTCOME.NO_KEY;
     case CODES.ABORTED: return OUTCOME.ABORTED;
     default: return OUTCOME.UNKNOWN;
@@ -170,6 +172,8 @@ export function outcomeKey(outcome, kind) {
     case OUTCOME.REGION: return 'settings.ai.verify.region';
     // ★ "키는 저장할 수 있습니다"를 붙이지 않는다 — 키 문제가 아니다.
     case OUTCOME.MODEL: return 'settings.ai.test.modelUnavailable';
+    // `[신설 2026-10-10]` "확인 불가·나중에 다시"가 아니다 — 요청을 보내지 않았고 설정을 고쳐야 한다.
+    case OUTCOME.KEY_IN_URL: return 'settings.ai.test.keyInModel';
     case OUTCOME.NO_KEY: return 'settings.ai.key.empty';
     case OUTCOME.ABORTED: return null;
     default: return 'settings.ai.verify.unknown';

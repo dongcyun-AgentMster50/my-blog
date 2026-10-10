@@ -20,10 +20,10 @@ import * as settings from '../settings.js';
 import { t, applyTranslations, formatNumber, onLangChange } from '../i18n/index.js';
 import { TTS } from '../config.js';
 import { createSpeaker, CODES } from '../tts/speaker.js';
-import { loadVoices, pickVoice, availability } from '../tts/voices.js';
+import { loadVoices, pickVoice, availability, utteranceLang } from '../tts/voices.js';
 import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
-  onLineTap, onPageRender
+  onLineTap, onPageRender, sourceLang
 } from './reader.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
 import { renderReadalongRow } from './settings.js';
@@ -160,8 +160,10 @@ export function initControls() {
     speaker.play(lineId);
   });
 
-  /* 쪽이 새로 그려지면 큐를 그 쪽 것으로 갈아 끼운다. */
-  onPageRender(() => { speaker.reload(); attachDebugHook(); });
+  /* 쪽이 새로 그려지면 큐를 그 쪽 것으로 갈아 끼운다.
+     `[7c]` 원문 언어가 바뀌었으면(서재 [⋯]·자동 추정 — 리더가 `medreader:doclang` 을 듣고
+     여기를 부른다) **음성을 먼저** 다시 고르고 큐를 간다. 순서가 바뀌면 새 큐가 옛 언어로 나뉜다. */
+  onPageRender(() => { syncSourceVoice(); speaker.reload(); attachDebugHook(); });
 
   /* ── 6-4 백그라운드 ────────────────────────────────
      hidden 이면 일시정지로 **상태를 분명히 하고**, 다시 보일 때
@@ -200,6 +202,8 @@ function attachDebugHook() {
     state: function () { return speaker.getState(); },
     index: function () { return { index: speaker.getIndex(), total: speaker.getTotal() }; },
     current: function () { return speaker.getCurrent(); },
+    // 7c — 원문 발화의 `utterance.lang`(16-C `[D]` "fr 문서면 fr-*").
+    docLang: function () { return speaker.getDocLang(); },
     voices: function () { return voices.map((v) => ({ lang: v.lang, name: v.name, local: v.localService })); }
   };
 }
@@ -230,20 +234,44 @@ async function restoreSettings() {
   await refreshVoices();
 }
 
+/** `[7c]` 음성 목록을 한 번이라도 읽었는가(1.5초 타임아웃으로 빈 목록이 와도 참). */
+let voicesLoaded = false;
+
 async function refreshVoices() {
   const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
   if (!synth) { notice('reader.tts.unsupported'); return; }
 
   voices = await loadVoices(synth, TTS.VOICES_TIMEOUT_MS);
-  const have = availability(voices);
+  voicesLoaded = true;
+  voicesLang = null;          // 목록이 새로 왔다 — 다시 고른다
+  syncSourceVoice();
+}
 
-  // 원서 언어는 en 고정이다(문서 언어 설정은 뒤 단계).
-  const v = pickVoice('en', voices, settings.get('tts.voice.en'));
-  if (v) speaker.setVoice('en', v);
-  speaker.setDocLang(v && v.lang ? String(v.lang).replace(/_/g, '-') : 'en-US');
+/** `[7c]` 지금 음성을 고른 원문 언어. 같으면 다시 고르지 않는다(쪽마다 불린다). */
+let voicesLang = null;
 
-  // 6-3 — 영어 음성이 없으면 설치 안내. 세션당 1회, 닫을 수 있다.
-  if (!have.en) notice('reader.tts.noVoice');
+/**
+ * `[7c]` 6-3 — 원문 음성은 **문서의 원문 언어**로 고른다(`pickVoice(doc.lang)`).
+ * `utterance.lang` 은 고른 음성의 `voice.lang`, 없으면 언어별 기본 지역(`utteranceLang`).
+ * 음성이 없으면 설치 안내 — 언어마다 세션당 1회, 문구에 그 언어의 자국어 이름.
+ */
+function syncSourceVoice() {
+  if (!speaker) return;
+  const lang = sourceLang();
+  if (lang === voicesLang) return;
+  voicesLang = lang;
+  const v = pickVoice(lang, voices, settings.get('tts.voice.' + lang));
+  if (v) speaker.setVoice(lang, v);
+  speaker.setDocLang(utteranceLang(lang, v));
+  // 목록을 아직 안 읽었으면(`refreshVoices` 전) 판정하지 않는다 — 읽은 뒤 다시 불린다.
+  if (voicesLoaded && !availability(voices, lang)[lang]) noVoiceNotice(lang);
+}
+
+/** `[7c]` "음성 없음" 배너 — `{lang}` 은 원문 언어의 자국어 이름(`onboarding.lang.*`). */
+function noVoiceNotice(lang) {
+  const k = 'onboarding.lang.' + lang;
+  const name = t(k) === k ? String(lang) : t(k);
+  notice('reader.tts.noVoice', 'warn', { lang: name }, 'reader.tts.noVoice:' + lang);
 }
 
 /** 6-4 Wake Lock — 여기만이 기능 감지로 분기하는 곳이다. */
@@ -432,14 +460,20 @@ function onSpeakerError(code) {
   if (!key) return;
   // 건너뛴 줄 하나로 배너를 띄우지 않는다 — 시끄럽고, 워치독이 이미 이었다.
   if (code === CODES.LINE_SKIPPED) return;
+  // 7c — 음성 없음 문구는 원문 언어 이름을 받는다.
+  if (code === CODES.NO_VOICE) { noVoiceNotice(sourceLang()); return; }
   notice(key, code === CODES.NOT_ALLOWED ? 'error' : 'warn');
 }
 
-/** 세션당 1회. 닫기는 배너 자신이 갖고 있다(`main.js`). */
-function notice(key, tone) {
-  if (noticedOnce.has(key)) return;
-  noticedOnce.add(key);
+/**
+ * 세션당 1회. 닫기는 배너 자신이 갖고 있다(`main.js`).
+ * `[7c]` `once` 는 "한 번"을 세는 이름 — 기본은 키. 음성 없음은 언어마다 따로 센다.
+ */
+function notice(key, tone, params, once) {
+  const id = once || key;
+  if (noticedOnce.has(id)) return;
+  noticedOnce.add(id);
   document.dispatchEvent(new CustomEvent('medreader:banner', {
-    detail: { key: key, tone: tone || 'warn' }
+    detail: { key: key, tone: tone || 'warn', params: params || null }
   }));
 }

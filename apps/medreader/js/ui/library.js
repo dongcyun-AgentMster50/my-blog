@@ -14,6 +14,15 @@
 
    UI 계층이다. `loader`·`db`·`Extractor` 가 내는 **코드**를 배너로 넘긴다 —
    서비스 계층에 문자열을 되돌려 넣지 않는다(3-2).
+
+   ── `[7c]` 원문 언어 (9-2 · 12-6) ───────────────────────
+   · 카드 메타 줄 "원문: English (자동)" 과 [⋯] → "원문 언어" 하나뿐인 패널.
+   · 자동 추정은 추출이 앞 30쪽에서 본문 쪽을 5쪽 모으면 **한 번** 돈다(`watchLangGuess`).
+     판정은 순수 `text/lang.js`, 여기는 읽고 쓰기만 한다.
+   · ★ 쓰기는 **한 트랜잭션 안에서 다시 읽고** 쓴다(`updateDocLang`). 추정이 도는 사이
+     사용자가 [⋯] 에서 고르면 `langSource = 'user'` 가 먼저 들어가 있고, 추정은 그것을
+     보고 물러난다 — 미리 읽어 둔 레코드로 판단하면 사용자 선택을 덮어쓴다.
+   · 바뀌면 `medreader:doclang` 이벤트를 낸다 — 열린 리더가 본문 `lang` 과 낭독 큐를 갈아 끼운다.
    ============================================================ */
 
 import * as db from '../db.js';
@@ -23,6 +32,11 @@ import { openDocument } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
 import { go, readerHash } from '../router.js';
+import { fromStored } from '../text/store.js';
+import {
+  SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
+  collectSample, readyToGuess, docLangOf, langSourceOf
+} from '../text/lang.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -146,6 +160,8 @@ function docCard(doc) {
   meta.appendChild(el('span', null, Number(doc.lastPage) > 1
     ? t('library.card.lastRead', { page: formatNumber(doc.lastPage) })
     : t('library.card.neverRead')));
+  // 7c — "원문: English (자동)"
+  meta.appendChild(el('span', 'doc-src-lang', srcLangText(doc)));
   card.appendChild(meta);
 
   card.appendChild(extractRow(doc));
@@ -157,11 +173,80 @@ function docCard(doc) {
   const delBtn = el('button', 'danger', t('library.card.delete'));
   delBtn.type = 'button';
   delBtn.setAttribute('data-action', 'delete');
+  // 7c — [⋯]. 지금은 "원문 언어" 하나뿐이다(12-6). 같은 위임(`data-action`)을 탄다.
+  const panelId = 'docLang-' + String(doc.id);
+  const more = el('button', 'doc-more', '⋯');
+  more.type = 'button';
+  more.setAttribute('data-action', 'more');
+  more.setAttribute('aria-expanded', 'false');
+  more.setAttribute('aria-controls', panelId);
+  more.setAttribute('aria-label', t('library.card.more'));
   actions.appendChild(cont);
   actions.appendChild(delBtn);
+  actions.appendChild(more);
   card.appendChild(actions);
 
+  card.appendChild(langPanel(doc, panelId));
+
   return card;
+}
+
+/* ── 7c 원문 언어 ─────────────────────────────────────── */
+
+/** 카드 메타 줄의 글자. 언어 이름은 자국어 표기(`onboarding.lang.*`)를 그대로 쓴다. */
+function srcLangText(doc) {
+  const lang = docLangOf(doc);
+  if (SUPPORTED_SRC.indexOf(lang) < 0) return t('library.card.srcLang.unsupported');
+  const name = t('onboarding.lang.' + lang);
+  return t(langSourceOf(doc) === 'auto' ? 'library.card.srcLang.auto' : 'library.card.srcLang', { lang: name });
+}
+
+/** [⋯] 패널 — "원문 언어" 선택 하나. 선택지는 `SUPPORTED_SRC` 에서 만든다(미지원이어도 셋). */
+function langPanel(doc, panelId) {
+  const panel = el('div', 'doc-lang-panel');
+  panel.id = panelId;
+  panel.hidden = true;
+  const titleId = panelId + '-t';
+  panel.setAttribute('role', 'group');
+  panel.setAttribute('aria-labelledby', titleId);
+
+  const h = el('h3', 'doc-lang-title', t('library.lang.title'));
+  h.id = titleId;
+  panel.appendChild(h);
+  panel.appendChild(el('p', 'doc-lang-hint', t('library.lang.hint')));
+
+  const choices = el('div', 'doc-lang-choices');
+  for (let i = 0; i < SUPPORTED_SRC.length; i++) {
+    const code = SUPPORTED_SRC[i];
+    const b = el('button', null, t('onboarding.lang.' + code));
+    b.type = 'button';
+    b.setAttribute('data-action', 'set-lang');
+    b.setAttribute('data-lang', code);
+    b.setAttribute('lang', code);
+    choices.appendChild(b);
+  }
+  panel.appendChild(choices);
+  paintLangChoices(panel, doc);
+  return panel;
+}
+
+function paintLangChoices(panel, doc) {
+  const lang = docLangOf(doc);
+  const btns = panel.querySelectorAll('button[data-lang]');
+  for (let i = 0; i < btns.length; i++) {
+    btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-lang') === lang ? 'true' : 'false');
+  }
+}
+
+/** 카드 하나의 원문 언어 부분만 다시 그린다 — 패널을 연 채로 둔다. */
+function paintLangBits(doc) {
+  if (!els || !els.list || !doc) return;
+  const card = els.list.querySelector('[data-doc-id="' + cssEscape(doc.id) + '"]');
+  if (!card) return;
+  const line = card.querySelector('.doc-src-lang');
+  if (line) line.textContent = srcLangText(doc);
+  const panel = card.querySelector('.doc-lang-panel');
+  if (panel) paintLangChoices(panel, doc);
 }
 
 /** 추출 진행 — **"312/7000" 이 여기에 그려진다**(9-4 · 12-3). */
@@ -297,7 +382,10 @@ function newDocument(file, identity, pageCount) {
     lastOpenedAt: Date.now(),
     lastPage: 1,
     lastLineId: null,
+    // 7c — 기본값으로 남고, 본문 5쪽 추출 뒤 추정이 덮는다(`langSource` 가 'user' 가 아니면).
     lang: 'en',
+    langSource: 'default',
+    langGuess: null,
     extraction: { done: false, pagesDone: 0, cursor: 1, failed: [], algoVersion: 0 },
     columnsHint: null,
     sectionIndex: []
@@ -312,6 +400,7 @@ function newDocument(file, identity, pageCount) {
 async function attach(doc, pdfDoc) {
   const old = extractors.get(doc.id);
   if (old) { old.stop(); extractors.delete(doc.id); }
+  unwatchLangGuess(doc.id);
 
   const ex = new Extractor({ docId: doc.id, pdfDoc: pdfDoc, pageCount: pdfDoc.numPages });
   ex.setCurrentPage(doc.lastPage || 1);
@@ -338,8 +427,128 @@ async function attach(doc, pdfDoc) {
 
   extractors.set(doc.id, ex);
   await ex.prepare();
+  // 7c — 이미 뽑아 둔 쪽으로 곧바로 한 번, 모자라면 쪽이 생길 때마다 다시 본다.
+  watchLangGuess(doc.id, ex);
   await ex.start();
   return ex;
+}
+
+/* ────────────────────────────────────────────────────────
+   5-1. `[7c]` 원문 언어 — 자동 추정과 저장 (spec 9-2)
+   ──────────────────────────────────────────────────────── */
+
+/** docId → 추정 감시자. 추정이 한 번 끝나면 지운다. */
+const langWatch = new Map();
+
+function watchLangGuess(docId, ex) {
+  unwatchLangGuess(docId);
+  const w = { busy: false, again: false, done: false, off: null };
+  const onPage = (e) => {
+    const n = Number(e && e.detail && e.detail.pageNo);
+    if (n >= 1 && n <= GUESS.MAX_PAGE) runLangGuess(docId, w);
+  };
+  ex.addEventListener('page', onPage);
+  w.off = () => ex.removeEventListener('page', onPage);
+  langWatch.set(docId, w);
+  runLangGuess(docId, w);
+}
+
+function unwatchLangGuess(docId) {
+  const w = langWatch.get(docId);
+  if (!w) return;
+  w.done = true;
+  if (w.off) w.off();
+  langWatch.delete(docId);
+}
+
+/** 쪽 이벤트가 몰려도 한 번에 하나만 돈다. 도는 중에 온 것은 한 번으로 합친다. */
+async function runLangGuess(docId, w) {
+  if (w.done) return;
+  if (w.busy) { w.again = true; return; }
+  w.busy = true;
+  try {
+    let outcome = 'wait';
+    do {
+      w.again = false;
+      outcome = await tryLangGuess(docId);
+    } while (outcome === 'wait' && w.again && !w.done);
+    if (outcome !== 'wait' && langWatch.get(docId) === w) unwatchLangGuess(docId);
+  } catch (e) {
+    // 추정 실패는 조용히 — 기본 en 이 남고, 다음 쪽 이벤트에서 다시 본다.
+  } finally {
+    w.busy = false;
+  }
+}
+
+/**
+ * @returns {Promise<'skip'|'wait'|'done'>}
+ *   skip — 돌 필요가 없다(사용자가 골랐다·이미 추정했다·문서가 없다)
+ *   wait — 본문 쪽이 아직 모자라다
+ *   done — 추정해 저장했다(또는 그 사이 사용자가 골라 물러났다)
+ */
+async function tryLangGuess(docId) {
+  const doc = await db.get('documents', docId);
+  if (!doc || !shouldGuess(doc)) return 'skip';
+  const pageCount = Number(doc.pageCount) || 0;
+  const last = Math.min(GUESS.MAX_PAGE, pageCount);
+  const pages = [];
+  let seen = 0;
+  for (let n = 1; n <= last; n++) {
+    const rec = await db.get('pages', [docId, n]);
+    if (!rec) continue;
+    seen++;
+    let layout = null;
+    try { layout = fromStored(rec); } catch (e) { continue; }   // 깨진 저장본은 표본에서 뺀다
+    pages.push({ pageNo: n, paragraphs: layout.paragraphs });
+  }
+  const sample = collectSample(pages);
+  if (!readyToGuess(sample.bodyPages, seen, pageCount)) return 'wait';
+
+  const guess = guessLang(sample.text);
+  // ★ 판단은 트랜잭션 **안에서** 다시 읽은 레코드로 한다(`applyGuess` 가 'user' 를 지킨다).
+  const res = await updateDocLang(docId, (rec) => applyGuess(rec, guess));
+  if (res.wrote) announceLang(res.rec, res.changed);
+  return 'done';
+}
+
+/**
+ * ★ 원문 언어 쓰기 — **한 트랜잭션 안에서 읽고, 판단하고, 쓴다.**
+ * `decide(rec)` 는 `{changed, rec}` 를 돌려준다. 같은 레코드를 돌려주면(사용자 선택 보호)
+ * 쓰지 않는다.
+ * @returns {Promise<{wrote:boolean, changed:boolean, rec:Object|null}>}
+ */
+function updateDocLang(docId, decide) {
+  return db.withTx('documents', 'readwrite', (tx, s) => new Promise((resolve, reject) => {
+    const store = s.documents;
+    const req = store.get(docId);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const cur = req.result || null;
+      const res = cur ? decide(cur) : null;
+      if (!res || !res.rec || res.rec === cur) { resolve({ wrote: false, changed: false, rec: cur }); return; }
+      const put = store.put(res.rec);
+      put.onerror = () => reject(put.error);
+      put.onsuccess = () => resolve({ wrote: true, changed: !!res.changed, rec: res.rec });
+    };
+  }));
+}
+
+/** 카드를 고치고, 열린 리더에 알린다(`ui/reader.js` 가 듣는다). */
+function announceLang(rec, changed) {
+  if (!rec) return;
+  paintLangBits(rec);
+  document.dispatchEvent(new CustomEvent('medreader:doclang', {
+    detail: { docId: rec.id, lang: docLangOf(rec), langSource: langSourceOf(rec), changed: !!changed }
+  }));
+}
+
+/** [⋯] 에서 고른 원문 언어. `langSource = 'user'` — 이후 추정이 덮어쓰지 않는다. */
+async function setUserLang(docId, lang) {
+  const res = await updateDocLang(docId, (rec) => applyUserLang(rec, lang));
+  if (!res.wrote) return;
+  // 사용자가 골랐으니 이 문서의 추정 감시는 더 필요 없다.
+  unwatchLangGuess(docId);
+  announceLang(res.rec, res.changed);
 }
 
 /** 서재·리더가 문서를 열 때. 이미 추출기가 붙어 있으면 그것을 쓴다. */
@@ -393,6 +602,24 @@ async function onListClick(ev) {
     return;
   }
 
+  if (btn.getAttribute('data-action') === 'more') {
+    const panel = card.querySelector('.doc-lang-panel');
+    if (!panel) return;
+    const open = panel.hidden;
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return;
+  }
+
+  if (btn.getAttribute('data-action') === 'set-lang') {
+    try {
+      await setUserLang(docId, btn.getAttribute('data-lang'));
+    } catch (e) {
+      banner(e);
+    }
+    return;
+  }
+
   if (btn.getAttribute('data-action') === 'delete') {
     const doc = await db.get('documents', docId);
     const name = (doc && (doc.title || doc.fileName)) || docId;
@@ -400,6 +627,7 @@ async function onListClick(ev) {
     if (!confirm(t('library.card.deleteConfirm', { title: name }))) return;
     const ex = extractors.get(docId);
     if (ex) { ex.stop(); extractors.delete(docId); }
+    unwatchLangGuess(docId);
     progressByDoc.delete(docId);
     try {
       await db.deleteDocument(docId);

@@ -247,7 +247,7 @@ test('M5 ★ MODEL_UNAVAILABLE(404) → model 상태 [8a 결정] · 시간·키�
   assert.equal(p.configChanged('model'), STATES.READY);
 });
 
-test('M6 ★ 타임아웃 30초 → abort · cooldown · failed(TIMEOUT) · 재시도 없음', async () => {
+test('M6 ★ 타임아웃 30초 → abort · cooldown · 그 자리 재시도 없음 (문장은 blocked(TIMEOUT) — 2026-10-10 결정, followup T1·T2)', async () => {
   const fetch = stubFetch((url, init) => new Promise((resolve, reject) => {
     init.signal.addEventListener('abort', () => {
       const e = new Error('The operation was aborted.');
@@ -257,7 +257,9 @@ test('M6 ★ 타임아웃 30초 → abort · cooldown · failed(TIMEOUT) · 재�
   }));
   const { p, timers } = rig({ fetch });
   const pending = p.translate(SENTS, T);
-  await new Promise((r) => setTimeout(r, 5));
+  // `[7c+8af Review]` 고정 5ms 대기는 전체 실행 중 부하에서 요청이 아직 안 나가 간헐 실패했다(1/8회).
+  // 요청이 실제로 나갈 때까지(최대 2초) 기다린다 — 단언은 그대로다.
+  for (let t0 = Date.now(); fetch.calls.length === 0 && Date.now() - t0 < 2000;) await new Promise((r) => setTimeout(r, 1));
   assert.equal(p.state(), STATES.INFLIGHT);
   const t30 = timers.pending().filter((t) => t.ms === 30000);
   assert.equal(t30.length, 1, '30초 타이머가 하나 걸려 있다');
@@ -477,12 +479,13 @@ test('O3 어떤 응답에도 translate 는 던지지 않는다 · 결과에 키�
     assert.equal(r.results.length, 2);
     assert.ok(!JSON.stringify(r).includes(FAKE_KEY));
   }
-  // 네트워크 오류(온라인) → cooldown, failed(NETWORK) — 재시도 없음
+  // 네트워크 오류(온라인) → cooldown, 즉시 재시도 없음.
+  // `[수정 2026-10-10 — 운영자 결정]` 응답이 없었으므로 failed 가 아니라 blocked(NETWORK) — N1~N4(8a 후속).
   const net = rig({ fetch: stubFetch(() => { throw new TypeError('Failed to fetch'); }) });
   const r = await net.p.translate(SENTS, T);
   assert.equal(net.fetch.calls.length, 1);
   assert.equal(net.p.state(), STATES.COOLDOWN);
-  assert.equal(r.results[0].code, FAIL.NETWORK);
+  assert.deepEqual([r.results[0].state, r.results[0].code], [SEG.BLOCKED, FAIL.NETWORK]);
 });
 
 test('M8 [Review 8a] 숨은 재시도 없음 — 429·500·타임아웃 뒤 걸린 타이머를 전부 발화해도 요청이 늘지 않는다', async () => {

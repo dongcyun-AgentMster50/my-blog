@@ -116,3 +116,39 @@
 - `js/text/*` 는 건드리지 않았다(`segment.js` 의 `splitSentences` 시그니처 그대로). `spec.md` 의 기존 수정(19절 7b 행, 작업 시작 전부터 있던 것)은 내 변경이 아니다.
 - `ai/pipeline.js` 를 만들면 브라우저에서 `online`/`offline` 리스너를 전역에 붙인다(`deps.listen === false` 면 안 붙임 — 테스트는 끈다).
 - 차단 훅에 막힌 명령: 없음.
+
+## 후속(2026-10-10) — 운영자 결정 3건 (Build A, 지침 `medreader-build-8a-followup.md`)
+
+> 커밋 없음 · 실제 키 0 · `git checkout/restore/stash` 0 · 차단 훅에 막힌 명령 0건. 시험 스크립트는 스크래치패드(`f8a/`)에만.
+
+### 고친 것
+1. **짧은 원문은 길이 비율을 보지 않는다**(10-2) — `config.js` `PIPELINE.SHORT_SRC_CHARS: 20`(PIPELINE 블록 안에만). `prompts.js` `checkTranslation`: 원문 20자 **미만**이면 `[0.2, 5]` 검사 생략. 빈 번역은 여전히 `ratio` 실패, 숫자 보존 검사는 그대로.
+2. **네트워크 오류는 `blocked`**(7-6) —
+   - `provider.js`: `ProviderError.noResponse` 신설. `fetch` 자체가 거부됐을 때만 참(응답을 받은 뒤 본문 해석 실패는 `maybeBlocked` 여도 거짓).
+   - `pipeline.js`: `noResponse` 실패는 cooldown 에 들어가며 문장은 `blocked`(코드 `NETWORK`) — failed 기억에 넣지 않으므로 cooldown 이 풀린 뒤 호출자(8b refill)가 다시 부르면 나간다. **cooldown 3단계(30→60→120초)를 이미 다 쓴 상태에서 또 실패하면 `failed`(NETWORK)** → 그 뒤는 `retry()` + `translate({retry:true})` 로만. 한 문장 집합당 자동 전송은 최대 1 + 3 = 4건. 단계(`cooldownLevel`)는 성공·[다시 시도]에서 0 으로 돌아간다.
+   - 응답을 받고 실패한 것(4xx `BAD_REQUEST`·분류 못 한 상태·본문 해석 불가·파싱·검증)은 계속 `failed`. 분류 못 한 응답 오류의 코드는 `NETWORK` 가 아니라 `UNKNOWN` 으로 바로잡았다(전에는 응답이 있어도 `NETWORK`).
+   - 타임아웃(30초)은 지침 범위 밖이라 **그대로 `failed`**(응답 없음이긴 하다 — 바꿀지 결정 필요).
+3. **`assertNoKeyInUrl` 거절은 네트워크 오류가 아니다** —
+   - `provider.js`: 전용 코드 `CODES.KEY_IN_URL`(전에는 `BAD_REQUEST` — 리뷰 당시 기록의 `UNKNOWN/NETWORK` 와도 다름, 지금 코드 기준 실측은 `failed/BAD_REQUEST`·usage calls 1·errors 1). `complete()`·`verifyKey()` 모두 **URL 검사를 usage 기록보다 먼저** 해서 거절이면 `calls`·`errors` 어느 것도 안 센다.
+   - `pipeline.js`: `KEY_IN_URL` → 상태 `model`(코드 `KEY_IN_URL`, 상태 이벤트 `code` 로 UI 가 구별). 문장은 `blocked`(코드 `model`), failed 기억 없음, `translate` 의 `calls` 0. 시간으로 안 풀리고 모델·**키**·프로바이더 변경(`configChanged`) 또는 [다시 시도]로 풀린다(KEY_IN_URL 일 때만 `'key'` 로도 풀림).
+   - 설정 화면: `OUTCOME.KEY_IN_URL = 'keyInUrl'` → `settings.ai.test.keyInModel`(네 언어 추가, 키 집합 259개로 동일). 전에는 "확인 불가"로 보였다.
+
+### 테스트
+- 새 파일 `tests/pipeline-8a-followup.test.mjs` 15개: L1~L5(짧은 원문), N1~N6(네트워크 blocked·3단계 상한·**가짜 시계 6시간 무한 반복 없음**·[다시 시도]·응답 받은 실패는 failed·성공 시 단계 초기화), K1~K4(KEY_IN_URL 요청 0·usage 0·끈적한 상태·설정 문구).
+- 기존 테스트 기대값 2곳 수정(결정이 바꾼 동작): `pipeline-8a` O3 마지막 줄(네트워크 → `blocked/NETWORK`), **`settings-7b` T5**(거절 → `OUTCOME.KEY_IN_URL`·코드 `KEY_IN_URL`). T5 는 7b 테스트라 지침의 "8a 테스트·새 테스트" 밖이지만 결정 3 이 바로 그 기대값을 뒤집으므로 두 줄만 고쳤다.
+- 전체: B 의 config 변경 전 **764 통과 / 실패 0**(749 + 15). 마지막 실행은 760/4 — 실패 4건은 모두 B 진행 중인 `TTS_SYMBOLS` 언어별 표 변경(`tts-text` X7·X13·X14, `split-contract-8a` 128행 "Unit.src 는 낭독 정규화 이전의 원문")에서 난다. 내 파일과 무관 — 보고만.
+
+### 변이 (`f8a/mutate.mjs` — 찾을 문자열 정확히 1곳 확인 → 치환 → `/*MUT_n*/` 표지 읽어 확인 → 테스트 → 스크래치패드 원본으로 복원·일치 확인)
+| 변이 | 적용 | 빨강 | 걸린 테스트 | 복원 |
+|---|---|---|---|---|
+| 1 20자 조건 빼기(`ratioApplies = true`) | ○ | 3 | L1·L3·L5 | ○ |
+| 2 3단계 상한 빼기(`noResponse` 면 늘 blocked) | ○ | 2 | **N2·N3(요청 수 상한)** | ○ |
+| 3 KEY_IN_URL 거절을 usage `calls` 에 넣기 | ○ | 2 | K1·K3 | ○ |
+끝난 뒤 `grep MUT_` 0건.
+
+### 기록만 한 것
+- `css/screens.css` 의 `.ai-result[data-outcome=…]` 색 목록에 `keyInUrl` 이 없다(범위 밖 파일) — 결과 상자 왼쪽 띠가 기본색. 경고색(`--c-warn-text`) 줄에 더하면 된다.
+- `stateNotice`(8b 상태 바)는 `model`·`KEY_IN_URL` 문구를 아직 고르지 않는다 — 8b/8c 몫(기존 `ai.state.model` 과 같음).
+- 8b 에게: 네트워크 blocked 의 재전송은 **`'state'` 이벤트가 `ready` 로 바뀔 때** 하면 된다(cooldown 만료 타이머가 알린다). 3단계 뒤에는 failed 라 refill 이 몇 번 돌아도 요청이 늘지 않는다(N3).
+
+**덧붙임 — 타임아웃도 응답 없음(오케스트레이터 결정, 같은 날).** `pipeline.js` 의 타임아웃(30초) 분기를 네트워크 오류와 한 벌(`noResponseFail(reason)`)로 묶었다: 문장은 `blocked`(사유 `TIMEOUT`, 네트워크는 `NETWORK`), cooldown 단계(`cooldownLevel`)와 "1 + 3단계" 자동 전송 상한을 **두 사유가 함께 쓴다** — 3단계를 다 쓴 뒤의 실패는 사유와 관계없이 `failed`(사용자 [다시 시도]로만). 응답을 받은 실패는 계속 `failed`. `provider.js` 는 바꾸지 않았다. 테스트 T1(타임아웃 → blocked·풀리면 재전송)·T2(타임아웃·네트워크가 번갈아 나는 6시간 가짜 시계 — 요청 정확히 4건, `blocked/TIMEOUT → blocked/NETWORK → blocked/TIMEOUT → failed/NETWORK`) 추가. 변이 "타임아웃을 failed 로 되돌리기"(`/*MUT_T*/` 적용 확인) → T1·T2 빨강 2, 복원 확인. 전체 **766 통과 / 실패 0**(B 의 현재 상태 포함). 남은 것: `pipeline-8a` M6 의 제목이 아직 "failed(TIMEOUT)" 라고 적혀 있다(단언은 코드만 보아 통과 — 이번 지시의 고칠 파일 밖이라 그대로 둠).

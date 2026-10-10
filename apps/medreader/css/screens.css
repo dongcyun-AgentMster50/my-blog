@@ -138,6 +138,47 @@
 
 .doc-actions button { flex: 1 1 auto; }
 
+/* 7c — [⋯] 는 늘지 않는 정사각 48px. 글자 하나라 넓힐 이유가 없다. */
+.doc-actions button.doc-more {
+  flex: 0 0 auto;
+  min-inline-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+/* 7c — [⋯] 패널: "원문 언어" 하나 (12-6) */
+.doc-lang-panel {
+  margin-block-start: var(--sp-3);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--c-border);
+}
+
+.doc-lang-title {
+  font-size: var(--fs-base);
+  margin-block-end: var(--sp-1);
+}
+
+.doc-lang-hint {
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  margin-block-end: var(--sp-3);
+}
+
+.doc-lang-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.doc-lang-choices button { flex: 1 1 6em; }
+
+.doc-lang-choices button[aria-pressed="true"] {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+}
+
 .storage-line {
   color: var(--c-text-dim);
   font-size: var(--fs-sm);
@@ -511,7 +552,8 @@
 .ai-result[data-outcome="model"],
 .ai-result[data-outcome="unknown"],
 .ai-result[data-outcome="noKey"] { border-inline-start-color: var(--c-warn-text); }
-.ai-result[data-outcome="invalid"] { border-inline-start-color: var(--c-danger); }
+.ai-result[data-outcome="invalid"],
+.ai-result[data-outcome="keyInUrl"] { border-inline-start-color: var(--c-danger); } /* 모델 칸에 키 — 무효 키와 같은 입력 실수 `[2026-10-10]` */
 
 .ai-sample { color: var(--c-text-dim); }
 

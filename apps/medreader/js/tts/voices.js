@@ -10,8 +10,9 @@
      멀쩡한 기기에서 뜬다.
    ============================================================ */
 
-import { TTS } from '../config.js';
+import { TTS, TTS_LANG_REGION } from '../config.js';
 import { LANGS } from '../i18n/index.js';
+import { SUPPORTED_SRC } from '../text/lang.js';
 
 /** `en_US` → `en-us`. 비교는 전부 이 형태로만 한다. */
 export function normalizeVoiceLang(lang) {
@@ -52,13 +53,33 @@ export function pickVoice(lang, voices, preferredURI) {
   return matched[0];
 }
 
-/** 6-3 — 언어별 가용성 `{en, ar, fr, ko}`. 설정 화면과 배너가 읽는다. */
-export function availability(voices) {
+/**
+ * 6-3 — 언어별 가용성 `{en, ar, fr, ko}`. 설정 화면과 배너가 읽는다.
+ *
+ * `[7c]` 원문 언어는 UI 언어와 별개다. UI 언어(`LANGS`)와 지원 원문(`SUPPORTED_SRC`)을
+ * 모두 담고, `docLang` 을 주면 그 언어도 담는다 — 배너는 `out[doc.lang]` 을 읽는다
+ * (`en` 고정이 아니다).
+ */
+export function availability(voices, docLang) {
   const out = {};
-  for (let i = 0; i < LANGS.length; i++) out[LANGS[i]] = !!pickVoice(LANGS[i], voices);
-  // 원서 언어는 UI 언어와 별개다(문서 언어 기본 en).
-  out.en = !!pickVoice('en', voices);
+  const langs = LANGS.concat(SUPPORTED_SRC);
+  if (typeof docLang === 'string' && docLang) langs.push(docLang);
+  for (let i = 0; i < langs.length; i++) {
+    if (Object.prototype.hasOwnProperty.call(out, langs[i])) continue;
+    out[langs[i]] = !!pickVoice(langs[i], voices);
+  }
   return out;
+}
+
+/**
+ * `[7c — spec 6-1]` 원문 발화의 `utterance.lang`. 고른 음성이 있으면 그 음성의
+ * `voice.lang`(언더스코어를 하이픈으로), 없으면 언어별 기본 지역(`TTS_LANG_REGION`),
+ * 그것도 없으면 언어 코드 그대로. 언어가 비면 en.
+ */
+export function utteranceLang(lang, voice) {
+  if (voice && voice.lang) return String(voice.lang).replace(/_/g, '-');
+  const l = typeof lang === 'string' && lang ? lang : 'en';
+  return Object.prototype.hasOwnProperty.call(TTS_LANG_REGION, l) ? TTS_LANG_REGION[l] : l;
 }
 
 /**

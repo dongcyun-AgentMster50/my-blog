@@ -322,8 +322,9 @@ test('T5 ★ 모델 칸에 키가 들어가 있어도 보내지 않고, 결과�
   const f = stubFetch(() => jsonRes(200, {}));
   const r = await runTestTranslation({ key: NEW_KEY, model: NEW_KEY, fetch: f, db: stubDb() });
   assert.equal(f.calls.length, 0, 'assertNoKeyInUrl 이 보내기 전에 막아야 한다');
-  assert.equal(r.outcome, OUTCOME.UNKNOWN);
-  assert.equal(r.code, 'BAD_REQUEST');
+  // `[수정 2026-10-10 — 운영자 결정 · 8a 후속]` 거절은 BAD_REQUEST·"확인 불가"가 아니라 전용 코드·전용 문구.
+  assert.equal(r.outcome, OUTCOME.KEY_IN_URL);
+  assert.equal(r.code, 'KEY_IN_URL');
   assert.ok(!JSON.stringify(r).includes(NEW_KEY));
 });
 

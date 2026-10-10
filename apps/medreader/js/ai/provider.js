@@ -49,7 +49,11 @@ export const CODES = Object.freeze({
   UNKNOWN: 'UNKNOWN',
   ABORTED: 'ABORTED',
   NO_KEY: 'NO_KEY',
-  NO_PROVIDER: 'NO_PROVIDER'
+  NO_PROVIDER: 'NO_PROVIDER',
+  /* `[신설 2026-10-10 — 운영자 결정]` `assertNoKeyInUrl` 이 **보내기 전에** 막았다(모델 칸에 키 등).
+     네트워크 오류가 아니고 요청이 나가지 않았다 — `usage` 에 아무것도 넣지 않는다.
+     설정(모델·키)을 고쳐야 풀린다. */
+  KEY_IN_URL: 'KEY_IN_URL'
 });
 
 /** 8-4 형식 검사 결과. 불일치는 **경고**다. */
@@ -82,6 +86,12 @@ export class ProviderError extends Error {
      * 보여 줄지는 호출자(UI)가 고른다 — 문구는 여기서 만들지 않는다(3-2).
      */
     this.maybeBlocked = !!i.maybeBlocked;
+    /**
+     * `[신설 2026-10-10]` **응답을 받지 못했다**(`fetch` 자체가 거부 — 네트워크·CORS, 8-3).
+     * 응답을 받은 뒤의 실패(본문 해석 실패 등)는 `maybeBlocked` 여도 이것이 거짓이다.
+     * 파이프라인은 이것으로 "보냈다가 실패(failed)"와 "닿지 못함(blocked)"을 가른다(7-6).
+     */
+    this.noResponse = !!i.noResponse;
   }
   toJSON() {
     return {
@@ -89,7 +99,8 @@ export class ProviderError extends Error {
       status: this.status,
       message: this.message,
       retryAfter: this.retryAfter,
-      maybeBlocked: this.maybeBlocked
+      maybeBlocked: this.maybeBlocked,
+      noResponse: this.noResponse
     };
   }
 }
@@ -245,8 +256,9 @@ function assertNoKeyInUrl(url, key) {
   // 너무 짧은 값은 본문과 우연히 겹친다. 키라고 부를 만한 길이만 본다.
   if (k.length < 8) return u;
   if (u.indexOf(k) >= 0 || u.indexOf(encodeURIComponent(k)) >= 0) {
+    // `[수정 2026-10-10]` BAD_REQUEST 가 아니라 전용 코드 — 요청이 나가지 않았고 설정 탓이다.
     throw new ProviderError({
-      code: CODES.BAD_REQUEST, status: 0,
+      code: CODES.KEY_IN_URL, status: 0,
       message: 'refused: key would travel in the URL'
     });
   }
@@ -266,7 +278,7 @@ function pickFetch(opts) {
  *   그대로 따라 나온다. 필요한 것은 코드뿐이고, 사람이 읽을 부분은
  *   `redact` 를 통과한 메시지로 충분하다.
  */
-function wrap(err, fallbackCode, key) {
+function wrap(err, fallbackCode, key, noResponse) {
   if (err instanceof ProviderError) return err;
   const isAbort = !!(err && err.name === 'AbortError');
   // `redact(err)` 는 객체를 받는다 — 오류가 문자열이든 객체든 여기를 지난다.
@@ -280,7 +292,8 @@ function wrap(err, fallbackCode, key) {
     status: 0,
     message: msg,
     // 8-3 — `TypeError: Failed to fetch` 는 CORS 일 수도 네트워크일 수도 있다.
-    maybeBlocked: !isAbort && fallbackCode === CODES.UNKNOWN
+    maybeBlocked: !isAbort && fallbackCode === CODES.UNKNOWN,
+    noResponse: !isAbort && !!noResponse
   });
 }
 
@@ -351,6 +364,15 @@ export async function complete(req, opts) {
 
   throwIfAborted(signal);
 
+  /* `[수정 2026-10-10]` URL 검사를 **사용량 기록보다 먼저** 한다. 거절(`KEY_IN_URL`)이면 요청이
+     나가지 않았으므로 `calls`·`errors` 어느 것도 세지 않는다. */
+  let url;
+  try {
+    url = assertNoKeyInUrl(adapter.endpoint(model), key);
+  } catch (e) {
+    throw wrap(e, CODES.UNKNOWN, key);          // ProviderError(KEY_IN_URL) 는 그대로 지나간다
+  }
+
   /* 15절 — "호출이 **시작될 때** `calls++`(응답 실패도 비용이 발생했을 수
      있음)". 끝에서 await 하므로 네트워크 지연에 IndexedDB 쓰기가 끼어들지
      않으면서도, 호출자가 `await complete()` 한 뒤에는 기록이 끝나 있다. */
@@ -362,7 +384,7 @@ export async function complete(req, opts) {
 
   let res;
   try {
-    res = await doFetch(assertNoKeyInUrl(adapter.endpoint(model), key), {
+    res = await doFetch(url, {
       method: 'POST',
       headers: adapter.headers(key),
       body: JSON.stringify(adapter.bodyBuilder(req, model)),
@@ -371,7 +393,8 @@ export async function complete(req, opts) {
   } catch (e) {
     await bumpUsage({ errors: 1 }, { db: o.db, now: o.now });
     await started;
-    throw wrap(e, CODES.UNKNOWN, key);
+    // `[수정 2026-10-10]` fetch 가 거부됐다 = 응답을 받지 못했다(`noResponse`).
+    throw wrap(e, CODES.UNKNOWN, key, true);
   }
 
   // 스텁이든 실물이든, 취소가 `fetch` 거부로 오지 않는 경우가 있다.
@@ -503,6 +526,14 @@ export async function verifyKey(key, opts) {
     return { ok: false, code: CODES.ABORTED, status: 0, canSave: true };
   }
 
+  /* `[수정 2026-10-10]` URL 검사를 사용량 기록보다 먼저 — 거절이면 요청이 나가지 않았다(기록 0). */
+  let url;
+  try {
+    url = assertNoKeyInUrl(adapter.verifyEndpoint(), key);
+  } catch (e) {
+    return { ok: false, code: CODES.KEY_IN_URL, status: 0, canSave: true };
+  }
+
   /* 8-4 — "검증 호출도 `usage` 에 `kind:'verify'` 로 기록한다(대시보드 투명성)."
      15절이 상한 계산에서 검증을 제외하지만, 그것은 **상한 쪽 판단**이고
      기록은 남긴다. */
@@ -513,7 +544,7 @@ export async function verifyKey(key, opts) {
 
   let res;
   try {
-    res = await doFetch(assertNoKeyInUrl(adapter.verifyEndpoint(), key), {
+    res = await doFetch(url, {
       method: adapter.verifyMethod || 'GET',
       headers: adapter.headers(raw),
       signal: o.signal || undefined

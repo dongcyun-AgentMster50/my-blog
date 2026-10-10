@@ -14,12 +14,17 @@
      ready | inflight | cooldown | exhausted | no-key | offline | capped | region | model
      - 429                 → exhausted(until = Retry-After 또는 다음 날 00:00). 자동 재시도 0.
      - 5xx                 → **즉시 1회만** 다시 보낸 뒤에도 5xx 면 cooldown(30s → 60s → 120s).
-     - 네트워크 오류       → cooldown(재시도 없음). 기기가 오프라인이면 offline.
-     - 타임아웃 30초       → cooldown.
+     - 네트워크 오류       → cooldown(즉시 재시도 없음). 기기가 오프라인이면 offline.
+                             `[수정 2026-10-10 — 운영자 결정]` 응답 없이 실패한 문장은 **blocked**(`NETWORK`) —
+                             cooldown 이 풀려 호출자가 다시 부르면 보낸다. 단 cooldown 3단계를 다 쓴 뒤의
+                             네트워크 실패는 **failed** — 그 뒤는 사용자 [다시 시도]로만(무한 반복 없음).
+     - 타임아웃 30초       → cooldown. `[수정 2026-10-10]` 네트워크 오류와 같다 — blocked(`TIMEOUT`), 단계·상한 공유.
      - 401/403·AUTH·키 없음 → no-key.
      - REGION              → region. 키 문제가 아니다 — 세션 동안 유지, [다시 시도]·프로바이더 변경으로 ready.
      - MODEL_UNAVAILABLE   → **model** `[8a 결정 — spec 7-6 에 없음]`. 시간이 지나도, 키를 다시 넣어도
                              풀리지 않는다. 모델·프로바이더를 바꾸거나 [다시 시도]하면 ready.
+     - KEY_IN_URL          → **model**(코드 `KEY_IN_URL`) `[수정 2026-10-10]`. 보내기 전에 막혔다 — 요청 0,
+                             usage 0. 네트워크 오류가 아니다. 모델·키·프로바이더를 고치거나 [다시 시도]하면 ready.
      - 일일 상한(`ai.dailyCap`, 검증 호출 제외)에 닿으면 capped. 날이 바뀌거나 상한을 올리면 ready.
      - `navigator.onLine === false` → offline. online 이 오면 이전 상태로.
 
@@ -27,7 +32,8 @@
      blocked — 원격 상태가 ready 가 아니어서 **보내지 않았다**(429·키·지역·모델·오프라인으로 거절된
                것 포함 — 내용이 판정받지 않았다). 상태가 ready 로 돌아오면(`'state'` 이벤트) 호출자가
                다시 부르면 **보낸다.** 재시도가 아니라 첫 전송이다.
-     failed  — 보냈고 실패했다(5xx 1회 재시도 뒤, 타임아웃, 네트워크, 파싱 실패, 밀림, SAFETY, 개수 누락).
+     failed  — 보냈고 실패했다(5xx 1회 재시도 뒤, cooldown 3단계를 다 쓴 뒤의 네트워크·타임아웃,
+               파싱 실패, 밀림, SAFETY, 개수 누락, 응답을 받은 4xx).
                이 파이프라인이 키를 기억해 **다시 보내지 않는다.** `translate(…, {retry:true})`
                (사용자의 [다시 시도])만 다시 보낸다.
 
@@ -72,7 +78,7 @@ export const FAIL = Object.freeze({
   MISSING: 'MISSING',     // 응답에 그 번호가 없다(10-2 개수 누락)
   SERVER: 'SERVER',       // 5xx — 1회 다시 보낸 뒤에도
   TIMEOUT: 'TIMEOUT',     // 30초
-  NETWORK: 'NETWORK',     // 네트워크·CORS(구별 불가 — 8-3)
+  NETWORK: 'NETWORK',     // 네트워크·CORS(구별 불가 — 8-3). `[수정 2026-10-10]` 3단계 전에는 blocked 의 코드, 다 쓴 뒤에는 failed 의 코드
   SAFETY: 'SAFETY',
   BAD_REQUEST: 'BAD_REQUEST',
   UNKNOWN: 'UNKNOWN'
@@ -304,7 +310,8 @@ export function createPipeline(deps) {
         return accept(chunk, r, ctx);
       }
 
-      if (timedOut) { enterCooldown('TIMEOUT'); return all(SEG.FAILED, FAIL.TIMEOUT); }
+      // `[수정 2026-10-10 — 오케스트레이터 결정]` 타임아웃도 응답을 못 받은 것 — 네트워크 오류와 같은 규칙·같은 상한.
+      if (timedOut) return noResponseFail(FAIL.TIMEOUT);
       const code = (err && err.code) || CODES.UNKNOWN;
       switch (code) {
         case CODES.SERVER:
@@ -324,6 +331,14 @@ export function createPipeline(deps) {
         case CODES.MODEL_UNAVAILABLE:
           setBase(STATES.MODEL, 0, code);
           return all(SEG.BLOCKED, STATES.MODEL);
+        case CODES.KEY_IN_URL: {
+          // `[수정 2026-10-10]` 보내기 전에 막혔다(모델 칸에 키). 요청 0 — provider 가 usage 도 세지 않았다.
+          // 네트워크 오류가 아니므로 cooldown 이 아니라, 설정을 고쳐야 풀리는 model 상태(코드로 구별).
+          setBase(STATES.MODEL, 0, CODES.KEY_IN_URL);
+          const outs = all(SEG.BLOCKED, STATES.MODEL);
+          outs.notSent = true;
+          return outs;
+        }
         case CODES.ABORTED:
           // 화면을 떠났다(호출자의 signal). 비용은 이미 났을 수 있어 usage 에는 남았다(provider).
           // 내용이 판정받지 않았으므로 failed 가 아니다.
@@ -335,11 +350,28 @@ export function createPipeline(deps) {
         case CODES.BAD_REQUEST:
           notify();
           return all(SEG.FAILED, FAIL.BAD_REQUEST);
-        default:
+        default: {
           if (!isOnline()) { offline = true; notify(); return all(SEG.BLOCKED, STATES.OFFLINE); }
+          // `[수정 2026-10-10 — 운영자 결정]` 응답 없이 실패(fetch 거부 — 네트워크·CORS 구별 불가)는 blocked.
+          if (err && err.noResponse) return noResponseFail(FAIL.NETWORK);
+          // 응답을 받고 실패한 것(분류 못 한 4xx·본문 해석 실패 등)은 계속 failed.
           enterCooldown(code);
-          return all(SEG.FAILED, code === CODES.UNKNOWN ? FAIL.NETWORK : FAIL.UNKNOWN);
+          return all(SEG.FAILED, FAIL.UNKNOWN);
+        }
       }
+    }
+
+    /**
+     * `[수정 2026-10-10]` **응답을 못 받은 실패**(네트워크·타임아웃) 한 벌. 내용이 판정받지 않았다 →
+     * blocked(사유 `NETWORK`|`TIMEOUT`). cooldown 이 풀리면 호출자의 다음 refill 이 다시 보낸다.
+     * ★ 3단계(30→60→120초)를 이미 다 썼으면 failed — 그 뒤는 사용자 [다시 시도]로만.
+     *   단계(`cooldownLevel`)는 **두 사유가 함께 쓴다** — 번갈아 나도 상한(1 + 3단계)을 넘지 않는다.
+     *   성공하면 0, [다시 시도]면 0 으로 돌아간다.
+     */
+    function noResponseFail(reason) {
+      const stepsLeft = cooldownLevel < PIPELINE.COOLDOWN_STEPS_MS.length;
+      enterCooldown(reason);
+      return all(stepsLeft ? SEG.BLOCKED : SEG.FAILED, reason);
     }
   }
 
@@ -409,7 +441,7 @@ export function createPipeline(deps) {
         outs = chunk.map(() => ({ state: SEG.BLOCKED, code: g }));   // 보내지 않은 것
       } else {
         outs = await sendChunk(chunk, ctx);
-        ctx.calls++;
+        if (!outs.notSent) ctx.calls++;          // KEY_IN_URL — 보내기 전에 막혔다(호출 0)
       }
       for (let i = 0; i < chunk.length; i++) {
         result.set(chunk[i].key, outs[i]);
@@ -530,12 +562,14 @@ export function createPipeline(deps) {
   /**
    * 설정이 바뀌었다. `'key'` — 키 저장(no-key 해제), `'model'` — 모델 변경(model 해제),
    * `'provider'` — 프로바이더 변경(region·model·no-key 해제).
+   * `[수정 2026-10-10]` `KEY_IN_URL` 로 든 model 상태는 키 저장으로도 풀린다(키·모델 어느 쪽을 고쳐도).
    */
   function configChanged(what) {
     const w = String(what || '');
     const hasKey = !!String(getKey() || '').trim();
+    const keyInUrl = base.name === STATES.MODEL && base.code === CODES.KEY_IN_URL;
     if (base.name === STATES.NO_KEY && hasKey && (w === 'key' || w === 'provider')) setBase(STATES.READY, 0, null);
-    else if (base.name === STATES.MODEL && (w === 'model' || w === 'provider')) setBase(STATES.READY, 0, null);
+    else if (base.name === STATES.MODEL && (w === 'model' || w === 'provider' || (keyInUrl && w === 'key'))) setBase(STATES.READY, 0, null);
     else if (base.name === STATES.REGION && w === 'provider') setBase(STATES.READY, 0, null);
     notify();
     return current();

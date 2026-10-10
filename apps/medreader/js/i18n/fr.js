@@ -79,6 +79,14 @@ export default {
   'library.card.delete': 'Delete',
   'library.card.deleteConfirm': 'Delete "{title}" and everything stored with it?',
 
+  /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
+  'library.card.srcLang': 'Langue d’origine : {lang}',
+  'library.card.srcLang.auto': 'Langue d’origine : {lang} (auto)',
+  'library.card.srcLang.unsupported': 'Langue d’origine : non prise en charge',
+  'library.card.more': 'Autres options pour ce document',
+  'library.lang.title': 'Langue d’origine',
+  'library.lang.hint': 'La langue dans laquelle le livre est écrit. Sert à la lecture à voix haute et à la traduction.',
+
   'library.storage': 'Storage used: {used} of {quota}',
   'library.storage.unknown': 'Storage usage is not available in this browser.',
 
@@ -163,7 +171,7 @@ export default {
   'reader.tts.backToLine': 'Revenir à la ligne en cours',
   'reader.tts.waitingPage': 'Préparation de la page suivante…',
   'reader.tts.noVoice':
-    'Aucune voix anglaise sur cet appareil. Installez un pack de langue dans Paramètres > Système > Langues et saisie > Sortie de synthèse vocale > Speech Services by Google.',
+    'Aucune voix pour {lang} sur cet appareil. Installez un pack de langue dans Paramètres > Système > Langues et saisie > Sortie de synthèse vocale > Speech Services by Google.',
   'reader.tts.notAllowed': 'Le navigateur a bloqué la lecture. Appuyez de nouveau sur Lire.',
   'reader.tts.lineSkipped': 'Une ligne n’a pas pu être lue et a été ignorée.',
   'reader.tts.pageTimeout': 'La page suivante n’est pas encore prête. Appuyez sur Lire pour continuer.',
@@ -247,6 +255,7 @@ export default {
   'settings.ai.test.empty': "Le service a répondu, mais la traduction est vide.",
   'settings.ai.test.sample': "Phrases d'exemple",
   'settings.ai.test.modelUnavailable': "Ce modèle n'est pas disponible. Choisissez un autre modèle.",
+  'settings.ai.test.keyInModel': "Le champ du modèle contient votre clé API. Rien n'a été envoyé : la clé n'a pas fuité. Corrigez le champ du modèle — la clé va uniquement dans le champ de la clé.",
   'settings.ai.test.meta': "{ms} ms · {model} · {code}",
   'settings.ai.test.tokens': "Jetons en entrée {input} · jetons en sortie {output}",
   'settings.ai.model': "Modèle",

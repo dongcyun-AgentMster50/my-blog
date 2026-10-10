@@ -274,6 +274,8 @@ function charLen(s) {
  *   같은 `i` 가 두 번 오면 첫 것만 쓴다. 범위 밖 `i` 는 버린다.
  * - 개수 누락 → 있는 것만 채택, 없는 것은 `missing`.
  * - 길이 비율 `len(t)/len(text)` 가 `[0.2, 5]` 밖 → 그 항목 `failed`(`ratio`).
+ *   `[수정 2026-10-10]` 원문이 `PIPELINE.SHORT_SRC_CHARS`(20)자 **미만**이면 비율은 보지 않는다
+ *   (빈 번역만 `ratio`). `ECG.` → 아랍어 풀어쓰기가 5배를 넘어 정상 번역을 버리고 있었다.
  * - 원문에 숫자가 있는데 번역에 그중 하나도 없으면 → 그 항목 `failed`(`digits`). 동방 숫자는 같은 숫자다.
  * - 밀림 검사(비율·숫자)에 걸린 항목이 **20% 를 넘으면** 청크 전체가 파싱 실패(`chunkFailed`).
  *
@@ -300,8 +302,10 @@ export function checkTranslation(input, value) {
     const t = got.get(i);
     const a = charLen(src);
     const b = charLen(t);
-    const tooShort = b * PIPELINE.LEN_RATIO_MIN_DEN < a * PIPELINE.LEN_RATIO_MIN_NUM;
-    const tooLong = b > a * PIPELINE.LEN_RATIO_MAX;
+    // `[수정 2026-10-10]` 짧은 원문은 비율을 보지 않는다 — 빈 번역만 거른다(숫자 검사는 아래 그대로).
+    const ratioApplies = a >= PIPELINE.SHORT_SRC_CHARS;
+    const tooShort = ratioApplies && b * PIPELINE.LEN_RATIO_MIN_DEN < a * PIPELINE.LEN_RATIO_MIN_NUM;
+    const tooLong = ratioApplies && b > a * PIPELINE.LEN_RATIO_MAX;
     if (b === 0 || tooShort || tooLong) {
       shifted++;
       items.push({ i: i, state: 'failed', reason: 'ratio' });

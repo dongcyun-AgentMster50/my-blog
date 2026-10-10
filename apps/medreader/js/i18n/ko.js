@@ -79,6 +79,14 @@ export default {
   'library.card.delete': 'Delete',
   'library.card.deleteConfirm': 'Delete "{title}" and everything stored with it?',
 
+  /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
+  'library.card.srcLang': '원문: {lang}',
+  'library.card.srcLang.auto': '원문: {lang} (자동)',
+  'library.card.srcLang.unsupported': '원문: 지원하지 않는 언어',
+  'library.card.more': '이 문서의 다른 설정',
+  'library.lang.title': '원문 언어',
+  'library.lang.hint': '책이 쓰인 언어입니다. 소리 내어 읽기와 번역에 쓰입니다.',
+
   'library.storage': 'Storage used: {used} of {quota}',
   'library.storage.unknown': 'Storage usage is not available in this browser.',
 
@@ -163,7 +171,7 @@ export default {
   'reader.tts.backToLine': '현재 줄로 돌아가기',
   'reader.tts.waitingPage': '다음 쪽 준비 중…',
   'reader.tts.noVoice':
-    '이 기기에 영어 음성이 없습니다. 설정 > 시스템 > 언어 및 입력 > 텍스트 음성 변환 출력에서 Speech Services by Google 언어 팩을 설치하세요.',
+    '이 기기에 {lang} 음성이 없습니다. 설정 > 시스템 > 언어 및 입력 > 텍스트 음성 변환 출력에서 Speech Services by Google 언어 팩을 설치하세요.',
   'reader.tts.notAllowed': '브라우저가 낭독을 막았습니다. 재생을 다시 누르세요.',
   'reader.tts.lineSkipped': '한 줄을 읽지 못해 건너뛰었습니다.',
   'reader.tts.pageTimeout': '다음 쪽이 아직 준비되지 않았습니다. 재생을 눌러 이어가세요.',
@@ -247,6 +255,7 @@ export default {
   'settings.ai.test.empty': "서비스가 응답했지만 번역이 비어 있습니다.",
   'settings.ai.test.sample': "예문",
   'settings.ai.test.modelUnavailable': "이 모델은 쓸 수 없습니다. 다른 모델을 고르세요.",
+  'settings.ai.test.keyInModel': "모델 칸에 API 키가 들어 있습니다. 키가 새지 않도록 요청을 보내지 않았습니다. 모델 칸을 고치세요 — 키는 키 칸에만 넣습니다.",
   'settings.ai.test.meta': "{ms}ms · {model} · {code}",
   'settings.ai.test.tokens': "입력 토큰 {input} · 출력 토큰 {output}",
   'settings.ai.model': "모델",

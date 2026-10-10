@@ -28,7 +28,7 @@
    `gen` 을 들고 있고, `gen` 이 바뀌었으면 조용히 물러난다.
    ============================================================ */
 
-import { TTS } from '../config.js';
+import { TTS, TTS_LANG_REGION } from '../config.js';
 import { buildUnits, watchdogMs, indexOfLine } from './text.js';
 
 export const STATES = Object.freeze(['idle', 'speaking', 'paused', 'waiting-page', 'error']);
@@ -115,7 +115,9 @@ export function createSpeaker(deps) {
   let index = 0;
   let rate = 1;
   let unit = TTS.UNIT_DEFAULT;
-  let docLang = 'en-US';
+  // `[7c]` 원문 발화의 `utterance.lang`. 문서의 원문 언어에서 온다(`setDocLang`).
+  // 문장 분할·기호 표도 이 언어의 기본 부분(`langKey`)으로 고른다 — 언어 **전달**만 한다.
+  let docLang = TTS_LANG_REGION.en;
   const voiceFor = {};           // lang → voice 객체
   let gen = 0;                   // 세대 — 늦게 오는 콜백을 무시한다
   let current = null;            // ★ 6-4 (2) GC 방지: 지금 발화를 붙들어 둔다
@@ -365,7 +367,11 @@ export function createSpeaker(deps) {
 
   function firstLineId(u) { return u && u.lineIds.length ? u.lineIds[0] : null; }
 
-  function langKey(l) { return String(l || 'en').slice(0, 2).toLowerCase(); }
+  /** `en-US`·`en_US`·`en` → `en`. 두 글자로 자르지 않는다 — `und` 같은 세 글자 코드가 있다. */
+  function langKey(l) { return String(l || 'en').replace(/_/g, '-').split('-')[0].toLowerCase() || 'en'; }
+
+  /** `[7c]` 큐를 만들 때 넘기는 원문 언어. */
+  function unitOpts() { return { lang: langKey(docLang) }; }
 
   /* ── 6-1 쪽 넘김 ──────────────────────────────────── */
 
@@ -389,7 +395,7 @@ export function createSpeaker(deps) {
       return;
     }
 
-    units = buildUnits(view.paras(), unit);
+    units = buildUnits(view.paras(), unit, unitOpts());
     queueRebuilt();
     index = 0;
     if (!units.length) { advancePage(hop + 1); return; }   // 표뿐인 쪽 — 계속 넘긴다
@@ -431,7 +437,7 @@ export function createSpeaker(deps) {
    */
   function play(fromLineId) {
     if (!units.length || fromLineId != null || state === 'idle') {
-      units = buildUnits((view && view.paras && view.paras()) || [], unit);
+      units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
       queueRebuilt();
     }
     if (!units.length) { finish(); return; }
@@ -508,7 +514,7 @@ export function createSpeaker(deps) {
     if (next === unit) return;
     const anchor = units.length ? firstLineId(units[index]) : null;
     unit = next;
-    units = buildUnits((view && view.paras && view.paras()) || [], unit);
+    units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
     queueRebuilt();
     const found = anchor == null ? -1 : indexOfLine(units, anchor);
     index = found >= 0 ? found : 0;
@@ -554,7 +560,7 @@ export function createSpeaker(deps) {
   }
 
   function setVoice(lang, voice) { voiceFor[langKey(lang)] = voice || null; }
-  function setDocLang(l) { docLang = String(l || 'en-US'); }
+  function setDocLang(l) { docLang = String(l || TTS_LANG_REGION.en); }
 
   /** 쪽이 새로 그려졌다 — 큐를 그 쪽 것으로 갈아 끼운다(사용자가 쪽을 넘긴 경우). */
   function reload(fromLineId) {
@@ -568,7 +574,7 @@ export function createSpeaker(deps) {
     // 같은 쪽을 다시 그렸으면 그 줄이 새 큐에도 있어 제자리를 지키고,
     // 다른 쪽으로 넘어갔으면 `indexOfLine` 이 -1 을 줘 자연히 0 으로 간다.
     const anchorId = fromLineId != null ? fromLineId : firstLineId(units[index]);
-    units = buildUnits((view && view.paras && view.paras()) || [], unit);
+    units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
     queueRebuilt();
     const found = anchorId == null ? -1 : indexOfLine(units, anchorId);
     index = found >= 0 ? found : 0;
@@ -598,6 +604,8 @@ export function createSpeaker(deps) {
     getState: function () { return state; },
     getRate: function () { return rate; },
     getUnit: function () { return unit; },
+    /** `[7c]` 지금 원문 발화에 쓰는 `utterance.lang`. */
+    getDocLang: function () { return docLang; },
     getIndex: function () { return index; },
     getTotal: function () { return units.length; },
     getCurrent: function () { return units[index] || null; },

@@ -322,15 +322,33 @@ export const TTS = Object.freeze({
  * 키는 **한 글자**이거나 짧은 기호 문자열이고, 치환은 앞뒤에 공백을 붙여 들어간다
  * ("≥4" → "greater than or equal to 4"). 원서 텍스트 자체는 바뀌지 않는다 —
  * 낭독용 사본에서만 갈아 낀다.
+ *
+ * `[수정 7c — spec 6-1]` 치환 낱말은 영어이므로 표를 **원문 언어별**로 둔다.
+ * `en` 이 원래 표 그대로다. `fr`·`ko` 는 실물 측정 전까지 **비워 둔다** — 프랑스어
+ * 문장 속에 영어 "greater than" 이 끼는 것보다 기호를 그대로 두는 편이 낫다.
+ * 표에 없는 언어(미지원 `und` 등)도 빈 표로 읽는다(`tts/text.js` 의 `symbolsFor`).
  */
 export const TTS_SYMBOLS = Object.freeze({
-  '≥': 'greater than or equal to',
-  '≤': 'less than or equal to',
-  '±': 'plus or minus',
-  'µ': 'micro',
-  'μ': 'micro',
-  '→': 'to',
-  '%': 'percent'
+  en: Object.freeze({
+    '≥': 'greater than or equal to',
+    '≤': 'less than or equal to',
+    '±': 'plus or minus',
+    'µ': 'micro',
+    'μ': 'micro',
+    '→': 'to',
+    '%': 'percent'
+  }),
+  fr: Object.freeze({}),
+  ko: Object.freeze({})
+});
+
+/* `[7c — spec 6-1]` 고를 음성이 없을 때 `utterance.lang` 에 넣는 언어별 기본 지역.
+ * 음성이 있으면 그 음성의 `voice.lang` 이 우선이다(`tts/voices.js` 의 `utteranceLang`).
+ * 코드의 다른 곳에 지역 태그를 박지 않는다 — 여기 한 곳이다. */
+export const TTS_LANG_REGION = Object.freeze({
+  en: 'en-US',
+  fr: 'fr-FR',
+  ko: 'ko-KR'
 });
 
 /* ────────────────────────────────────────────────────────
@@ -485,6 +503,10 @@ export const PIPELINE = Object.freeze({
   LEN_RATIO_MIN_NUM: 1,
   LEN_RATIO_MIN_DEN: 5,
   LEN_RATIO_MAX: 5,
+
+  /* 10-2 `[수정 2026-10-10 — 운영자 결정]` 원문(`Unit.src`)이 이 글자 수 **미만**이면 길이 비율을
+     보지 않는다(숫자 보존 검사는 그대로). `ECG.` 같은 약어 한 낱말은 아랍어로 풀어 쓰면 5배를 넘는다. */
+  SHORT_SRC_CHARS: 20,
 
   /* 10-2 — 한 청크에서 밀림 검사(길이 비율·숫자 소실)에 걸린 항목이 이 비율을 **넘으면**
      청크 전체를 파싱 실패로 본다. 1/5 = 20%. */

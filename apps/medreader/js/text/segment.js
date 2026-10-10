@@ -92,11 +92,26 @@ export function endsSentence(text) {
   return !endsWithAbbrev(t);
 }
 
+/* `[7c — spec 9-2]` "다음 글자가 문장 시작처럼 보이는가" — 원문 언어별.
+ * **en(또는 언어 없음)은 원래 정규식 그대로다** — 영어 분할 결과는 한 글자도 바뀌지 않는다
+ * (`tests/srclang-7c.test.mjs` 의 E1 이 7c 이전 사본과 대조한다). fr 은 악센트 대문자(É·À·Ç…)를, ko 는 한글을
+ * 더할 뿐이다 `[가정 — 실물 측정 전]`. 약어 목록(`ABBREVIATIONS`)은 영어 것 그대로다. */
+const SENTENCE_START = Object.freeze({
+  en: /[A-Z0-9(\[«"“']/,
+  fr: /[\p{Lu}0-9(\[«"“']/u,
+  ko: /[\p{Lu}\p{Script=Hangul}0-9(\[«"“']/u
+});
+
 /**
  * spec 4-9 / 7-2 — 문장 분리. 약어·머리글자 예외를 지킨다.
  * 종결 부호 뒤에 공백이 오고 다음 글자가 문장 시작처럼 보일 때만 자른다.
+ *
+ * @param {string} text
+ * @param {{lang?:string}} [opts] `[7c]` 원문 언어. 없거나 모르는 값이면 en 규칙.
  */
-export function splitSentences(text) {
+export function splitSentences(text, opts) {
+  const lang = opts && typeof opts.lang === 'string' ? opts.lang : 'en';
+  const startRe = Object.prototype.hasOwnProperty.call(SENTENCE_START, lang) ? SENTENCE_START[lang] : SENTENCE_START.en;
   const t = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
   if (!t) return [];
   const out = [];
@@ -113,7 +128,7 @@ export function splitSentences(text) {
     const next = t[j + 1];
     if (!next) break;
     // 소문자로 이어지면 문장이 끝난 것이 아니다
-    if (!/[A-Z0-9(\[«"“']/.test(next)) continue;
+    if (!startRe.test(next)) continue;
     out.push(head.trim());
     start = j + 1;
   }

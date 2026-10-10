@@ -80,6 +80,14 @@ export default {
   'library.card.delete': 'Delete',
   'library.card.deleteConfirm': 'Delete "{title}" and everything stored with it?',
 
+  /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
+  'library.card.srcLang': 'Source: {lang}',
+  'library.card.srcLang.auto': 'Source: {lang} (auto)',
+  'library.card.srcLang.unsupported': 'Source: unsupported language',
+  'library.card.more': 'More options for this document',
+  'library.lang.title': 'Source language',
+  'library.lang.hint': 'The language the book is written in. Used for reading aloud and translation.',
+
   'library.storage': 'Storage used: {used} of {quota}',
   'library.storage.unknown': 'Storage usage is not available in this browser.',
 
@@ -165,7 +173,7 @@ export default {
   'reader.tts.waitingPage': 'Preparing the next page…',
   // 6-3 — 안내 문구는 spec 그대로. 기기 설정 경로를 그대로 적는다.
   'reader.tts.noVoice':
-    'This device has no English voice. Install a language pack in Settings > System > Languages & input > Text-to-speech output > Speech Services by Google.',
+    'This device has no voice for {lang}. Install a language pack in Settings > System > Languages & input > Text-to-speech output > Speech Services by Google.',
   'reader.tts.notAllowed': 'The browser blocked read-aloud. Tap Play again.',
   'reader.tts.lineSkipped': 'One line could not be spoken and was skipped.',
   'reader.tts.pageTimeout': 'The next page is not ready yet. Tap Play to continue.',
@@ -249,6 +257,7 @@ export default {
   'settings.ai.test.empty': "The service answered, but the translation was empty.",
   'settings.ai.test.sample': "Sample sentences",
   'settings.ai.test.modelUnavailable': "This model is not available. Choose another model.",
+  'settings.ai.test.keyInModel': "The model field contains your API key. Nothing was sent, so the key did not leak. Fix the model field — the key goes only in the key field.",
   'settings.ai.test.meta': "{ms} ms · {model} · {code}",
   'settings.ai.test.tokens': "Input tokens {input} · output tokens {output}",
   'settings.ai.model': "Model",

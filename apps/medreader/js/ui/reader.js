@@ -13,7 +13,7 @@
    원서와 다른 글자가 된다. **`fromStored` 를 거치지 않는 경로를 만들지 마라.**
 
    ── 12-4 DOM 과 5단계의 앵커 ────────────────────────────
-     article.reflow[dir=ltr][lang=en]
+     article.reflow[dir=ltr][lang={documents.lang}]
      └ section.page[data-page]
        ├ h2.page-label
        ├ p.para[data-para-id][data-kind]
@@ -27,8 +27,12 @@
    돈다 — `flowLineIds()` 가 그 순서를 준다.
 
    ── 11-3 ────────────────────────────────────────────────
-   본문 컨테이너는 `dir="ltr" lang="en"` 고정이다. UI 가 아랍어여도 원서
-   본문은 LTR 이다. 번역 블록(8단계)만 RTL 로 들어간다.
+   본문 컨테이너는 `dir="ltr"` 고정이다. UI 가 아랍어여도 원서 본문은 LTR 이다.
+   번역 블록(8단계)만 RTL 로 들어간다.
+   `[7c]` `lang` 은 **문서의 원문 언어**(`documents.lang`)다 — en 고정이 아니다. 지원 원문
+   en·fr·ko 가 전부 LTR 이라 `dir` 은 그대로 둔다. 서재 [⋯] 나 자동 추정이 바꾸면
+   `medreader:doclang` 이벤트로 듣고 **새로고침 없이** 본문 `lang` 을 고치고 낭독 큐를
+   다시 만들게 한다(`onPageRender` 구독자 — `ui/controls.js` 의 `speaker.reload()`).
 
    ── 7000쪽 ──────────────────────────────────────────────
    한 번에 **한 쪽만** DOM 에 둔다. 쪽을 넘기면 이전 DOM 을 통째로 버린다.
@@ -46,6 +50,7 @@ import { initControls, leaveControls } from './controls.js';
 // 5-4 · 5-5 제안 칩 — 퀴즈 화면은 스스로 배선된다(이 import 가 그것을 읽힌다).
 import { updateReaderChip, onQuizEntry } from './quiz.js';
 import { TTS, ORIGINAL } from '../config.js';
+import { docLangOf } from '../text/lang.js';
 import * as render from '../pdf/render.js';
 import * as charhl from './charhl.js';
 import * as original from './original.js';
@@ -401,7 +406,34 @@ export function initReader() {
 
   // 언어가 바뀌면 이 화면의 동적 문장도 다시 만든다(16-H — 새로고침 없이).
   onLangChange(() => relabelReader());
+
+  // 7c — 열린 문서의 **원문** 언어가 바뀌었다(서재 [⋯] 또는 자동 추정).
+  document.addEventListener('medreader:doclang', (ev) => onDocLang(ev.detail || {}));
 }
+
+/**
+ * `[7c]` 원문 언어 변경 — 본문 `lang` 을 고치고, 쪽 구독자에게 알려 낭독 큐를 다시 만든다.
+ * 쪽을 다시 그리지 않는다(글자는 그대로다). 값이 같으면 아무것도 하지 않는다 —
+ * 낭독 중에 같은 언어로 "바뀌었다"고 큐를 갈면 읽던 문장이 처음부터 다시 나온다.
+ */
+function onDocLang(d) {
+  if (!d || d.docId == null || String(d.docId) !== String(state.docId) || !state.doc) return;
+  const next = typeof d.lang === 'string' && d.lang ? d.lang : 'en';
+  const before = docLangOf(state.doc);
+  state.doc = Object.assign({}, state.doc, { lang: next, langSource: d.langSource });
+  if (next === before) return;
+  // 리더를 떠나 있으면 고칠 화면이 없다 — 다음 `showReader` 가 레코드를 새로 읽는다.
+  if (!els || els.root.hidden) return;
+  const article = els && els.mount ? els.mount.querySelector('article.reflow') : null;
+  if (article) article.setAttribute('lang', next);
+  notifyPage();
+}
+
+/**
+ * `[7c]` 지금 열린 문서의 원문 언어(`documents.lang`, 없으면 `'en'`).
+ * 원문 음성(`pickVoice(sourceLang())`)·낭독 큐의 언어가 이것을 읽는다.
+ */
+export function sourceLang() { return docLangOf(state.doc); }
 
 function onAnyScroll() {
   if (!els || els.root.hidden) return;
@@ -832,9 +864,9 @@ onQuizEntry(paintQuizButton);
 /** 12-4 의 DOM 을 만든다. 문서 텍스트는 전부 `textContent` 다(13절 XSS). */
 function renderDescription(desc) {
   const article = el('article', 'reflow');
-  // 11-3 — UI 가 아랍어여도 원서 본문은 LTR·en 이다.
+  // 11-3 — UI 가 아랍어여도 원서 본문은 LTR 이다. `[7c]` lang 은 문서의 원문 언어.
   article.setAttribute('dir', 'ltr');
-  article.setAttribute('lang', 'en');
+  article.setAttribute('lang', sourceLang());
 
   const section = el('section', 'page');
   section.setAttribute('data-page', String(desc.pageNo));

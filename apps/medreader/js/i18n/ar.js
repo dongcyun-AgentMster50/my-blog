@@ -75,6 +75,14 @@ export default {
   'library.card.delete': 'حذف',
   'library.card.deleteConfirm': 'هل تريد حذف «{title}» وكل ما هو مخزَّن معه؟',
 
+  /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
+  'library.card.srcLang': 'لغة الأصل: {lang}',
+  'library.card.srcLang.auto': 'لغة الأصل: {lang} (تلقائي)',
+  'library.card.srcLang.unsupported': 'لغة الأصل: لغة غير مدعومة',
+  'library.card.more': 'خيارات أخرى لهذا المستند',
+  'library.lang.title': 'لغة النص الأصلي',
+  'library.lang.hint': 'اللغة التي كُتب بها الكتاب. تُستخدم للقراءة بصوت عالٍ وللترجمة.',
+
   'library.storage': 'المساحة المستخدمة: {used} من {quota}',
   'library.storage.unknown': 'معلومات المساحة غير متاحة في هذا المتصفح.',
 
@@ -159,7 +167,7 @@ export default {
   'reader.tts.backToLine': 'العودة إلى السطر الحالي',
   'reader.tts.waitingPage': 'جارٍ تجهيز الصفحة التالية…',
   'reader.tts.noVoice':
-    'لا يوجد صوت إنجليزي على هذا الجهاز. ثبّت حزمة لغة من: الإعدادات > النظام > اللغات والإدخال > إخراج النص إلى كلام > Speech Services by Google.',
+    'لا يوجد صوت للغة {lang} على هذا الجهاز. ثبّت حزمة لغة من: الإعدادات > النظام > اللغات والإدخال > إخراج النص إلى كلام > Speech Services by Google.',
   'reader.tts.notAllowed': 'منع المتصفّح القراءة الصوتية. اضغط تشغيل مرة أخرى.',
   'reader.tts.lineSkipped': 'تعذّرت قراءة سطر واحد فتمّ تجاوزه.',
   'reader.tts.pageTimeout': 'الصفحة التالية غير جاهزة بعد. اضغط تشغيل للمتابعة.',
@@ -243,6 +251,7 @@ export default {
   'settings.ai.test.empty': "ردّت الخدمة، لكن الترجمة جاءت فارغة.",
   'settings.ai.test.sample': "الجملتان التجريبيتان",
   'settings.ai.test.modelUnavailable': "هذا النموذج غير متاح. اختر نموذجًا آخر.",
+  'settings.ai.test.keyInModel': "حقل النموذج يحتوي على مفتاح API. لم يُرسَل أي طلب، فلم يتسرّب المفتاح. صحّح حقل النموذج — المفتاح يوضع في حقل المفتاح فقط.",
   'settings.ai.test.meta': "{ms} مللي ثانية · {model} · {code}",
   'settings.ai.test.tokens': "رموز الإدخال {input} · رموز الإخراج {output}",
   'settings.ai.model': "النموذج",
