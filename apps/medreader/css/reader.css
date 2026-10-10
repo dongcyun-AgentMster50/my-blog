@@ -364,7 +364,106 @@
   /* 고정된 .pager 뒤로 본문 마지막 줄이 숨지 않게 한다.
      base.css 가 이미 --notice-total 만큼 body 에 여백을 주므로 여기서는
      그 위에 쌓이는 쪽 이동 바·컨트롤 바만 더한다. */
-  padding-block-end: calc(var(--pager-h) + var(--tts-h) + var(--tts-gap));
+  /* `[8b-2]` 바 세 개를 여기서 따로 더하지 않고 **`--reader-chrome-bottom` 하나**에서 고지 몫만 뺀다 —
+     자막 띠가 켜지면(tokens.css `:root[data-tr-band="on"]`) 그 높이가 저절로 들어온다. */
+  padding-block-end: calc(var(--reader-chrome-bottom) - var(--notice-total));
+}
+
+/* `[8b-2]` 6-5 — `scrollIntoView({block:'center'})` 가 상단바 밑·자막 띠 밑을 가운데로 잡지 않게
+   문서 스크롤러(루트 요소)에 본문 영역을 알려 준다. 리더가 보일 때만(다른 화면은 그대로). */
+html:has(.screen[data-screen="reader"]:not([hidden])) {
+  scroll-padding-block-start: var(--bar-top);
+  scroll-padding-block-end: calc(var(--reader-chrome-bottom) + env(safe-area-inset-bottom, 0px));
+}
+
+/* `[8b-2]` 6-5 편안 영역의 아래 경계 탐침(`ui/reader.js` `bodyArea`). 토큰 높이 그대로의 보이지 않는 상자 —
+   윗변이 곧 "본문 영역의 아래 끝"이다. JS 가 calc 를 두 벌로 갖지 않게 한다. */
+.chrome-probe {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: calc(var(--reader-chrome-bottom) + env(safe-area-inset-bottom, 0px));
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── `[8b-2]` 하단 자막 띠 (7-7 · 16-D3) ───────────────
+   ★ 높이는 **토큰이 정한다** — `block-size`(min 아님). 내용이 넘치면 띠 **안에서** 스크롤된다.
+     세로 예산의 근거와 수치는 tokens.css `--tr-band-h`.
+   ★ 낭독 컨트롤 바 바로 위에 붙는다 — 아래변 = 컨트롤 바 윗변(16-D3 B2).
+   ★ 논리 속성만(16-H). 번역문 블록의 방향은 `dir` 속성(대상 언어에서 유도)이 정한다. */
+.tr-band {
+  box-sizing: border-box;
+  block-size: var(--tr-band-h);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + var(--tts-h) + env(safe-area-inset-bottom, 0px));
+  z-index: 29;
+  padding-block: var(--tr-pad);
+  /* 넓은 화면에서는 본문 폭(760px)에 맞춰 가운데로 모은다. 좁은 화면은 --sp-4. */
+  padding-inline: max(var(--sp-4), calc((100% - 760px) / 2));
+  background: var(--c-surface);
+  color: var(--c-text);
+  border-block-start: 1px solid var(--c-border);
+  /* 6-5 — 번역문을 소리 내는 동안 "지금 소리는 이쪽"을 보인다. 색만이 아니라 굵은 테두리로. */
+  border-inline-start: 4px solid transparent;
+}
+
+.tr-band[hidden] { display: none; }
+
+.tr-band[data-speaking="tr"] { border-inline-start-color: var(--c-accent); }
+
+.tr-band .tr-text {
+  margin: 0;
+  font-size: var(--tr-fs);
+  line-height: var(--tr-lh);
+  text-align: start;
+  /* 11-3 — 혼합 문장(아랍어 안의 영어 용어). 라틴 구간은 `<bdi dir="ltr">` 로도 격리된다. */
+  unicode-bidi: plaintext;
+  overflow-wrap: anywhere;
+}
+
+/* 11-4 — 글꼴은 **언어 속성**에서 고른다(`ar` 을 클래스로 박지 않는다). */
+.tr-band .tr-text:lang(ar) { font-family: var(--font-ar); }
+
+.tr-band .tr-text[hidden],
+.tr-band .tr-status[hidden],
+.tr-band .tr-retry[hidden] { display: none; }
+
+.tr-band .tr-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+  min-block-size: calc(var(--tr-fs) * var(--tr-lh));
+}
+
+.tr-band .tr-note {
+  flex: 1 1 12em;
+  min-inline-size: 0;
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: 1.4;
+  color: var(--c-text-dim);
+  text-align: start;
+}
+
+/* 16-G — 48×48. */
+.tr-band .tr-retry {
+  flex: 0 0 auto;
+  min-block-size: var(--tap);
+  min-inline-size: var(--tap);
+  padding-inline: var(--sp-4);
+  font: inherit;
+  border: 1px solid var(--c-accent);
+  border-radius: var(--radius-sm);
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  touch-action: manipulation;
 }
 
 /* ── 하단 컨트롤 바 (12-3 · 16-G) ─────────────────────

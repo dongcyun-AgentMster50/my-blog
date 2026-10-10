@@ -46,8 +46,10 @@
      그때 UI 는 지금처럼 줄 단위로 칠한다(틀린 구간을 그리느니 넓게 칠한다).
    ============================================================ */
 
-import { TTS, TTS_SYMBOLS } from '../config.js';
+import { TTS, TTS_SYMBOLS, READALONG } from '../config.js';
 import { splitSentences, endsSentence } from '../text/segment.js';
+// `[8b-1]` 번역문 발화 텍스트의 괄호 판정은 화면(bdi 격리)과 **같은 함수**를 쓴다 — 규칙이 두 벌이 되지 않게.
+import { ltrRuns } from '../text/bidi.js';
 
 /** 7-8-2 — 표 안내 문단의 kind. 번역 입력에서 빠지고 문장 번호를 받지 않는다. */
 export const TABLE_NOTICE_KIND = 'table-notice';
@@ -126,16 +128,19 @@ export function normalizeSpeech(text, symbols) {
  * 공백에서 쪼갠다(끝까지 못 쪼개면 그냥 길게 둔다 — 워치독이 받는다).
  * **경계 문자는 앞 조각에 남긴다**(읽을 때 억양이 자연스럽다).
  */
-export function splitLong(text, max) {
+export function splitLong(text, max, breaks) {
   const limit = Math.max(40, Number(max) || TTS.MAX_UTTER_CHARS);
   const s = str(text).trim();
   if (s.length <= limit) return s ? [s] : [];
+  // `[8b-1]` 경계 문자는 주입할 수 있다(번역문은 `،`·`؛` 도 — RA11). 주지 않으면 지금과 같다(`;`·`,`).
+  const marks = Array.isArray(breaks) && breaks.length ? breaks : [';', ','];
 
   const out = [];
   let rest = s;
   while (rest.length > limit) {
     const window = rest.slice(0, limit);
-    let cut = Math.max(window.lastIndexOf(';'), window.lastIndexOf(','));
+    let cut = -1;
+    for (let b = 0; b < marks.length; b++) cut = Math.max(cut, window.lastIndexOf(marks[b]));
     if (cut < limit * 0.4) cut = window.lastIndexOf(' ') - 1;   // 경계가 너무 앞이면 공백에서
     if (cut < 0) break;                                          // 쪼갤 자리가 없다
     out.push(rest.slice(0, cut + 1).trim());
@@ -143,6 +148,59 @@ export function splitLong(text, max) {
   }
   if (rest) out.push(rest);
   return out.filter(function (x) { return x.length > 0; });
+}
+
+/* ────────────────────────────────────────────────────────
+   `[8b-1]` 번역문(`tr`) 발화 텍스트 (6-1 · 운영자 결정 2026-10-08)
+   ──────────────────────────────────────────────────────── */
+
+/** 글자(`\p{L}`)가 전부 라틴 문자인가 — 괄호 묶음 안에 대상 언어 글자가 섞였으면 거짓. */
+const NON_LATIN_LETTER = /(?![\p{Script=Latin}])\p{L}/u;
+
+/** 앞에 공백이 남으면 안 되는 구두점(라틴·아랍). 괄호를 뺀 자리에서 "낱말 ، 다음" 이 되지 않게. */
+const SPACE_BEFORE_PUNCT = /\s+([،؛؟,.;:!?)\]])/gu;
+
+/**
+ * ★ 번역문 **발화 텍스트**에서 괄호 속 라틴 문자 묶음을 뺀다. 화면 표시는 그대로 둔다.
+ *
+ * 운영자 결정(2026-10-08): 아랍어 번역문의 "(C-reactive protein)" 같은 영어 병기를 아랍어 음성이
+ * 읽으면 듣기가 깨진다. 판정은 `text/bidi.js` 의 `ltrRuns` 그대로다 — 화면이 `<bdi dir="ltr">` 로
+ * 격리하는 **바로 그 괄호 묶음**만 뺀다(규칙이 두 벌이 되지 않게). 더해서 묶음 안의 글자가
+ * **전부 라틴**일 때만 뺀다 — 대상 언어 글자가 섞인 괄호는 내용이 있으므로 남긴다.
+ * 괄호 밖의 라틴 낱말(`mg/L` 등)은 건드리지 않는다(괄호 병기가 아니다).
+ *
+ * 빼고 난 자리의 이중 공백·구두점 앞 공백을 정리한다. 순수 함수.
+ * 번역문에는 기호 치환(`normalizeSpeech`)을 하지 않는다(6-1).
+ *
+ * @param {string} text 번역문(화면에 보이는 그대로)
+ * @returns {string} 음성 엔진에 넣을 문자열
+ */
+export function trSpeechText(text) {
+  const runs = ltrRuns(str(text));
+  let out = '';
+  for (let i = 0; i < runs.length; i++) {
+    const r = runs[i];
+    const paren = r.ltr && r.text.charAt(0) === '(' && r.text.charAt(r.text.length - 1) === ')';
+    // 괄호 앞이 공백이면 공백으로(뒤에서 하나로 접힌다), 낱말에 붙어 있었으면 그냥 뺀다("관절염(…)은" → "관절염은").
+    if (paren && !NON_LATIN_LETTER.test(r.text)) { out += /\s$/.test(out) || !out ? ' ' : ''; continue; }
+    out += r.text;
+  }
+  return out.replace(/\s+/g, ' ').replace(SPACE_BEFORE_PUNCT, '$1').trim();
+}
+
+/**
+ * 번역문 발화 조각들 — `trSpeechText` 다음 300자 분할(6-4). 경계에 `،`·`؛` 를 더한다(RA11).
+ * @returns {string[]}
+ */
+export function trSpeechParts(text) {
+  return splitLong(trSpeechText(text), TTS.MAX_UTTER_CHARS, READALONG.SPLIT_BREAKS_TR);
+}
+
+/** `[8b-1]` 번역문 워치독 시간 — `CHARS_PER_SEC_TR`(가정 10자/초)로 센다(6-2 `speakTr`). */
+export function trWatchdogMs(text, rate) {
+  const len = str(text).length;
+  const r = Number(rate) > 0 ? Number(rate) : 1;
+  return ((len / (READALONG.CHARS_PER_SEC_TR * r)) * 1000 + TTS.WATCHDOG_PAD_MS) * TTS.WATCHDOG_FACTOR;
 }
 
 /**

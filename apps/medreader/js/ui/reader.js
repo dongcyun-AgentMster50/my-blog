@@ -1197,6 +1197,26 @@ export function flowParasOf(desc) {
   return out;
 }
 
+/**
+ * ★ `[8b-1]` spec 7-8-2 원칙 2 — 낭독 동반 번역(`ai/readalong.js`)에 주입하는 `loadParas(n)`.
+ * 서비스가 화면 계층을 import 하지 않도록 리더가 대신 읽어 준다(3-2). 지금 쪽과 **같은 함수**
+ * (`flowParasOf(describePage(fromStored(rec)))`)를 지난다 — 표 안내는 끼우지 않는다(번역 입력이 아니다).
+ * 아직 추출되지 않은 쪽·깨진 저장본·문서가 없으면 **null**(서비스가 그 경계에서 끊는다 — 기다리지 않는다).
+ * 추출 우선순위는 건드리지 않는다(7-8-3).
+ * @param {number} pageNo
+ * @returns {Promise<Array|null>}
+ */
+export async function loadFlowParas(pageNo) {
+  const docId = state.docId;
+  const n = Math.floor(Number(pageNo));
+  if (docId == null || !Number.isFinite(n) || n < 1) return null;
+  if (state.pageCount > 0 && n > state.pageCount) return null;
+  let rec = null;
+  try { rec = await db.get('pages', [docId, n]); } catch (e) { return null; }
+  if (!rec || state.docId !== docId) return null;
+  try { return flowParasOf(describePage(fromStored(rec))); } catch (e) { return null; }
+}
+
 /* ────────────────────────────────────────────────────────
    ★ `[수정 2026-09-25 — 10a]` 리플로우 하이라이트 (spec 6-5)
 
@@ -1313,16 +1333,89 @@ function scrollToCurrent(force) {
   if (!node || typeof node.getBoundingClientRect !== 'function') return;
   const vh = window.innerHeight || 0;
   if (!vh) return;
-  const r = node.getBoundingClientRect();
-  const inComfort = r.top >= vh * TTS.COMFORT_TOP && r.bottom <= vh * TTS.COMFORT_BOTTOM;
+  // `[8b-2]` 6-5 — 편안 영역은 창 높이가 아니라 **보이는 본문 영역**(상단바 아래 ~ 하단 바·자막 띠 위)의 30~65% 다.
+  // 띠가 켜지면 창 높이의 65% 가 띠 아래에 떨어질 수 있다(12-3 수치). 그리고 문장의 **끝**이 띠에 가려도
+  // 편안 영역 밖으로 본다(16-D3 B4 — 끝 줄 아래변 ≤ 띠 윗변 − 4px). 잣대는 줄 상자가 아니라 **칠해진 문장**이다 —
+  // 큰 글자에서 원서 한 줄(`span.line`)은 화면 여러 줄로 접히고 문장은 그 중간에서 시작·끝난다.
+  const area = bodyArea(vh);
+  const h = area.bottom - area.top;
+  const ext = sentenceExtent(node);
+  const inComfort = ext.top >= area.top + h * TTS.COMFORT_TOP && ext.firstBottom <= area.top + h * TTS.COMFORT_BOTTOM &&
+    ext.bottom <= area.bottom - BODY_EDGE_PX;
   if (inComfort && !force) return;
 
   state.programScrollAt = Date.now();
+  const behavior = reducedMotion() ? 'auto' : 'smooth';
+  // 첫 화면 줄을 본문 영역 가운데로(옛 동작과 같은 자리). 그 자리에서 문장 끝이 띠·하단 바에 닿는 긴 문장이면
+  // 끝이 본문 영역 안에 오도록 올리고, 그래도 영역보다 길면 시작을 영역 맨 위에 둔다(읽기 시작점이 먼저다).
+  const rowH = ext.firstBottom - ext.top;
+  const sh = ext.bottom - ext.top;
+  let want = area.top + h / 2 - rowH / 2;
+  if (want + sh > area.bottom - BODY_EDGE_PX * 2) want = area.bottom - BODY_EDGE_PX * 2 - sh;
+  if (want < area.top + BODY_EDGE_PX) want = area.top + BODY_EDGE_PX;
+  const dy = ext.top - want;
+  try { window.scrollBy({ top: dy, behavior: behavior }); } catch (e) { window.scrollBy(0, dy); }
+}
+
+/**
+ * `[8b-2]` 지금 문장이 화면에서 차지하는 세로 범위 `{top, bottom, firstBottom}`(px).
+ * 글자 구간 하이라이트(10a)가 칠해져 있으면 그 Range 들의 상자, 아니면 줄 요소들의 상자.
+ */
+function sentenceExtent(firstNode) {
+  let rects = [];
   try {
-    node.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
-  } catch (e) {
-    node.scrollIntoView(true);        // 옛 브라우저 — 옵션 객체를 모른다
+    const hl = charhl.highlightsSupported() ? CSS.highlights.get(HL_NAME) : null;
+    if (hl && state.currentRanges) hl.forEach((rg) => { rects.push(...Array.from(rg.getClientRects())); });
+  } catch (e) { rects = []; }
+  rects = rects.filter((q) => q.width > 0 && q.height > 0);
+  if (!rects.length) {
+    for (let i = 0; i < state.currentLineIds.length; i++) {
+      const n = lineElement(state.currentLineIds[i]);
+      if (n) rects.push(...Array.from(n.getClientRects()));
+    }
+    rects = rects.filter((q) => q.height > 0);
   }
+  if (!rects.length) { const r = firstNode.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, firstBottom: r.bottom }; }
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const q of rects) { if (q.top < top) top = q.top; if (q.bottom > bottom) bottom = q.bottom; }
+  // 첫 화면 줄 — 맨 위 상자와 세로로 겹치는 상자들의 아래변
+  let firstBottom = top;
+  for (const q of rects) if (q.top < top + 1 && q.bottom > firstBottom) firstBottom = q.bottom;
+  return { top: top, bottom: bottom, firstBottom: firstBottom };
+}
+
+/** `[8b-2]` 본문 끝 줄과 띠 사이에 남기는 틈(16-D3 B4 "띠 윗변 − 4px"). */
+const BODY_EDGE_PX = 4;
+
+/**
+ * `[8b-2]` 6-5 보이는 본문 영역 `[--bar-top, innerHeight − --reader-chrome-bottom − safe-area]`(px).
+ * 아래 경계는 **토큰을 그대로 쓰는 탐침**의 윗변으로 잰다 — 띠가 켜지면(`<html data-tr-band="on">`)
+ * 토큰이 늘어나 경계가 저절로 올라간다. 계산식을 JS 에 두 벌 두지 않는다.
+ */
+function bodyArea(vh) {
+  let top = 0;
+  try { top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bar-top')) || 0; } catch (e) { top = 0; }
+  let bottom = vh;
+  const probe = chromeProbe();
+  if (probe) {
+    const pr = probe.getBoundingClientRect();
+    if (pr.height > 0) bottom = Math.min(vh, pr.top);
+  }
+  return { top: top, bottom: Math.max(top + 1, bottom) };
+}
+
+/** 아래 크롬 높이 탐침 — 보이지 않고 눌리지 않는 고정 상자 하나(reader.css `.chrome-probe`). */
+function chromeProbe() {
+  if (!els || !els.root) return null;
+  let p = els.root.querySelector('.chrome-probe');
+  if (!p) {
+    p = document.createElement('div');
+    p.className = 'chrome-probe';
+    p.setAttribute('aria-hidden', 'true');
+    els.root.appendChild(p);
+  }
+  return p;
 }
 
 function reducedMotion() {

@@ -19,10 +19,13 @@
    - 번역문 음성 = `pickVoice(ai.translationLang)`, 없으면 유효 모드 `show` + 알림 1회(RA9). 원문 음성은 7c 의 `syncSourceVoice` 경로 그대로.
    - **표 안내 발화는 UI 언어 음성으로**(6-1 — 지금은 원서 음성이 UI 언어 문장을 읽는다).
 3. **[다시 시도]의 서비스 쪽** — `exhausted`(Gemini 429 에 `Retry-After` 가 거의 없어 사실상 다음 날 00:00 까지)·`cooldown`·`model` 을 **사용자 재시도가 즉시 `ready` 로** 돌리는 함수(7-6). 화면 버튼은 8b-2 가 붙인다.
-4. **8b-2 에 넘길 계약**(보고서에 표로): 띠가 구독할 이벤트(현재 문장의 번역 준비/대기/없음/막힘+사유, 유효 모드 변화, 상태 알림), 띠가 부를 함수([다시 시도], 모드 변경), 데이터 모양.
+4. **음성 목록을 끝까지 듣는다**(운영자 실기기 이상, 2026-10-10): Galaxy·Chrome 에서 영어·아랍어 언어팩이 설치돼 있는데 앱이 "영어 음성 없음"·아랍어 "번역문 음성: 없음"으로, 한국어만 "있음"으로 판정했다. `tts/voices.js` 의 `loadVoices` 는 **첫 `getVoices()` 가 비어 있지 않으면 그 자리에서 그 목록을 최종으로 쓴다** — Android 가 기본 언어 음성만 먼저 주고 나머지를 `voiceschanged` 로 늦게 주면 놓친다(가설 — 진단 페이지 `dev/voices.html` 결과 대기, 결과가 오면 오케스트레이터가 알려 준다).
+   어느 쪽이든 맞는 수정으로: `voiceschanged` 를 **계속** 구독해 목록이 바뀔 때마다 원문 음성·번역문 음성·유효 모드·"음성 없음" 판정을 다시 한다. "음성 없음" 알림은 **목록이 안정된 뒤**(첫 응답 후 일정 시간 변화 없음, 상수로)에만, 그리고 나중에 음성이 생기면 알림을 거두고 유효 모드를 되돌린다. 음성 객체가 없어도 `utterance.lang` 만으로 발화를 시도하는 기존 경로는 유지. 설정 화면의 "번역문 음성: 있음/없음"도 같은 판정을 구독한다(설정 화면은 배선만 — 화면 요소 추가 없음). 테스트: 첫 목록에 `ko` 만 → 1초 뒤 `en`·`ar` 추가 → 판정이 "있음"으로 바뀌고 알림 0.
+5. **미지원 언어(`und`) 문서**: 지금 배너가 "und 음성이 없습니다"로 나온다. `und` 면 원문 낭독 대상 언어 이름 대신 "이 문서의 언어는 낭독을 지원하지 않습니다" 류 문구(네 언어, 키 집합 동일).
+6. **8b-2 에 넘길 계약**(보고서에 표로): 띠가 구독할 이벤트(현재 문장의 번역 준비/대기/없음/막힘+사유, 유효 모드 변화, 상태 알림), 띠가 부를 함수([다시 시도], 모드 변경), 데이터 모양.
 
 ## 고쳐도 되는 파일
-새 `js/ai/readalong.js`, `js/tts/speaker.js`(발화 단계·번역문 음성·표 안내 음성), `js/tts/text.js`(번역문 분할·발화 텍스트 정리 함수), `js/tts/voices.js`(필요하면), `js/ai/pipeline.js`(재시도 함수·이벤트 필드만), `js/config.js` 의 `READALONG` 블록, `js/ui/controls.js`·`js/ui/reader.js`(readalong 서비스 **배선**만 — `loadParas` 주입·생명주기. 화면 요소 추가 금지), `tests/` 새 테스트(`readalong.test.mjs`·`speaker-tr.test.mjs` 등).
+새 `js/ai/readalong.js`, `js/tts/speaker.js`(발화 단계·번역문 음성·표 안내 음성), `js/tts/text.js`(번역문 분할·발화 텍스트 정리 함수), `js/tts/voices.js`(위 4 — 음성 목록 구독), `js/ui/settings.js`(위 4 의 판정 구독 배선만), `js/i18n/*.js`(위 5 의 문구만, 키 집합 동일), `js/ai/pipeline.js`(재시도 함수·이벤트 필드만), `js/config.js` 의 `READALONG` 블록, `js/ui/controls.js`·`js/ui/reader.js`(readalong 서비스 **배선**만 — `loadParas` 주입·생명주기. 화면 요소 추가 금지), `tests/` 새 테스트(`readalong.test.mjs`·`speaker-tr.test.mjs` 등).
 **건드리지 않는 것:** `spec.md`, `js/text/*`(bidi 의 판정 재사용은 import 로), 4절 알고리즘, `gemini.js` 판정·모델 필터, `js/quiz/*`, CSS·`index.html`(8b-2 몫).
 
 ## 반드시 지킬 것

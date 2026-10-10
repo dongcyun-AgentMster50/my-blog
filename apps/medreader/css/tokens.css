@@ -71,6 +71,21 @@
      본문 아래 여백·팝오버·원본 스크롤 상자가 모두 이 하나를 쓴다. */
   --reader-chrome-bottom: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + var(--tts-h));
 
+  /* ── `[8b-2]` 하단 자막 띠 (7-7) ─────────────────────────
+     ★ 띠 높이는 **내용이 아니라 이 토큰이 정한다**(`block-size`, min 아님).
+     10b 의 결함("토큰이 실제 렌더 높이보다 작아 원본 쪽 아래가 잘렸다")을
+     되풀이하지 않으려는 것이다. 넘치는 번역문은 띠 **안에서** 스크롤된다.
+     글자는 Aa 슬라이더(--reader-fs)를 따라가되 24px 에서 멈춘다.
+       16px → 18 × 1.8 × 3 + 12 + 1 = 110.2
+       22px → 19.8 × 1.8 × 3 + 13   = 119.92
+       40px → 24 × 1.8 × 3 + 13     = 142.6
+       가로 800×360 → 22dvh = 79.2 (약 2줄 — 넘치면 띠 안 스크롤) */
+  --tr-fs: clamp(18px, calc(var(--reader-fs, 22px) * 0.9), 24px);
+  --tr-lh: 1.8;              /* 아랍어는 위아래 돌출이 커 여백이 필요하다(11-4) */
+  --tr-lines: 3;
+  --tr-pad: 6px;             /* 위아래 각각 */
+  --tr-band-h: min(calc(var(--tr-lines) * var(--tr-fs) * var(--tr-lh) + 2 * var(--tr-pad) + 1px), 22dvh);   /* +1px = 위 테두리 */
+
   --fs-sm: 13px;
   --fs-base: 16px;
   --fs-lg: 20px;
@@ -100,6 +115,15 @@
   /* [수정 2026-09-22] 읽은 줄은 배경이 아니라 **옅은 글자색**이다.
      배경으로 칠하면 현재 줄 하이라이트와 색 계열이 겹쳐 어디를 읽는지 묻힌다. */
   --hl-done: #9a958c;
+}
+
+/* `[8b-2]` 띠가 켜지면(유효 모드 show·speak — `ui/trband.js` 가 `<html data-tr-band="on">` 을 건다)
+   **`--reader-chrome-bottom` 하나가 늘어난다.** 본문 아래 여백·원본 뷰 flex 상자·팝오버 위치·
+   편안 영역·`scroll-padding` 이 전부 이 토큰을 쓰므로(10b) 따로 고칠 곳이 없다.
+   꺼지면 이 규칙이 빠져 138px 로 돌아오고 빈 자리가 남지 않는다.
+   ★ `body` 가 아니라 `html` 에 건다 — 문서 스크롤러의 `scroll-padding` 은 루트 요소에 있다(6-5). */
+:root[data-tr-band="on"] {
+  --reader-chrome-bottom: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + var(--tts-h) + var(--tr-band-h));
 }
 
 /* system 테마 — 사용자가 명시적으로 고르지 않았을 때만 OS 를 따른다. */

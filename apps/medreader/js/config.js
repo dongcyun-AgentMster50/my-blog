@@ -528,6 +528,47 @@ export const PIPELINE = Object.freeze({
   MAX_REQ_CHARS: 6000
 });
 
+/* ────────────────────────────────────────────────────────
+   `[8b-1]` 7-8-6 — 낭독 동반 번역 상수. **추가만** 했다.
+   ★ 무료 티어 한도 숫자는 여기에도 없다(15절).
+   ──────────────────────────────────────────────────────── */
+export const READALONG = Object.freeze({
+  /* 창 `READ_AHEAD_CHARS = ai.maxReqChars(기본 PIPELINE.MAX_REQ_CHARS) × 이 값` = 9,000자.
+     숫자를 두 곳에 두지 않는다. 선행 요청 문턱 = 창 − maxReqChars(기본 3,000) —
+     덮인 거리가 이 이하로 떨어지면 다음 청크를 보낸다. maxReqChars 를 바꾸면 같은 비율로 따라간다. */
+  READ_AHEAD_FACTOR: 1.5,
+
+  /* 냉시작(커서 문장이 아직 메모리에 없음) head 청크 크기. 0 이면 head 를 끈다(RA12 의 스텁). */
+  HEAD_CHARS: 600,
+
+  /* speak 모드에서 번역 도착을 기다리는 상한(6-2 `tr-wait`). [가정] 8b 실기기에서 조정 */
+  TR_WAIT_MS: 4000,
+
+  /* 연속 이만큼 `tr-wait` 이 상한으로 끝나면 `lagging` 을 한 번 알린다(6-2). */
+  LAG_NOTICE_AFTER: 3,
+
+  /* 번역문 300자 분할 경계(6-4 · RA11). 대상 언어가 바뀌어도 해가 없는 문자들. */
+  SPLIT_BREAKS_TR: Object.freeze(['،', '؛', ',', ';']),
+
+  /* [가정] 번역문 워치독용 초당 글자 수(7-8-6 `TTS.CHARS_PER_SEC_TR`). 8b 실기기에서 잰다.
+     TTS 블록은 8b-1 의 수정 범위 밖이라 이 블록에 둔다. */
+  CHARS_PER_SEC_TR: 10,
+
+  /* 창을 걸으며 문단을 불러올 때, 문장이 하나도 없는 쪽(표뿐인 쪽 등)을 이만큼까지만 건너뛴다. */
+  MAX_EMPTY_PAGES: 20,
+
+  /* 음성 목록이 "안정됐다"고 보는 시간 — 첫 응답 뒤 이만큼 목록이 바뀌지 않으면.
+     [가정] Android 가 기본 언어 음성만 먼저 주고 나머지를 `voiceschanged` 로 늦게 주는 경우
+     (2026-10-10 운영자 폰). "음성 없음" 판정·알림은 안정된 뒤에만 한다. */
+  VOICES_SETTLE_MS: 3000,
+
+  /* 번역문·표 안내 발화의 `utterance.lang` 기본 지역(고른 음성이 없을 때). 음성 객체 없이 이 태그만으로
+     소리가 나는 것을 확인했다 — 2026-10-10 운영자 폰(Galaxy·Chrome 154) 진단: 목록에 아랍어 음성 0개,
+     `lang = 'ar-SA'`·voice 없음으로 발화 → 실제로 아랍어가 들렸다. 원문 언어 표(`TTS_LANG_REGION`)와 겹치는
+     언어는 거기서 읽는다(여기는 그 표에 없는 대상 언어만). */
+  TR_LANG_REGION: Object.freeze({ ar: 'ar-SA' })
+});
+
 /* 8-4 키 형식 검사 — **길이 하한만** 두고 정확한 길이를 강제하지 않는다.
    불일치는 **경고만** 하고 저장을 막지 않는다(형식이 또 바뀔 수 있다). */
 export const AI_KEY_PATTERNS = Object.freeze({

@@ -17,20 +17,39 @@
    ============================================================ */
 
 import * as settings from '../settings.js';
-import { t, applyTranslations, formatNumber, onLangChange } from '../i18n/index.js';
-import { TTS } from '../config.js';
+import { t, applyTranslations, formatNumber, onLangChange, getLang } from '../i18n/index.js';
+import { TTS, AI } from '../config.js';
 import { createSpeaker, CODES } from '../tts/speaker.js';
-import { loadVoices, pickVoice, availability, utteranceLang } from '../tts/voices.js';
+import { pickVoice, utteranceLang, sharedVoiceWatch, speechLang } from '../tts/voices.js';
 import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
-  onLineTap, onPageRender, sourceLang
+  onLineTap, onPageRender, sourceLang, loadFlowParas
 } from './reader.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
 import { renderReadalongRow } from './settings.js';
+// `[8b-1]` 유효 모드 계산에 쓰는 값 읽기 — 설정 AI 탭과 같은 함수.
+import { readalongState, normalizeTranslationLang } from './settings.js';
+// `[8b-1]` 낭독 동반 번역 서비스 배선(7-8). 화면 요소는 8b-2(자막 띠)가 붙인다 — 여기는 배선만.
+import { createPipeline } from '../ai/pipeline.js';
+import { createReadalong } from '../ai/readalong.js';
+import * as keys from '../privacy/keys.js';
+import { hashHexSync } from '../hash.js';
+import { SUPPORTED_SRC } from '../text/lang.js';
+// `[8b-2]` 하단 자막 띠(7-7) — 8b-1 계약 8절: controls 가 만든 readalong·speaker 를 넘기는 한 줄.
+import { initTrBand } from './trband.js';
 
 let els = null;
 let speaker = null;
 let voices = [];
+/** `[8b-1]` 파이프라인(8a)과 낭독 동반 번역 서비스 — 리더 컨트롤이 하나씩 갖는다. */
+let pipeline = null;
+let readalong = null;
+/** `[8b-2]` 자막 띠 — `sync()`(유효 모드 → 자리) · `leave()`(리더를 떠남). */
+let trband = null;
+/** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
+let lastConfigFp = null;
+/** `[8b-1]` 음성 목록 감시 구독(한 번). */
+let voicesSub = null;
 /** 마지막 진행 값 — 언어를 바꾸면 이 문장도 다시 만들어야 한다(16-H). */
 let lastProgress = { index: 0, total: 0 };
 /** 6-3 — 배너는 **세션당 1회**다. 닫고 나면 이 세션에서는 다시 뜨지 않는다. */
@@ -70,9 +89,15 @@ export function initControls() {
   };
   if (!els.bar) { els = null; return; }
 
+  /* `[8b-1]` 7-8 — 파이프라인·낭독 동반 번역. 키는 호출마다 저장소에서 읽는다(13절 — 들고 있지 않는다).
+     `loadParas` 는 리더가 주입한다(서비스가 화면 계층을 import 하지 않게 — 3-2). */
+  pipeline = createPipeline({ getKey: () => keys.readKeySecret(providerId()) || '' });
+  readalong = createReadalong({ pipeline: pipeline, loadParas: loadFlowParas, getSetting: settings.get });
+
   speaker = createSpeaker({
     synth: (typeof window !== 'undefined' && window.speechSynthesis) || null,
     makeUtterance: makeUtterance,
+    translation: readalong,
     view: {
       paras: flowParas,
       page: function () { const p = currentPage(); return { page: p.page, pageCount: p.pageCount }; },
@@ -86,13 +111,16 @@ export function initControls() {
     requestWakeLock: requestWakeLock
   });
 
+  // `[8b-2]` 띠가 같은 두 객체의 이벤트를 듣는다(띠는 speaker 를 조작하지 않는다).
+  trband = initTrBand({ readalong: readalong, speaker: speaker });
+
   /* ── 버튼 ──────────────────────────────────────────
      ★ 6-4 (5) — 재생은 **핸들러 안에서 동기적으로** `speak()` 까지 간다.
      `play()` 앞에 `await` 를 두면 안드로이드에서 소리가 나지 않는다. */
   els.play.addEventListener('click', () => {
     const s = speaker.getState();
     if (s === 'speaking') speaker.pause();
-    else speaker.play();
+    else { syncReadalong(); speaker.play(); }     // 8b-1 — 설정값을 동기적으로 다시 읽고(await 없음) 곧장 재생
   });
   els.prev.addEventListener('click', () => speaker.prev());
   els.next.addEventListener('click', () => speaker.next());
@@ -117,6 +145,7 @@ export function initControls() {
     const u = btn.getAttribute('data-unit');
     speaker.setUnit(u);
     settings.set('tts.unit', speaker.getUnit()).catch(() => { });
+    syncReadalong();                     // 8b-1 — 줄 단위면 낭독 동반 번역이 쉰다(7-8-1)
     paintRatePanel();
   });
 
@@ -146,8 +175,17 @@ export function initControls() {
   speaker.addEventListener('linechange', (ev) => {
     const d = ev.detail || {};
     paintProgress(d.index, d.total);
+    readalong.onProgress(d.page, d.seg);          // 8b-1 — 커서만 옮기고 refill(7-8-3)
   });
-  speaker.addEventListener('statechange', () => paintBar());
+  // 8b-1 — 쪽 큐를 새로 만들었다(play·쪽 넘김·reload) → 그 쪽 문장을 흐름에 넣는다(7-8-3 onQueue).
+  speaker.addEventListener('queue', (ev) => {
+    const d = ev.detail || {};
+    readalong.onQueue(d.page, d.units, d.seg);
+  });
+  speaker.addEventListener('statechange', () => {
+    paintBar();
+    readalong.setActive(speaker.getState() === 'speaking');   // 낭독 중일 때만 요청한다
+  });
   speaker.addEventListener('repeatchange', () => { paintRepeat(); paintProgress(lastProgress.index, lastProgress.total); });
   speaker.addEventListener('end', () => { paintBar(); paintProgress(0, 0); });
   speaker.addEventListener('error', (ev) => onSpeakerError((ev.detail || {}).code));
@@ -163,7 +201,7 @@ export function initControls() {
   /* 쪽이 새로 그려지면 큐를 그 쪽 것으로 갈아 끼운다.
      `[7c]` 원문 언어가 바뀌었으면(서재 [⋯]·자동 추정 — 리더가 `medreader:doclang` 을 듣고
      여기를 부른다) **음성을 먼저** 다시 고르고 큐를 간다. 순서가 바뀌면 새 큐가 옛 언어로 나뉜다. */
-  onPageRender(() => { syncSourceVoice(); speaker.reload(); attachDebugHook(); });
+  onPageRender(() => { syncSourceVoice(); speaker.reload(); syncReadalong(); attachDebugHook(); });
 
   /* ── 6-4 백그라운드 ────────────────────────────────
      hidden 이면 일시정지로 **상태를 분명히 하고**, 다시 보일 때
@@ -176,7 +214,16 @@ export function initControls() {
     }
   });
 
-  onLangChange(() => { paintBar(); paintRatePanel(); paintProgress(lastProgress.index, lastProgress.total); });
+  onLangChange(() => { paintBar(); paintRatePanel(); paintProgress(lastProgress.index, lastProgress.total); syncNoticeVoice(); });
+
+  /* `[8b-2]` 속도 팝오버의 "번역 따라가기" 줄(7b 에서 저장만 되던 것)이 이제 실제로 동작한다.
+     저장은 settings.js 가 그 줄(`[data-readalong-host]`)에 건 위임이 한다. 여기서는 **팝오버(조상)의 버블 단계**에서
+     들어 그 저장이 끝난 뒤에 유효 모드를 다시 계산한다 — DOM 전파 순서가 보장하므로 타이머가 필요 없다
+     (`settings.set` 은 캐시를 먼저 고친다). 띠는 `syncReadalong()` 끝의 `trband.sync()` 로 따라온다. */
+  els.ratePanel.addEventListener('click', (ev) => {
+    const hit = ev.target && ev.target.closest ? ev.target.closest('[data-readalong-mode], [data-readalong-source]') : null;
+    if (hit && els.ratePanel.contains(hit)) syncReadalong();
+  });
 
   attachDebugHook();
 
@@ -204,7 +251,13 @@ function attachDebugHook() {
     current: function () { return speaker.getCurrent(); },
     // 7c — 원문 발화의 `utterance.lang`(16-C `[D]` "fr 문서면 fr-*").
     docLang: function () { return speaker.getDocLang(); },
-    voices: function () { return voices.map((v) => ({ lang: v.lang, name: v.name, local: v.localService })); }
+    voices: function () { return voices.map((v) => ({ lang: v.lang, name: v.name, local: v.localService })); },
+    // 8b-1 — 발화 단계·낭독 동반 번역 상태(키·원문 문장을 담지 않는다).
+    phase: function () { return speaker.getPhase(); },
+    readalong: function () {
+      const st = readalong.stats();
+      return { mode: readalong.mode(), remote: readalong.remoteState(), calls: st.calls, chars: st.chars, maxInflight: st.maxInflight };
+    }
   };
 }
 
@@ -212,6 +265,8 @@ function attachDebugHook() {
 export function leaveControls() {
   if (!speaker) return;
   speaker.stop();
+  if (readalong) readalong.setActive(false);
+  if (trband) trband.leave();
   toggleRatePanel(false);
 }
 
@@ -237,14 +292,34 @@ async function restoreSettings() {
 /** `[7c]` 음성 목록을 한 번이라도 읽었는가(1.5초 타임아웃으로 빈 목록이 와도 참). */
 let voicesLoaded = false;
 
+/**
+ * `[8b-1]` 음성 목록을 **끝까지** 듣는다 — 목록이 바뀔 때마다 원문 음성·번역문 음성·표 안내 음성·유효 모드를
+ * 다시 고른다(`sharedVoiceWatch` — 설정 화면과 같은 감시자). 옛 `loadVoices` 는 첫 응답(또는 1.5초 타임아웃의
+ * 빈 목록)을 최종으로 썼다 — 그 빈 목록으로 "영어 음성 없음"을 판정한 것이 운영자 폰 오경고의 경로다(보고서).
+ */
 async function refreshVoices() {
   const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
   if (!synth) { notice('reader.tts.unsupported'); return; }
 
-  voices = await loadVoices(synth, TTS.VOICES_TIMEOUT_MS);
-  voicesLoaded = true;
+  const watch = sharedVoiceWatch(synth);
+  if (!voicesSub) voicesSub = watch.subscribe(applyVoices);
+  const snap = watch.snapshot();
+  voices = snap.voices;
+  voicesLoaded = snap.loaded;
   voicesLang = null;          // 목록이 새로 왔다 — 다시 고른다
   syncSourceVoice();
+  syncTrVoice();
+  syncNoticeVoice();
+}
+
+/** 음성 목록이 바뀌었다(늦게 온 음성 포함). */
+function applyVoices(snap) {
+  voices = snap.voices;
+  voicesLoaded = snap.loaded;
+  voicesLang = null;
+  syncSourceVoice();
+  syncTrVoice();
+  syncNoticeVoice();
 }
 
 /** `[7c]` 지금 음성을 고른 원문 언어. 같으면 다시 고르지 않는다(쪽마다 불린다). */
@@ -263,15 +338,100 @@ function syncSourceVoice() {
   const v = pickVoice(lang, voices, settings.get('tts.voice.' + lang));
   if (v) speaker.setVoice(lang, v);
   speaker.setDocLang(utteranceLang(lang, v));
-  // 목록을 아직 안 읽었으면(`refreshVoices` 전) 판정하지 않는다 — 읽은 뒤 다시 불린다.
-  if (voicesLoaded && !availability(voices, lang)[lang]) noVoiceNotice(lang);
+  // `[8b-1 — 오케스트레이터 결정 2026-10-10]` **목록만으로 "음성 없음"을 말하지 않는다.** 목록에 그 언어가
+  // 없어도 `utterance.lang` 만으로 소리가 나는 기기가 있다(운영자 폰 — 목록에 아랍어 0개인데 lang 으로 발화됨).
+  // "음성 없음"은 실제 발화 오류(`CODES.NO_VOICE`)로만 낸다. 미지원 언어(`und` 등)는 따로 안내한다.
+  if (SUPPORTED_SRC.indexOf(lang) < 0) { notice('reader.tts.unsupportedLang', 'warn'); return; }
+  // 나중에 음성이 목록에 생겼다 — 오류로 띄웠던 "음성 없음" 배너를 거둔다.
+  if (v) withdrawNotice('reader.tts.noVoice', 'reader.tts.noVoice:' + lang);
 }
 
 /** `[7c]` "음성 없음" 배너 — `{lang}` 은 원문 언어의 자국어 이름(`onboarding.lang.*`). */
 function noVoiceNotice(lang) {
+  // `[8b-1]` 미지원 언어 문서(`und`)는 "und 음성이 없습니다"가 아니라 "이 문서의 언어는 낭독을 지원하지 않습니다".
+  if (SUPPORTED_SRC.indexOf(lang) < 0) { notice('reader.tts.unsupportedLang', 'warn'); return; }
   const k = 'onboarding.lang.' + lang;
   const name = t(k) === k ? String(lang) : t(k);
   notice('reader.tts.noVoice', 'warn', { lang: name }, 'reader.tts.noVoice:' + lang);
+}
+
+/**
+ * `[8b-1]` 띄웠던 배너를 거둔다(음성이 나중에 생겼다). 배너의 닫기 단추가 `main.js` 의 기록까지 지우므로
+ * 그것을 누른다 — 배너 장치를 두 벌로 만들지 않는다. 다시 필요해지면 다시 뜰 수 있게 "한 번" 기록도 지운다.
+ */
+function withdrawNotice(key, once) {
+  const id = once || key;
+  if (!noticedOnce.has(id)) return;
+  noticedOnce.delete(id);
+  const bar = document.querySelector('#banners .banner[data-key="' + key + '"]');
+  const close = bar ? bar.querySelector('button.banner-close') : null;
+  if (close) close.click();
+}
+
+/* ────────────────────────────────────────────────────────
+   `[8b-1]` 낭독 동반 번역 배선 (7-8) — 화면 없이 서비스·speaker 만 잇는다.
+   띠·상태 바 문구는 8b-2 가 `readalong` 의 `mode`·`notice`·`remote`·`change` 이벤트에 붙인다.
+   ──────────────────────────────────────────────────────── */
+
+function providerId() {
+  const p = settings.get('ai.provider');
+  return typeof p === 'string' && p ? p : AI.DEFAULT_PROVIDER;
+}
+
+function targetLang() { return normalizeTranslationLang(settings.get('ai.translationLang')); }
+
+/** 번역문 음성 — `pickVoice(target)`(7-8-5). 목록에 없으면 voice 없이 `utterance.lang` 만으로 시도한다. */
+function syncTrVoice() {
+  if (!speaker) return;
+  const target = targetLang();
+  const v = pickVoice(target, voices, settings.get('tts.voice.' + target));
+  const was = speaker.isTrDisabled();
+  speaker.setTrVoice(speechLang(target, v), v);
+  if (was && !speaker.isTrDisabled()) syncReadalong();     // 음성이 생겼다 — 유효 모드를 되돌린다
+}
+
+/** 6-1 — 표 안내는 UI 언어 문장이다. UI 언어 음성으로 읽는다. */
+function syncNoticeVoice() {
+  if (!speaker) return;
+  const ui = getLang();
+  const v = pickVoice(ui, voices, settings.get('tts.voice.' + ui));
+  speaker.setNoticeVoice(speechLang(ui, v), v);
+}
+
+/**
+ * 유효 모드(7-8-1)를 다시 계산해 서비스와 speaker 에 준다. **동기** — 재생 탭 핸들러 안에서 불린다(6-4 (5)).
+ * 번역문 음성은 **실제 발화 오류**(speaker 의 `TR_VOICE_FAILED`)일 때만 "없음"이다 — 목록만으로 내리지 않는다.
+ */
+function syncReadalong() {
+  if (!speaker || !readalong) return;
+  const st = readalongState();
+  const page = currentPage();
+  const src = sourceLang();
+  const target = targetLang();
+  const pid = providerId();
+  const key = String(keys.readKeySecret(pid) || '').trim();
+  // 키·모델·프로바이더가 바뀌었으면 파이프라인의 막힌 상태(no-key·model·region)를 풀 기회를 준다(7-6).
+  const fp = hashHexSync(pid + '|' + String(settings.get('ai.model') || '') + '|' + key);
+  if (lastConfigFp !== null && fp !== lastConfigFp) {
+    pipeline.configChanged('provider');
+    pipeline.configChanged('model');
+    pipeline.configChanged('key');
+  }
+  lastConfigFp = fp;
+  readalong.setDoc({ docId: page.docId, lang: src, target: target, pageCount: page.pageCount });
+  const em = readalong.setContext({
+    mode: st.mode,
+    consented: !!settings.get('privacy.consentedAt'),
+    srcLang: src,
+    supportedSrc: SUPPORTED_SRC,
+    targetLang: target,
+    unit: speaker.getUnit(),
+    hasKey: !!key,
+    trVoice: speaker.isTrDisabled() ? false : null
+  });
+  speaker.setReadalong({ mode: em.mode, speakSource: st.speakSource });
+  // `[8b-2]` 띠 자리 — 값이 같아 `mode` 이벤트가 없어도(리더에 다시 들어옴) 여기서 맞춘다.
+  if (trband) trband.sync();
 }
 
 /** 6-4 Wake Lock — 여기만이 기능 감지로 분기하는 곳이다. */
@@ -360,7 +520,6 @@ function paintRatePanel() {
   paintUnit();
   paintRepeat();
   // 7b — 열 때마다 설정값에서 다시 그린다. 설정 AI 탭에서 바꾼 값이 여기에 그대로 보인다.
-  // 저장만 한다 — 낭독 동작은 8b 가 붙인다(`speaker` 를 건드리지 않는다).
   if (els.readalongHost) renderReadalongRow(els.readalongHost);
 }
 
@@ -456,6 +615,9 @@ const CODE_KEYS = Object.freeze({
 });
 
 function onSpeakerError(code) {
+  // `[8b-1]` 첫 번역문 발화가 실패 — 번역문 음성 불가(7-8-5). 유효 모드가 show 로 내려가고 서비스가
+  // `notice` 를 한 번 낸다(문구는 8b-2). 원문 낭독은 그대로 이어진다.
+  if (code === CODES.TR_VOICE_FAILED) { syncReadalong(); return; }
   const key = CODE_KEYS[code];
   if (!key) return;
   // 건너뛴 줄 하나로 배너를 띄우지 않는다 — 시끄럽고, 워치독이 이미 이었다.

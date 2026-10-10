@@ -35,9 +35,10 @@ import * as keys from '../privacy/keys.js';
 import { redactString } from '../privacy/redact.js';
 import { AI, TTS } from '../config.js';
 import { t, applyTranslations, formatNumber, onLangChange, BUNDLES, dirOf } from '../i18n/index.js';
-import { loadVoices, pickVoice } from '../tts/voices.js';
+import { pickVoice, sharedVoiceWatch, voiceVerdict, speechLang } from '../tts/voices.js';
 import { piiWarning } from './notice.js';
-import { ltrRuns } from '../text/bidi.js';
+// `[8b-2]` 번역문 bidi 격리는 화면 공용 모듈 하나(자막 띠와 같은 함수 — 규칙 한 벌).
+import { appendBidiText } from './bididom.js';
 import { TEST_PROMPT } from '../ai/prompts.js';
 import { parseAIJson } from '../ai/jsonrepair.js';
 
@@ -243,9 +244,34 @@ export function nativeLangName(code) {
   return c;
 }
 
-/** 6-3 — 번역문 음성 유무. `pickVoice(target)` 그대로. */
+/** 6-3 — 번역문 음성이 **목록에** 있는가. `pickVoice(target)` 그대로.
+ *  `[8b-1]` 'no' 는 "목록에 없음"일 뿐 "말할 수 없음"이 아니다 — 화면은 `voiceVerdict` 로 세 갈래를 낸다. */
 export function voiceStatus(lang, voices) {
   return pickVoice(lang, voices) ? 'yes' : 'no';
+}
+
+/**
+ * `[8b-1 — 오케스트레이터 결정 2026-10-10]` 번역문 음성 [들어 보기]가 읽는 **지어낸** 짧은 문장.
+ * 원서 문장이 아니다. 목록에 없는 언어를 `utterance.lang` 만으로 시험한다(운영자 폰 진단 — 목록에 아랍어
+ * 0개였는데 lang 만으로 아랍어가 소리 났다). 선택지(`TRANSLATION_LANGS`)마다 하나.
+ */
+export const VOICE_TEST_PHRASES = Object.freeze({
+  ar: 'هذا اختبار قصير لصوت الترجمة.',
+  ko: '번역문 음성 시험입니다.'
+});
+
+/** 시험 발화 결과를 기기에 기억하는 이름. 키·문장을 담지 않는다 — 언어 코드와 'ok'|'fail' 뿐. */
+export const VOICE_TEST_STORE_PREFIX = 'medreader.voiceTest.';
+
+function readVoiceTest(lang) {
+  try {
+    const v = globalThis.localStorage ? globalThis.localStorage.getItem(VOICE_TEST_STORE_PREFIX + lang) : null;
+    return v === 'ok' || v === 'fail' ? v : null;
+  } catch (e) { return null; }
+}
+
+function writeVoiceTest(lang, v) {
+  try { if (globalThis.localStorage) globalThis.localStorage.setItem(VOICE_TEST_STORE_PREFIX + lang, v); } catch (e) { /* 기억 못 해도 판정은 화면에 남는다 */ }
 }
 
 /**
@@ -539,7 +565,11 @@ const inflight = new Set();
 /** 마지막 결과. 언어를 바꾸면 이것으로 문구를 다시 쓴다. 키는 담지 않는다. */
 let lastVerify = null;
 let lastTest = null;
-let lastVoice = null;      // 'yes' | 'no' | null(확인 중)
+let lastVoice = null;      // 'yes' | 'unlisted' | 'no' | null(확인 중) — `[8b-1]` 세 갈래
+/** `[8b-1]` 음성 목록 감시 구독(한 번만). 목록이 늦게·여러 번 와도 판정을 다시 한다. */
+let voiceSub = null;
+/** 시험 발화 중인 utterance(GC 로 onend 를 잃지 않게 붙들어 둔다 — 6-4 (2)). */
+let voiceTestUtter = null;
 /** 검증이 통과한 뒤 받은 원격 모델 목록. `{pid, models}` */
 let remoteModels = null;
 let busy = false;
@@ -859,9 +889,16 @@ function paintVoiceText() {
   const lang = targetLang();
   const key = lastVoice === 'yes' ? 'settings.readalong.voice.yes'
     : lastVoice === 'no' ? 'settings.readalong.voice.no'
-      : 'settings.readalong.voice.checking';
+      : lastVoice === 'unlisted' ? 'settings.readalong.voice.unlisted'
+        : 'settings.readalong.voice.checking';
   els.voice.textContent = t(key);
   els.voice.setAttribute('data-voice', lastVoice || 'checking');
+  // `[8b-1]` [들어 보기] — 목록에 없거나 시험이 실패했을 때. 정적 HTML 에 없으므로 여기서 한 번 만든다.
+  const btn = voiceTestButton();
+  if (btn) {
+    btn.textContent = t('settings.readalong.voice.test');
+    btn.hidden = !(lastVoice === 'unlisted' || lastVoice === 'no') || !!voiceTestUtter;
+  }
   els.howTo.hidden = lastVoice !== 'no';
   if (lastVoice !== 'no') {
     els.howToBody.hidden = true;
@@ -870,14 +907,80 @@ function paintVoiceText() {
   fillWithBdi(els.howToBody, t('settings.readalong.voice.howToBody'), 'lang', nativeLangName(lang), dirOf(lang), lang);
 }
 
+/**
+ * `[8b-1]` "번역문 음성" 판정 — 리더 컨트롤과 **같은 음성 목록 감시자**(`sharedVoiceWatch`)를 구독한다.
+ * 첫 목록만 보고 끝내지 않는다(운영자 폰: 첫 `getVoices()` 0개 → 9ms 뒤 92개). 판정은 세 갈래:
+ * 있음(목록에 있음 또는 시험 성공) / 목록에 없음 — [들어 보기] / 안 됨(시험 발화 오류). 화면 요소 추가 없음 —
+ * [들어 보기]는 기존 `data-action` 위임 한 장치로 받는다.
+ */
 async function refreshVoice() {
+  const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
+  const watch = sharedVoiceWatch(synth);
+  const judge = (snap) => {
+    const voices = snap.voices;
+    lastVoice = voiceStatus(targetLang(), voices);
+    if (lastVoice !== 'yes') lastVoice = voiceVerdict(targetLang(), snap, readVoiceTest(targetLang()));
+    if (lastVoice === 'checking') lastVoice = null;
+    if (els) paintVoiceText();
+  };
+  if (!voiceSub) voiceSub = watch.subscribe(judge);
+  judge(watch.snapshot());
+}
+
+/** [들어 보기] 버튼 — `#aiVoiceStatus` 바로 뒤에 한 번 만든다(기본 button 이 48px — 16-G). */
+function voiceTestButton() {
+  if (!els || !els.voice || !els.voice.parentNode) return null;
+  let b = root.querySelector('#aiVoiceTest');
+  if (b) return b;
+  b = document.createElement('button');
+  b.type = 'button';
+  b.id = 'aiVoiceTest';
+  b.setAttribute('data-action', 'voice-test');
+  b.setAttribute('data-i18n', 'settings.readalong.voice.test');
+  b.hidden = true;
+  els.voice.parentNode.insertBefore(b, els.voice.nextSibling);
+  return b;
+}
+
+/**
+ * `[8b-1]` 시험 발화 — **탭 핸들러 안에서 동기적으로** `speak()`(6-4 (5)). voice 없이도 `utterance.lang` 으로
+ * 시도한다. 끝까지 가면 'ok', 오류면 'fail' — 이 기기에 기억한다(목록이 그대로여도 다음에 다시 묻지 않게).
+ * onend 가 유실되는 기기(6-4)를 위해 상한 시간에 onstart 가 왔는지로 판정한다.
+ */
+function runVoiceTest() {
+  const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
+  if (!synth || typeof window.SpeechSynthesisUtterance !== 'function' || voiceTestUtter) return;
+  const lang = targetLang();
+  const phrase = VOICE_TEST_PHRASES[lang];
+  if (!phrase) return;
+  const voices = sharedVoiceWatch(synth).snapshot().voices;
+  const v = pickVoice(lang, voices, settings.get('tts.voice.' + lang));
+  const u = new window.SpeechSynthesisUtterance(phrase);
+  u.lang = speechLang(lang, v);
+  if (v) u.voice = v;
+  let started = false;
+  let done = false;
+  let timer = null;
+  const finish = (ok) => {
+    if (done) return;
+    done = true;
+    if (timer !== null) clearTimeout(timer);
+    voiceTestUtter = null;
+    if (ok !== null) writeVoiceTest(lang, ok ? 'ok' : 'fail');
+    refreshVoice();
+  };
+  u.onstart = () => { started = true; };
+  u.onend = () => finish(true);
+  u.onerror = (ev) => {
+    const code = String((ev && ev.error) || '');
+    // 다른 발화가 끊은 것 — 판정하지 않는다.
+    finish(code === 'interrupted' || code === 'canceled' ? null : false);
+  };
+  voiceTestUtter = u;
   lastVoice = null;
   paintVoiceText();
-  const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
-  let voices = [];
-  try { voices = synth ? await loadVoices(synth, TTS.VOICES_TIMEOUT_MS) : []; } catch (e) { voices = []; }
-  lastVoice = voiceStatus(targetLang(), voices);
-  if (els) paintVoiceText();
+  timer = setTimeout(() => finish(started), TTS.VOICES_TIMEOUT_MS * 10);
+  try { synth.speak(u); } catch (e) { finish(false); }
 }
 
 /** 캐시 줄 — 센 값을 들고 있다가 언어가 바뀌면 그 값으로 다시 쓴다. */
@@ -949,36 +1052,14 @@ function paintResult(kind) {
   if (out) paintTestOutput(out, r);
 }
 
+/* `[8b-2]` `appendBidiText` 는 `./bididom.js` 로 옮겼다 — 자막 띠(`trband.js`)와 한 벌. */
+
 /**
  * `[수정 2026-10-08]` [시험 번역] 결과 — 아랍어·한국어 **두 블록**.
  * 블록마다 `lang`·`dir` 을 그 언어에서 유도한다(`translationBlockAttrs`).
  * JSON 파싱에 실패했으면 응답 문자열을 **그대로** 한 블록으로(`dir=auto`).
  * ★ AI 응답은 **textContent** 로만(13절).
  */
-/**
- * `[신설 2026-10-08 — 운영자 결정]` 번역문을 넣는다. 오른쪽→왼쪽 블록이면 라틴 문자 구간
- * (영어 원어 괄호 등)을 `<bdi dir="ltr">` 로 격리한다 — 그냥 넣으면 줄바꿈 지점에서
- * "(C-" / "reactive protein)" 처럼 갈라지고 괄호가 뒤집혔다(실키 확인 캡처).
- * 조각마다 **textContent** 다(13절 — AI 응답을 HTML 로 해석하지 않는다).
- * 8b 자막 띠도 같은 규칙(`text/bidi.js` 의 `ltrRuns`)을 쓴다.
- */
-function appendBidiText(el, text, dir) {
-  const s = String(text == null ? '' : text);
-  if (dir !== 'rtl') { el.textContent = s; return; }
-  const doc = el.ownerDocument;
-  const runs = ltrRuns(s);
-  for (let i = 0; i < runs.length; i++) {
-    if (runs[i].ltr) {
-      const iso = doc.createElement('bdi');
-      iso.dir = 'ltr';
-      iso.textContent = runs[i].text;
-      el.appendChild(iso);
-    } else {
-      el.appendChild(doc.createTextNode(runs[i].text));
-    }
-  }
-}
-
 function paintTestOutput(out, r) {
   while (out.firstChild) out.removeChild(out.firstChild);
   out.removeAttribute('lang');
@@ -1095,6 +1176,7 @@ function onAction(ev) {
     case 'consent-agree': onConsentAgree(); break;
     case 'cache-clear': onCacheClear(); break;
     case 'target-lang': onTargetLang(btn); break;
+    case 'voice-test': runVoiceTest(); break;
     case 'voice-howto': {
       const open = els.howToBody.hidden;
       els.howToBody.hidden = !open;

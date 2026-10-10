@@ -44,10 +44,18 @@ test('B4 괄호 밖 라틴 연속 — 낱말 사이 붙임표·빗금·공백까
 });
 
 test('B5 ★ 화면 연결 — 번역 본문은 appendBidiText 로, rtl 일 때만 <bdi dir="ltr">, 조각은 textContent', () => {
-  const src = readFileSync(new URL('../js/ui/settings.js', import.meta.url), 'utf8');
-  assert.match(src, /import \{ ltrRuns \} from '\.\.\/text\/bidi\.js'/);
-  assert.match(src, /appendBidiText\(body, r\.pair\[code\], a\.dir\)/, '번역 블록 본문은 appendBidiText 를 거친다');
-  const fn = src.slice(src.indexOf('function appendBidiText'), src.indexOf('function paintTestOutput'));
+  // `[수정 8b-2]` 함수는 공용 `ui/bididom.js` 로 옮겼다 — [시험 번역]과 자막 띠가 **한 벌**을 쓴다.
+  const dom = readFileSync(new URL('../js/ui/bididom.js', import.meta.url), 'utf8');
+  const settingsSrc = readFileSync(new URL('../js/ui/settings.js', import.meta.url), 'utf8');
+  const bandSrc = readFileSync(new URL('../js/ui/trband.js', import.meta.url), 'utf8');
+  assert.match(dom, /import \{ ltrRuns \} from '\.\.\/text\/bidi\.js'/);
+  for (const [name, src] of [['settings.js', settingsSrc], ['trband.js', bandSrc]]) {
+    assert.match(src, /import \{ appendBidiText \} from '\.\/bididom\.js'/, name + ' 은 공용 함수를 import 한다');
+    assert.doesNotMatch(src, /function appendBidiText/, name + ' 에 옛 복사본이 없다(두 벌 금지)');
+  }
+  assert.match(settingsSrc, /appendBidiText\(body, r\.pair\[code\], a\.dir\)/, '[시험 번역] 블록 본문은 appendBidiText 를 거친다');
+  assert.match(bandSrc, /appendBidiText\(/, '자막 띠 번역문도 appendBidiText 를 거친다');
+  const fn = dom.slice(dom.indexOf('function appendBidiText'));
   assert.match(fn, /if \(dir !== 'rtl'\) \{ el\.textContent = s; return; \}/);
   assert.match(fn, /createElement\('bdi'\)/);
   assert.match(fn, /iso\.dir = 'ltr'/);

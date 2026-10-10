@@ -26,10 +26,21 @@
    취소한 발화의 `onend`·`onerror`·워치독이 **뒤늦게** 도착해 새 발화를
    덮어쓰는 것이 이 API 에서 가장 흔한 버그다. 모든 콜백이 자기가 태어난
    `gen` 을 들고 있고, `gen` 이 바뀌었으면 조용히 물러난다.
+
+   ── `[8b-1]` 발화 단계 (6-1 · 6-2 · 7-8) ─────────────────
+   낭독 동반 번역의 `speak` 모드에서 한 문장은 `src → (tr-wait) → tr` 를 지난다.
+   **상태(`SpeakerState`)는 늘리지 않는다** — 단계는 별도 변수이고 `phasechange` 로만 알린다.
+   새 재생 경로를 만들지 않는다: 번역문 발화도 같은 `onend` 사슬·워치독·세대 검사의 한 고리다.
+     · 번역 조회(`translation.get(unit)`)는 **동기**다 — onend 안에서 await 하지 않는다.
+     · `tr-wait` 은 발화가 없으므로 워치독 대신 **세대 달린 타이머**(`READALONG.TR_WAIT_MS`)가 끝낸다.
+     · 반복·`markDone` 은 **번역문까지 끝난 뒤에** — 반복은 "원문 + 번역문" 한 쌍.
+     · 원문 낭독은 멈추지 않는다 — 번역이 없거나 늦으면 기다리지 않거나(최대 4초) 건너뛴다.
+   `speak` 모드가 아니면(끔·표시) 이 단계는 **한 줄도 돌지 않는다** — 지금까지와 같다.
    ============================================================ */
 
-import { TTS, TTS_LANG_REGION } from '../config.js';
-import { buildUnits, watchdogMs, indexOfLine } from './text.js';
+import { TTS, TTS_LANG_REGION, READALONG } from '../config.js';
+import { buildUnits, watchdogMs, indexOfLine, TABLE_NOTICE_KIND, trSpeechParts, trWatchdogMs } from './text.js';
+import { VOICE_ERRORS } from './voices.js';
 
 export const STATES = Object.freeze(['idle', 'speaking', 'paused', 'waiting-page', 'error']);
 
@@ -38,8 +49,15 @@ export const CODES = Object.freeze({
   LINE_SKIPPED: 'TTS_LINE_SKIPPED',
   PAGE_TIMEOUT: 'TTS_PAGE_TIMEOUT',
   NO_VOICE: 'TTS_NO_VOICE',
-  WAKELOCK_UNAVAILABLE: 'TTS_WAKELOCK_UNAVAILABLE'
+  WAKELOCK_UNAVAILABLE: 'TTS_WAKELOCK_UNAVAILABLE',
+  /* `[8b-1]` 번역문 발화(6-2 `speakTr`). 문구는 화면이 고른다. */
+  TR_SKIPPED: 'TTS_TR_SKIPPED',            // 번역문 발화 하나가 오류로 끝나 건너뛰었다(재시도 없음)
+  TR_VOICE_FAILED: 'TTS_TR_VOICE_FAILED',  // 세션의 첫 번역문 발화가 실패 — 번역문 음성 불가로 보고 tr 을 멈춘다(7-8-5)
+  TR_LAGGING: 'TTS_TR_LAGGING'             // 연속 LAG_NOTICE_AFTER 문장의 tr-wait 이 상한으로 끝났다(한 번)
 });
+
+/** `[8b-1]` 발화 단계(6-1). */
+export const PHASES = Object.freeze(['src', 'tr-wait', 'tr']);
 
 /** 빈 쪽이 이어질 때 몇 쪽까지 건너뛰며 찾아볼 것인가(무한 루프 방지). */
 const MAX_EMPTY_PAGES = 20;
@@ -94,6 +112,10 @@ export function snapRepeatCount(n) {
  *   goToPage(n)        → `Promise<boolean>` 그 쪽을 그릴 때까지(최대 5초)
  *   show(unit)         → `boolean` 하이라이트. 줄이 지금 쪽에 없으면 false
  *   markDone(unit)     → 읽은 표시
+ *
+ * `[8b-1]` `deps.translation`(선택) — 낭독 동반 번역 서비스(`ai/readalong.js`):
+ *   get(unit)          → `{state:'ready'|'pending'|'failed'|'blocked'|'none', text?}` **동기**
+ *   onChange(unit, fn) → 되돌림 함수. 그 문장의 상태가 바뀌면 `fn({state, text})`
  */
 export function createSpeaker(deps) {
   const d = deps || {};
@@ -128,6 +150,24 @@ export function createSpeaker(deps) {
   let wakeLock = null;
   let stallOnce = false;         // 16-C 테스트 훅
 
+  /* ── `[8b-1]` 발화 단계 (6-1 · 6-2) ─────────────────── */
+  const translation = d.translation || null;
+  let raMode = 'off';            // **유효** 모드(7-8-1) — 'off' | 'show' | 'speak'. 화면이 정한다
+  let speakSource = true;        // 9-3 readalong.speakSource
+  let phase = 'src';
+  let trPart = 0;                // 지금(또는 멈춘) 번역문 조각 번호
+  let trWait = null;             // {timer, off}
+  let trLang = null;             // 번역문 utterance.lang
+  let trVoice = null;
+  let trDisabled = false;        // 첫 번역문 발화 실패 → 세션 동안 tr 없음(7-8-5)
+  let trEverOk = false;          // 번역문 발화가 한 번이라도 끝까지 갔는가
+  let lagCount = 0;              // 연속으로 tr-wait 이 상한에 걸린 문장 수
+  let laggedOnce = false;
+  let audibleIdx = -1;           // speakSource=false 인데 번역이 없어 **소리 내어** 읽는 문장(첫 조각 번호)
+  let noticeLang = null;         // 표 안내 발화의 utterance.lang — UI 언어(6-1). null 이면 원문 언어
+  let noticeVoice = null;
+  let srcEverOk = false;         // 원문 발화가 한 번이라도 끝까지 갔는가("음성 없음" 판정 — 실제 오류로만)
+
   /* ── 반복 재생 (5b) ───────────────────────────────────
      ★ 반복은 **큐 위의 인덱스 계산**일 뿐이다. `speechSynthesis.pause()` 는
        물론이고 새로운 재생 경로도 만들지 않는다 — `onend` 체이닝·워치독·
@@ -159,6 +199,7 @@ export function createSpeaker(deps) {
     gen++;
     clearWatchdog();
     clearDeferred();
+    clearTrWait();
     current = null;
     try { if (synth && synth.cancel) synth.cancel(); } catch (e) { /* 이미 죽은 엔진 */ }
   }
@@ -169,6 +210,37 @@ export function createSpeaker(deps) {
 
   function clearDeferred() {
     if (deferred !== null) { timers.clearTimeout(deferred); deferred = null; }
+  }
+
+  function clearTrWait() {
+    const w = trWait;
+    trWait = null;
+    if (!w) return;
+    if (w.timer !== null) timers.clearTimeout(w.timer);
+    if (w.off) { try { w.off(); } catch (e) { /* 이미 풀림 */ } }
+  }
+
+  function setPhase(next, i) {
+    if (phase === next && next === 'src') return;
+    phase = next;
+    const u = units[i];
+    emit('phasechange', { phase: next, index: i, seg: u ? u.seg : null, part: next === 'tr' ? trPart : null });
+  }
+
+  /** `[8b-1]` 이 문장에 번역문 단계가 붙는가 — speak 모드·번역 대상 문장·번역 서비스가 있을 때만. */
+  function trActive(u) {
+    return raMode === 'speak' && !trDisabled && !!translation && !!u &&
+      u.kind !== TABLE_NOTICE_KIND && Number.isInteger(u.seg);
+  }
+
+  /** 같은 문장(같은 seg·src)의 첫 조각·끝 조각 번호. */
+  function firstPartIndex(i) {
+    const u = units[i];
+    return u && Number.isInteger(u.part) ? Math.max(0, i - u.part) : i;
+  }
+  function lastPartIndex(i) {
+    const u = units[i];
+    return u && Number.isInteger(u.part) && Number.isInteger(u.parts) ? Math.min(units.length - 1, i + (u.parts - 1 - u.part)) : i;
   }
 
   /* ── 반복 (5b) — 상태와 인덱스 계산만 ───────────────── */
@@ -238,32 +310,42 @@ export function createSpeaker(deps) {
    * 있었으면 60ms 뒤에 건다. **아무것도 안 울리고 있으면 즉시 건다** —
    * 그래야 첫 재생이 탭 핸들러 안에서 동기적으로 나간다(6-4 (5)).
    */
-  function restart(i) {
+  function restart(i, fn) {
+    const go = typeof fn === 'function' ? fn : function () { speakAt(i); };
     const wasBusy = busy();
     cancelSynth();
-    if (!wasBusy) { speakAt(i); return; }
+    if (!wasBusy) { go(); return; }
     const myGen = gen;
     deferred = timers.setTimeout(function () {
       deferred = null;
       if (myGen !== gen) return;
-      speakAt(i);
+      go();
     }, TTS.CANCEL_DELAY_MS);
   }
 
-  function speakAt(i) {
+  function speakAt(i, opts) {
     if (i >= units.length) { advancePage(0); return; }
     if (i < 0) i = 0;
     index = i;
+    setPhase('src', i);
 
     const u = units[i];
     const myGen = gen;
+    const tr = trActive(u);
+    // `[8b-1]` speakSource=false 면 원문은 소리 없이 하이라이트만 — 단, 번역이 없어 소리 내기로 한 문장은 읽는다.
+    const silent = tr && !speakSource && audibleIdx !== firstPartIndex(i);
 
     // 6-4 (7) — onstart 가 안 오는 환경이 있다. 하이라이트를 먼저 옮긴다.
-    show(u);
+    // (소리 내기로 되돌아온 같은 문장은 다시 칠하지 않는다 — 하이라이트는 문장마다 한 번.)
+    if (!(opts && opts.noShow)) show(u);
+
+    if (silent) { afterSrc(lastPartIndex(i), true); return; }
 
     const utt = makeUtterance(u.text);
-    utt.lang = docLang;
-    const v = voiceFor[langKey(docLang)];
+    // `[8b-1]` 6-1 — 표 안내는 UI 언어 문장이므로 UI 언어 음성으로 읽는다(지정돼 있을 때).
+    const notice = u.kind === TABLE_NOTICE_KIND && noticeLang;
+    utt.lang = notice ? noticeLang : docLang;
+    const v = notice ? noticeVoice : voiceFor[langKey(docLang)];
     if (v) utt.voice = v;
     utt.rate = rate;
     utt.pitch = 1;
@@ -278,7 +360,10 @@ export function createSpeaker(deps) {
       utt.onend = function () {
         if (myGen !== gen) return;
         clearWatchdog();
+        if (u.kind !== TABLE_NOTICE_KIND) srcEverOk = true;
         if (state !== 'speaking') return;
+        // `[8b-1]` speak 모드 문장 — 조각이 남았으면 다음 조각, 마지막 조각이면 번역문 단계로.
+        if (tr && trActive(u)) { onSrcEnd(index); return; }
         const at = index;
         const to = nextIndexAfter(at);
         // 같은 발화를 다시 읽는 중이면 아직 "읽은 줄"이 아니다 —
@@ -315,6 +400,8 @@ export function createSpeaker(deps) {
         // ★ 반복 경로에서도 워치독이 산다. `onend` 가 유실돼도 반복이 그
         //   자리에서 멈추지 않는다 — `nextIndexAfter` 는 세대 검사를 통과한
         //   뒤에만 부른다(회차가 헛돌지 않게).
+        // `[8b-1]` speak 모드 문장은 onend 를 잃어도 번역문 단계로 잇는다.
+        if (tr && trActive(u)) { onSrcEnd(at); return; }
         speakAt(nextIndexAfter(at));
       }, TTS.CANCEL_DELAY_MS);
     }, watchdogMs(u.text, rate));
@@ -348,9 +435,174 @@ export function createSpeaker(deps) {
       return;
     }
 
+    // `[8b-1 — 오케스트레이터 결정 2026-10-10]` "음성 없음"은 **실제 발화 오류**로만 판정한다 —
+    // 목록에 그 언어 음성이 없어도 `utterance.lang` 만으로 소리가 나는 기기가 있다(운영자 폰 진단).
+    // 언어·음성 오류 코드이거나, 이 세션에서 원문 발화가 한 번도 끝까지 간 적이 없을 때. 표 안내(UI 언어)는 제외.
+    if (u && u.kind !== TABLE_NOTICE_KIND && (VOICE_ERRORS.indexOf(code) >= 0 || !srcEverOk)) {
+      emit('error', { code: CODES.NO_VOICE, error: code });
+    }
     emit('error', { code: CODES.LINE_SKIPPED, lineId: firstLineId(u) });
     retriedAt = -1;
     speakAt(afterSkip(index));
+  }
+
+  /* ── `[8b-1]` 번역문 단계 (6-1 표 · 6-2 onSrcEnd/speakTr) ─────────── */
+
+  /** speak 모드 문장의 원문 조각 하나가 끝났다. 조각이 남았으면 다음 조각(반복·읽은 표시는 문장 끝에서). */
+  function onSrcEnd(i) {
+    retriedAt = -1;
+    const u = units[i];
+    if (u && Number.isInteger(u.parts) && u.part < u.parts - 1) { speakAt(i + 1, { noShow: false }); return; }
+    afterSrc(i, false);
+  }
+
+  /**
+   * 원문(소리 있든 없든)이 끝난 자리. 번역 상태로 갈린다(6-1 표).
+   * @param {number} i 그 문장의 **마지막 조각** 번호
+   * @param {boolean} silent speakSource=false 로 원문을 소리 없이 지나왔다
+   */
+  function afterSrc(i, silent) {
+    const u = units[i];
+    if (!trActive(u)) { finishSentence(i); return; }
+    const r = translation.get(u) || { state: 'none' };
+    if (r.state === 'ready') { speakTr(i, 0); return; }
+    if (r.state === 'pending') { enterTrWait(i); return; }
+    // failed · blocked · none — 기다리지 않는다(7-8-4). 원문을 소리 없이 지나왔으면 그 문장만 원문으로 읽는다.
+    if (silent) { speakSourceAloud(i); return; }
+    finishSentence(i);
+  }
+
+  /** speakSource=false 인데 번역이 없다 — 그 문장만 원문으로 읽는다(6-1, 소리가 끊기지 않게). */
+  function speakSourceAloud(i) {
+    const first = firstPartIndex(i);
+    audibleIdx = first;
+    speakAt(first, { noShow: true });
+  }
+
+  /** 6-2 `tr-wait` — 발화 없음. 세대 달린 타이머(`TR_WAIT_MS`)와 도착 알림 중 먼저 오는 것. */
+  function enterTrWait(i) {
+    const u = units[i];
+    index = i;
+    setPhase('tr-wait', i);
+    const myGen = gen;
+    const silent = !speakSource && audibleIdx !== firstPartIndex(i);
+    clearTrWait();
+    const w = { timer: null, off: null };
+    trWait = w;
+    w.off = translation.onChange(u, function (ev) {
+      if (myGen !== gen || trWait !== w) return;
+      const st = ev && ev.state;
+      if (st === 'pending') return;
+      clearTrWait();
+      if (state !== 'speaking') return;
+      if (st === 'ready') { speakTr(i, 0); return; }
+      // 원격이 막혔다·실패했다 — 더 기다리지 않는다.
+      if (silent) speakSourceAloud(i); else finishSentence(i);
+    });
+    w.timer = timers.setTimeout(function () {
+      w.timer = null;
+      if (myGen !== gen || trWait !== w) return;
+      clearTrWait();
+      if (state !== 'speaking') return;
+      noteLag();
+      // 그 문장의 번역문은 되돌아가 읽지 않는다(띠에는 도착하면 채운다).
+      if (silent) speakSourceAloud(i); else finishSentence(i);
+    }, READALONG.TR_WAIT_MS);
+  }
+
+  function noteLag() {
+    lagCount++;
+    if (lagCount >= READALONG.LAG_NOTICE_AFTER && !laggedOnce) {
+      laggedOnce = true;
+      emit('error', { code: CODES.TR_LAGGING });
+    }
+  }
+
+  /** 6-2 `speakTr(i, k)` — 번역문 조각 k. 같은 사슬의 한 고리다(gen·워치독·GC 방지 그대로). */
+  function speakTr(i, k) {
+    const u = units[i];
+    if (!trActive(u)) { finishSentence(i); return; }
+    const r = translation.get(u) || { state: 'none' };
+    const parts = r.state === 'ready' ? trSpeechParts(r.text) : [];
+    if (k >= parts.length) { finishSentence(i); return; }
+    index = i;
+    trPart = k;
+    setPhase('tr', i);
+    lagCount = 0;
+    const myGen = gen;
+
+    const utt = makeUtterance(parts[k]);
+    if (trLang) utt.lang = trLang;
+    if (trVoice) utt.voice = trVoice;
+    utt.rate = rate;
+    utt.pitch = 1;
+    utt.onend = function () {
+      if (myGen !== gen) return;
+      clearWatchdog();
+      if (state !== 'speaking') return;
+      trEverOk = true;
+      if (k + 1 < parts.length) { speakTr(i, k + 1); return; }
+      finishSentence(i);
+    };
+    utt.onerror = function (ev) {
+      if (myGen !== gen) return;
+      clearWatchdog();
+      const code = String((ev && ev.error) || '');
+      if (code === 'interrupted' || code === 'canceled') return;
+      if (code === 'not-allowed') { setState('error'); emit('error', { code: CODES.NOT_ALLOWED }); return; }
+      emit('error', { code: CODES.TR_SKIPPED, lineId: firstLineId(u) });
+      // 7-8-5 — 세션의 첫 번역문 발화가 실패하면 번역문 음성 불가로 보고 tr 을 멈춘다(재시도 없음).
+      if (!trEverOk && !trDisabled) { trDisabled = true; emit('error', { code: CODES.TR_VOICE_FAILED }); }
+      finishSentence(i);                       // 원문이 주인이다 — 다음 원문으로
+    };
+
+    current = utt;               // ★ 6-4 (2)
+    try {
+      synth.speak(utt);
+    } catch (e) {
+      setState('error');
+      emit('error', { code: CODES.NOT_ALLOWED });
+      return;
+    }
+    watchdog = timers.setTimeout(function () {
+      if (myGen !== gen) return;
+      watchdog = null;
+      if (state !== 'speaking') return;
+      cancelSynth();
+      setState('speaking');
+      const nextGen = gen;
+      deferred = timers.setTimeout(function () {
+        deferred = null;
+        if (nextGen !== gen) return;
+        finishSentence(i);
+      }, TTS.CANCEL_DELAY_MS);
+    }, trWatchdogMs(parts[k], rate));
+  }
+
+  /**
+   * speak 모드 문장 하나가 **번역문까지** 끝났다(또는 번역 없이 끝났다). 반복·읽은 표시는 여기서만(6-2).
+   * 문장 반복이면 그 문장의 **첫 조각**부터 원문 + 번역문을 다시.
+   */
+  function finishSentence(i) {
+    const first = firstPartIndex(i);
+    const last = lastPartIndex(i);
+    audibleIdx = -1;
+    retriedAt = -1;
+    let to = nextIndexAfter(last);
+    if (to !== last && view && view.markDone) {
+      for (let j = first; j <= last; j++) { try { view.markDone(units[j]); } catch (e) { /* 화면이 사라졌다 */ } }
+    }
+    if (to === last) to = first;
+    speakAt(to);
+  }
+
+  /** 멈춘 단계로 돌아간다(6-1 — tr 은 같은 조각 처음부터, tr-wait 은 도착했으면 tr 아니면 다음 원문). */
+  function resumePhase(i, ph, k) {
+    const u = units[i];
+    if (!trActive(u)) { finishSentence(i); return; }
+    const r = translation.get(u) || { state: 'none' };
+    if (r.state === 'ready') { speakTr(i, ph === 'tr' ? k : 0); return; }
+    finishSentence(i);
   }
 
   function show(u) {
@@ -358,9 +610,12 @@ export function createSpeaker(deps) {
     lastLineId = firstLineId(u);
     let ok = false;
     if (view && view.show) { try { ok = !!view.show(u); } catch (e) { ok = false; } }
+    const pg = (view && view.page && view.page()) || null;
     emit('linechange', {
       lineId: firstLineId(u), lineIds: u.lineIds.slice(),
-      paraId: u.paraId, index: index, total: units.length, onPage: ok
+      paraId: u.paraId, index: index, total: units.length, onPage: ok,
+      // `[8b-1]` 낭독 동반 번역의 커서(7-8-3) — 쪽 번호와 쪽 안의 문장 번호. 표 안내는 seg 가 null.
+      page: pg ? pg.page : null, seg: Number.isInteger(u.seg) ? u.seg : null, src: u.src == null ? null : u.src
     });
     return ok;
   }
@@ -398,6 +653,7 @@ export function createSpeaker(deps) {
     units = buildUnits(view.paras(), unit, unitOpts());
     queueRebuilt();
     index = 0;
+    emitQueue(0);
     if (!units.length) { advancePage(hop + 1); return; }   // 표뿐인 쪽 — 계속 넘긴다
     setState('speaking');
     speakAt(0);
@@ -436,9 +692,14 @@ export function createSpeaker(deps) {
    * 탭 핸들러에서 곧장 불리면 `synth.speak()` 가 그 이벤트 안에서 나간다.
    */
   function play(fromLineId) {
+    // `[8b-1]` 번역문 단계에서 멈췄으면 같은 단계로 돌아간다(6-1 resume).
+    const resumeTr = fromLineId == null && state === 'paused' && units.length > 0 &&
+      (phase === 'tr' || phase === 'tr-wait') && index >= 0 && index < units.length;
+    let rebuilt = false;
     if (!units.length || fromLineId != null || state === 'idle') {
       units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
       queueRebuilt();
+      rebuilt = true;
     }
     if (!units.length) { finish(); return; }
 
@@ -448,9 +709,16 @@ export function createSpeaker(deps) {
       if (found >= 0) i = found;
     }
     if (i < 0 || i >= units.length) i = 0;
+    if (rebuilt) emitQueue(i);
 
     setState('speaking');
-    restart(i);
+    if (resumeTr) {
+      const ph = phase;
+      const k = trPart;
+      restart(i, function () { resumePhase(i, ph, k); });
+    } else {
+      restart(i);
+    }
     // Wake Lock 은 speak 뒤에 — 앞에 두면 첫 재생이 제스처를 잃는다.
     requestWakeLock();
   }
@@ -475,6 +743,8 @@ export function createSpeaker(deps) {
     units = [];
     lastLineId = null;
     retriedAt = -1;
+    phase = 'src';
+    audibleIdx = -1;
     // 5b — 리더를 떠나면 반복도 끈다. 다음에 들어왔을 때 무한 반복이
     // 켜져 있으면 "왜 안 넘어가지"가 된다.
     repeatMode = 'off';
@@ -495,6 +765,8 @@ export function createSpeaker(deps) {
     }
     const i = Math.max(0, target);
     index = i;
+    phase = 'src';                // 6-1 — 건너뛰면 단계는 src 로
+    audibleIdx = -1;
     if (state === 'speaking') restart(i);
     else show(units[i]);
   }
@@ -506,7 +778,11 @@ export function createSpeaker(deps) {
     if (next === rate) return;
     rate = next;
     emit('statechange', { state: state, rate: rate });
-    if (state === 'speaking') restart(index);   // 6-1 — 즉시 적용
+    if (state !== 'speaking') return;
+    // 6-1 — 즉시 적용. `[8b-1]` 번역문 중이면 같은 tr 조각을 처음부터, tr-wait 이면 소리가 없으니 그대로.
+    if (phase === 'tr') { const i = index; const k = trPart; restart(i, function () { speakTr(i, k); }); return; }
+    if (phase === 'tr-wait') return;
+    restart(index);
   }
 
   function setUnit(u) {
@@ -518,6 +794,9 @@ export function createSpeaker(deps) {
     queueRebuilt();
     const found = anchor == null ? -1 : indexOfLine(units, anchor);
     index = found >= 0 ? found : 0;
+    phase = 'src';
+    audibleIdx = -1;
+    emitQueue(index);
     emit('statechange', { state: state, unit: unit });
     if (state === 'speaking') restart(index);
     else if (units.length) show(units[index]);
@@ -574,11 +853,59 @@ export function createSpeaker(deps) {
     // 같은 쪽을 다시 그렸으면 그 줄이 새 큐에도 있어 제자리를 지키고,
     // 다른 쪽으로 넘어갔으면 `indexOfLine` 이 -1 을 줘 자연히 0 으로 간다.
     const anchorId = fromLineId != null ? fromLineId : firstLineId(units[index]);
+    // `[8b-1]` 뷰만 바꿔 같은 문장이 남으면 번역문 단계도 지킨다(되감김 수정과 같은 이유).
+    const before = units[index] || null;
+    const ph = phase;
+    const k = trPart;
     units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
     queueRebuilt();
     const found = anchorId == null ? -1 : indexOfLine(units, anchorId);
     index = found >= 0 ? found : 0;
-    if (state === 'speaking') restart(index);
+    const same = !!before && !!units[index] && before.src === units[index].src && before.seg === units[index].seg;
+    if (!same || fromLineId != null) { phase = 'src'; audibleIdx = -1; }
+    emitQueue(index);
+    if (state !== 'speaking') return;
+    if (same && fromLineId == null && (ph === 'tr' || ph === 'tr-wait')) {
+      const i = index;
+      restart(i, function () { resumePhase(i, ph, k); });
+      return;
+    }
+    restart(index);
+  }
+
+  /** `[8b-1]` 큐를 새로 만들었다 — 낭독 동반 번역이 그 쪽 문장을 흐름에 넣는다(7-8-3 onQueue). */
+  function emitQueue(i) {
+    const p = (view && view.page && view.page()) || null;
+    const u = units[i] || null;
+    emit('queue', { page: p ? p.page : null, units: units.slice(), index: i, seg: u ? u.seg : null });
+  }
+
+  /**
+   * `[8b-1]` 낭독 동반 번역의 **유효** 모드(7-8-1)와 원문 읽기 여부. 재생을 건드리지 않는다 —
+   * 다음 문장 끝부터 새 규칙이 적용된다. speak 가 아니게 되면 기다리던 tr-wait 은 곧장 다음으로 간다.
+   */
+  function setReadalong(o) {
+    const x = o || {};
+    raMode = x.mode === 'speak' || x.mode === 'show' ? x.mode : 'off';
+    speakSource = x.speakSource !== false;
+    if (raMode !== 'speak' && trWait && state === 'speaking') {
+      const i = index;
+      clearTrWait();
+      finishSentence(i);
+    }
+  }
+
+  /** `[8b-1]` 번역문 발화의 `utterance.lang`·음성(7-8-5 `pickVoice(target)`). 음성이 생기면 tr 을 다시 허락한다. */
+  function setTrVoice(lang, voice) {
+    trLang = lang ? String(lang) : null;
+    trVoice = voice || null;
+    if (trVoice) { trDisabled = false; }
+  }
+
+  /** `[8b-1]` 6-1 — 표 안내 발화의 언어(UI 언어)·음성. */
+  function setNoticeVoice(lang, voice) {
+    noticeLang = lang ? String(lang) : null;
+    noticeVoice = voice || null;
   }
 
   return {
@@ -598,6 +925,9 @@ export function createSpeaker(deps) {
     setVoice: setVoice,
     setDocLang: setDocLang,
     reload: reload,
+    setReadalong: setReadalong,
+    setTrVoice: setTrVoice,
+    setNoticeVoice: setNoticeVoice,
     requestWakeLock: requestWakeLock,
     releaseWakeLock: releaseWakeLock,
 
@@ -609,6 +939,10 @@ export function createSpeaker(deps) {
     getIndex: function () { return index; },
     getTotal: function () { return units.length; },
     getCurrent: function () { return units[index] || null; },
+    /** `[8b-1]` 지금 발화 단계 `'src'|'tr-wait'|'tr'`. */
+    getPhase: function () { return phase; },
+    /** `[8b-1]` 번역문 음성이 첫 발화 실패로 꺼졌는가(7-8-5 — 세션 동안). */
+    isTrDisabled: function () { return trDisabled; },
     /** 반복 상태 한 덩어리 — UI 는 **이것만** 읽고 그린다(표시 어긋남 방지). */
     getRepeat: function () {
       return {

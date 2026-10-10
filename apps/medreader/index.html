@@ -225,6 +225,21 @@
     <button type="button" class="back-to-line" id="backToLine"
             data-i18n="reader.tts.backToLine" data-i18n-aria="reader.tts.backToLine" hidden></button>
 
+    <!-- `[8b-2]` 7-7 하단 자막 띠 — 낭독 컨트롤 바 바로 위. 리플로우·원본 두 뷰가 같은 부품을 쓴다.
+         높이는 내용이 아니라 토큰(`--tr-band-h`)이 정하고, 켜지면 `<html data-tr-band="on">` 이
+         `--reader-chrome-bottom` 을 늘려 본문·원본 상자·팝오버가 저절로 비켜난다(tokens.css).
+         번역문은 `js/ui/trband.js` 가 **textContent 로만** 넣는다(13절). `aria-live` 를 주지 않는다 —
+         낭독이 이미 소리로 읽는다(7-7). [다시 시도]의 동작은 띠 하나의 위임 리스너(`data-tr-action`)가 받는다. -->
+    <div class="tr-band" id="trBand" role="region" data-i18n-aria="readalong.band"
+         data-state="idle" data-speaking="src" hidden>
+      <p class="tr-text" id="trText" hidden></p>
+      <div class="tr-status" id="trStatus">
+        <p class="tr-note" id="trNote"></p>
+        <button type="button" class="tr-retry" id="trRetry" data-tr-action="retry"
+                data-i18n="readalong.retry" hidden></button>
+      </div>
+    </div>
+
     <!-- 12-3 하단 컨트롤 바. 쪽 이동 바 바로 위에 앉는다(겹치지 않는다).
          ★ 방향을 가리키는 아이콘을 쓰지 않는다 — RTL 에서 뒤집을 수 없다(16-H).
          낱말은 전부 i18n 이고 순서는 논리 순서라 아랍어에서 저절로 거울이 된다. -->
