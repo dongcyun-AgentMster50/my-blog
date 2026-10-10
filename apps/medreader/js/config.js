@@ -457,7 +457,53 @@ export const AI = Object.freeze({
   USAGE_KINDS: Object.freeze(['translate', 'summarize', 'quiz', 'grade', 'table', 'verify']),
 
   /* 8-4 검증 호출이 `usage` 에 남기는 종류(대시보드 투명성). */
-  VERIFY_KIND: 'verify'
+  VERIFY_KIND: 'verify',
+
+  /* `[8a]` 9-2 · 15절 — 낭독 동반 번역 원격 호출의 `usage.byKind` 키.
+     `USAGE_KINDS` 에 넣지 않고 따로 둔다: 7a 테스트가 **빈 행**의 키 여섯 개를 고정한다.
+     `bumpUsage` 는 이 키도 받아 **처음 쓰일 때** 행에 만든다(대시보드는 `|| 0` 으로 읽는다). */
+  READALONG_KIND: 'readalong'
+});
+
+/* ────────────────────────────────────────────────────────
+   `[8a]` 7-6 · 10-2 · 7-5 — 번역 파이프라인 상수. **추가만** 했다.
+   ★ 무료 티어 한도 숫자는 여기에도 없다(15절). 상한은 사용자의 `ai.dailyCap` 이다.
+   ──────────────────────────────────────────────────────── */
+export const PIPELINE = Object.freeze({
+  /* 7-6 — 요청 하나의 타임아웃. 넘으면 abort 하고 `cooldown`. */
+  TIMEOUT_MS: 30000,
+
+  /* 7-6 — 5xx·네트워크 오류·타임아웃 뒤 쉬는 시간. 연달아 실패하면 한 단계씩, 최대 3단계.
+     성공하면 첫 단계로 돌아간다. */
+  COOLDOWN_STEPS_MS: Object.freeze([30000, 60000, 120000]),
+
+  /* 7-6 — **자동 재시도는 5xx 에 대해 즉시 1회만.** 그 밖의 어떤 경우에도 0. */
+  SERVER_RETRIES: 1,
+
+  /* 10-2 밀림 방지 — `len(번역) / len(원문)` 이 [1/5, 5] 밖이면 그 항목 `failed`.
+     분수로 둔다 — 0.2 는 이진 부동소수에 정확히 담기지 않는다(tokens.js 와 같은 이유). */
+  LEN_RATIO_MIN_NUM: 1,
+  LEN_RATIO_MIN_DEN: 5,
+  LEN_RATIO_MAX: 5,
+
+  /* 10-2 — 한 청크에서 밀림 검사(길이 비율·숫자 소실)에 걸린 항목이 이 비율을 **넘으면**
+     청크 전체를 파싱 실패로 본다. 1/5 = 20%. */
+  CHUNK_FAIL_NUM: 1,
+  CHUNK_FAIL_DEN: 5,
+
+  /* 10-2 — `maxOutputTokens = estimateTokens(입력) × 3 + 200`, `temperature 0.2`. */
+  OUT_TOKEN_FACTOR: 3,
+  OUT_TOKEN_PAD: 200,
+  TEMPERATURE: 0.2,
+
+  /* 7-5 · 9-3 — `ai.cacheLimitMB` 설정이 없을 때의 상한과, 최근 정리 때 남길 여유(상한의 90% 까지 지운다).
+     여유를 두지 않으면 상한 근처에서 쓸 때마다 한 항목씩 지우는 정리가 매번 돈다. */
+  CACHE_LIMIT_MB: 200,
+  CACHE_TRIM_NUM: 9,
+  CACHE_TRIM_DEN: 10,
+
+  /* 7-1 원칙 3 — `ai.maxReqChars` 설정이 없을 때 요청 하나의 원문 글자 상한. */
+  MAX_REQ_CHARS: 6000
 });
 
 /* 8-4 키 형식 검사 — **길이 하한만** 두고 정확한 길이를 강제하지 않는다.

@@ -150,7 +150,9 @@ export function emptyUsageRow(day) {
     cacheHits: 0,
     ondeviceHits: 0,
     blocked429: 0,
-    errors: 0
+    errors: 0,
+    /* `[8a]` 15절 — 낭독 동반 번역 원격 호출로 **보낸** 원문 글자 수 합(캐시로 끝난 문장은 세지 않는다). */
+    charsTranslated: 0
   };
 }
 
@@ -166,7 +168,7 @@ let usageChain = Promise.resolve();
  * `usage` 를 증분한다. **실패해도 던지지 않는다** — 사용량 기록이 안 됐다고
  * 번역이 죽으면 안 된다(대시보드는 부차적이고 AI 호출은 그렇지 않다).
  *
- * @param {Object} delta `{calls, kind, provider, tokensIn, tokensOut, errors, blocked429}`
+ * @param {Object} delta `{calls, kind, provider, tokensIn, tokensOut, errors, blocked429, cacheHits, ondeviceHits, charsTranslated}`
  * @param {{db?: Object, now?: *}} [deps] 테스트가 `db` 를 주입한다
  */
 export function bumpUsage(delta, deps) {
@@ -185,9 +187,11 @@ export function bumpUsage(delta, deps) {
       if (d.blocked429) row.blocked429 += d.blocked429;
       if (d.cacheHits) row.cacheHits += d.cacheHits;
       if (d.ondeviceHits) row.ondeviceHits += d.ondeviceHits;
+      if (d.charsTranslated) row.charsTranslated = (Number(row.charsTranslated) || 0) + d.charsTranslated;
 
       // 9-2 의 고정 키가 아니면 새로 만들지 않는다(오타가 스토어에 눌러앉는다).
-      if (d.kind && AI.USAGE_KINDS.indexOf(d.kind) >= 0) {
+      // `[8a]` `readalong`(15절)은 빈 행에 없고 **처음 쓰일 때** 생긴다(config 의 `READALONG_KIND` 주석).
+      if (d.kind && (AI.USAGE_KINDS.indexOf(d.kind) >= 0 || d.kind === AI.READALONG_KIND)) {
         row.byKind[d.kind] = (row.byKind[d.kind] || 0) + (d.calls || 1);
       }
       if (d.provider) {
@@ -326,7 +330,7 @@ function messageOf(json) {
  * @param {{system?:string, user:string, json?:boolean, schema?:object,
  *          maxOutputTokens?:number, temperature?:number}} req
  * @param {{key:string, provider?:string, model?:string, signal?:AbortSignal,
- *          fetch?:Function, kind?:string, db?:Object, now?:*}} opts
+ *          fetch?:Function, kind?:string, db?:Object, now?:*, chars?:number}} opts
  * @returns {Promise<{text:string, usage:{input:number,output:number}|null, finishReason:string|null, model:string, provider:string}>}
  * @throws {ProviderError} **항상** 이 타입이다. 메시지는 이미 지워져 있다.
  */
@@ -350,8 +354,9 @@ export async function complete(req, opts) {
   /* 15절 — "호출이 **시작될 때** `calls++`(응답 실패도 비용이 발생했을 수
      있음)". 끝에서 await 하므로 네트워크 지연에 IndexedDB 쓰기가 끼어들지
      않으면서도, 호출자가 `await complete()` 한 뒤에는 기록이 끝나 있다. */
+  /* `[8a]` 7-8-3 — `charsTranslated` 도 호출이 **시작될 때** 함께 센다(`o.chars` — 파이프라인이 준다). */
   const started = bumpUsage(
-    { calls: 1, kind: o.kind, provider: adapter.id },
+    { calls: 1, kind: o.kind, provider: adapter.id, charsTranslated: Number(o.chars) > 0 ? Number(o.chars) : 0 },
     { db: o.db, now: o.now }
   );
 

@@ -674,3 +674,19 @@ CMDT 의 `bboxDegenerate` 303건(9-27 미추적)과 같은 원인일 수 있다.
   **기능이 바뀌면 이 가이드도 고쳐야 한다**(스크래치패드의 `medreader-guide.html` 을 같은 경로로 다시 publish 하거나, 다른 세션이면 URL 로).
 - 가이드를 쓰며 확인한 사실: **줄 "길게 누르기"는 구현돼 있지 않다**(spec 12-3·16-G 에는 있다). 지금은 낭독 중 줄 탭 = 그 줄로 이동, 낭독 중이 아니면 탭은 아무 일도 안 한다(`reader.js` pointerup). 8c 탭 번역 때 정한다.
   **한국어 UI 번역이 일부만 돼 있다** — `ko.js` 에 영어 값이 남은 키가 많다(Settings, Import a PDF, Library, Previous/Next …). spec 10단계 "fr·ko 번역 완성" 몫.
+
+## 2026-10-10 — 8a 완료 (파이프라인·캐시·상태 기계·분할 계약)
+
+- 운영자 결정: **Nour 폰 확인 지점을 "8a 전" → "8b 를 Nour 에게 공개하기 전"으로**(spec 19 7b 행). 8a 는 프로바이더 무관이라 `REGION` 이어도 버려지지 않는다.
+- Build: `js/ai/{prompts,jsonrepair,cache,pipeline,ondevice}.js`, `tts/text.js` 의 `Unit.src/seg/kind`·`sentencesOf`, `reader.js` 의 `flowParasOf` 분리. 테스트 670→745. `DB_VERSION` 2 그대로.
+  지시문(`TEST_PROMPT`)은 `prompts.js` 로 **글자 그대로** 옮김 — 오케스트레이터가 실행 값으로 대조(COMMON·TASK·LANG_RULES ar/ko·SCHEMA 모두 같음). Nour 가 "좋다"고 한 지시문이다, 바꾸지 마라.
+  Build 가 정한 것(Review 가 7-6 과 맞다고 판정): 404 → 새 상태 **`model`**(시간·키 재입력으로 안 풀림, 모델 변경·[다시 시도]로만). 거절된 문장은 **`blocked`**(상태 복귀 시 다시 보냄) vs 보냈다 실패는 **`failed`**(사용자 재시도만). `cacheHits` 는 아낀 호출 단위.
+- Review(조건부 통과, 749): 고친 것 — jsonrepair 가 번역문 속 백틱 세 개를 펜스로 잘라 정상 JSON 을 버림 / `numberTokens` 가 `1,500`↔`1500`·`7.0`↔`7` 을 "숫자 소실"로 버림(값 비교로). 오케스트레이터 재현 확인: 정상은 ok, 숫자를 실제로 뺀 번역만 `failed digits`.
+  운영자 캡처 꼴 아랍어 → 길이 비율 1.49·1.64 통과, `mg/L`→`ملغ/لتر`·동방 숫자 오판 없음.
+- **결정 대기(8b 전에)**:
+  1. 4자 이하 약어 문장(`ECG.` 등)은 길이 비율이 5 를 넘어 `failed` — spec `[0.2, 5]` 를 짧은 문장에 완화할지.
+  2. 온라인 중 네트워크 오류가 `failed` 라 청크 전체가 [다시 시도] 전까지 막힌다 — `blocked` 로 볼지.
+  3. Gemini 429 에 `Retry-After` 가 거의 없어 사실상 다음 날 00:00 까지 `exhausted` — 7-6 대로 [다시 시도]가 즉시 해제하는지 8b 화면에서 보장할 것.
+  4. `provider.js`: 모델 칸에 키를 넣으면(누출은 없음) `cooldown`·`failed/NETWORK` 로 잘못 기억되고 usage 호출 수 +1.
+  8b 주의: 성공 호출마다 `inflight → ready` 이벤트가 난다 — 다시 보낼지는 `prev` 로 거를 것.
+- **실PDF 확인 대기**: 실제 책 쪽에서 `flowParasOf` 분리 전후 낭독 큐 동일성, 쪽 경계 R2·frag, 리더 낭독. **pdf.js 설치본과 스크래치패드 측정 스크립트가 임시 폴더 정리로 사라졌다**(chars-per-page·sim-readahead·imgops 등 — 결과 수치는 이 문서에 남아 있다). 재설치는 운영자 허락 대기. 다시 만들 스크립트는 레포 `dev/` 에 두자고 제안함.

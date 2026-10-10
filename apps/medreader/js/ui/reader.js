@@ -1141,13 +1141,28 @@ export function currentPage() { return { docId: state.docId, page: state.page, p
  */
 export function flowParas() {
   const blocks = (state.desc && state.desc.blocks) || [];
+  // 4-8 (3) — 표 자리에 안내 한 마디를 끼운다. 이미 말한 표는 빠진다.
+  return insertTableNotices(flowParasOf(state.desc), blocks, state.announcedTables, t('reader.tts.tableSkipped'));
+}
+
+/**
+ * ★ `[8a]` spec 7-8-2 원칙 2 — `flowParas()` 의 **순수 부분**. 표 안내를 끼우기 전의 문단들.
+ *
+ * 지금 쪽(`flowParas()`)과 그 뒤의 쪽들(UI 가 낭독 동반 번역에 주입할
+ * `loadParas(n) = flowParasOf(describePage(fromStored(rec)))`)이 **같은 함수**를 지나게 하려고
+ * 떼어 냈다. 동작은 그대로다 — `flowParas()` 가 이것에 표 안내만 더한다.
+ *
+ * @param {{blocks?:Array}} desc `describePage()` 결과
+ * @returns {{id:string|null, kind:string, lines:Array}[]} 읽기 순서
+ */
+export function flowParasOf(desc) {
+  const blocks = (desc && desc.blocks) || [];
   const out = [];
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i].type !== 'para') continue;
     out.push({ id: blocks[i].id, kind: blocks[i].kind, lines: blocks[i].lines });
   }
-  // 4-8 (3) — 표 자리에 안내 한 마디를 끼운다. 이미 말한 표는 빠진다.
-  return insertTableNotices(out, blocks, state.announcedTables, t('reader.tts.tableSkipped'));
+  return out;
 }
 
 /* ────────────────────────────────────────────────────────

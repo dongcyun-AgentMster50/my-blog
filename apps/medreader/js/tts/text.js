@@ -17,9 +17,20 @@
        ranges?: [{id,start,end}],  // ★ 10a — 그 줄 **안에서** 이 발화가 차지한 글자 구간
        paraId:  string|null,
        part:    number,     // 300자 초과로 쪼갠 조각 번호(0부터)
-       parts:   number      // 그 문장이 몇 조각인가
+       parts:   number,     // 그 문장이 몇 조각인가
+       src:     string,     // ★ 8a — normalizeSpeech 이전의 문장 원문(번역·캐시 키의 입력, 7-8-2)
+       seg:     number|null,// ★ 8a — 쪽 안의 문장 번호(0부터). 조각들은 같은 seg. 표 안내는 null
+       kind:    string      // ★ 8a — 문단 kind ('table-notice' 포함)
      }
    `part`/`parts` 가 있어야 "쪼개진 동안 하이라이트는 유지"(6-4)를 UI 가 안다.
+
+   ── ★ `[8a]` 분할은 한 벌 (spec 7-8-2) ───────────────────
+   문장을 나누는 함수가 두 곳에서 불리면 번역이 한 문장씩 밀린다. 그래서
+   **`splitSentences` 를 부르는 곳은 이 파일의 `buildUnits` 하나뿐**이다(R6 — grep).
+   번역 입력은 `sentencesOf(buildUnits(paras, 'sentence'))` 에서만 만든다. `sentencesOf`
+   는 **다시 나누지 않는다** — `Unit.seg` 로 묶기만 한다(나누면 R2 가 빨개진다 — R5 변이).
+   표 안내 문단(`kind = 'table-notice'`)은 `seg` 를 받지 않아 앞뒤 번호를 밀지 않고,
+   `sentencesOf` 가 뺀다(R4).
 
    ── ★ `[수정 2026-09-25 — 10a]` `ranges` (spec 6-5) ─────
    5단계에서 낭독 단위를 줄 → **문장**으로 바꿨는데 하이라이트 단위는 줄로
@@ -36,7 +47,10 @@
    ============================================================ */
 
 import { TTS, TTS_SYMBOLS } from '../config.js';
-import { splitSentences } from '../text/segment.js';
+import { splitSentences, endsSentence } from '../text/segment.js';
+
+/** 7-8-2 — 표 안내 문단의 kind. 번역 입력에서 빠지고 문장 번호를 받지 않는다. */
+export const TABLE_NOTICE_KIND = 'table-notice';
 
 /** URL·이메일. 6-1 — "link" 로 바꾼다(주소를 한 글자씩 읽으면 못 듣는다). */
 const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[\w.+-]+@[\w-]+\.[\w.-]+\b/gi;
@@ -138,11 +152,14 @@ export function buildUnits(paras, unit) {
   const list = Array.isArray(paras) ? paras : [];
   const mode = unit === 'line' ? 'line' : 'sentence';
   const out = [];
+  // ★ 8a — 쪽 안의 문장 번호. 실제로 발화가 나온 문장만 번호를 받는다(빈 문장은 건너뛴다).
+  const seq = { next: 0 };
 
   for (let p = 0; p < list.length; p++) {
     const para = list[p] || {};
     const lines = Array.isArray(para.lines) ? para.lines : [];
     if (!lines.length) continue;
+    const meta = { kind: para.kind ? String(para.kind) : 'body', seq: seq };
 
     if (mode === 'line') {
       let group = [];
@@ -152,16 +169,16 @@ export function buildUnits(paras, unit) {
         const last = i === lines.length - 1;
         // 하이픈으로 다음 줄과 이어지면 발화를 끊지 않는다.
         if (!last && hy !== 'none') continue;
-        emit(out, joinPieces(group), para.id);
+        emit(out, joinPieces(group), para.id, undefined, undefined, meta);
         group = [];
       }
-      if (group.length) emit(out, joinPieces(group), para.id);
+      if (group.length) emit(out, joinPieces(group), para.id, undefined, undefined, meta);
       continue;
     }
 
     const joined = joinPieces(lines);
     const sentences = splitSentences(joined.text);
-    if (!sentences.length) { emit(out, joined, para.id); continue; }
+    if (!sentences.length) { emit(out, joined, para.id, undefined, undefined, meta); continue; }
 
     // `splitSentences` 는 공백 하나로 정확히 되붙는다(그 함수의 계약). 그래서
     // 누적 길이로 각 문장이 원문의 어느 구간인지 되찾을 수 있다.
@@ -172,7 +189,7 @@ export function buildUnits(paras, unit) {
       const from = start < 0 ? cursor : start;
       const to = from + sent.length;
       cursor = to + 1;
-      emit(out, { text: sent, spans: spansIn(joined.spans, from, to) }, para.id, from, to);
+      emit(out, { text: sent, spans: spansIn(joined.spans, from, to) }, para.id, from, to, meta);
     }
   }
 
@@ -227,13 +244,21 @@ export function localRange(sp, from, to) {
  *
  * @param {number} [from] `joined.spans` 와 같은 좌표계의 구간 시작(문장 모드)
  * @param {number} [to]   같은 구간 끝. 주지 않으면 **덩어리 전체**(줄 모드)다.
+ * @param {{kind:string, seq:{next:number}}} [meta] ★ 8a — 문단 kind 와 쪽 안의 문장 번호 계수기
  */
-function emit(out, joined, paraId, from, to) {
+function emit(out, joined, paraId, from, to, meta) {
   const ids = [];
   for (let i = 0; i < joined.spans.length; i++) ids.push(joined.spans[i].id);
 
   const spoken = normalizeSpeech(joined.text);
   if (!spoken) return;
+
+  // ★ 8a — `src` 는 정규화(기호 → 낱말)·300자 분할 **이전**의 문장 원문이다(7-8-2).
+  //   문장 모드에서는 `splitSentences` 가 낸 그 문장 = `joinPieces` 결과의 [from, to) 구간.
+  const kind = meta && meta.kind ? meta.kind : 'body';
+  const src = String(joined.text).replace(/\s+/g, ' ').trim();
+  let seg = null;
+  if (kind !== TABLE_NOTICE_KIND && meta && meta.seq) seg = meta.seq.next++;
 
   const parts = splitLong(spoken, TTS.MAX_UTTER_CHARS);
 
@@ -253,11 +278,45 @@ function emit(out, joined, paraId, from, to) {
       lineIds: ids,
       paraId: paraId == null ? null : String(paraId),
       part: i,
-      parts: parts.length
+      parts: parts.length,
+      src: src,
+      seg: seg,
+      kind: kind
     };
     if (ranges) u.ranges = ranges;
     out.push(u);
   }
+}
+
+/**
+ * ★ 8a — 번역 입력(spec 7-8-2). `buildUnits(paras, 'sentence')` 결과에서 **문장 하나에 하나씩**.
+ *
+ * **다시 나누지 않는다.** `Unit.seg` 로 묶을 뿐이다 — 300자로 쪼갠 조각들은 같은 `seg`·같은 `src`
+ * 라 항목 하나가 된다(R3). 표 안내(`kind = 'table-notice'`)는 뺀다(R4).
+ *
+ *   frag: 'head' — 쪽의 마지막 문장이고 `endsSentence(src)` 가 거짓(다음 쪽으로 이어진다)
+ *         'tail' — 쪽의 첫 문장이고 첫 글자가 소문자(앞 쪽에서 이어졌다)
+ *         null   — 그 밖. 한 문장뿐인 쪽이 둘 다에 해당하면 'head' 가 이긴다.
+ *
+ * @param {Unit[]} units 한 쪽의 낭독 큐
+ * @returns {{seg:number, src:string, paraId:string|null, kind:string, frag:'head'|'tail'|null}[]} seg 오름차순
+ */
+export function sentencesOf(units) {
+  const list = Array.isArray(units) ? units : [];
+  const bySeg = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const u = list[i];
+    if (!u || u.kind === TABLE_NOTICE_KIND || !Number.isInteger(u.seg)) continue;
+    if (bySeg.has(u.seg)) continue;                       // 조각들 — 첫 조각이 대표
+    bySeg.set(u.seg, { seg: u.seg, src: String(u.src == null ? '' : u.src), paraId: u.paraId == null ? null : u.paraId, kind: u.kind || 'body', frag: null });
+  }
+  const out = Array.from(bySeg.values()).sort((a, b) => a.seg - b.seg);
+  if (!out.length) return out;
+  const first = out[0];
+  const last = out[out.length - 1];
+  if (/^\p{Ll}/u.test(first.src)) first.frag = 'tail';
+  if (!endsSentence(last.src)) last.frag = 'head';
+  return out;
 }
 
 /**

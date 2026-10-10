@@ -344,9 +344,12 @@ test('J3 ★ 지시문 — 한 곳(상수), 10-1 공통 규칙, 현대 표준 �
   assert.match(req.user, /drug names, numbers and units unchanged/);
   assert.equal(req.json, true);
   // 화면 코드 다른 곳에 지시문 조각이 흩어져 있지 않다.
+  // `[8a]` 지시문이 예고대로 `ai/prompts.js` 로 옮겨 갔다 — 화면에는 0, prompts.js 에 한 곳.
   const ui = readFileSync(new URL('../js/ui/settings.js', import.meta.url), 'utf8');
-  assert.equal((ui.match(/Modern Standard Arabic/g) || []).length, 1);
-  assert.match(ui, /prompts\.js/, '8a 의 prompts.js 로 옮겨 갈 것이라는 주석');
+  const prompts = readFileSync(new URL('../js/ai/prompts.js', import.meta.url), 'utf8');
+  assert.equal((ui.match(/Modern Standard Arabic/g) || []).length, 0);
+  assert.equal((prompts.match(/Modern Standard Arabic/g) || []).length, 1);
+  assert.match(ui, /import \{ TEST_PROMPT \} from '\.\.\/ai\/prompts\.js'/, '설정 화면은 prompts.js 의 지시문을 쓴다');
 });
 
 test('J4 ★ 시험 번역 결과 어디에도 키가 없다 — 모델 칸에 키가 들어 있어도(모델 이름도 지운다)', async () => {
