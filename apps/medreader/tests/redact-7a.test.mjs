@@ -40,13 +40,22 @@ test('문장 가운데 있는 키를 지운다', () => {
 });
 
 test('URL 쿼리 안의 키를 지운다 — 그리고 URL 의 나머지는 남긴다', () => {
+  // `[수정 2026-10-12 — P1 ③]` 신형 키 몸통이 출력 가능 ASCII 로 넓어져(8-4 — 몸통에 `.`·`~`·`+`·`/`·`=`
+  // 가 든 키를 패턴이 통째로 놓쳤다) `&` 도 몸통 글자가 됐다. 그래서 신형 키 뒤의 쿼리는 함께 지워진다 —
+  // 지우는 쪽으로 넘치는 것은 안전한 방향이다(config.js 원칙). 키가 URL 에 실리는 일 자체는
+  // `assertNoKeyInUrl` 이 막는다. "나머지는 남긴다"는 몸통이 좁은 구형(`AIza…`) 키로 계속 고정한다.
   const url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + NEW_KEY + '&pageSize=1';
   const out = redactString(url);
   assertClean(out, NEW_KEY);
-  // `&` 는 키 문자 집합에 없으므로 거기서 멈춰야 한다. 뒤 파라미터가 살아
+  assert.equal(out.startsWith('https://generativelanguage.googleapis.com/v1beta/models?key=' + REDACTION), true, out);
+
+  const urlOld = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + OLD_KEY + '&pageSize=1';
+  const outOld = redactString(urlOld);
+  assertClean(outOld, OLD_KEY);
+  // `&` 는 구형 키 문자 집합에 없으므로 거기서 멈춰야 한다. 뒤 파라미터가 살아
   // 있어야 사람이 어떤 요청이었는지 알아볼 수 있다.
-  assert.equal(out.endsWith('&pageSize=1'), true, '지나치게 먹어 치웠다: ' + out);
-  assert.equal(out.includes('?key=' + REDACTION), true);
+  assert.equal(outOld.endsWith('&pageSize=1'), true, '지나치게 먹어 치웠다: ' + outOld);
+  assert.equal(outOld.includes('?key=' + REDACTION), true);
 });
 
 test('JSON 문자열 안의 키를 지운다', () => {

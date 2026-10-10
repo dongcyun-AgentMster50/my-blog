@@ -34,6 +34,38 @@ const MAX_DEPTH = 8;
 /** 배열 한 개에서 훑는 최대 원소 수. 나머지는 개수만 남긴다. */
 const MAX_ITEMS = 200;
 
+/* ────────────────────────────────────────────────────────
+   `[신설 2026-10-12 — 공개 전 묶음 P1 ③]` **저장된 실제 키**를 늘 함께 쓴다.
+
+   `keys` 옵션은 호출자가 기억해야 걸린다 — 실제로 `ProviderError` 생성자는 그것을 잊고
+   패턴만 썼다(몸통에 `.` 가 든 키는 패턴이 통째로 놓쳤다). 그래서 "지금 저장된 키"를
+   돌려주는 **공급자**를 한 번 꽂아 두면 모든 `redact`·`redactString` 호출이 그 값도 지운다.
+   이 파일은 여전히 저장소를 모른다(3-2) — 공급자는 `ai/provider.js` 가 `privacy/keys.js` 로 만든다.
+   ──────────────────────────────────────────────────────── */
+let secretSource = null;
+
+/**
+ * 저장된 실제 키 목록을 돌려주는 함수를 꽂는다. `null` 이면 뺀다.
+ * 공급자가 던지거나 이상한 값을 주어도 지우기는 멈추지 않는다(패턴만으로 계속).
+ * @param {(function(): string[])|null} fn
+ * @returns {(function(): string[])|null} 이전 공급자(되돌릴 때 쓴다)
+ */
+export function setSecretSource(fn) {
+  const prev = secretSource;
+  secretSource = typeof fn === 'function' ? fn : null;
+  return prev;
+}
+
+function sourcedSecrets() {
+  if (!secretSource) return [];
+  try {
+    const v = secretSource();
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 /** 정규식 메타문자를 막는다 — 키에 `.` 이나 `-` 가 들어 있다(`AQ.Ab…`). */
 function escapeRe(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
@@ -48,18 +80,27 @@ function escapeRe(s) {
  */
 function buildPatterns(extraKeys) {
   const out = [];
-  for (let i = 0; i < REDACT_PATTERNS.length; i++) {
-    out.push(new RegExp(REDACT_PATTERNS[i], 'g'));
-  }
-  if (extraKeys) {
-    for (let i = 0; i < extraKeys.length; i++) {
-      const k = extraKeys[i];
+  // ★ 실제 키 값을 **패턴보다 먼저** 지운다. 패턴이 먼저 돌면 키의 앞부분만 `[KEY]` 로 바뀌어
+  //   (예: 몸통에 따옴표가 든 키) 실제 키 문자열이 더는 통째로 나타나지 않고, 뒤 조각이 남는다.
+  const keys = (Array.isArray(extraKeys) ? extraKeys : []).concat(sourcedSecrets());
+  const seen = new Set();
+  for (let i = 0; i < keys.length; i++) {
+    const k = typeof keys[i] === 'string' ? keys[i] : '';
+    // 앞뒤 공백이 붙은 원문과 뗀 값 둘 다 — 헤더로 나간 것은 뗀 값이다.
+    const forms = [k, k.trim()];
+    for (let j = 0; j < forms.length; j++) {
+      const f = forms[j];
       // 짧은 문자열을 통째로 지우면 본문이 말살된다("a" 를 키라고 넘긴 경우).
       // 키라고 부를 수 있는 최소 길이 아래는 패턴에만 맡긴다.
-      if (typeof k === 'string' && k.length >= AI.MASK_MIN_LEN) {
-        out.push(new RegExp(escapeRe(k), 'g'));
-      }
+      if (f.length < AI.MASK_MIN_LEN || seen.has(f)) continue;
+      seen.add(f);
     }
+  }
+  // 긴 것부터 — 한 키가 다른 키의 앞부분이면 짧은 것이 먼저 지워 긴 키의 꼬리를 남긴다.
+  const literal = [...seen].sort((a, b) => b.length - a.length);
+  for (let i = 0; i < literal.length; i++) out.push(new RegExp(escapeRe(literal[i]), 'g'));
+  for (let i = 0; i < REDACT_PATTERNS.length; i++) {
+    out.push(new RegExp(REDACT_PATTERNS[i], 'g'));
   }
   return out;
 }

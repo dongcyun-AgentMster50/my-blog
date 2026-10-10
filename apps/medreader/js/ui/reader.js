@@ -1053,16 +1053,25 @@ async function saveLastPage() {
   const page = state.page;
   const lineId = state.currentLineId || firstFlowLineId();
   try {
-    const doc = await db.get('documents', docId);
-    if (!doc) return;
-    if (Number(doc.lastPage) === page && doc.lastLineId === lineId) return;
-    doc.lastPage = page;
-    doc.lastLineId = lineId;
-    await db.put('documents', doc);
-    state.doc = doc;
+    const res = await writeLastPage(docId, page, lineId);
+    // 다른 문서로 옮겨 갔으면 그 문서의 state.doc 을 덮지 않는다.
+    if (res.wrote && state.docId === docId) state.doc = res.rec;
   } catch (e) {
     // 위치 저장 실패로 읽기를 막지 않는다. 다음 쪽에서 다시 시도된다.
   }
+}
+
+/**
+ * `[P1 경합]` 마지막 위치 쓰기 — **자기 필드(`lastPage`·`lastLineId`)만** 한 트랜잭션에서 합친다.
+ * 예전에는 미리 읽은 레코드를 통째로 `put` 해서, 그사이 서재 [⋯] 에서 고른 원문 언어를
+ * 옛 값으로 되돌렸다(review.md 7c8-5 재현). 같으면 쓰지 않는다.
+ * @returns {Promise<{wrote:boolean, rec:Object|null}>}
+ */
+export function writeLastPage(docId, page, lineId) {
+  return db.patch('documents', docId, (cur) => {
+    if (Number(cur.lastPage) === page && cur.lastLineId === lineId) return null;
+    return { lastPage: page, lastLineId: lineId };
+  });
 }
 
 function firstFlowLineId() {

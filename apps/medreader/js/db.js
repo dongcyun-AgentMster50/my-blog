@@ -300,6 +300,49 @@ export function put(storeName, value, key) {
     reqPromise(key === undefined ? s[storeName].put(value) : s[storeName].put(value, key)));
 }
 
+/**
+ * `[공개 전 묶음 P1 — documents 갱신 경합]` **한 트랜잭션 안에서 읽고 → 자기 필드만 합쳐 → 쓴다.**
+ *
+ * 왜: `get()` 과 `put()` 은 서로 다른 트랜잭션이다. 그 사이에 다른 곳이 같은 레코드의
+ * **다른 필드**를 쓰면, 미리 읽어 둔 옛 레코드를 통째로 `put` 하는 쪽이 그것을 지운다
+ * (review.md 7c8-5 — 읽기 트랜잭션을 3초 늦추자 사용자가 고른 원문 언어가 옛 값으로 덮였다).
+ * 여기서는 읽기와 쓰기가 **같은 readwrite 트랜잭션**이라, 같은 레코드에 대한 다른 쓰기는
+ * 앞이나 뒤에 줄을 서고 사이에 끼어들 수 없다.
+ *
+ * - `change` 가 객체면 그 필드만 덮는다(얕은 합치기). 함수면 **트랜잭션 안에서 읽은 현재
+ *   레코드**를 받아 덮을 필드 객체를 돌려준다. `null`·`undefined`·`false`·빈 객체면 쓰지 않는다.
+ * - 레코드가 없으면 **쓰지 않는다**(지워진 문서를 되살리지 않는다).
+ * - `change` 함수는 동기여야 한다 — `await` 하면 그사이 트랜잭션이 끝난다.
+ *
+ * @param {string} storeName
+ * @param {*} key
+ * @param {Object|function(Object):(Object|null)} change
+ * @returns {Promise<{wrote:boolean, rec:Object|null}>} `rec` 는 쓴 뒤(또는 그대로인) 레코드
+ */
+export function patch(storeName, key, change) {
+  return withTx(storeName, 'readwrite', (tx, s) => new Promise((resolve, reject) => {
+    const store = s[storeName];
+    const req = store.get(key);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const cur = req.result;
+      if (cur === undefined || cur === null) { resolve({ wrote: false, rec: null }); return; }
+      let part;
+      try {
+        part = typeof change === 'function' ? change(cur) : change;
+      } catch (e) { reject(e); return; }
+      if (!part || typeof part !== 'object' || Object.keys(part).length === 0) {
+        resolve({ wrote: false, rec: cur });
+        return;
+      }
+      const next = Object.assign({}, cur, part);
+      const w = store.put(next);
+      w.onerror = () => reject(w.error);
+      w.onsuccess = () => resolve({ wrote: true, rec: next });
+    };
+  }));
+}
+
 /** 여러 레코드를 **한 트랜잭션**으로. 7000쪽에서 쪽마다 트랜잭션을 여는 비용을 피한다. */
 export function putAll(storeName, values) {
   return withTx(storeName, 'readwrite', (tx, s) => {

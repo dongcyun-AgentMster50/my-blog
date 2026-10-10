@@ -83,7 +83,10 @@ test('R3 화면 폭 맞춤 scale, dpr 상한', () => {
   assert.equal(fitScale(612, 1), ORIGINAL.ZOOM_FLOOR_MIN);
   assert.equal(fitScale(612, 612), 1);
   assert.equal(fitScale(0, 360), 1);
-  assert.equal(canvasRatio(3), ORIGINAL.DPR_MAX);
+  // `[수정 2026-10-12 — 12-5 캔버스 해상도]` 옛 기대 `canvasRatio(3) === DPR_MAX(2)` 는 고정 상한을
+  // 고정했다. 그 상한이 작게 볼 때까지 해상도를 깎아 가는 글자가 사라졌다(Nour 캡처) — 이제 상한은
+  // 캔버스 크기에 걸린 **픽셀 수 예산**이고, 크기를 모르면 dpr 그대로다. 예산 쪽은 canvas-budget-p1 이 고정한다.
+  assert.equal(canvasRatio(3), 3);
   assert.equal(canvasRatio(1), 1);
 });
 

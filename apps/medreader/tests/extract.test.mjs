@@ -363,9 +363,12 @@ test('E28 _saveMeta 가 쓰는 키 집합에 derivedHash 가 있다', async () =
   // 통으로 못 돌린다. 키 하나가 빠지는 종류의 결함은 소스 검사로 충분히 잡힌다.
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../js/pdf/extract.js', import.meta.url), 'utf8');
-  const at = src.indexOf('doc.extraction = {');
-  assert.ok(at >= 0, 'doc.extraction 저장 블록을 찾지 못했다');
-  const end = src.indexOf('};', at);
+  // `[P1 경합]` 저장이 `doc.extraction = {…}; put(doc)` 통째 쓰기에서
+  // `db.patch('documents', id, { extraction: {…} })` 부분 갱신으로 바뀌었다 — 찾는 표지만 바꾼다.
+  // 동작(실제로 쓰인 키)은 docs-patch-p1 의 DP5 가 흉내 IndexedDB 로 다시 본다.
+  const at = src.indexOf('extraction: {', src.indexOf('async _saveMeta'));
+  assert.ok(at >= 0, 'extraction 저장 블록을 찾지 못했다');
+  const end = src.indexOf('}', at + 'extraction: {'.length);
   assert.ok(end > at, '저장 블록의 끝을 찾지 못했다');
   const block = src.slice(at, end);
   for (const key of ['done', 'pagesDone', 'cursor', 'failed', 'algoVersion',

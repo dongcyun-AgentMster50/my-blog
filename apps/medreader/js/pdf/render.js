@@ -79,11 +79,33 @@ export function zoomStep(scale, dir) {
   return clampScale(Number(dir) >= 0 ? cur * f : cur / f);
 }
 
-/** canvas 뒷면 해상도 배수. dpr 을 그대로 쓰면 3× 줌에서 한 변이 5000px 을 넘는다. */
-export function canvasRatio(dpr) {
+/**
+ * canvas 뒷면 해상도 배수 — `[수정 2026-10-12 — 12-5]` **픽셀 수 예산**.
+ *
+ *   ratio = max(1, min(dpr, √(MAX_CANVAS_PIXELS / (cssW × cssH)), MAX_CANVAS_SIDE / cssW, MAX_CANVAS_SIDE / cssH))
+ *
+ * 작게·폭 맞춤으로 볼 때는 **기기 밀도 그대로**(CMDT 66%·dpr 3 → 3), 크게 확대해 캔버스가
+ * 예산을 넘을 때만 깎는다(3.0× → 약 1.58). 옛 고정 상한 2 는 작게 볼 때도 깎아 가는 글자를 지웠다.
+ * 1 아래로는 내려가지 않는다(CSS 픽셀보다 거친 캔버스는 만들지 않는다 — 그 크기면 이미
+ * 예산이 아니라 CSS 크기 자체가 문제다). 크기를 모르면 예산을 걸 수 없으니 dpr 만 본다.
+ *
+ * @param {number} dpr devicePixelRatio
+ * @param {number} [cssW] 캔버스의 CSS 폭(px)
+ * @param {number} [cssH] 캔버스의 CSS 높이(px)
+ */
+export function canvasRatio(dpr, cssW, cssH) {
   const v = Number(dpr);
   if (!Number.isFinite(v) || v <= 0) return 1;
-  return Math.min(ORIGINAL.DPR_MAX, v);
+  let r = v;
+  const w = Number(cssW);
+  const h = Number(cssH);
+  if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) {
+    r = Math.min(r,
+      Math.sqrt(ORIGINAL.MAX_CANVAS_PIXELS / (w * h)),
+      ORIGINAL.MAX_CANVAS_SIDE / w,
+      ORIGINAL.MAX_CANVAS_SIDE / h);
+  }
+  return Math.max(1, r);
 }
 
 /* ────────────────────────────────────────────────────────
@@ -343,6 +365,27 @@ export function cropScale(dpr) {
   return Math.min(ORIGINAL.CROP_SCALE_MAX, ORIGINAL.CROP_SCALE_FACTOR * base);
 }
 
+/**
+ * `[12-5 와 맞춤 — 2026-10-12]` 표 크롭이 **실제로 그리는** 배율.
+ *
+ * 크롭 배율(`cropScale`)은 화면 배율과 무관한 절대 배율(pt 당 픽셀)이라 원본 뷰와 **기준이 다르다** —
+ * 해상도 규칙은 그대로 둔다(dpr 3 폰에서 3, 리플로우 폭에 맞춰 보이므로 충분하다 — spec 12-5).
+ * 다만 크롭은 **쪽 전체를 한 번 그린 뒤** 잘라 내므로, 그 전체 쪽 캔버스는 원본 뷰와 **같은
+ * 저사양 보호 예산**(`MAX_CANVAS_PIXELS`·`MAX_CANVAS_SIDE`)을 넘지 않게 한다. 보통 쪽(CMDT 517×720pt,
+ * Letter 612×792pt)은 배율 3 에서도 예산 안이라 그대로 3 이고, A3 같은 큰 쪽에서만 깎인다.
+ * 같은 식을 쓴다 — 쪽 크기(pt)를 CSS 크기로, 크롭 배율을 dpr 자리에 넣은 `canvasRatio`.
+ *
+ * @param {number} scale 원하는 크롭 배율
+ * @param {number} pageWpt `viewport(scale:1).width`
+ * @param {number} pageHpt `viewport(scale:1).height`
+ */
+export function cropRenderScale(scale, pageWpt, pageHpt) {
+  const s = Number(scale);
+  if (!Number.isFinite(s) || s <= 0) return 1;
+  // canvasRatio 는 1 아래로 내리지 않는다 — 1 보다 작게 달라는 호출은 그대로 둔다.
+  return Math.min(s, canvasRatio(s, pageWpt, pageHpt));
+}
+
 /* ────────────────────────────────────────────────────────
    3. LRU 캐시 — 4-8: "메모리 캐시(LRU 20개)만. IndexedDB 에는 저장하지
    않는다"(25MB 문서에서 용량이 두 배가 된다).
@@ -430,10 +473,11 @@ export async function renderPageInto(pdfDoc, pageNo, canvas, scale, dpr) {
   try {
     // 10b — UI 가 정한 배율을 그대로 그린다. 여기서 정책 하한을 다시 강제하면 표시가 거짓말을 한다.
     const s = clampScaleAbs(scale);
-    const ratio = canvasRatio(dpr);
     const viewport = page.getViewport({ scale: s });
     const cssW = Math.max(1, Math.floor(viewport.width));
     const cssH = Math.max(1, Math.floor(viewport.height));
+    // 12-5 — 예산은 **이 캔버스의 CSS 크기**로 정한다(배율이 크면 깎이고, 작으면 dpr 그대로).
+    const ratio = canvasRatio(dpr, cssW, cssH);
 
     canvas.width = Math.max(1, Math.floor(cssW * ratio));
     canvas.height = Math.max(1, Math.floor(cssH * ratio));
@@ -476,7 +520,10 @@ export async function renderRegionImage(pdfDoc, pageNo, pdfRect, opts) {
   const o = opts || {};
   const page = await pdfDoc.getPage(pageNo);
   try {
-    const scale = Number(o.scale) || cropScale(o.dpr);
+    const want = Number(o.scale) || cropScale(o.dpr);
+    const unit = page.getViewport({ scale: 1 });
+    // 12-5 와 같은 예산 — 쪽 전체 캔버스가 저사양 기기에서 할당 실패하지 않게.
+    const scale = cropRenderScale(want, unit.width, unit.height);
     const viewport = page.getViewport({ scale: scale });
     const rect = viewportRect(pdfRect, viewport);
     const w = Math.max(1, Math.round(rect.width));

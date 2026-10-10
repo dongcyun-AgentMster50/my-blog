@@ -214,6 +214,27 @@ export function formatWarningKey(providerId, key) {
   return r.code === provider.KEY_FORMAT.UNFAMILIAR ? 'settings.ai.key.unfamiliar' : null;
 }
 
+/**
+ * `[신설 2026-10-12 — 8-4 (가)]` 형식 경고 옆 진단 한 줄의 **조각들**. 키를 드러내지 않는다 —
+ * 길이·알려진 시작인가·보통 밖 글자 종류와 개수뿐(`provider.diagnoseKey`).
+ * `{text}` 는 그대로, `{ltr}` 는 `bdi dir=ltr` 로 꽂는다(아랍어 UI 에서 `.×1` 이 뒤집히지 않게).
+ * @returns {{text?:string, ltr?:string}[]} 진단할 것이 없으면 빈 배열
+ */
+export function keyDiagnosisParts(key) {
+  const d = provider.diagnoseKey(key);
+  if (!d) return [];
+  const sep = ' · ';
+  const out = [{ text: t('settings.ai.key.diag') + ' ' + t('settings.ai.key.diag.length', { len: formatNumber(d.length) }) }];
+  if (!d.knownHead) out.push({ text: sep + t('settings.ai.key.diag.head') });
+  if (d.odd.length) {
+    out.push({ text: sep + t('settings.ai.key.diag.chars') + ' ' });
+    out.push({ ltr: d.odd.map((o) => o.label + '×' + o.count).join(', ') });
+  } else {
+    out.push({ text: sep + t('settings.ai.key.diag.clean') });
+  }
+  return out;
+}
+
 /** 일일 상한 입력. 1 이상의 정수만. 아니면 `null`(이전 값으로 되돌린다). */
 export function parseDailyCap(v) {
   if (v === null || v === undefined || String(v).trim() === '') return null;
@@ -589,7 +610,7 @@ export function initSettingsScreen() {
     keyInput: q('aiKey'),
     keyToggle: q('aiKeyToggle'),
     keyPaste: q('aiKeyPaste'),
-    keyFormat: q('aiKeyFormat'),
+    keyFormat: q('aiKeyFormat'),   // `[P1 ③]` 글자는 paintFormatWarning 이 그린다(아래에서 data-i18n 을 뗀다)
     keyStored: q('aiKeyStored'),
     keyClear: q('aiKeyClear'),
     keyMsg: q('aiKeyMsg'),
@@ -620,6 +641,8 @@ export function initSettingsScreen() {
   };
   // 반쪽 캐시(옛 index.html + 새 JS) — 그릇이 없으면 조용히 물러난다. 던지지 않는다.
   if (!els.keyInput || !els.verifyBtn || !els.testBtn) { els = null; return; }
+  // `[P1 ③]` 형식 경고 칸은 진단 줄을 함께 그리므로 applyTranslations 가 글자를 덮지 않게 한다.
+  if (els.keyFormat) els.keyFormat.removeAttribute('data-i18n');
 
   // 12-7 — 키 입력창 옆 상시 경고(아랍어 우선 + 현재 UI 언어).
   if (els.piiHost && !els.piiHost.querySelector('[data-pii-warning]')) {
@@ -784,7 +807,28 @@ function paintFormatWarning() {
   if (!els) return;
   const k = currentKey().key;
   const warn = k ? formatWarningKey(providerId(), k) : null;
-  els.keyFormat.hidden = !warn;
+  const host = els.keyFormat;
+  // `[P1 ③]` 이 칸의 글자는 여기서만 그린다(정적 `data-i18n` 은 init 에서 뗐다) — 경고 + 진단 한 줄.
+  while (host.firstChild) host.removeChild(host.firstChild);
+  host.hidden = !warn;
+  if (!warn) return;
+  host.appendChild(document.createTextNode(t(warn)));
+  const parts = keyDiagnosisParts(k);
+  if (!parts.length) return;
+  host.appendChild(document.createElement('br'));
+  const line = document.createElement('small');
+  line.className = 'key-diag';
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].ltr !== undefined) {
+      const b = document.createElement('bdi');
+      b.dir = 'ltr';
+      b.textContent = parts[i].ltr;
+      line.appendChild(b);
+    } else {
+      line.appendChild(document.createTextNode(parts[i].text));
+    }
+  }
+  host.appendChild(line);
 }
 
 function setKeyVisible(on) {

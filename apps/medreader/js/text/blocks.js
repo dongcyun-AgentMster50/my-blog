@@ -31,6 +31,118 @@ function upperRatio(text) {
 }
 
 function inTopZone(line, H, ratio) { return H > 0 && line.baseline > H * (1 - ratio); }
+
+/* spec 4-7 [수정 2026-10-10 — 공개 전 P2] 머리말 띠(top band).
+ *
+ * 러닝 헤드는 **본문 덩어리 위 여백**에 놓인다 — 쪽의 맨 윗줄 묶음이고, 그 아래 첫 줄과
+ * 본문 행간보다 뚜렷이 떨어져 있다. 상단 8% 영역 안에는 본문 첫 몇 줄도 들어오므로
+ * (CMDT 2026 은 본문 3~4줄, Harrison 은 첫 본문 줄) "영역 안"만으로는 머리말과 본문을
+ * 가르지 못한다. 이 띠가 그 구조 신호다.
+ *
+ * `[실측 2026-10-10]` CMDT 2026 표본 201쪽(dev/probe-running-heads.mjs):
+ *   진짜 머리말 줄 253개 — 영역·길이 253/253 통과, **글자 크기 4/253 통과**
+ *   (머리말이 본문 9pt 보다 큰 10~12pt, Fm 의 1.33배 중앙·최대 1.5배), 대문자 243/253.
+ *   이웃 반복은 **0/253** — 짝·홀 쪽 머리말이 서로 달라 앞뒤 1쪽 비교로는 겹치지 않는다.
+ *   머리말 아래 간격은 최소 2.64×Lm. 그 결과 196쪽에서 머리말이 낭독에 남았다.
+ *   반대로 띠 없이 영역만 보던 규칙은 영역 안 본문(참고문헌 줄·표 머리·문항 라벨
+ *   "I-61." 등)을 머리말로 빼고 있었다(CMDT 16줄, Harrison 27줄).
+ *
+ * 반환: 띠가 있으면 { rowMin } (이 baseline 이상인 줄이 띠에 든다), 없으면 null.
+ * 줄은 회전 줄을 뺀 본문 파이프라인의 줄이다(classifyRoles 의 입력).
+ */
+export function topBand(lines, Fm, Lm, params = LAYOUT) {
+  const P = params || LAYOUT;
+  let maxB = -Infinity;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!hasText(l)) continue;
+    if (l.baseline > maxB) maxB = l.baseline;
+  }
+  if (!Number.isFinite(maxB)) return null;
+  const tol = P.HEADER_ROW_TOL_FACTOR * Fm;
+  let rowMin = maxB, below = -Infinity;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!hasText(l)) continue;
+    if (maxB - l.baseline <= tol) { if (l.baseline < rowMin) rowMin = l.baseline; }
+    else if (l.baseline > below) below = l.baseline;
+  }
+  // 아래에 줄이 없으면(머리말만 있는 쪽) 떨어져 있는 것으로 본다
+  const gap = Number.isFinite(below) ? rowMin - below : Infinity;
+  return gap >= P.HEADER_BAND_GAP_FACTOR * Lm ? { rowMin: rowMin } : null;
+}
+
+/* spec 4-7 [수정 2026-10-10] 쪽 번호 진행(folio run) — 머리말 띠의 "이웃 반복" 신호.
+ *
+ * 4-7 의 반복 검사는 이웃 쪽과 **글자가 같은** 줄을 찾는다. 그런데 짝·홀 쪽 머리말이
+ * 다른 책은 앞뒤 1쪽(앱이 넘기는 이웃)과 글자가 겹치지 않는다(`[실측]` CMDT 2026 0/253).
+ * 대신 머리말에는 거의 언제나 **쪽 번호**가 들어 있고, 그 번호는 쪽마다 1씩 나아간다.
+ * 그래서 이 쪽 띠 줄의 끝 숫자 n 과, **같은 자리**(쪽 위에서 잰 거리 ±행 허용폭)에 있는
+ * 이웃 띠 줄의 끝 숫자 m 이 `n − m = 이 쪽 번호 − 이웃 쪽 번호` 이면 그 띠는 러닝 헤드다.
+ *
+ * 왜 "같은 자리"만으로는 안 되는가: `[실측]` 머리말이 없는 책(Harrison)에서 그림·표가
+ * 쪽 맨 위에 오면 맨 윗줄(그림 글자·표 제목)도 아래와 떨어져 띠가 되고, 이웃 쪽의 같은
+ * 높이(본문 덩어리 맨 위)에 또 그런 줄이 있으면 겹친다 — 표 제목 1줄·그림 글자 1줄이
+ * 머리말로 빠졌다. 쪽 번호 진행을 함께 요구하면 그런 우연은 맞지 않는다.
+ * 끝 숫자만 본다(`"TABLE II-11 …"` 처럼 가운데 든 번호는 쪽 번호가 아니다).
+ */
+function edgeNumbers(text) {
+  const t = String(text == null ? '' : text).trim().split(/\s+/);
+  const out = [];
+  if (t.length && /^\d{1,5}$/.test(t[0])) out.push(Number(t[0]));
+  if (t.length > 1 && /^\d{1,5}$/.test(t[t.length - 1])) out.push(Number(t[t.length - 1]));
+  return out;
+}
+
+/* 이웃 쪽들의 머리말 띠 줄 — { d: 쪽 위에서 잰 거리, nums: 끝 숫자, pageNo }.
+ * 이웃은 저장본이다(lines[].baseline·text·role, stats). 회전 줄은 뺀다.
+ * 이웃의 Fm·Lm 은 그 저장본 stats 를, 없으면 이 쪽 값을 쓴다. */
+function neighborBandLines(nbs, Fm, Lm, P) {
+  const out = [];
+  for (let i = 0; i < nbs.length; i++) {
+    const nl = nbs[i] || {};
+    const nh = Number(nl.height) || 0;
+    const npg = Number(nl.pageNo);
+    if (!(nh > 0) || !Number.isFinite(npg)) continue;
+    const src = Array.isArray(nl.lines) ? nl.lines : [];
+    const nlines = [];
+    for (let k = 0; k < src.length; k++) if (src[k] && src[k].role !== 'rotated') nlines.push(src[k]);
+    const st = nl.stats || {};
+    const nFm = Number(st.medianFontSize) > 0 ? Number(st.medianFontSize) : Fm;
+    const nLm = Number(st.medianLeading) > 0 ? Number(st.medianLeading) : Lm;
+    const b = topBand(nlines, nFm, nLm, P);
+    if (!b) continue;
+    for (let k = 0; k < nlines.length; k++) {
+      const l = nlines[k];
+      if (!hasText(l) || l.baseline < b.rowMin || !(l.baseline > nh * (1 - P.HEADER_ZONE))) continue;
+      out.push({ d: nh - l.baseline, nums: edgeNumbers(l.text), pageNo: npg });
+    }
+  }
+  return out;
+}
+
+/* 이 쪽 띠 줄 가운데 하나라도 같은 자리의 이웃 띠 줄과 쪽 번호가 맞게 나아가는가. */
+function bandFolioRun(lines, band, H, pageNo, nbLines, tol) {
+  if (!band || !nbLines.length || !Number.isFinite(pageNo)) return false;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!hasText(l) || l.baseline < band.rowMin) continue;
+    const nums = edgeNumbers(l.text);
+    if (!nums.length) continue;
+    const d = H - l.baseline;
+    for (let k = 0; k < nbLines.length; k++) {
+      const s = nbLines[k];
+      const dp = pageNo - s.pageNo;
+      if (dp === 0 || Math.abs(s.d - d) > tol) continue;
+      for (let a = 0; a < nums.length; a++) {
+        for (let c = 0; c < s.nums.length; c++) if (nums[a] - s.nums[c] === dp) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function hasText(line) { return /\S/.test(String(line && line.text != null ? line.text : '')); }
 function inBottomZone(line, H, ratio) { return H > 0 && line.baseline < H * ratio; }
 
 // 흐름(문단·표)에 들어가는 줄인가
@@ -147,6 +259,13 @@ export function classifyRoles(lines, pageInfo, params = LAYOUT, neighborLayouts 
     }
   }
 
+  // 머리말 띠 — 쪽 맨 윗줄 묶음이 아래와 떨어져 있을 때만 머리말 후보가 된다(위 topBand)
+  const band = topBand(lines, Fm, Lm, P);
+  // 쪽 번호 진행 — 같은 자리 이웃 띠 줄과 끝 숫자가 쪽 차이만큼 나아가면 띠 전체가 머리말(위 bandFolioRun)
+  const pageNo = Number(pageInfo && pageInfo.pageNo);
+  const folioRun = !!band &&
+    bandFolioRun(lines, band, H, pageNo, neighborBandLines(nbs, Fm, Lm, P), P.HEADER_ROW_TOL_FACTOR * Fm);
+
   // 위쪽 여백의 기준은 "같은 컬럼의 직전 본문 흐름 줄"이다.
   // [보강] 머리말·꼬리말·페이지 번호를 기준으로 삼으면 컬럼 첫 본문 줄의
   // 여백이 항상 Lm을 크게 넘어 본문이 heading 으로 오판된다(spec 4-11 P4 위험).
@@ -169,10 +288,20 @@ export function classifyRoles(lines, pageInfo, params = LAYOUT, neighborLayouts 
 
     const repeats = neighborKeys.has(normalizeRepeatKey(text));
 
-    // header — 상단 8%
+    // header — 상단 8% · 머리말 띠 안 · 길이 · 글자 크기 · [반복 | 쪽 번호 진행 | 대문자 | 접두]
+    // [수정 2026-10-10] (1) 띠 조건을 더했다. (2) 글자 크기 상한을 1.1 → HEADER_FONT_RATIO 로
+    // 넓혔다 — 띠(구조 신호)가 "영역 안 본문"을 거르므로 글자 크기는 쪽 머리의 큰 표제
+    // (장 첫 쪽 제목 등)만 막으면 된다. (3) "쪽 번호 진행"을 반복 신호에 더했다 —
+    // 짝·홀 쪽 머리말이 다른 책은 앞뒤 1쪽과 글자가 겹치지 않는다. 대소문자가 섞인
+    // 머리말("… Chapter 2")은 대문자 비율로도 못 잡는다. 근거 수치는 topBand·bandFolioRun 주석.
+    // (4) 쪽 번호 진행이 맞으면 글자 크기 상한을 보지 않는다 — 상한은 약한 신호(대문자·접두)를
+    // 지키는 장치이고, Fm 은 쪽마다 흔들린다. `[실측 CMDT 2026 전수]` 표가 많은 쪽은 Fm 이
+    // 작아져 같은 12pt 머리말이 1.62~1.84×Fm 이 되어 3쪽에서 남았다. 장 첫 쪽의 큰 표제는
+    // 머리말 자리에서 쪽 번호와 함께 나아가지 않으므로 이 길로 새지 않는다.
     if (inTopZone(line, H, P.HEADER_ZONE) && text.length <= P.HEADER_MAX_LEN &&
-        line.fontSize <= P.HEADER_FONT_RATIO * Fm &&
-        (repeats || upperRatio(text) >= P.HEADER_UPPER_RATIO || /^(SECTION|CHAPTER|PART)\b/i.test(text))) {
+        !!band && line.baseline >= band.rowMin &&
+        (folioRun || line.fontSize <= P.HEADER_FONT_RATIO * Fm) &&
+        (repeats || folioRun || upperRatio(text) >= P.HEADER_UPPER_RATIO || /^(SECTION|CHAPTER|PART)\b/i.test(text))) {
       line.role = 'header';
       continue;
     }

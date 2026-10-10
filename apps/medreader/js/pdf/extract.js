@@ -594,22 +594,24 @@ export class Extractor extends EventTarget {
     if (!force && this._dirtyMeta < EXTRACT.META_SAVE_EVERY_PAGES && now - this._lastSave < EXTRACT.META_SAVE_EVERY_MS) return;
     this._dirtyMeta = 0;
     this._lastSave = now;
-    const doc = await db.get('documents', this.docId);
-    if (!doc) return;
-    doc.extraction = {
-      done: this.ex.done,
-      pagesDone: this.ex.pagesDone,
-      cursor: this.ex.cursor,
-      failed: this.ex.failed.slice(),
-      algoVersion: ALGO_VERSION,
-      // spec 9-2 — 파생 규칙 지문. 이것을 빼면 planResume 이 매번
-      // "규칙을 알 수 없다"로 보아 되감고, 진짜 규칙 변경을 감지하는
-      // 기능이 죽는다(항상 울리는 경보).
-      derivedHash: DERIVED_HASH,
-      roleDirty: this.ex.roleDirty.slice(),
-      status: this.ex.status
-    };
-    await db.put('documents', doc);
+    // `[P1 경합]` 통째 쓰기(get → put)가 아니라 **자기 필드(`extraction`)만** 한 트랜잭션에서
+    // 합친다. 몇 시간 도는 추출이 그사이 사용자가 고른 원문 언어·마지막 위치를 덮지 않게.
+    // 문서가 지워졌으면 쓰지 않는다(전과 같다).
+    await db.patch('documents', this.docId, {
+      extraction: {
+        done: this.ex.done,
+        pagesDone: this.ex.pagesDone,
+        cursor: this.ex.cursor,
+        failed: this.ex.failed.slice(),
+        algoVersion: ALGO_VERSION,
+        // spec 9-2 — 파생 규칙 지문. 이것을 빼면 planResume 이 매번
+        // "규칙을 알 수 없다"로 보아 되감고, 진짜 규칙 변경을 감지하는
+        // 기능이 죽는다(항상 울리는 경보).
+        derivedHash: DERIVED_HASH,
+        roleDirty: this.ex.roleDirty.slice(),
+        status: this.ex.status
+      }
+    });
     // worker 쪽 캐시를 주기적으로 턴다 (7000쪽 메모리)
     if (this.pdfDoc && typeof this.pdfDoc.cleanup === 'function' && this.stats.pagesBuilt % EXTRACT.PDFDOC_CLEANUP_EVERY === 0) {
       try { await this.pdfDoc.cleanup(); } catch (e) { /* 캐시 정리 실패는 치명적이지 않다 */ }

@@ -151,8 +151,22 @@ export const LAYOUT = Object.freeze({
   HEADING_SIZE_RATIO: 1.15,
   // 4-7 표의 길이·비율 조건들
   HEADER_MAX_LEN: 80,
-  HEADER_FONT_RATIO: 1.1,
+  // [수정 2026-10-10 — 공개 전 P2] spec 4-7 원문 1.1. 러닝 헤드는 본문보다 클 수 있다 —
+  // [실측] CMDT 2026 머리말 10~12pt / 본문 9pt = 중앙 1.33, 최대 1.5×Fm 이라 1.1 로는
+  // 253줄 중 4줄만 통과했다(196쪽에서 낭독에 남음). 이 상한은 이제 머리말 띠(아래) 안에서만
+  // 쓰이고 쪽 맨 위의 큰 표제(장 첫 쪽 제목 — Harrison 2.8×Fm)만 막으면 된다.
+  // 쪽 번호 진행이 맞는 띠는 이 상한을 보지 않는다(blocks.js classifyRoles).
+  HEADER_FONT_RATIO: 1.6,
   HEADER_UPPER_RATIO: 0.6,
+  // [신규 2026-10-10] 머리말 띠 — 쪽 맨 윗줄 묶음과 그 아래 첫 줄의 간격 하한(×Lm).
+  // 4-7 heading 규칙의 "위 여백 ≥ 1.5×Lm"과 같은 뜻의 값이다(행간보다 뚜렷이 떨어짐).
+  // [실측] CMDT 2026 머리말 아래 간격 최소 2.64×Lm, 머리말 없는 책(Harrison)의 맨 윗줄은
+  // 중앙 1.0×Lm(본문 행간) — 상단 영역 안 본문 줄을 머리말에서 빼는 것이 이 값의 일이다.
+  HEADER_BAND_GAP_FACTOR: 1.5,
+  // [신규 2026-10-10] 머리말 띠의 "같은 줄 묶음" 허용폭(×Fm). 홀수 쪽 머리말이 장 제목과
+  // "책 이름 쪽번호"로 나뉘어 글자 크기·baseline 이 조금 다른 두 줄이 되는 경우를 한 띠로 묶고,
+  // 이웃 쪽 띠 줄과 "같은 자리"인지 볼 때도 이 폭을 쓴다.
+  HEADER_ROW_TOL_FACTOR: 0.5,
   FOOTER_MAX_LEN: 120,
   FOOTER_FONT_RATIO: 0.85,
   HEADING_MAX_LEN: 60,
@@ -422,9 +436,19 @@ export const ORIGINAL = Object.freeze({
   /* 4-8 — 크롭 이미지는 **메모리에만** 둔다(IndexedDB 금지). LRU 20개. */
   CROP_CACHE_MAX: 20,
 
-  /* 렌더 canvas 의 devicePixelRatio 상한. 3.0× 줌 × dpr 3 이면 한 변이
-     5000px 을 넘어 저사양 기기에서 canvas 할당이 실패한다. */
-  DPR_MAX: 2
+  /* `[수정 2026-10-12 — 12-5 캔버스 해상도]` 고정 상한 `DPR_MAX: 2` 를 **픽셀 수 예산**으로 바꿨다.
+     옛 근거("3.0× 줌 × dpr 3 이면 한 변이 5000px 을 넘어 저사양 기기에서 canvas 할당이 실패한다")는
+     **크게 볼 때**의 이야기인데, 고정 상한이 **작게 볼 때까지** 해상도를 깎았다 — 폰(dpr ≈ 3)에서
+     2배로 그린 뒤 1.5배 늘려 9pt 표의 가는 글자(i·l·o)가 사라졌다(Nour 캡처, CMDT 31쪽 66%).
+     이제 `render.canvasRatio(dpr, cssW, cssH) = max(1, min(dpr, √(MAX_CANVAS_PIXELS / 면적),
+     MAX_CANVAS_SIDE / 한 변))` — 작게·폭 맞춤일 때는 기기 밀도 그대로, 크게 확대할 때만 예산이 깎는다.
+     3.0× 에서는 옛 규칙(13.4MP·약 54MB)보다 오히려 작다(8MP 이하). 표 크롭(4-8)의 전체 쪽 캔버스도
+     같은 예산을 넘지 않는다(`renderRegionImage`). 숫자는 여기 한 곳에만 둔다. */
+  /* 캔버스 한 장의 픽셀 수 상한 — RGBA 4바이트면 약 32MB. 저사양 보호.
+     [가정] Chrome Android 의 캔버스 상한은 기기 메모리에 달렸다 — 실기기 3.0× 에서 할당 실패가 없는지 본다. */
+  MAX_CANVAS_PIXELS: 8388608,
+  /* 캔버스 한 변 상한 — GPU 텍스처 상한이 낮은 기기 보호. [가정] */
+  MAX_CANVAS_SIDE: 4096
 });
 
 /* ────────────────────────────────────────────────────────
@@ -569,10 +593,24 @@ export const READALONG = Object.freeze({
   TR_LANG_REGION: Object.freeze({ ar: 'ar-SA' })
 });
 
+/* `[수정 2026-10-12 — 8-4 Nour 키 형식 경고 · 13절 지우개]` 키 **모양의 원본** — 한 곳에만 둔다.
+   형식 검사(`AI_KEY_PATTERNS`)와 지우개(`REDACT_PATTERNS`)가 **둘 다 이 문자열에서** 만들어진다.
+   예전에는 두 벌이었고, 신형 몸통 `[0-9A-Za-z_-]` 가 좁아서 몸통에 `.`·`~`·`+`·`/`·`=` 가 든 키는
+   (가) 정상 키인데 "형식이 낯섭니다" 경고가 떴고(Nour) (나) 지우개가 **키 전체를 놓쳤다**.
+   신형 몸통 = 출력 가능 ASCII(\x21-\x7E) 에서 따옴표(" ' `)·꺾쇠(< >)만 뺀 것 — 공백·따옴표·꺾쇠에서
+   끊기므로 JSON·HTML·문장 안에서도 키까지만 지운다. 키에 그런 글자가 들어 있으면 경고가 뜨고(경고일 뿐)
+   지우개는 그 앞까지만 지운다 — 그 경우는 실제 키 값 그물(`redact` 의 저장된 키)이 받는다.
+   길이 하한(20)은 그대로 — "AQ.1 level" 같은 문장을 지우지 않는다. */
+export const KEY_SHAPES = Object.freeze({
+  GOOGLE_AIZA: 'AIza[0-9A-Za-z_\\-]{30,}',
+  GOOGLE_AQ: 'AQ\\.[\\x21\\x23-\\x26\\x28-\\x3B\\x3D\\x3F-\\x5F\\x61-\\x7E]{20,}'
+});
+
 /* 8-4 키 형식 검사 — **길이 하한만** 두고 정확한 길이를 강제하지 않는다.
-   불일치는 **경고만** 하고 저장을 막지 않는다(형식이 또 바뀔 수 있다). */
+   불일치는 **경고만** 하고 저장을 막지 않는다(형식이 또 바뀔 수 있다).
+   경고의 목적은 "다른 프로바이더 키를 잘못 넣었다" 같은 큰 실수를 잡는 것이지 몸통 글자 검사가 아니다. */
 export const AI_KEY_PATTERNS = Object.freeze({
-  gemini: /^(AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_-]{20,})$/
+  gemini: new RegExp('^(?:' + KEY_SHAPES.GOOGLE_AIZA + '|' + KEY_SHAPES.GOOGLE_AQ + ')$')
 });
 
 /* 13절 `redact.js` 가 `[KEY]` 로 지울 것들.
@@ -584,8 +622,8 @@ export const AI_KEY_PATTERNS = Object.freeze({
    아직 어댑터가 없는 프로바이더(openai·mistral·openrouter)의 키가 오류
    객체를 타고 흘러나오는 경우까지 덮는다. */
 export const REDACT_PATTERNS = Object.freeze([
-  'AIza[0-9A-Za-z_\\-]{30,}',    // 구형 Google API 키
-  'AQ\\.[0-9A-Za-z_\\-]{20,}',   // 신형 Google API 키
+  KEY_SHAPES.GOOGLE_AIZA,        // 구형 Google API 키 — 형식 검사와 같은 상수
+  KEY_SHAPES.GOOGLE_AQ,          // 신형 Google API 키 — 형식 검사와 같은 상수
   'Bearer\\s+\\S+',              // 13절이 명시한 형태 (openai-compat 계열)
   'sk-[A-Za-z0-9_\\-]{16,}'      // openai/mistral 계열 키가 헤더 밖에 나왔을 때
 ]);

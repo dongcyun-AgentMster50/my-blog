@@ -335,19 +335,15 @@ async function importFile(file) {
 
     let doc;
     if (decision.reuse) {
-      doc = existing;
-      // 처음 열어 본 레코드면 쪽수를 채운다.
-      if (!Number(doc.pageCount)) doc.pageCount = pageCount;
-      doc.lastOpenedAt = Date.now();
-      await db.put('documents', doc);
+      // `[P1 경합]` 자기 필드(쪽수가 비었을 때의 `pageCount`·`lastOpenedAt`)만 합친다.
+      doc = await touchDuplicate(existing, pageCount);
       setStatus(t('library.import.duplicate'));
     } else {
       // 같은 해시의 변형이 이미 있으면 그것을 재사용한다(같은 파일을 다시 가져온 경우).
       const prior = decision.identity === fileHash ? null : await db.findByFileHash(decision.identity);
       if (prior) {
-        doc = prior;
-        doc.lastOpenedAt = Date.now();
-        await db.put('documents', doc);
+        // 예전 코드는 여기서 쪽수를 채우지 않았다 — 변형 키는 쪽수가 같아야 찾아지므로 채울 일이 없다.
+        doc = await touchDuplicate(prior, null);
         setStatus(t('library.import.duplicate'));
       } else {
         doc = newDocument(file, decision.identity, pageCount);
@@ -517,21 +513,22 @@ async function tryLangGuess(docId) {
  * 쓰지 않는다.
  * @returns {Promise<{wrote:boolean, changed:boolean, rec:Object|null}>}
  */
-function updateDocLang(docId, decide) {
-  return db.withTx('documents', 'readwrite', (tx, s) => new Promise((resolve, reject) => {
-    const store = s.documents;
-    const req = store.get(docId);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      const cur = req.result || null;
-      const res = cur ? decide(cur) : null;
-      if (!res || !res.rec || res.rec === cur) { resolve({ wrote: false, changed: false, rec: cur }); return; }
-      const put = store.put(res.rec);
-      put.onerror = () => reject(put.error);
-      put.onsuccess = () => resolve({ wrote: true, changed: !!res.changed, rec: res.rec });
-    };
-  }));
+async function updateDocLang(docId, decide) {
+  // `[P1 경합]` 같은 도우미(`db.patch`)로 통일 — 자기 필드(`lang`·`langSource`·`langGuess`)만 합친다.
+  let changed = false;
+  const out = await db.patch('documents', docId, (cur) => {
+    const res = decide(cur);
+    if (!res || !res.rec || res.rec === cur) return null;
+    changed = !!res.changed;
+    const part = {};
+    for (const f of LANG_FIELDS) if (f in res.rec) part[f] = res.rec[f];
+    return part;
+  });
+  return { wrote: out.wrote, changed: out.wrote && changed, rec: out.rec };
 }
+
+/** `[P1 경합]` 원문 언어 쓰기가 맡은 필드. */
+const LANG_FIELDS = Object.freeze(['lang', 'langSource', 'langGuess']);
 
 /** 카드를 고치고, 열린 리더에 알린다(`ui/reader.js` 가 듣는다). */
 function announceLang(rec, changed) {
@@ -560,13 +557,47 @@ export async function openDoc(docId) {
   if (!rec || !rec.blob) return null;
   // 같은 이유 — 이것은 문서를 **열 때마다** 일어난다.
   const pdfDoc = await openDocument(rec.blob);
-  // 저장된 쪽수가 실제와 다르면 실제를 믿는다(2차 방벽이 이 값을 쓴다).
-  if (doc.pageCount !== pdfDoc.numPages) {
-    doc.pageCount = pdfDoc.numPages;
-  }
-  doc.lastOpenedAt = Date.now();
+  // `[P1 경합]` 위에서 읽은 `doc` 을 통째로 쓰지 않는다 — Blob 읽기 + PDF 파싱(큰 책은 수백 ms~초)
+  // 동안 다른 곳이 쓴 필드를 되돌린다(review.md 7c8-5 의 가장 긴 창). 자기 필드만 합친다.
+  const res = await touchOnOpen(docId, pdfDoc.numPages);
+  // 그사이 문서가 지워졌으면 되살리지 않는다(예전에는 통째 쓰기가 다시 만들었다).
+  if (!res.rec) return null;
+  return attach(res.rec, pdfDoc);
+}
+
+/**
+ * `[P1 경합]` 문서를 열 때의 쓰기 — **자기 필드(`pageCount`·`lastOpenedAt`)만**.
+ * 저장된 쪽수가 실제와 다르면 실제를 믿는다(2차 방벽이 이 값을 쓴다).
+ * @returns {Promise<{wrote:boolean, rec:Object|null}>}
+ */
+export function touchOnOpen(docId, numPages, now) {
+  const at = Number.isFinite(now) ? now : Date.now();
+  return db.patch('documents', docId, (cur) => {
+    const part = { lastOpenedAt: at };
+    if (cur.pageCount !== numPages) part.pageCount = numPages;
+    return part;
+  });
+}
+
+/**
+ * `[P1 경합]` 같은 파일을 다시 가져왔을 때 — **자기 필드**만: 처음 열어 본 레코드면 `pageCount`,
+ * 그리고 `lastOpenedAt`. `pageCount` 인자가 `null` 이면 쪽수는 건드리지 않는다.
+ * 레코드가 그사이 사라졌으면(드묾) 찾았던 그대로 다시 만든다 — 덮을 다른 필드가 없다.
+ * @param {Object} found `findByFileHash` 로 찾은 레코드
+ * @returns {Promise<Object>} 지금 저장된 레코드
+ */
+export async function touchDuplicate(found, pageCount, now) {
+  const at = Number.isFinite(now) ? now : Date.now();
+  const res = await db.patch('documents', found.id, (cur) => {
+    const part = { lastOpenedAt: at };
+    if (pageCount !== null && pageCount !== undefined && !Number(cur.pageCount)) part.pageCount = pageCount;
+    return part;
+  });
+  if (res.rec) return res.rec;
+  const doc = Object.assign({}, found, { lastOpenedAt: at });
+  if (pageCount !== null && pageCount !== undefined && !Number(doc.pageCount)) doc.pageCount = pageCount;
   await db.put('documents', doc);
-  return attach(doc, pdfDoc);
+  return doc;
 }
 
 /** 라우터가 리더를 떠날 때 부르지 않는다 — 추출은 계속 돈다(9-4 백그라운드). */

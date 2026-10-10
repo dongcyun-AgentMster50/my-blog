@@ -23,12 +23,34 @@
    ============================================================ */
 
 import { AI } from '../config.js';
-import { redact, redactString } from '../privacy/redact.js';
+import { redact, redactString, setSecretSource } from '../privacy/redact.js';
+import { readKeySecret } from '../privacy/keys.js';
 import * as db from '../db.js';
 import { gemini } from './adapters/gemini.js';
 
 /** 8-1 — 등록된 어댑터. 7a 는 gemini 하나다(나머지는 8-2 표에 설계만 있다). */
 export const ADAPTERS = Object.freeze({ gemini: gemini });
+
+/**
+ * `[신설 2026-10-12 — 공개 전 묶음 P1 ③]` **지금 저장된 실제 키**(등록된 어댑터마다).
+ * 저장소가 막혀 있어도 던지지 않는다(`keys.js` 가 "없음"으로 돌려준다).
+ * ★ 이 값은 지우개에만 쓴다 — 밖으로 돌려주지 않고, 어디에도 적지 않는다.
+ */
+function storedSecrets() {
+  const out = [];
+  const ids = Object.keys(ADAPTERS);
+  for (let i = 0; i < ids.length; i++) {
+    try {
+      const k = readKeySecret(ids[i]);
+      if (k) out.push(k);
+    } catch (e) { /* 막힌 저장소 — 패턴만으로 계속 */ }
+  }
+  return out;
+}
+
+/* ★ 모든 `redact`·`redactString` 호출(이 파일·설정 화면·앞으로 생길 곳)이 저장된 실제 키도 지운다.
+   호출자가 `keys` 를 잊어도 걸린다 — `ProviderError` 생성자가 바로 그렇게 잊고 있었다. */
+setSecretSource(storedSecrets);
 
 /** 오류 코드. 8-2 의 일곱 가지 + 네트워크/취소/키없음. */
 export const CODES = Object.freeze({
@@ -74,7 +96,11 @@ export const KEY_FORMAT = Object.freeze({
 export class ProviderError extends Error {
   constructor(info) {
     const i = info || {};
-    super(redactString(i.message === undefined || i.message === null ? '' : i.message));
+    // `[P1 ③]` 실제 키 값도 함께 지운다 — 이 호출에 쓴 키(`info.keys`)와 저장된 키(공급자, 위).
+    // 예전에는 패턴만 썼다. 몸통에 `.` 가 든 신형 키는 그 패턴이 **통째로** 놓쳤다.
+    // `keys` 는 지우는 데만 쓰고 오류 객체에 붙이지 않는다.
+    super(redactString(i.message === undefined || i.message === null ? '' : i.message,
+      { keys: Array.isArray(i.keys) ? i.keys : [] }));
     this.name = 'ProviderError';
     this.code = i.code || CODES.UNKNOWN;
     this.status = Number.isFinite(i.status) ? i.status : 0;
@@ -134,6 +160,45 @@ export function checkKeyFormat(providerId, key) {
   const p = adapter.keyPattern;
   if (!p || p.test(raw)) return { ok: true, code: KEY_FORMAT.OK };
   return { ok: true, code: KEY_FORMAT.UNFAMILIAR };
+}
+
+/** 진단에서 "보통 글자"로 치는 것 — 구형·신형 몸통에 늘 쓰이는 base64url 계열. */
+const PLAIN_KEY_CHAR = /^[0-9A-Za-z_-]$/;
+/** 알려진 시작. 진단은 이것이 맞는지만 말하고, 무엇인지는 말하지 않는다. */
+const KNOWN_KEY_HEADS = Object.freeze(['AQ.', 'AIza']);
+
+/**
+ * `[신설 2026-10-12 — 8-4 고칠 방향 (가)]` 형식 경고 옆에 보일 **진단** — 키를 드러내지 않는다.
+ *
+ * 돌려주는 것은 **길이**, **알려진 시작인가**(참·거짓), 그리고 시작 뒤 몸통에서 보통 글자
+ * (`[0-9A-Za-z_-]`) 밖에 있는 **글자 종류와 개수**뿐이다. 위치·순서·보통 글자는 내지 않는다.
+ * 출력 가능 ASCII 는 그 글자 자체(`.` 같은 한 글자)로, 그 밖(공백·보이지 않는 글자·비 ASCII)은
+ * `U+200B` 처럼 코드 포인트로 적는다. Nour 가 이 한 줄만 운영자에게 보내면 원인 후보가 좁혀진다.
+ * 문구는 만들지 않는다(3-2) — UI 가 조립한다.
+ *
+ * @returns {{length:number, knownHead:boolean, odd:{label:string, count:number}[]}|null} 빈 키면 null
+ */
+export function diagnoseKey(key) {
+  const raw = typeof key === 'string' ? key.trim() : '';
+  if (raw === '') return null;
+  let head = '';
+  for (let i = 0; i < KNOWN_KEY_HEADS.length; i++) {
+    if (raw.startsWith(KNOWN_KEY_HEADS[i])) { head = KNOWN_KEY_HEADS[i]; break; }
+  }
+  const body = Array.from(raw.slice(head.length));
+  const counts = new Map();
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (PLAIN_KEY_CHAR.test(ch)) continue;
+    const cp = ch.codePointAt(0);
+    const label = cp >= 0x21 && cp <= 0x7E
+      ? ch
+      : 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  const odd = [...counts].map(([label, count]) => ({ label: label, count: count }))
+    .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+  return { length: Array.from(raw).length, knownHead: head !== '', odd: odd };
 }
 
 /* ────────────────────────────────────────────────────────
@@ -259,7 +324,8 @@ function assertNoKeyInUrl(url, key) {
     // `[수정 2026-10-10]` BAD_REQUEST 가 아니라 전용 코드 — 요청이 나가지 않았고 설정 탓이다.
     throw new ProviderError({
       code: CODES.KEY_IN_URL, status: 0,
-      message: 'refused: key would travel in the URL'
+      message: 'refused: key would travel in the URL',
+      keys: [k]
     });
   }
   return u;
@@ -293,7 +359,8 @@ function wrap(err, fallbackCode, key, noResponse) {
     message: msg,
     // 8-3 — `TypeError: Failed to fetch` 는 CORS 일 수도 네트워크일 수도 있다.
     maybeBlocked: !isAbort && fallbackCode === CODES.UNKNOWN,
-    noResponse: !isAbort && !!noResponse
+    noResponse: !isAbort && !!noResponse,
+    keys: keys
   });
 }
 
@@ -432,7 +499,8 @@ export async function complete(req, opts) {
       code: code,
       status: status,
       retryAfter: retryAfter,
-      message: redactString(messageOf(json), { keys: [key] })
+      message: redactString(messageOf(json), { keys: [key] }),
+      keys: [key]
     });
   }
 
@@ -452,7 +520,8 @@ export async function complete(req, opts) {
     throw new ProviderError({
       code: CODES.SAFETY,
       status: status,
-      message: redactString(String(parsed.blockReason || parsed.finishReason || ''), { keys: [key] })
+      message: redactString(String(parsed.blockReason || parsed.finishReason || ''), { keys: [key] }),
+      keys: [key]
     });
   }
 

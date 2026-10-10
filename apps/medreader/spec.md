@@ -651,8 +651,8 @@ y0 ← clamp(y0, 0, H) ; y1 ← clamp(y1, 0, H)
 | role | 조건 (모두 만족) | 비고 |
 |---|---|---|
 | `pageno` | y가 상단 10% 또는 하단 10% 영역 AND `text`가 `/^\s*\d{1,4}\s*$/` 또는 `/^(page\s*)?\d{1,4}$/i` | 낭독·문단 제외 |
-| `header` | y가 상단 8% 영역 AND (길이 ≤ 80자) AND (fontSize ≤ 1.1×Fm) AND [ 이웃 페이지에 같은 정규화 텍스트 존재 OR 텍스트가 대문자 비율 ≥ 60% OR `/^(SECTION|CHAPTER|PART)\b/i` ] | 러닝 헤드 "SECTION I Introduction to Clinical Medicine" 등 |
-| `footer` | y가 하단 8% 영역 AND 길이 ≤ 120자 AND (이웃 페이지 반복 OR `/^(©|copyright|harrison|mcgraw)/i` OR fontSize ≤ 0.85×Fm) | |
+| `header` | `[수정 2026-10-12 — 공개 전 P2, algoVersion 10]` 상단 8% AND 길이 ≤ 80 AND **[머리말 띠 안]** AND (**쪽 번호 진행** OR fontSize ≤ **1.6**×Fm) AND (이웃 반복 OR 쪽 번호 진행 OR 대문자 ≥ 60% OR 접두 `/^(SECTION\|CHAPTER\|PART)/i`). **머리말 띠**: 쪽 맨 윗줄 묶음(최고 baseline 에서 0.5×Fm 이내)이고 아래 첫 줄과 1.5×Lm 이상 떨어져 있음 — 러닝 헤드는 본문 위 여백에 있다. **쪽 번호 진행**: 같은 자리(쪽 위에서 잰 거리 ±0.5×Fm)의 이웃 띠 줄 **끝 숫자**의 차이 = 쪽 차이(짝·홀 머리말 글자가 달라도 쪽 번호는 1씩 나아간다) — 맞으면 글자 크기 상한도 보지 않는다. "같은 자리"만으로는 안 된다: 머리말 없는 Harrison 에서 쪽 맨 위 표 제목·그림 글자가 새로 빠졌다(실측). 옛 규칙(fontSize ≤ 1.1×Fm, 이웃 반복)은 CMDT 2026 의 머리말(본문보다 큼, 중앙값 1.33×Fm; 짝·홀이 달라 앞뒤 1쪽 반복 0)을 놓쳐 **1,831쪽에서 머리말이 낭독**됐다 → 0쪽. Review 전수(역할이 바뀐 줄 단위): 산문 본문 손실 0 — 낭독에서 빠진 CMDT 2,516줄 중 2,481 header(표지·장 제목 조각), 35 table(쪽 맨 위 표의 열 제목·첫 행), Harrison 표 행 6줄 → table, CMDT 2021 변화 0, 문항·보기·정답 줄 → header 0. 한계: 글자도 다르고 대문자도 아니고 쪽 번호도 없는 짝·홀 머리말은 이웃을 앞뒤 2쪽 넘겨야 잡힌다(지금 1쪽). | 러닝 헤드 "SECTION I Introduction to Clinical Medicine", "170 CMDT 2026 · CHapter 7" 등 |
+| `footer` | y가 하단 8% 영역 AND 길이 ≤ 120자 AND (이웃 페이지 반복 OR `/^(©\|copyright\|harrison\|mcgraw)/i` OR fontSize ≤ 0.85×Fm) | |
 | `heading` | fontSize ≥ 1.15×Fm OR (길이 ≤ 60자 AND 문장 종결 부호 없음 AND 위쪽 여백 ≥ 1.5×Lm AND 다음 줄이 본문 AND **`isQuestionStart`·`isOptionStart`·`isAnswerStart` 중 어느 것도 아님**) | 문단 kind='heading', 낭독은 함 |
 | `figure-caption` | `/^(FIGURE|FIG\.|TABLE)\s*\d/i`로 시작 | 표 제목은 표 영역 힌트로 사용 |
 | `rotated` | 1단계에서 분리 | 제외 |

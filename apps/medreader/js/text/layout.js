@@ -72,8 +72,17 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  *     임계값이 맞았던 게 아니라 **자가 짧았다.**
  *     전수 재측: CMDT 2단 19.8% → 84.3%, Harrison 29.5% → 31.5%(퇴보 없음).
  *     줄·컬럼·읽기 순서가 바뀐다 — 다시 추출해야 한다.
+ * 10 — 2026-10-10 공개 전 P2: 4-7 머리말(러닝 헤드) 판정에 **머리말 띠**(쪽 맨 윗줄 묶음이
+ *     아래와 HEADER_BAND_GAP_FACTOR×Lm 이상 떨어져 있다)를 요구하고, 글자 크기 상한을
+ *     1.1 → 1.6×Fm 으로 넓히고, 반복 신호에 **쪽 번호 진행**(같은 자리 이웃 띠 줄의 끝 숫자가
+ *     쪽 차이만큼 나아간다)을 더했다(blocks.js topBand·bandFolioRun).
+ *     `[실측 CMDT 2026]` 표본 201쪽 중 194쪽에 머리말이 있고 190쪽에서 낭독에 남았다
+ *     (머리말이 본문보다 커 글자 크기 조건 4/253 통과, 짝·홀 쪽 머리말이 달라 이웃 반복 0/253).
+ *     고친 뒤 0쪽. 띠 조건이 상단 영역 안의 본문(참고문헌 줄·문항 라벨 등)을 머리말로 빼던
+ *     오판도 줄였다(표본 CMDT 16→0줄, Harrison 전수 27→5줄, Harrison 정답 연결 1186→1190).
+ *     lines[].role·paragraphs 경계·kind 가 바뀐다 — **전 책 재추출**.
  */
-export const algoVersion = 9;
+export const algoVersion = 10;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {

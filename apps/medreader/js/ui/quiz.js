@@ -266,13 +266,22 @@ function makeIo(docId) {
       });
     },
     putQuestions: function (records) { return db.putAll('questions', records); },
-    saveIndex: async function (entries) {
-      const doc = await db.get('documents', docId);
-      if (!doc) return;
-      doc.sectionIndex = entries;
-      await db.put('documents', doc);
-    }
+    saveIndex: function (entries) { return saveSectionIndex(docId, entries); }
   };
+}
+
+/**
+ * `[P1 경합]` 색인 저장 — **자기 필드(`sectionIndex`)만** 한 트랜잭션에서 합친다.
+ * 통째 쓰기(get → put)는 그사이 추출 진행·마지막 위치·원문 언어를 옛 값으로 되돌렸다.
+ * 문서가 없으면 쓰지 않는다(전과 같다).
+ */
+export function saveSectionIndex(docId, entries) {
+  return db.patch('documents', docId, { sectionIndex: entries });
+}
+
+/** `[P1 경합]` "다 만든 색인" 표시 — 자기 필드(`sectionIndexDone`·`sectionIndexVersion`)만. */
+export function markSectionIndexDone(docId, version) {
+  return db.patch('documents', docId, { sectionIndexDone: true, sectionIndexVersion: version });
 }
 
 /**
@@ -307,12 +316,7 @@ export function ensureSectionIndex(docId, doc, opts) {
       });
       if (ex.done) {
         try {
-          const fresh = await db.get('documents', docId);
-          if (fresh) {
-            fresh.sectionIndexDone = true;
-            fresh.sectionIndexVersion = parserVersion;
-            await db.put('documents', fresh);
-          }
+          await markSectionIndexDone(docId, parserVersion);
         } catch (e) { /* 표시 실패는 다음에 다시 만들 뿐이다 */ }
       }
       return out.sections;
