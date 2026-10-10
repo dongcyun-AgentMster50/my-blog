@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedReader 음성 진단</title>
+<style>
+  /* 진단 도구 — 앱 본체와 무관. 이 기기 브라우저가 낭독 음성을 언제·무엇을 주는지 본다. */
+  :root { color-scheme: light dark; --bg: #faf7f0; --fg: #222; --line: #d8d2c4; --ok: #1f7a4d; --no: #a32d2d; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --line: #333; --ok: #6cc89a; --no: #ef8b8b; } }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 10px; }
+  button { font: inherit; min-height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; }
+  .ok { color: var(--ok); font-weight: 700; } .no { color: var(--no); font-weight: 700; }
+  pre { white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td, th { border-block-end: 1px solid var(--line); padding: 4px 6px; text-align: start; }
+</style>
+</head>
+<body>
+<h1>MedReader 음성 진단</h1>
+<p>Chrome으로 열어 주세요. 약 8초 동안 이 기기가 주는 음성 목록을 기록합니다.</p>
+
+<table>
+  <thead><tr><th>언어</th><th>앱이 쓰는 기준(lang)</th><th>찾은 음성</th></tr></thead>
+  <tbody id="summary"></tbody>
+</table>
+
+<div class="row">
+  <button type="button" data-say="en">영어로 읽기</button>
+  <button type="button" data-say="ar">아랍어로 읽기</button>
+  <button type="button" data-say="ko">한국어로 읽기</button>
+  <button type="button" id="copy">결과 복사</button>
+</div>
+<p id="sayResult"></p>
+<pre id="log">기록 중…</pre>
+
+<script>
+(function () {
+  var LANGS = { en: 'en-US', ar: 'ar-SA', ko: 'ko-KR' };
+  var SAMPLE = { en: 'This is a test of the English voice.', ar: 'هذا اختبار للصوت العربي.', ko: '한국어 음성 시험입니다.' };
+  var t0 = Date.now(), lines = [], last = null;
+  var synth = window.speechSynthesis;
+  function norm(l) { return String(l || '').replace(/_/g, '-').toLowerCase(); }
+  function log(s) { lines.push('+' + (Date.now() - t0) + 'ms ' + s); document.getElementById('log').textContent = lines.join('\n'); }
+  if (!synth) { log('speechSynthesis 없음 — 이 브라우저는 낭독을 지원하지 않는다(메신저 안 브라우저일 수 있음)'); return; }
+  log('UA: ' + navigator.userAgent);
+  function snapshot(why) {
+    var v = [];
+    try { v = synth.getVoices() || []; } catch (e) { log('getVoices 예외: ' + e.message); }
+    var sig = v.map(function (x) { return x.lang + '|' + x.name; }).join(';');
+    if (sig === last && why.indexOf('timer') === 0) return v;
+    last = sig;
+    log(why + ' → 음성 ' + v.length + '개');
+    v.forEach(function (x) { log('   ' + x.lang + ' · ' + x.name + (x.localService ? ' · 기기' : ' · 네트워크') + (x.default ? ' · 기본' : '')); });
+    var tb = document.getElementById('summary'); tb.textContent = '';
+    Object.keys(LANGS).forEach(function (k) {
+      var hit = v.filter(function (x) { var n = norm(x.lang); return n === k || n.indexOf(k + '-') === 0; });
+      var tr = document.createElement('tr');
+      [k, LANGS[k], hit.length ? hit.length + '개 (' + hit[0].name + ')' : '없음'].forEach(function (c, i) {
+        var td = document.createElement('td'); td.textContent = c;
+        if (i === 2) td.className = hit.length ? 'ok' : 'no';
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    return v;
+  }
+  snapshot('처음 getVoices()');
+  synth.addEventListener('voiceschanged', function () { snapshot('voiceschanged 이벤트'); });
+  [500, 1500, 3000, 5000, 8000].forEach(function (ms) { setTimeout(function () { snapshot('timer ' + ms + 'ms'); }, ms); });
+
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-say]');
+    if (!b) return;
+    var k = b.getAttribute('data-say');
+    synth.cancel();
+    var u = new SpeechSynthesisUtterance(SAMPLE[k]);
+    u.lang = LANGS[k];
+    var v = (synth.getVoices() || []).filter(function (x) { var n = norm(x.lang); return n === k || n.indexOf(k + '-') === 0; });
+    if (v.length) u.voice = v[0];
+    var out = document.getElementById('sayResult');
+    out.textContent = k + ' 읽는 중… (voice ' + (v.length ? '지정' : '없이 lang 만') + ')';
+    u.onstart = function () { log('발화 시작 ' + k + ' voice=' + (u.voice ? u.voice.name : '-')); };
+    u.onend = function () { out.textContent = k + ' 끝 — 소리가 들렸나요?'; log('발화 끝 ' + k); };
+    u.onerror = function (e) { out.textContent = k + ' 오류: ' + e.error; log('발화 오류 ' + k + ': ' + e.error); };
+    synth.speak(u);
+  });
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = lines.join('\n');
+    var b = this;
+    function shown() { b.textContent = '복사됨'; setTimeout(function () { b.textContent = '결과 복사'; }, 1500); }
+    try { navigator.clipboard.writeText(text).then(shown, function () { selectLog(); }); } catch (e) { selectLog(); }
+    function selectLog() { var r = document.createRange(); r.selectNodeContents(document.getElementById('log')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = '선택됨 — 길게 눌러 복사'; }
+  });
+})();
+</script>
+</body>
+</html>
