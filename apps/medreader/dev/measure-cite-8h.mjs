@@ -5,6 +5,10 @@
      MEDREADER_PDFJS=<폴더> node apps/medreader/dev/measure-cite-8h.mjs <pdf> [시작쪽] [끝쪽] [--page N]
      --page N   그 쪽의 낭독 단위 목록(40자 이하)만 찍는다 — cite 표시·발화에 ∗ 가 남았는지
      --all      오탐 검토용 표본을 JSON 한 줄로 더 찍는다(40자 이하): A1 et al. 전부 · A2 묶음(무작위 200) · et al. 없는 A2 머리 전부
+                · `[8h-2]` A3 로 새로 빠지는 문장(무작위 200)
+   `[8h-2]` A3 칸 — 앱 분할 문장 위에서 A1·A2 로는 인용이 아닌데 `publicationTails`(A3)로 빠지는 문장 수.
+     대조로 8h Review 의 정의("출판 정보만(A2 닫힘 꼴 — 월 이름·전자 위치 허용) + 바로 뒤 식별자만")도 센다 —
+     그 차이는 A3 의 "낱말 글자 0" 조건으로 남는(읽히는) 문장이다.
 
    Plan 의 `probe-citations-8h.mjs` 는 규칙을 **흉내** 냈다. 이 스크립트는 **앱 코드**를 그대로 쓴다:
      · 앱 쪽 수치 — `sentenceUnits`(= 앱 `buildUnits(…,'sentence')`) 결과의 `Unit.cite`
@@ -14,7 +18,7 @@
    ============================================================ */
 import { loadPdfjs, positional, pageLayout, sentenceUnits } from './measure-lib.mjs';
 import { splitSentences, endsSentence } from '../js/text/segment.js';
-import { citationKind, referenceRuns, isReferenceHead } from '../js/text/cite.js';
+import { citationKind, referenceRuns, isReferenceHead, publicationTails } from '../js/text/cite.js';
 import { joinPieces, speechMarks } from '../js/tts/text.js';
 import { SPEECH_MARKS } from '../js/config.js';
 
@@ -26,7 +30,7 @@ const ONLY = Number(opt('--page', 0)) || 0;
 const ALL = argv.includes('--all');
 let seed = 7;
 const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-const S = { etal: [], a2: [], a2NoEtal: [] };
+const S = { etal: [], a2: [], a2NoEtal: [], a3: [] };
 const push = (arr, x, n) => { if (arr.length < n) arr.push(x); else { const k = Math.floor(rnd() * (arr.length + 1)); if (k < n) arr[k] = x; } };
 const PUB_ALONE = /^\d{4}(?:\s\p{Lu}\p{Ll}{2}(?:\s\d{1,2})?)?;\s?\d+(?:\(\w+\))?(?::\s?[\w\-–]+)?\.?$/u;
 
@@ -74,7 +78,12 @@ const c = {
   bUnits: 0, bPieces: 0, bCite: 0, bCiteChars: 0, bMiss: 0, bMissChars: 0, bBulletOnly: 0,
   a2Runs: 0, a2Pieces: 0, a2Chars: 0, a2Open: 0,
   marks: 0, marksKept: 0,
-  pubAloneRead: 0                     // 출판 정보만인 문장인데 읽는 것(앞 문장이 A1 인용 — 미탐 기록)
+  pubAloneRead: 0,                    // 출판 정보만인 문장인데 읽는 것(앞 문장이 A1 인용 — 미탐 기록)
+  // [8h-2] A3 — 앱 분할 문장 위에서
+  a3: 0, a3Chars: 0, a3Pages: 0,      // A1·A2 로는 아닌데 A3 로 새로 빠지는 문장
+  a3ReviewDef: 0, a3ReviewPages: 0,   // 8h Review 정의(PUB_ALONE + 바로 뒤 식별자만, A1·A2 아님)
+  a3LetterKept: 0,                    // Review 정의엔 들지만 A3 는 아님(글자가 있다 — 읽는다)
+  a3KeptShapes: {}                    // 그 꼴(숫자 → 9) 별 수 — 무엇 때문에 남는지
 };
 
 for (let p = from; p <= to; p++) {
@@ -83,6 +92,7 @@ for (let p = from; p <= to; p++) {
   // ── 앱 쪽 ──
   const units = sentenceUnits(L);
   let pageCite = false;
+  let pageA3 = false, pageA3Review = false;
   for (const u of units) {
     if (u.part !== 0) continue;
     const t = String(u.src).trim();
@@ -134,7 +144,25 @@ for (let p = from; p <= to; p++) {
       }
     }
     for (let i = 0; i < sents.length; i++) if (!inRun.has(i) && isReferenceHead(sents[i])) c.a2Open++;
+    // A3 — A1·A2 로 이미 인용인 문장은 빼고 센다
+    const base = (i) => inRun.has(i) || citationKind(sents[i]) !== null;
+    const tails = new Set(publicationTails(sents).filter((i) => !base(i)));
+    for (const i of tails) {
+      c.a3++; c.a3Chars += sents[i].length; pageA3 = true;
+      if (ALL) push(S.a3, p + ': ' + cut(sents[i]) + ' | ' + cut(sents[i + 1]), 200);
+    }
+    for (let i = 0; i + 1 < sents.length; i++) {
+      if (base(i) || !PUB_ALONE.test(sents[i].trim()) || citationKind(sents[i + 1]) !== 'id') continue;
+      c.a3ReviewDef++; pageA3Review = true;
+      if (!tails.has(i)) {
+        c.a3LetterKept++;
+        const shape = sents[i].trim().replace(/\d+/g, '9');
+        c.a3KeptShapes[shape] = (c.a3KeptShapes[shape] || 0) + 1;
+      }
+    }
   }
+  if (pageA3) c.a3Pages++;
+  if (pageA3Review) c.a3ReviewPages++;
   if (!ONLY && c.pages % 200 === 0) console.error('…' + p + '쪽');
 }
 
@@ -147,6 +175,9 @@ if (!ONLY) {
   console.log(`  B 바뀌는 단위 ${c.bUnits} → 조각 ${c.bPieces} · 그중 인용 ${c.bCite} (글자 ${c.bCiteChars}) · 글머리 포함 ${c.bBulletOnly} · 캐시 빗나감 ${c.bMiss} (글자 ${c.bMissChars}, ${pct(c.bMissChars, c.chars)})`);
   console.log(`  A2 묶음 ${c.a2Runs} · 인용 아닌 조각 ${c.a2Pieces} · 글자 ${c.a2Chars} (${pct(c.a2Chars, c.chars)}) · 닫히지 않은 머리 ${c.a2Open}`);
   console.log(`  C 기호 ${c.marks} · 남김(피연산자) ${c.marksKept} · 지움 ${c.marks - c.marksKept}`);
+  console.log(`  A3 새로 빠지는 문장 ${c.a3} · 글자 ${c.a3Chars} (${pct(c.a3Chars, c.chars)}) · ${c.a3Pages}쪽 | Review 정의 ${c.a3ReviewDef} (${c.a3ReviewPages}쪽) · 그중 글자 있어 읽는 것 ${c.a3LetterKept}`);
+  const shapes = Object.entries(c.a3KeptShapes).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => k + ' ×' + v).join(' · ');
+  if (shapes) console.log(`    A3 로 남는 꼴(숫자→9, 상위 8): ${shapes}`);
   console.log(`[미탐 기록] 출판 정보만인데 읽는 문장 ${c.pubAloneRead}`);
   if (ALL) console.log(JSON.stringify(S));
 }

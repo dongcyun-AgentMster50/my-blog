@@ -302,7 +302,8 @@ export function buildUnits(paras, unit, opts) {
     const joined = joinPieces(lines);
     const sentences = splitSentences(joined.text, { lang: lang });
     if (!sentences.length) { emit(out, joined, para.id, undefined, undefined, meta); continue; }
-    // `[8h-1 — spec 6-6-2]` 인용·참고문헌 문장(A1 ∪ A2). 표 안내는 판별하지 않는다. 같은 문단 안에서만 본다.
+    // `[8h-1 — spec 6-6-2]` 인용·참고문헌 문장(A1 ∪ A2 ∪ `[8h-2]` A3). 표 안내는 판별하지 않는다. 같은 문단 안에서만 본다
+    // — A3 의 "바로 다음 식별자"도 이 문단의 다음 문장만 본다(문단을 넘지 않는다).
     const cites = meta.kind === TABLE_NOTICE_KIND ? null : markReferences(sentences);
     const citeMeta = { kind: meta.kind, seq: seq, symbols: symbols, cite: true };
 

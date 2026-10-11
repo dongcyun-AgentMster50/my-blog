@@ -54,6 +54,11 @@ const ET_AL = /\bet\s+al\b/gu;
 const REF_START = new RegExp(String.raw`^(?:\d{1,3}\.\s)?${AUTHORS}(?:,?\s+et\s+al[.;]|\.)\s`, 'u');
 /** A2 닫힘 — 출판 정보만인 문장 "2022;40:381." · "2021 Mar 4;12(3):e1–9." */
 const PUB_ONLY = /^\d{4}(?:\s\p{Lu}\p{Ll}{2}(?:\s\d{1,2})?)?;\s?\d+(?:\(\w+\))?(?::\s?[\w\-–]+)?\.?$/u;
+/** A3 꼴 — "연도;권(호):쪽[-쪽]." (spec 6-6-2 A3). 꼴만 본다 — 글자 0 조건은 `isPublicationOnly` 가 따로 건다.
+ *  "2024;332:957." · "2023;40(2):381-9." · "2022; 17: 101–9" */
+const PUB_INFO = /^\d{4};\s?[\p{L}\p{N}]+(?:\([\p{L}\p{N}\s\-–]+\))?:\s?[\p{L}\p{N}]+(?:[\-–][\p{L}\p{N}]+)?\.?$/u;
+/** 낱말 글자 — 출판 정보만인 문장에는 하나도 없어야 한다("2024;8:bvae033" · "2021 Mar;…" 는 A3 가 아니다). */
+const ANY_LETTER = /\p{L}/u;
 
 function str(v) { return String(v == null ? '' : v); }
 
@@ -96,6 +101,35 @@ export function isIdOnly(src) {
   let had = false;
   const rest = s.replace(idRe(), function () { had = true; return ' '; });
   return had && PUNCT_ONLY.test(rest);
+}
+
+/**
+ * spec 6-6-2 A3 — 문장 **전체**가 출판 정보 꼴뿐인가("2024;332:957." · "2023;40(2):381-9.").
+ * 낱말 글자가 하나라도 있으면 아니다(월 이름·전자 위치 "bvae033"·"Suppl" 도 아니다 — 좁게).
+ */
+export function isPublicationOnly(src) {
+  const s = str(src).replace(/\s+/g, ' ').trim();
+  if (!s || ANY_LETTER.test(s)) return false;
+  return PUB_INFO.test(s);
+}
+
+/**
+ * spec 6-6-2 A3 — 한 문단의 연속 문장에서 "출판 정보만인 문장 + **바로 다음** 식별자만인 문장"의 앞 문장 번호들.
+ *   ★ 닫힘 조건: 바로 다음 문장(같은 문단 — 호출자가 문단마다 부른다)이 A1 식별자만(`citationKind === 'id'`)이어야 한다.
+ *   ★ 둘 중 하나라도 아니면 읽는다. A1·A2 로 이미 인용인 문장도 돌려준다(측정이 걸러 센다).
+ *
+ * @param {string[]} sents `splitSentences` 결과(한 문단)
+ * @param {Array<string|null>} [kinds] 이미 계산한 `citationKind` 들(같은 길이) — 없으면 계산한다
+ * @returns {number[]} 문장 번호(오름차순)
+ */
+export function publicationTails(sents, kinds) {
+  const list = Array.isArray(sents) ? sents.map(str) : [];
+  const ks = Array.isArray(kinds) && kinds.length === list.length ? kinds : list.map(citationKind);
+  const out = [];
+  for (let i = 0; i + 1 < list.length; i++) {
+    if (ks[i + 1] === 'id' && isPublicationOnly(list[i])) out.push(i);
+  }
+  return out;
 }
 
 /* ── A2 ─────────────────────────────────────────────────── */
@@ -143,9 +177,10 @@ export function referenceRuns(sents) {
 }
 
 /**
- * spec 6-6-2 — 한 문단의 연속 문장에서 **인용인 문장**을 표시한다(A1 ∪ A2).
+ * spec 6-6-2 — 한 문단의 연속 문장에서 **인용인 문장**을 표시한다(A1 ∪ A2 ∪ A3).
  *   A1 — 문장 하나만 보고 `citationKind` 가 참.
  *   A2 — `referenceRuns` 의 묶음 안의 모든 문장.
+ *   A3 — `publicationTails` — 출판 정보만인 문장 중 바로 다음 문장이 식별자만인 것.
  * `tts/text.js` 의 `buildUnits` 가 문장 모드에서 문단마다 부른다.
  *
  * @param {string[]} sents `splitSentences` 결과(한 문단)
@@ -153,10 +188,14 @@ export function referenceRuns(sents) {
  */
 export function markReferences(sents) {
   const list = Array.isArray(sents) ? sents.map(str) : [];
-  const out = list.map(function (s) { return citationKind(s) !== null; });
+  const kinds = list.map(citationKind);
+  const out = kinds.map(function (k) { return k !== null; });
   const runs = referenceRuns(list);
   for (let r = 0; r < runs.length; r++) {
     for (let k = runs[r].from; k <= runs[r].to; k++) out[k] = true;
   }
+  // A3 — 출판 정보만인 문장 + 바로 뒤 식별자만(A1). 8h Review 8h-9 ① · 운영자 승인 2026-10-12.
+  const tails = publicationTails(list, kinds);
+  for (let t = 0; t < tails.length; t++) out[tails[t]] = true;
   return out;
 }

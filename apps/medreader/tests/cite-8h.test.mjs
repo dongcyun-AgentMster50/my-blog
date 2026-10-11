@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
-import { isCitation, citationKind, isIdOnly, markReferences } from '../js/text/cite.js';
+import { isCitation, citationKind, isIdOnly, markReferences, isPublicationOnly, publicationTails } from '../js/text/cite.js';
 import { splitSentences, endsSentence } from '../js/text/segment.js';
 import {
   buildUnits, sentencesOf, speechMarks, normalizeSpeech, trSpeechText, indexAtOrAfterLine
@@ -140,6 +140,73 @@ test('T-A2 다른 문단에서 닫힘 → 없음 (buildUnits 는 문단마다 �
   const paras = [para('a', [ln('a1', HEAD), ln('a2', TITLE)]), para('b', [ln('b1', PUBL), ln('b2', 'Rest is advised.')])];
   const units = buildUnits(paras, 'sentence');
   assert.ok(units.every((u) => !u.cite), units.filter((u) => u.cite).map((u) => u.src).join(' | '));
+});
+
+/* ══ T-A3 출판 정보만 + 바로 뒤 식별자 (8h-2 · spec 6-6-2 A3) ═════════ */
+
+const PMID = '[PMID: 31234567]';
+
+test('T-A3 isPublicationOnly — "연도;권(호):쪽[-쪽]." 꼴뿐 · 낱말 글자 0', () => {
+  for (const s of ['2024;332:957.', '2023;40(2):381-9.', '2022; 17: 101–9', '2021;5(3-4):12–19.']) {
+    assert.equal(isPublicationOnly(s), true, s);
+  }
+  for (const s of [
+    'In 2024;332:957.',          // 낱말이 섞인 문장
+    '2024;8:bvae033.',           // 전자 위치 — 글자가 있다
+    '2021 Mar;12(3):45.',        // 월 이름 — 글자가 있다
+    '2023;10(Suppl 1):12.',      // 보충호 — 글자가 있다
+    '2024;332.',                 // 쪽이 없다
+    '2024:332:957.',             // 세미콜론이 없다
+    'Rest is advised.', ''
+  ]) {
+    assert.equal(isPublicationOnly(s), false, s);
+  }
+});
+
+test('T-A3 ★ 양성 — "2024;332:957." + "[PMID: n]" → 둘 다 cite · "2023;40(2):381-9." 꼴', () => {
+  assert.deepEqual(markReferences(['Rest is advised.', '2024;332:957.', PMID]), [false, true, true]);
+  assert.deepEqual(markReferences(['2023;40(2):381-9.', 'PMID 31234567.']), [true, true]);
+  assert.deepEqual(publicationTails(['Rest is advised.', '2024;332:957.', PMID, 'Fever resolved.']), [1]);
+  // buildUnits 에서도 — 번호를 받지 않고, 앞뒤 본문은 그대로
+  const units = buildUnits([para('p', [ln('1', 'Rest is advised. 2024;332:957.'), ln('2', PMID + ' Fever resolved.')])], 'sentence');
+  assert.deepEqual(units.map((u) => [u.src, !!u.cite, u.seg]), [
+    ['Rest is advised.', false, 0],
+    ['2024;332:957.', true, null],
+    [PMID, true, null],
+    ['Fever resolved.', false, 1]
+  ]);
+});
+
+test('T-A3 ★ 음성 — 뒤가 식별자가 아님 · 식별자가 앞 · 사이가 떨어짐 · 뒤가 et al.+식별자', () => {
+  // 출판 정보 꼴인데 뒤 문장이 본문 — 읽는다
+  assert.deepEqual(markReferences(['2024;332:957.', 'Doses were halved.']), [false, false]);
+  assert.deepEqual(publicationTails(['2024;332:957.', 'Doses were halved.']), []);
+  // 문단 끝(뒤 문장이 없다)
+  assert.deepEqual(markReferences(['Rest is advised.', '2024;332:957.']), [false, false]);
+  // 식별자가 앞에 있다 — "바로 다음"만 본다
+  assert.deepEqual(markReferences([PMID, '2024;332:957.']), [true, false]);
+  // [Review 8h-2] 식별자가 앞에 있고 뒤가 본문 — 출판 정보가 문단 끝이 아니어도 "앞" 방향은 닫힘이 아니다
+  assert.deepEqual(markReferences([PMID, '2024;332:957.', 'Doses were halved.']), [true, false, false]);
+  // 사이에 본문 하나
+  assert.deepEqual(markReferences(['2024;332:957.', 'Rest.', PMID]), [false, false, true]);
+  // 뒤가 인용이지만 식별자만은 아니다(A1 et al.+식별자) — A3 의 닫힘은 식별자만
+  assert.deepEqual(markReferences(['2024;332:957.', 'Lee K et al. Lancet. ' + PMID]), [false, true]);
+});
+
+test('T-A3 ★ 음성 — 낱말이 섞인 문장("In 2024;…") · 글자 있는 출판 정보는 식별자 앞이어도 읽는다', () => {
+  assert.deepEqual(markReferences(['In 2024;332:957.', PMID]), [false, true]);
+  assert.deepEqual(markReferences(['2024;8:bvae033.', PMID]), [false, true]);
+  assert.deepEqual(markReferences(['2021 Mar;12(3):45.', PMID]), [false, true]);
+});
+
+test('T-A3 ★ 음성 — 다른 문단의 식별자 · 줄 단위 모드', () => {
+  const two = [para('a', [ln('a1', 'Rest is advised. 2024;332:957.')]), para('b', [ln('b1', PMID + ' Fever resolved.')])];
+  const units = buildUnits(two, 'sentence');
+  assert.deepEqual(units.filter((u) => u.cite).map((u) => u.src), [PMID], '식별자만 A1 로 빠지고 출판 정보는 읽는다');
+  const one = [para('p', [ln('1', 'Rest is advised.'), ln('2', '2024;332:957.'), ln('3', PMID)])];
+  assert.deepEqual(buildUnits(one, 'sentence').filter((u) => u.cite).map((u) => u.src), ['2024;332:957.', PMID]);
+  const lineUnits = buildUnits(one, 'line');
+  assert.ok(lineUnits.length === 3 && lineUnits.every((u) => !('cite' in u)), '줄 모드는 판별하지 않는다');
 });
 
 /* ══ T-B splitSentences ═══════════════════════════════ */
