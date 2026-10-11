@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedReader 검색 벤치</title>
+<style>
+  /* 진단 도구 — 앱 본체와 무관(spec 17-8 측정). 앱 DB(medreader)는 건드리지 않는다.
+     별도 DB "medreader-bench" 에 **지어낸 글자**로 만든 쪽 레코드를 넣고,
+     세 검색 방식의 읽기·훑기 시간을 이 기기에서 잰다. 끝나면 [벤치 DB 지우기]. */
+  :root { color-scheme: light dark; --bg: #faf7f0; --fg: #222; --line: #d8d2c4; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --line: #333; } }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 10px; }
+  button { font: inherit; min-height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; }
+  button[aria-pressed="true"] { outline: 3px solid currentColor; }
+  pre { white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>MedReader 검색 벤치</h1>
+<p>Chrome으로 열어 주세요. 책 크기를 고르고 [실행]을 누르면 약 1~3분 걸립니다. 화면을 켜 둔 채로 기다려 주세요.</p>
+<div class="row" id="presets">
+  <button type="button" data-preset="cmdt26" aria-pressed="true">CMDT 2026 크기 (1,967쪽)</button>
+  <button type="button" data-preset="cmdt21" aria-pressed="false">CMDT 2021 크기 (5,051쪽)</button>
+  <button type="button" data-preset="harrison" aria-pressed="false">Harrison 크기 (729쪽)</button>
+</div>
+<div class="row">
+  <button type="button" id="run">실행</button>
+  <button type="button" id="copy">결과 복사</button>
+  <button type="button" id="drop">벤치 DB 지우기</button>
+</div>
+<pre id="log">대기 중</pre>
+
+<script type="module">
+/* 프리셋 — 쪽 수와 쪽당 글자·저장 바이트는 dev/measure-search.mjs 의 실측(2026-10-12)에 맞춘다. */
+const PRESETS = {
+  cmdt26:   { pages: 1967, chars: 4600, linesPerPage: 105 },
+  cmdt21:   { pages: 5051, chars: 1950, linesPerPage: 38 },
+  harrison: { pages: 729,  chars: 4100, linesPerPage: 80 }
+};
+let preset = 'cmdt26';
+const DB = 'medreader-bench';
+const logEl = document.getElementById('log');
+const lines = [];
+function log(s) { lines.push(s); logEl.textContent = lines.join('\n'); }
+
+/* 지어낸 낱말 — 음절을 이어 만든다(원서 글자를 쓰지 않는다). 지프 분포로 뽑는다. */
+function makeVocab(n, seed) {
+  const syl = ['ka', 'ro', 'mi', 'tel', 'an', 'dis', 'po', 'ver', 'sul', 'ine', 'ox', 'thy', 'lo', 'car', 'neu', 'pha', 'gen', 'ia', 'us', 'ter'];
+  let s = seed; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const out = [];
+  for (let i = 0; i < n; i++) { const k = 1 + Math.floor(rnd() * 4); let w = ''; for (let j = 0; j < k; j++) w += syl[Math.floor(rnd() * syl.length)]; out.push(w); }
+  return { out, rnd };
+}
+function makeText(len, V, rnd) {
+  let t = '';
+  while (t.length < len) {
+    const r = rnd(); const i = Math.floor(Math.pow(r, 3) * V.length);   // 앞쪽 낱말이 자주 나온다
+    let w = V[i]; if (rnd() < 0.05) w = w[0].toUpperCase() + w.slice(1);
+    if (rnd() < 0.003) w = 'metformin';                                   // 찾을 낱말을 드물게 심는다
+    t += w + (rnd() < 0.08 ? '. ' : ' ');
+  }
+  return t.slice(0, len);
+}
+function r2(v) { return Math.round(v * 100) / 100; }
+function makeRecord(p, P, V, rnd) {
+  const per = Math.max(1, Math.round(P.chars / P.linesPerPage));
+  const ls = [], ps = [];
+  let para = null;
+  for (let i = 0; i < P.linesPerPage; i++) {
+    if (!para || para.lineIds.length >= 7) { para = { id: p + ':p' + ps.length, lineIds: [], kind: 'body', bbox: [r2(50 + rnd()), r2(100 + i * 6.1), r2(300 + rnd()), r2(140 + i * 6.1)], continuesNext: false, continuesPrev: false }; ps.push(para); }
+    const id = p + ':' + i;
+    ls.push({ id, text: makeText(per, V, rnd), bbox: [r2(50 + rnd() * 3), r2(700 - i * 6.3), r2(250 + rnd() * 9), r2(709 - i * 6.3)], baseline: r2(701 - i * 6.3),
+      fontSize: 9, col: i % 2, role: 'body', hyphenJoin: rnd() < 0.05, paraId: para.id, regionId: null, runs: [{ x0: r2(50 + rnd()), x1: r2(250 + rnd() * 9) }] });
+    para.lineIds.push(id);
+  }
+  return { docId: 'bench', pageNo: p, width: 517, height: 720, algoVersion: 10, storeVersion: 1, derivedHash: 'abcd1234', lines: ls, paragraphs: ps, regions: [],
+    columns: { count: 2, gutters: [258.5] }, stats: { medianFontSize: 9, medianLeading: 10.8, bodyLeft: [50, 262], warn: null, widthFixed: 0 },
+    textHash: 'x'.repeat(64), extractedAt: Date.now(), roleVersion: 1 };
+}
+
+/* 길이를 보존하는 접기(spec 17-8 정규화의 축약판 — 비용만 재면 된다) */
+const DASH = /[‐-―−­-]/g;
+const fold = (s) => s.toLowerCase().replace(DASH, ' ');
+const pageText = (rec) => { const by = new Map(rec.lines.map((l) => [l.id, l.text])); return rec.paragraphs.map((p) => p.lineIds.map((id) => by.get(id)).join(' ')).join('\n'); };
+function countAll(h, n) { let c = 0, i = h.indexOf(n); while (i >= 0) { c++; i = h.indexOf(n, i + n.length); } return c; }
+
+function open() {
+  return new Promise((res, rej) => {
+    const q = indexedDB.open(DB, 1);
+    q.onupgradeneeded = () => { const d = q.result; d.createObjectStore('pages', { keyPath: ['docId', 'pageNo'] }); d.createObjectStore('slim', { keyPath: ['docId', 'pageNo'] }); d.createObjectStore('blob', { keyPath: 'docId' }); };
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  });
+}
+const done = (tx) => new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
+const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+async function gzip(str) { const s = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip')); return new Response(s).arrayBuffer(); }
+async function gunzip(buf) { const s = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')); return new Response(s).text(); }
+const ms = (t) => Math.round(performance.now() - t);
+
+async function run() {
+  lines.length = 0;
+  const P = PRESETS[preset];
+  log('기기: ' + navigator.userAgent);
+  log('코어 ' + (navigator.hardwareConcurrency || '?') + ' · 메모리 ' + (navigator.deviceMemory || '?') + 'GB · 프리셋 ' + preset + ' (' + P.pages + '쪽, 쪽당 ' + P.chars + '자)');
+  await dropDb(true);
+  let db = await open();
+  const { out: V, rnd } = makeVocab(6000, 7);
+
+  // 1. 채우기 — 100쪽씩 한 트랜잭션
+  let t = performance.now(); let jsonBytes = 0; let all = ''; const starts = [];
+  for (let a = 1; a <= P.pages; a += 100) {
+    const tx = db.transaction(['pages', 'slim'], 'readwrite');
+    for (let p = a; p < a + 100 && p <= P.pages; p++) {
+      const rec = makeRecord(p, P, V, rnd);
+      if (p === 1) jsonBytes = JSON.stringify(rec).length;
+      tx.objectStore('pages').put(rec);
+      const st = fold(pageText(rec));
+      tx.objectStore('slim').put({ docId: 'bench', pageNo: p, t: st });
+      starts.push(all.length); all += st + '\f';
+    }
+    await done(tx);
+  }
+  const gz = await gzip(all);
+  { const tx = db.transaction('blob', 'readwrite'); tx.objectStore('blob').put({ docId: 'bench', gz, starts: Int32Array.from(starts) }); tx.objectStore('blob').put({ docId: 'bench-plain', s: all }); await done(tx); }
+  log('채우기 ' + ms(t) + 'ms · 1쪽 JSON ' + jsonBytes + 'B · 덩어리 ' + all.length + '자 → gzip ' + gz.byteLength + 'B');
+  let est = null; try { est = await navigator.storage.estimate(); } catch (e) { /* 없음 */ }
+  if (est) log('저장소 사용(이 출처 전체) ' + Math.round(est.usage / 1e6) + 'MB');
+  db.close(); db = await open();                 // 다시 열어 메모리에 남은 것을 줄인다
+  const Q = 'metformin';
+
+  // 2. (i) 쪽 레코드 전체 — getAll 50쪽씩
+  t = performance.now(); let hits = 0, hp = 0;
+  for (let a = 1; a <= P.pages; a += 50) {
+    const tx = db.transaction('pages', 'readonly');
+    const recs = await req(tx.objectStore('pages').getAll(IDBKeyRange.bound(['bench', a], ['bench', Math.min(P.pages, a + 49)])));
+    for (const r of recs) { const n = countAll(fold(pageText(r)), Q); hits += n; if (n) hp++; }
+  }
+  log('(i) 쪽 레코드 전체 getAll×50 훑기: ' + ms(t) + 'ms (적중 ' + hits + ' / ' + hp + '쪽)');
+  // 2b. (i) 커서 하나로
+  t = performance.now(); hits = 0;
+  await new Promise((res, rej) => {
+    const tx = db.transaction('pages', 'readonly');
+    const c = tx.objectStore('pages').openCursor(IDBKeyRange.bound(['bench', 1], ['bench', P.pages]));
+    c.onsuccess = () => { const cur = c.result; if (!cur) return res(); hits += countAll(fold(pageText(cur.value)), Q); cur.continue(); };
+    c.onerror = () => rej(c.error);
+  });
+  log('(i) 쪽 레코드 전체 커서 훑기: ' + ms(t) + 'ms');
+
+  // 3. (i-b) 가벼운 글자 레코드 — getAll 200쪽씩
+  t = performance.now(); hits = 0;
+  for (let a = 1; a <= P.pages; a += 200) {
+    const tx = db.transaction('slim', 'readonly');
+    const recs = await req(tx.objectStore('slim').getAll(IDBKeyRange.bound(['bench', a], ['bench', Math.min(P.pages, a + 199)])));
+    for (const r of recs) hits += countAll(r.t, Q);
+  }
+  log('(i-b) 쪽별 접은 글자 레코드 훑기: ' + ms(t) + 'ms (적중 ' + hits + ')');
+
+  // 4. (iii) 덩어리 — gzip 읽기 → 풀기 → 훑기
+  t = performance.now();
+  const b = await req(db.transaction('blob', 'readonly').objectStore('blob').get('bench'));
+  const tGet = ms(t); t = performance.now();
+  const s = await gunzip(b.gz); const tUnz = ms(t); t = performance.now();
+  hits = countAll(s, Q); const tScan = ms(t);
+  log('(iii) gzip 덩어리: 읽기 ' + tGet + 'ms + 풀기 ' + tUnz + 'ms + 훑기 ' + tScan + 'ms (적중 ' + hits + ')');
+  t = performance.now();
+  const pl = await req(db.transaction('blob', 'readonly').objectStore('blob').get('bench-plain'));
+  const tGetPlain = ms(t); t = performance.now(); countAll(pl.s, Q); const tScan2 = ms(t);
+  log('(iii) 압축 안 한 덩어리: 읽기 ' + tGetPlain + 'ms + 훑기 ' + tScan2 + 'ms');
+  // 메모리에 이미 올라온 뒤 두 번째 검색(다른 낱말)
+  t = performance.now(); countAll(s, 'ka'); const tAgain = ms(t);
+  t = performance.now(); const m = s.match(/\bmetform/g); const tRe = ms(t);
+  log('(iii) 메모리에 올라온 뒤: 흔한 낱말 훑기 ' + tAgain + 'ms · 접두 정규식 ' + tRe + 'ms (' + (m ? m.length : 0) + ')');
+  db.close();
+  log('끝 — [벤치 DB 지우기]를 눌러 주세요.');
+}
+function dropDb(quiet) {
+  return new Promise((res) => { const q = indexedDB.deleteDatabase(DB); q.onsuccess = q.onerror = q.onblocked = () => { if (!quiet) log('벤치 DB 지움'); res(); }; });
+}
+document.getElementById('presets').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-preset]'); if (!b) return;
+  preset = b.dataset.preset;
+  for (const x of document.querySelectorAll('[data-preset]')) x.setAttribute('aria-pressed', String(x === b));
+});
+document.getElementById('run').addEventListener('click', () => run().catch((e) => log('오류: ' + (e && e.message ? e.message : e))));
+document.getElementById('drop').addEventListener('click', () => dropDb(false));
+document.getElementById('copy').addEventListener('click', () => { try { navigator.clipboard.writeText(logEl.textContent); } catch (e) { /* 복사 실패는 무시 */ } });
+</script>
+</body>
+</html>
