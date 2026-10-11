@@ -192,6 +192,17 @@ async function boot() {
     parseRoute: parseRoute,
     persistState: persistState
   };
+
+  /* `[배포 안전장치]` 부팅 완료 표시 — index.html 의 고전 스크립트(부팅 감시)가 이것을 본다.
+     이것이 서기 전에 모듈 오류가 나거나 제한 시간이 지나면 정적 안내를 연다. 늦게라도 서면
+     시간 초과로 연 안내를 닫는다. **마지막 줄이어야 한다** — 화면 배선과 라우터가 다 돈 뒤다. */
+  markBoot('ok');
+}
+
+/** `<html data-boot>` 와 이벤트 하나. 감시 스크립트는 모듈이 아니라 이 둘로만 이어진다. */
+function markBoot(state) {
+  document.documentElement.setAttribute('data-boot', state);
+  document.dispatchEvent(new CustomEvent(state === 'ok' ? 'medreader:booted' : 'medreader:bootfailed'));
 }
 
 /**
@@ -287,4 +298,6 @@ boot().catch((e) => {
   // 부팅이 통째로 실패해도 화면에 무언가는 남긴다. 콘솔에만 죽지 않는다.
   showBanner({ code: (e && e.code) || 'ERR_UNKNOWN', tone: 'error' });
   console.error('[medreader] boot failed', e);
+  // 화면 배선이 반쯤에서 멈췄을 수 있다 — 배너만으로는 빈 화면일 수 있으니 정적 안내도 연다.
+  markBoot('failed');
 });

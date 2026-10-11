@@ -1030,6 +1030,8 @@ function noticeBlock(key) {
    ──────────────────────────────────────────────────────── */
 
 function goPage(v) {
+  // 부팅 직후 첫 `showReader` 가 문서를 정하기 전에 누르면 `#/reader/null/N` 으로 갔다가 서재로 튕겼다(review.md PR-4-6).
+  if (!state.docId) return;
   const next = clampPage(v, state.pageCount);
   if (next === state.page) { paintPager(); return; }   // 입력창의 잘못된 값을 되돌린다
   go(readerHash(state.docId, next));

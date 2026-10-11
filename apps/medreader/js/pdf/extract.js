@@ -295,6 +295,8 @@ export class Extractor extends EventTarget {
     this.stats = { widthFixed: 0, items: 0, pagesBuilt: 0, buildMs: 0, recomputed: 0 };
 
     this._handle = null;
+    this._tickPromise = null;   // 마지막으로 시작한 `_tick` — `stopAndSettle` 이 기다린다
+    this._pauseSave = null;     // `pause()` 의 마지막 저장 — 같은 이유
     this._dirtyMeta = 0;        // 마지막 저장 이후 바뀐 쪽 수
     this._lastSave = 0;
   }
@@ -313,13 +315,27 @@ export class Extractor extends EventTarget {
     cancelIdle(this._handle);
     this._handle = null;
     this.ex.status = STATUS.PAUSED;
-    this._saveMeta(true);
+    this._pauseSave = this._saveMeta(true);
     this._emitProgress();
   }
 
   stop() {
     this.stopped = true;
     this.pause();
+  }
+
+  /**
+   * `[배포 안전장치 — 텍스트 다시 추출]` 멈추고, **이미 시작된 쪽 처리와 마지막 저장이 끝날 때까지** 기다린다.
+   * `stop()` 만으로는 도는 중인 `_tick` 이 그 뒤에 쪽 하나를 `pages` 에 쓰고 `extraction` 을
+   * 옛 커서로 덮을 수 있다(review.md PR-5 기록 ②). 다시 추출은 그 뒤에 파생 데이터를 지워야
+   * 하므로 이 순서를 기다린다. 실패는 삼킨다 — 기다림이 목적이다.
+   */
+  async stopAndSettle() {
+    this.stop();
+    for (const p of [this._tickPromise, this._pauseSave]) {
+      if (!p) continue;
+      try { await p; } catch (e) { /* 기다림만 */ }
+    }
   }
 
   /* ── 시작·재개 ──────────────────────────────────── */
@@ -371,9 +387,9 @@ export class Extractor extends EventTarget {
     if (!this.running) return;
     cancelIdle(this._handle);
     if (delayMs > 0) {
-      this._handle = setTimeout(() => { this._handle = null; this._tick(); }, delayMs);
+      this._handle = setTimeout(() => { this._handle = null; this._tickPromise = this._tick(); }, delayMs);
     } else {
-      this._handle = idle(() => { this._handle = null; this._tick(); });
+      this._handle = idle(() => { this._handle = null; this._tickPromise = this._tick(); });
     }
   }
 

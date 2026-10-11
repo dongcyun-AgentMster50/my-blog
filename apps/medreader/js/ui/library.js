@@ -23,6 +23,13 @@
      사용자가 [⋯] 에서 고르면 `langSource = 'user'` 가 먼저 들어가 있고, 추정은 그것을
      보고 물러난다 — 미리 읽어 둔 레코드로 판단하면 사용자 선택을 덮어쓴다.
    · 바뀌면 `medreader:doclang` 이벤트를 낸다 — 열린 리더가 본문 `lang` 과 낭독 큐를 갈아 끼운다.
+
+   ── `[배포 안전장치]` [⋯] → [텍스트 다시 추출] (spec 9-4) ──────
+   · 확인은 페이지 안 대화상자(`#reextractDialog`). `confirm()` 을 쓰지 않는다.
+   · 순서가 곧 안전이다(`reextractDoc`): ① PDF 를 먼저 손에 쥔다(못 열면 **아무것도 지우지 않는다**)
+     ② 옛 추출기를 멈추고 마지막 쓰기까지 기다린다 ③ 파생 데이터를 한 트랜잭션으로 지운다
+     (`db.resetDerived` — 사용자 필드는 남는다) ④ 새 추출기를 붙인다. 그동안 `openDoc` 은 기다린다.
+   · 읽기는 그동안에도 된다 — 리더가 보는 쪽이 우선순위 0 이라 지워진 쪽이 먼저 다시 생긴다(새 문서와 같은 길).
    ============================================================ */
 
 import * as db from '../db.js';
@@ -227,6 +234,16 @@ function langPanel(doc, panelId) {
   }
   panel.appendChild(choices);
   paintLangChoices(panel, doc);
+
+  // `[배포 안전장치]` 9-4 [텍스트 다시 추출] — 같은 [⋯] 패널, 같은 위임(`data-action`).
+  const rx = el('div', 'doc-reextract');
+  rx.appendChild(el('h3', 'doc-lang-title', t('library.reextract.title')));
+  rx.appendChild(el('p', 'doc-lang-hint', t('library.reextract.hint')));
+  const rb = el('button', null, t('library.reextract.button'));
+  rb.type = 'button';
+  rb.setAttribute('data-action', 'reextract');
+  rx.appendChild(rb);
+  panel.appendChild(rx);
   return panel;
 }
 
@@ -550,6 +567,9 @@ async function setUserLang(docId, lang) {
 
 /** 서재·리더가 문서를 열 때. 이미 추출기가 붙어 있으면 그것을 쓴다. */
 export async function openDoc(docId) {
+  // 다시 추출이 옛 추출기를 내리고 새것을 붙이는 사이에 열면, 여기서 따로 추출기를 만들어
+  // 지우기 전의 `extraction` 을 읽게 된다 — 그 일이 끝나기를 기다려 새 추출기를 쓴다.
+  if (reextracting.has(docId)) return reextracting.get(docId);
   if (extractors.has(docId)) return extractors.get(docId);
   const doc = await db.get('documents', docId);
   if (!doc) return null;
@@ -603,6 +623,86 @@ export async function touchDuplicate(found, pageCount, now) {
 /** 라우터가 리더를 떠날 때 부르지 않는다 — 추출은 계속 돈다(9-4 백그라운드). */
 export function extractorFor(docId) { return extractors.get(docId) || null; }
 
+/* ────────────────────────────────────────────────────────
+   5-2. `[배포 안전장치]` 텍스트 다시 추출 (spec 9-4)
+   ──────────────────────────────────────────────────────── */
+
+/** docId → 다시 추출이 끝나면 새 추출기(또는 null)를 주는 약속. 두 번 누름도 이것으로 막는다. */
+const reextracting = new Map();
+
+/**
+ * 그 문서의 파생 데이터를 지우고 지금 `algoVersion` 으로 처음부터 다시 뽑는다.
+ * 사용자 데이터(원문 언어·마지막 쪽·번역 캐시·퀴즈 기록·카드)는 남는다 — `db.resetDerived` 주석의 목록.
+ * @returns {Promise<Extractor|null>}
+ */
+export function reextractDoc(docId) {
+  if (reextracting.has(docId)) return reextracting.get(docId);
+  const p = (async () => {
+    // ① PDF 를 먼저 손에 쥔다. 원본이 없거나 pdf.js 를 못 받으면(오프라인) 여기서 멈춘다 —
+    //    쪽을 지운 뒤에 다시 뽑지 못하면 읽던 책이 빈다.
+    const old = extractors.get(docId) || null;
+    let pdfDoc = old && old.pdfDoc;
+    if (!pdfDoc) {
+      const blob = await db.get('blobs', docId);
+      if (!blob || !blob.blob) { bannerKey('library.reextract.noFile'); return null; }
+      pdfDoc = await openDocument(blob.blob);
+    }
+    // ② 옛 추출기를 내리고 **도는 중인 쪽과 마지막 저장까지** 기다린다. 기다리지 않으면
+    //    지운 뒤에 옛 커서의 `extraction` 이 다시 쓰인다(review.md PR-5 ②).
+    if (old) {
+      extractors.delete(docId);
+      await old.stopAndSettle();
+    }
+    unwatchLangGuess(docId);
+    progressByDoc.delete(docId);
+    // ③ 한 트랜잭션 — 쪽·문항·색인·extraction. 그사이 문서가 지워졌으면 아무것도 하지 않는다.
+    const res = await db.resetDerived(docId);
+    if (!res.reset) return null;
+    // ④ 새 추출기. 새 문서처럼 algoVersion 0 에서 시작하므로 "엔진이 갱신되어…" 배너는 뜨지 않는다
+    //    (`attach` 는 이미 뽑아 둔 쪽이 있을 때만 그 배너를 낸다).
+    const ex = await attach(res.rec, pdfDoc);
+    setStatus(t('library.reextract.started', { title: res.rec.title || res.rec.fileName || '' }));
+    return ex;
+  })();
+  const guarded = p.catch((e) => { banner(e); return null; })
+    .finally(() => { reextracting.delete(docId); });
+  reextracting.set(docId, guarded);
+  return guarded;
+}
+
+/**
+ * 페이지 안 확인 대화상자. `confirm()` 은 브라우저 문자열·모양이고 RTL 을 따르지 않는다.
+ * `<dialog>` 의 `showModal` 이 없으면(아주 옛 브라우저) `open` 속성으로 띄운다.
+ * @returns {Promise<boolean>}
+ */
+function askReextract(name) {
+  const dlg = document.getElementById('reextractDialog');
+  if (!dlg) return Promise.resolve(false);
+  applyTranslations(dlg);
+  const title = dlg.querySelector('#reextractTitle');
+  if (title) title.textContent = t('library.reextract.confirmTitle', { title: name });
+  return new Promise((resolve) => {
+    const finish = (ok) => {
+      dlg.removeEventListener('click', onClick);
+      dlg.removeEventListener('cancel', onCancel);
+      if (typeof dlg.close === 'function' && dlg.open) dlg.close(); else dlg.removeAttribute('open');
+      resolve(ok);
+    };
+    const onClick = (ev) => {
+      const b = ev.target.closest('button[data-dialog]');
+      if (b) finish(b.getAttribute('data-dialog') === 'ok');
+    };
+    // Esc — 기본 닫기를 막고 같은 길(취소)로 닫는다.
+    const onCancel = (ev) => { ev.preventDefault(); finish(false); };
+    dlg.addEventListener('click', onClick);
+    dlg.addEventListener('cancel', onCancel);
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    // 실수로 지우지 않게 첫 초점은 [취소].
+    const cancel = dlg.querySelector('button[data-dialog="cancel"]');
+    if (cancel) cancel.focus();
+  });
+}
+
 function paintCard(docId) {
   if (!els || !els.list) return;
   const card = els.list.querySelector('[data-doc-id="' + cssEscape(docId) + '"]');
@@ -639,6 +739,17 @@ async function onListClick(ev) {
     const open = panel.hidden;
     panel.hidden = !open;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return;
+  }
+
+  if (btn.getAttribute('data-action') === 'reextract') {
+    if (reextracting.has(docId)) return;
+    const doc = await db.get('documents', docId);
+    if (!doc) return;
+    const name = doc.title || doc.fileName || docId;
+    if (!(await askReextract(name))) return;
+    await reextractDoc(docId);
+    await renderList();
     return;
   }
 

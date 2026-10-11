@@ -87,6 +87,17 @@ export default {
   'library.card.more': 'More options for this document',
   'library.lang.title': 'Source language',
   'library.lang.hint': 'The language the book is written in. Used for reading aloud and translation.',
+  // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
+  'library.reextract.title': 'Re-extract text',
+  'library.reextract.hint': 'If paragraphs look broken or page headers are read aloud again, prepare this book’s text again from the start.',
+  'library.reextract.button': 'Re-extract text',
+  'library.reextract.confirmTitle': 'Re-extract the text of “{title}”?',
+  'library.reextract.body': 'The text of this document will be prepared again from the first page. You can keep reading and listening meanwhile. The quiz list is rebuilt when it finishes.',
+  'library.reextract.keeps': 'Your source language, last page, saved translations and quiz history are kept.',
+  'library.reextract.cancel': 'Cancel',
+  'library.reextract.ok': 'Re-extract',
+  'library.reextract.started': 'Preparing the text of “{title}” again.',
+  'library.reextract.noFile': 'The original PDF of this document is missing, so it cannot be re-extracted. Nothing was deleted.',
 
   'library.storage': 'Storage used: {used} of {quota}',
   'library.storage.unknown': 'Storage usage is not available in this browser.',

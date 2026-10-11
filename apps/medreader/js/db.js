@@ -434,6 +434,80 @@ const CASCADE_STORES = Object.freeze([
   'cards', 'aiCache', 'annotations', 'sections'
 ]);
 
+/* ────────────────────────────────────────────────────────
+   `[배포 안전장치 — 텍스트 다시 추출]` (spec 9-4 "설정 > 고급 [텍스트 다시 추출]")
+   한 문서의 **쪽 텍스트에서 파생된 것**만 지운다. 무엇이 파생인가는 코드에서 찾은 목록이다:
+
+   지운다(쪽 텍스트가 바뀌면 함께 틀려진다)
+   · `pages`                  — 추출 결과 그 자체(`extract.js` `_buildAndStore`)
+   · `questions`              — 5절 파서가 `pages` 에서 만든 문항(`quiz/engine.js` `buildSectionIndex`)
+   · `sections`               — 같은 파서 몫의 스토어(P2, 지금은 쓰는 곳 없음 — 비어 있다)
+   · documents.`extraction`   — 커서·실패 목록·algoVersion. 새 문서의 값으로 되돌린다
+   · documents.`sectionIndex`·`sectionIndexDone`·`sectionIndexVersion` — 퀴즈 색인(`ui/quiz.js`)
+
+   남긴다(사용자 데이터이거나, 텍스트가 바뀌어도 맞다)
+   · documents 의 나머지 — 원문 언어(`lang`·`langSource`·`langGuess`), 마지막 쪽(`lastPage`·
+     `lastLineId`), `readStats`(비용 추정용 실측 — 쪽 글자 수는 다시 추출해도 거의 같다), 제목 등
+   · `aiCache`(번역 캐시 — 같은 문장이면 키가 같아 그대로 맞는다), `cards`(단어장 예정·문장 카드),
+     `progress`·`attempts`·`mistakes`(퀴즈 기록 — 문항 id 는 `docId:섹션:번호` 로 다시 같게 만들어진다),
+     `annotations`, `blobs`(PDF 원본 — 다시 추출의 재료)
+   ──────────────────────────────────────────────────────── */
+
+/** 문서별 파생 스토어 — 모두 `docId` 인덱스를 가진다. */
+export const DERIVED_STORES = Object.freeze(['pages', 'questions', 'sections']);
+
+/** documents 의 파생 필드를 되돌릴 값(새 문서의 값과 같다 — `ui/library.js` `newDocument`). */
+export function derivedDocReset() {
+  return {
+    extraction: { done: false, pagesDone: 0, cursor: 1, failed: [], algoVersion: 0 },
+    sectionIndex: [],
+    sectionIndexDone: false,
+    sectionIndexVersion: 0
+  };
+}
+
+/**
+ * 파생 데이터를 **한 트랜잭션**으로 지운다 — 쪽만 지워지고 `extraction.done` 이 남는 반쪽 상태가 없다.
+ * documents 는 `patch` 와 같은 방식(트랜잭션 안에서 읽고 → 파생 필드만 덮어)으로 써서 사용자 필드를 지킨다.
+ * 문서가 없으면 아무것도 지우지 않는다(지워진 문서를 되살리지 않는다).
+ *
+ * @param {string} docId
+ * @returns {Promise<{reset:boolean, rec:Object|null, counts:Object}>}
+ */
+export function resetDerived(docId) {
+  const names = ['documents'].concat(DERIVED_STORES);
+  return withTx(names, 'readwrite', (tx, s) => new Promise((resolve, reject) => {
+    const counts = {};
+    const r = s.documents.get(docId);
+    r.onerror = () => reject(r.error);
+    r.onsuccess = () => {
+      const cur = r.result;
+      if (cur === undefined || cur === null) { resolve({ reset: false, rec: null, counts: counts }); return; }
+      const next = Object.assign({}, cur, derivedDocReset());
+      let pending = 1 + DERIVED_STORES.length;
+      let failed = null;
+      const done = () => { if (--pending === 0) { failed ? reject(failed) : resolve({ reset: true, rec: next, counts: counts }); } };
+
+      const w = s.documents.put(next);
+      w.onsuccess = done;
+      w.onerror = () => { failed = w.error; done(); };
+
+      for (const name of DERIVED_STORES) {
+        counts[name] = 0;
+        const req = s[name].index('docId').openCursor(IDBKeyRange.only(docId));
+        req.onsuccess = () => {
+          const c = req.result;
+          if (!c) { done(); return; }
+          c.delete();
+          counts[name]++;
+          c.continue();
+        };
+        req.onerror = () => { failed = req.error; done(); };
+      }
+    };
+  }));
+}
+
 /**
  * 문서와 딸린 모든 것을 지운다. **한 트랜잭션**으로 묶어 중간에 끊겨도
  * 반쯤 지워진 상태가 남지 않게 한다.

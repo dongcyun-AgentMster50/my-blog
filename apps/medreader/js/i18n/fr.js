@@ -86,6 +86,17 @@ export default {
   'library.card.more': 'Autres options pour ce document',
   'library.lang.title': 'Langue d’origine',
   'library.lang.hint': 'La langue dans laquelle le livre est écrit. Sert à la lecture à voix haute et à la traduction.',
+  // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
+  'library.reextract.title': 'Réextraire le texte',
+  'library.reextract.hint': 'Si des paragraphes semblent coupés ou si les en-têtes de page sont de nouveau lus à voix haute, préparez à nouveau le texte de ce livre depuis le début.',
+  'library.reextract.button': 'Réextraire le texte',
+  'library.reextract.confirmTitle': 'Réextraire le texte de « {title} » ?',
+  'library.reextract.body': 'Le texte de ce document sera préparé à nouveau à partir de la première page. Vous pouvez continuer à lire et à écouter pendant ce temps. La liste des quiz est reconstruite à la fin.',
+  'library.reextract.keeps': 'La langue d’origine, la dernière page lue, les traductions enregistrées et l’historique des quiz sont conservés.',
+  'library.reextract.cancel': 'Annuler',
+  'library.reextract.ok': 'Réextraire',
+  'library.reextract.started': 'Le texte de « {title} » est de nouveau en préparation.',
+  'library.reextract.noFile': 'Le PDF d’origine de ce document est introuvable : impossible de le réextraire. Rien n’a été supprimé.',
 
   'library.storage': 'Storage used: {used} of {quota}',
   'library.storage.unknown': 'Storage usage is not available in this browser.',
@@ -342,7 +353,7 @@ export default {
   'err.dbOpen': 'Could not open local storage. Private browsing or blocked site data can cause this.',
   'err.extractStalled.one': 'Text preparation stopped with {n} page left unread.',
   'err.extractStalled.other': 'Text preparation stopped with {n} pages left unread.',
-  'err.reextract': 'The text engine was updated, so this document is being prepared again.',
+  'err.reextract': 'Le moteur de texte a été mis à jour : ce document est de nouveau en préparation.',
   'err.unknown': 'Something went wrong. Please try again.',
   'err.importFailed': 'Could not import that file: {code}',
 

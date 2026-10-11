@@ -86,6 +86,17 @@ export default {
   'library.card.more': '이 문서의 다른 설정',
   'library.lang.title': '원문 언어',
   'library.lang.hint': '책이 쓰인 언어입니다. 소리 내어 읽기와 번역에 쓰입니다.',
+  // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
+  'library.reextract.title': '텍스트 다시 추출',
+  'library.reextract.hint': '문단이 이상하게 끊기거나 쪽 머리말이 다시 소리 내어 읽히면, 이 책의 텍스트를 처음부터 다시 준비합니다.',
+  'library.reextract.button': '텍스트 다시 추출',
+  'library.reextract.confirmTitle': '“{title}”의 텍스트를 다시 추출할까요?',
+  'library.reextract.body': '이 문서의 텍스트를 첫 쪽부터 다시 준비합니다. 그동안에도 읽고 들을 수 있습니다. 퀴즈 목록은 다 끝난 뒤 다시 만들어집니다.',
+  'library.reextract.keeps': '원문 언어, 마지막으로 읽은 쪽, 저장된 번역, 퀴즈 기록은 그대로 남습니다.',
+  'library.reextract.cancel': '취소',
+  'library.reextract.ok': '다시 추출',
+  'library.reextract.started': '“{title}”의 텍스트를 다시 준비하고 있습니다.',
+  'library.reextract.noFile': '이 문서의 PDF 원본이 없어 다시 추출할 수 없습니다. 아무것도 지우지 않았습니다.',
 
   'library.storage': 'Storage used: {used} of {quota}',
   'library.storage.unknown': 'Storage usage is not available in this browser.',
@@ -342,7 +353,7 @@ export default {
   'err.dbOpen': 'Could not open local storage. Private browsing or blocked site data can cause this.',
   'err.extractStalled.one': 'Text preparation stopped with {n} page left unread.',
   'err.extractStalled.other': 'Text preparation stopped with {n} pages left unread.',
-  'err.reextract': 'The text engine was updated, so this document is being prepared again.',
+  'err.reextract': '텍스트 엔진이 갱신되어 이 문서를 다시 준비하고 있습니다.',
   'err.unknown': 'Something went wrong. Please try again.',
   'err.importFailed': 'Could not import that file: {code}',
 

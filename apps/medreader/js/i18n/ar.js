@@ -82,6 +82,17 @@ export default {
   'library.card.more': 'خيارات أخرى لهذا المستند',
   'library.lang.title': 'لغة النص الأصلي',
   'library.lang.hint': 'اللغة التي كُتب بها الكتاب. تُستخدم للقراءة بصوت عالٍ وللترجمة.',
+  // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
+  'library.reextract.title': 'إعادة استخراج النص',
+  'library.reextract.hint': 'إذا بدت الفقرات مقطّعة أو عادت ترويسات الصفحات تُقرأ بصوت عالٍ، فأعِد تجهيز نص هذا الكتاب من البداية.',
+  'library.reextract.button': 'إعادة استخراج النص',
+  'library.reextract.confirmTitle': 'هل تريد إعادة استخراج نص «{title}»؟',
+  'library.reextract.body': 'سيُجهَّز نص هذا المستند من جديد بدءًا من الصفحة الأولى. يمكنك مواصلة القراءة والاستماع في أثناء ذلك. تُبنى قائمة الاختبارات من جديد عند الانتهاء.',
+  'library.reextract.keeps': 'تبقى لغة الأصل وآخر صفحة قرأتها والترجمات المحفوظة وسجل الاختبارات كما هي.',
+  'library.reextract.cancel': 'إلغاء',
+  'library.reextract.ok': 'إعادة الاستخراج',
+  'library.reextract.started': 'يُعاد تجهيز نص «{title}».',
+  'library.reextract.noFile': 'ملف PDF الأصلي لهذا المستند مفقود، لذا لا يمكن إعادة استخراجه. لم يُحذف أي شيء.',
 
   'library.storage': 'المساحة المستخدمة: {used} من {quota}',
   'library.storage.unknown': 'معلومات المساحة غير متاحة في هذا المتصفح.',
