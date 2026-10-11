@@ -287,6 +287,9 @@ export default {
   'settings.ai.consent.agree': "أوافق",
   'settings.ai.open': "إعداد المفتاح",
   'settings.readalong.title': "الترجمة أثناء القراءة الصوتية",
+  /* `[8h-1 — spec 6-6-2]` 설정 낭독 묶음 — 인용 거르기 스위치 */
+  'settings.tts.readCitations': "قراءة الاستشهادات والمراجع أيضًا",
+  'settings.tts.readCitations.help': "يتم تخطي أسماء المؤلفين والمجلات وأرقام PMID افتراضيًا. عند التفعيل تُقرأ بلغة الكتاب فقط ولا تُترجم.",
   'settings.readalong.target': "لغة الترجمة",
   'settings.readalong.voice.checking': "صوت الترجمة: جارٍ الفحص…",
   'settings.readalong.voice.yes': "صوت الترجمة: متوفر",

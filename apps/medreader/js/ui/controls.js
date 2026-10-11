@@ -23,7 +23,7 @@ import { createSpeaker, CODES } from '../tts/speaker.js';
 import { pickVoice, utteranceLang, sharedVoiceWatch, speechLang } from '../tts/voices.js';
 import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
-  onLineTap, onPageRender, sourceLang, loadFlowParas
+  onLineTap, onPageRender, sourceLang, loadFlowParas, flowLineIds
 } from './reader.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
 import { renderReadalongRow } from './settings.js';
@@ -106,9 +106,14 @@ export function initControls() {
       markDone: function (u) {
         const ids = u.lineIds || [];
         for (let i = 0; i < ids.length; i++) markDone(ids[i], true);
-      }
+      },
+      // `[8h-1]` 걸러진 인용 줄을 탭하면 화면 순서로 그 뒤의 첫 발화로 간다(spec 6-6-2).
+      lineOrder: flowLineIds
     },
-    requestWakeLock: requestWakeLock
+    requestWakeLock: requestWakeLock,
+    // `[8h-1 — spec 6-6-2]` 9-3 `tts.readCitations`(기본 false). speaker 가 **큐를 만들 때마다** 읽는다 —
+    // 설정 화면에서 바꾸고 돌아오면 다음 큐(재생·쪽 넘김·다시 그리기)부터 따른다. 동기(캐시 읽기)다.
+    readCitations: function () { return settings.get('tts.readCitations') === true; }
   });
 
   // `[8b-2]` 띠가 같은 두 객체의 이벤트를 듣는다(띠는 speaker 를 조작하지 않는다).

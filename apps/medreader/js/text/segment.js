@@ -4,7 +4,7 @@
    순수 모듈. 번역 단위·문장 낭독 모드·문단 분리가 함께 쓴다.
    ============================================================ */
 
-import { ABBREVIATIONS } from '../config.js';
+import { ABBREVIATIONS, CITE } from '../config.js';
 
 /* spec 5-3 [수정 2026-09-18] — 문항 번호는 "12." 뿐 아니라 "I-42."·"IV-62." 형태를 받는다.
  * [실측] 대상 서적(729쪽)은 섹션 로마숫자 + 하이픈 + 번호를 쓴다. 로마숫자 부분은
@@ -102,9 +102,38 @@ const SENTENCE_START = Object.freeze({
   ko: /[\p{Lu}\p{Script=Hangul}0-9(\[«"“']/u
 });
 
+/* `[8h-1 — spec 6-6-3 B]` 문장 경계 두 개를 더한다. 분할 함수는 여전히 이것 하나다(R6).
+ *   B1 글머리 — `CITE.BULLETS` 글리프가 **앞에 공백, 뒤에 공백**을 두고 문장 중간에 나오면 글리프 **앞**에서 끊는다.
+ *      글리프는 뒤 문장의 첫 글자로 남는다(화면 글자 그대로 — `joinPieces` 좌표 그대로). 문장 첫 글자의 글머리는 그대로.
+ *   B2 식별자 괄호 끝 — `[PMID|PMCID|DOI …]` 가 닫히고(뒤에 `. ; ,` 하나 허용) 공백 다음 글자가
+ *      그 언어의 문장 시작 꼴(`SENTENCE_START[lang]`)·`[`·글머리면 끊는다. 소문자로 이어지면 끊지 않는다.
+ *   en dash 줄머리("– ")는 넣지 않는다 — 문단 이음 뒤에는 줄머리 정보가 없다(spec 6-6-3).
+ * 글리프·식별자는 언어 무관, B2 의 "다음 글자" 판정만 언어별 표를 쓴다.
+ * ★ 'i' 플래그 아래에서 `\p{Lu}` 는 소문자에도 맞는다 — 다음 글자 판정에는 대소문자 무시 정규식을 쓰지 않는다. */
+const BULLET_SET = new Set(CITE.BULLETS);
+const ID_BRACKET = /^\[\s*(?:PMID|PMCID|DOI)\b[^\[\]]*\]$/i;
+
+/**
+ * B2 — `t[i]` 가 식별자 괄호의 `]` 이고 그 뒤에서 끊어야 하면 **끊는 공백의 자리**, 아니면 -1.
+ * 앞 문장은 `[start, 반환값)`, 다음 문장은 `반환값 + 1` 부터다(공백 하나로 되붙는 계약 그대로).
+ */
+function idBracketCut(t, i, start, startRe) {
+  const open = t.lastIndexOf('[', i);
+  if (open < start || open < 0) return -1;
+  if (!ID_BRACKET.test(t.slice(open, i + 1))) return -1;
+  let j = i + 1;
+  if (j < t.length && '.;,'.indexOf(t[j]) >= 0) j++;
+  if (j >= t.length || t[j] !== ' ') return -1;
+  const next = t[j + 1];
+  if (!next) return -1;
+  if (!(startRe.test(next) || next === '[' || BULLET_SET.has(next))) return -1;
+  return j;
+}
+
 /**
  * spec 4-9 / 7-2 — 문장 분리. 약어·머리글자 예외를 지킨다.
  * 종결 부호 뒤에 공백이 오고 다음 글자가 문장 시작처럼 보일 때만 자른다.
+ * `[8h-1]` 글머리 앞(B1)·식별자 괄호 끝 뒤(B2)도 경계다(위 주석).
  *
  * @param {string} text
  * @param {{lang?:string}} [opts] `[7c]` 원문 언어. 없거나 모르는 값이면 en 규칙.
@@ -118,6 +147,24 @@ export function splitSentences(text, opts) {
   let start = 0;
   for (let i = 0; i < t.length; i++) {
     const ch = t[i];
+    // `[8h-1]` B1 — 문장 중간의 글머리: 글리프 앞 공백에서 끊는다.
+    if (BULLET_SET.has(ch)) {
+      if (i - 1 > start && t[i - 1] === ' ' && t[i + 1] === ' ') {
+        out.push(t.slice(start, i - 1).trim());
+        start = i;
+      }
+      continue;
+    }
+    // `[8h-1]` B2 — 식별자 괄호가 닫힌 뒤.
+    if (ch === ']') {
+      const cut = idBracketCut(t, i, start, startRe);
+      if (cut > 0) {
+        out.push(t.slice(start, cut).trim());
+        start = cut + 1;
+        i = cut;
+      }
+      continue;
+    }
     if (ch !== '.' && ch !== '!' && ch !== '?' && ch !== '…') continue;
     let j = i + 1;
     while (j < t.length && '"”\')]'.indexOf(t[j]) >= 0) j++;

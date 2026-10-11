@@ -36,10 +36,17 @@
      · 반복·`markDone` 은 **번역문까지 끝난 뒤에** — 반복은 "원문 + 번역문" 한 쌍.
      · 원문 낭독은 멈추지 않는다 — 번역이 없거나 늦으면 기다리지 않거나(최대 4초) 건너뛴다.
    `speak` 모드가 아니면(끔·표시) 이 단계는 **한 줄도 돌지 않는다** — 지금까지와 같다.
+
+   ── `[8h-1]` 인용·참고문헌은 큐에서 거른다 (spec 6-6-2) ──────
+   `buildUnits` 를 부르는 네 곳(`play`·`advancePage`·`setUnit`·`reload`)이 한 도우미 `queueOf` 를 쓴다.
+   `tts.readCitations` 가 꺼져 있으면(기본) `Unit.cite` 단위를 뺀다 — **건너뛰기 상태를 새로 만들지 않는다.**
+   그래서 반복·`step`·진행 표시·워치독·쪽 넘김은 인용을 모른다(고칠 것 없음). 쪽이 인용뿐이면 큐가 비어
+   기존 "빈 쪽 넘기기"(`MAX_EMPTY_PAGES`)로 간다. 켜져 있으면 거르지 않는다 — 인용은 `seg` 가 없어
+   번역문 단계가 붙지 않고(`trActive` 거짓) 원문 음성으로만 읽힌다.
    ============================================================ */
 
 import { TTS, TTS_LANG_REGION, READALONG } from '../config.js';
-import { buildUnits, watchdogMs, indexOfLine, TABLE_NOTICE_KIND, trSpeechParts, trWatchdogMs } from './text.js';
+import { buildUnits, watchdogMs, indexOfLine, indexAtOrAfterLine, TABLE_NOTICE_KIND, trSpeechParts, trWatchdogMs } from './text.js';
 import { VOICE_ERRORS } from './voices.js';
 
 export const STATES = Object.freeze(['idle', 'speaking', 'paused', 'waiting-page', 'error']);
@@ -105,6 +112,8 @@ export function snapRepeatCount(n) {
  * @param {Object} deps.view         화면 어댑터(아래 참조)
  * @param {Function} [deps.requestWakeLock]  `() => Promise<lock|null>`
  * @param {Object} [deps.timers]     `{setTimeout, clearTimeout}`
+ * @param {Function} [deps.readCitations]  `[8h-1]` `() => boolean` — 9-3 `tts.readCitations`. 큐를 만들 때마다 읽는다.
+ *                                    없으면 `setReadCitations` 로 정한 값(기본 false — 인용을 거른다)
  *
  * `view` 계약:
  *   paras()            → `[{id, kind, lines:[{id,text,hyphen}]}]` 지금 쪽
@@ -112,6 +121,8 @@ export function snapRepeatCount(n) {
  *   goToPage(n)        → `Promise<boolean>` 그 쪽을 그릴 때까지(최대 5초)
  *   show(unit)         → `boolean` 하이라이트. 줄이 지금 쪽에 없으면 false
  *   markDone(unit)     → 읽은 표시
+ *   lineOrder()        → `string[]` (선택, `[8h-1]`) 지금 쪽의 낭독 줄 id 를 화면 순서로 — 걸러진 인용 줄을 탭했을 때
+ *                        그 뒤의 첫 발화를 찾는다
  *
  * `[8b-1]` `deps.translation`(선택) — 낭독 동반 번역 서비스(`ai/readalong.js`):
  *   get(unit)          → `{state:'ready'|'pending'|'failed'|'blocked'|'none', text?}` **동기**
@@ -167,6 +178,10 @@ export function createSpeaker(deps) {
   let noticeLang = null;         // 표 안내 발화의 utterance.lang — UI 언어(6-1). null 이면 원문 언어
   let noticeVoice = null;
   let srcEverOk = false;         // 원문 발화가 한 번이라도 끝까지 갔는가("음성 없음" 판정 — 실제 오류로만)
+
+  /* ── `[8h-1]` 인용 거르기 (spec 6-6-2) ─────────────── */
+  let readCitations = false;     // 9-3 tts.readCitations — 기본 false(거른다). `deps.readCitations` 가 있으면 그것이 우선
+  let citeOnlyQueue = false;     // 마지막으로 만든 큐가 "인용을 걸러서" 비었는가(본래 빈 쪽과 구별)
 
   /* ── 반복 재생 (5b) ───────────────────────────────────
      ★ 반복은 **큐 위의 인덱스 계산**일 뿐이다. `speechSynthesis.pause()` 는
@@ -628,6 +643,27 @@ export function createSpeaker(deps) {
   /** `[7c]` 큐를 만들 때 넘기는 원문 언어. */
   function unitOpts() { return { lang: langKey(docLang) }; }
 
+  /**
+   * `[8h-1]` 큐를 만드는 **한 곳**. 설정이 꺼져 있으면 인용(`Unit.cite`) 단위를 뺀다.
+   * 인용은 `seg` 가 없으므로 `sentencesOf` 결과(번역 흐름)는 거르기 전과 같다(RA-C1).
+   */
+  function queueOf(paras) {
+    const all = buildUnits(paras || [], unit, unitOpts());
+    const q = citationsOn() ? all : all.filter(function (x) { return !x.cite; });
+    citeOnlyQueue = all.length > 0 && q.length === 0;
+    return q;
+  }
+
+  function citationsOn() {
+    if (typeof d.readCitations === 'function') { try { return d.readCitations() === true; } catch (e) { return false; } }
+    return readCitations;
+  }
+
+  function lineOrder() {
+    if (!view || typeof view.lineOrder !== 'function') return [];
+    try { return view.lineOrder() || []; } catch (e) { return []; }
+  }
+
   /* ── 6-1 쪽 넘김 ──────────────────────────────────── */
 
   /** 쪽 끝. 다음 쪽을 요청하고 **최대 5초** 기다린다. 그동안 `'waiting-page'`. */
@@ -650,7 +686,7 @@ export function createSpeaker(deps) {
       return;
     }
 
-    units = buildUnits(view.paras(), unit, unitOpts());
+    units = queueOf(view.paras());
     queueRebuilt();
     index = 0;
     emitQueue(0);
@@ -697,22 +733,31 @@ export function createSpeaker(deps) {
       (phase === 'tr' || phase === 'tr-wait') && index >= 0 && index < units.length;
     let rebuilt = false;
     if (!units.length || fromLineId != null || state === 'idle') {
-      units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
+      units = queueOf((view && view.paras && view.paras()) || []);
       queueRebuilt();
       rebuilt = true;
     }
-    if (!units.length) { finish(); return; }
+    if (!units.length) {
+      // `[8h-1]` 인용만 있는 쪽 — 끝내지 않고 다음 쪽으로(쪽 넘김 중의 빈 쪽 넘기기와 같은 길).
+      if (rebuilt && citeOnlyQueue) { emitQueue(0); setState('speaking'); advancePage(0); requestWakeLock(); return; }
+      finish(); return;
+    }
 
     let i = index;
+    let pastEnd = false;
     if (fromLineId != null) {
-      const found = indexOfLine(units, fromLineId);
-      if (found >= 0) i = found;
+      // `[8h-1]` 걸러진 인용 줄을 탭했으면 화면 순서로 그 뒤의 첫 발화. 그 뒤에 발화가 없으면 다음 쪽.
+      const found = indexAtOrAfterLine(units, fromLineId, lineOrder());
+      if (found >= units.length) pastEnd = true;
+      else if (found >= 0) i = found;
     }
     if (i < 0 || i >= units.length) i = 0;
     if (rebuilt) emitQueue(i);
 
     setState('speaking');
-    if (resumeTr) {
+    if (pastEnd) {
+      restart(units.length);          // speakAt(끝) → advancePage — 지금까지의 쪽 끝 경로 그대로
+    } else if (resumeTr) {
       const ph = phase;
       const k = trPart;
       restart(i, function () { resumePhase(i, ph, k); });
@@ -790,7 +835,7 @@ export function createSpeaker(deps) {
     if (next === unit) return;
     const anchor = units.length ? firstLineId(units[index]) : null;
     unit = next;
-    units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
+    units = queueOf((view && view.paras && view.paras()) || []);
     queueRebuilt();
     const found = anchor == null ? -1 : indexOfLine(units, anchor);
     index = found >= 0 ? found : 0;
@@ -839,6 +884,12 @@ export function createSpeaker(deps) {
   }
 
   function setVoice(lang, voice) { voiceFor[langKey(lang)] = voice || null; }
+
+  /**
+   * `[8h-1]` 9-3 `tts.readCitations`. **재생을 건드리지 않는다** — 다음에 큐를 만들 때(재생·쪽 넘김·다시 그리기)부터.
+   * 켜도 인용은 원문 음성으로만 읽고 번역하지 않는다(`seg` 없음).
+   */
+  function setReadCitations(on) { readCitations = on === true; }
   function setDocLang(l) { docLang = String(l || TTS_LANG_REGION.en); }
 
   /** 쪽이 새로 그려졌다 — 큐를 그 쪽 것으로 갈아 끼운다(사용자가 쪽을 넘긴 경우). */
@@ -857,7 +908,7 @@ export function createSpeaker(deps) {
     const before = units[index] || null;
     const ph = phase;
     const k = trPart;
-    units = buildUnits((view && view.paras && view.paras()) || [], unit, unitOpts());
+    units = queueOf((view && view.paras && view.paras()) || []);
     queueRebuilt();
     const found = anchorId == null ? -1 : indexOfLine(units, anchorId);
     index = found >= 0 ? found : 0;
@@ -924,6 +975,7 @@ export function createSpeaker(deps) {
     setRepeatEdge: setRepeatEdge,
     setVoice: setVoice,
     setDocLang: setDocLang,
+    setReadCitations: setReadCitations,
     reload: reload,
     setReadalong: setReadalong,
     setTrVoice: setTrVoice,
@@ -934,6 +986,8 @@ export function createSpeaker(deps) {
     getState: function () { return state; },
     getRate: function () { return rate; },
     getUnit: function () { return unit; },
+    /** `[8h-1]` 인용·참고문헌도 읽는가(9-3 `tts.readCitations`). */
+    getReadCitations: function () { return citationsOn(); },
     /** `[7c]` 지금 원문 발화에 쓰는 `utterance.lang`. */
     getDocLang: function () { return docLang; },
     getIndex: function () { return index; },

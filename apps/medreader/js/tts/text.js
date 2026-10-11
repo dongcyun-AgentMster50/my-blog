@@ -19,8 +19,9 @@
        part:    number,     // 300자 초과로 쪼갠 조각 번호(0부터)
        parts:   number,     // 그 문장이 몇 조각인가
        src:     string,     // ★ 8a — normalizeSpeech 이전의 문장 원문(번역·캐시 키의 입력, 7-8-2)
-       seg:     number|null,// ★ 8a — 쪽 안의 문장 번호(0부터). 조각들은 같은 seg. 표 안내는 null
-       kind:    string      // ★ 8a — 문단 kind ('table-notice' 포함)
+       seg:     number|null,// ★ 8a — 쪽 안의 문장 번호(0부터). 조각들은 같은 seg. 표 안내·인용은 null
+       kind:    string,     // ★ 8a — 문단 kind ('table-notice' 포함)
+       cite?:   true        // ★ 8h-1 — 인용·참고문헌 문장의 모든 조각(문장 모드만). 아니면 **속성 자체가 없다**
      }
    `part`/`parts` 가 있어야 "쪼개진 동안 하이라이트는 유지"(6-4)를 UI 가 안다.
 
@@ -46,8 +47,10 @@
      그때 UI 는 지금처럼 줄 단위로 칠한다(틀린 구간을 그리느니 넓게 칠한다).
    ============================================================ */
 
-import { TTS, TTS_SYMBOLS, READALONG } from '../config.js';
+import { TTS, TTS_SYMBOLS, READALONG, SPEECH_MARKS } from '../config.js';
 import { splitSentences, endsSentence } from '../text/segment.js';
+// `[8h-1]` 인용·참고문헌 판별(spec 6-6-2) — 순수 모듈. 문장을 나누지 않는다(나누는 곳은 아래 buildUnits 한 곳).
+import { markReferences } from '../text/cite.js';
 // `[8b-1]` 번역문 발화 텍스트의 괄호 판정은 화면(bdi 격리)과 **같은 함수**를 쓴다 — 규칙이 두 벌이 되지 않게.
 import { ltrRuns } from '../text/bidi.js';
 
@@ -104,8 +107,55 @@ export function symbolsFor(lang) {
   return Object.prototype.hasOwnProperty.call(TTS_SYMBOLS, k) ? TTS_SYMBOLS[k] : {};
 }
 
+/* ────────────────────────────────────────────────────────
+   `[8h-1 — spec 6-6-4 C]` 각주·기호 문자 낭독 정리
+   ──────────────────────────────────────────────────────── */
+
+const MARK_SET = new Set(SPEECH_MARKS);
+const OPERAND_PREV = /[\p{L}\p{N})\]]/u;
+const OPERAND_NEXT = /[\p{L}\p{N}(\[]/u;
+const DIGIT_OR_CLOSE = /[\p{N})]/u;
+const DIGIT_OR_OPEN = /[\p{N}(]/u;
+/** 지운 자리에 남은 "낱말 , 다음" 의 공백(라틴·아랍 구두점). */
+const SPACE_BEFORE_MARK_PUNCT = /\s+([,.;:!?،؛؟)\]])/gu;
+
+/**
+ * ★ 발화 텍스트에서 각주 기호(∗ * † ‡ §)를 정리한다. **`src`·화면·번역 입력에는 쓰지 않는다**(캐시 키 불변).
+ *   피연산자 사이 — 앞 글자가 글자·숫자·닫는 괄호이고 뒤 글자가 글자·숫자·여는 괄호(공백 없이):
+ *       "HLA-B∗58:01" "STAR*D" "mg*h/L" — 또는 "숫자 공백 * 공백 숫자"
+ *       → `∗`(U+2217) 는 ASCII `*` 로 바꾸고 남긴다(엔진이 "asterisk operator" 라고 읽지 않게). 지우지 않는다 —
+ *         대립 유전자 이름이 바뀐다.
+ *   그 밖 — 단어 끝 "Practice∗", 줄머리 "∗See chapter", 사이에 낀 "hyper- ∗ sensitivity", 따옴표 뒤 → 지운다.
+ * 기호가 없으면 **입력을 그대로** 돌려준다(공백 정리도 하지 않는다 — 8h 이전과 같다).
+ * 원문 발화(`normalizeSpeech` 첫 단계)와 번역문 발화(`trSpeechText` 끝 단계)가 함께 쓴다. 언어 무관.
+ * @param {string} text
+ * @returns {string}
+ */
+export function speechMarks(text) {
+  const s = str(text);
+  let any = false;
+  for (let i = 0; i < s.length; i++) { if (MARK_SET.has(s[i])) { any = true; break; } }
+  if (!any) return s;
+  let out = '';
+  let removed = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (!MARK_SET.has(ch)) { out += ch; continue; }
+    const p = i > 0 ? s[i - 1] : '';
+    const n = i + 1 < s.length ? s[i + 1] : '';
+    const operand = (p !== '' && n !== '' && OPERAND_PREV.test(p) && OPERAND_NEXT.test(n)) ||
+      (p === ' ' && n === ' ' && DIGIT_OR_CLOSE.test(s[i - 2] || '') && DIGIT_OR_OPEN.test(s[i + 2] || ''));
+    if (operand) { out += ch === '∗' ? '*' : ch; continue; }   // ∗ → *
+    out += ' ';
+    removed = true;
+  }
+  if (!removed) return out;
+  return out.replace(/\s+/g, ' ').replace(SPACE_BEFORE_MARK_PUNCT, '$1').trim();
+}
+
 /**
  * 낭독용 정규화. **원서 텍스트를 바꾸지 않는다** — 사본만 바꾼다.
+ *   0. `[8h-1]` 각주 기호 정리(`speechMarks`)
  *   1. URL·이메일 → "link"
  *   2. `TTS_SYMBOLS` 의 기호 → 낱말 (앞뒤에 공백을 둔다)
  *   3. 공백 정리
@@ -113,7 +163,7 @@ export function symbolsFor(lang) {
  */
 export function normalizeSpeech(text, symbols) {
   const table = symbols || TTS_SYMBOLS.en;
-  let s = str(text).replace(URL_RE, 'link');
+  let s = speechMarks(str(text)).replace(URL_RE, 'link');
   const keys = Object.keys(table);
   for (let i = 0; i < keys.length; i++) {
     const k = keys[i];
@@ -170,7 +220,8 @@ const SPACE_BEFORE_PUNCT = /\s+([،؛؟,.;:!?)\]])/gu;
  * 괄호 밖의 라틴 낱말(`mg/L` 등)은 건드리지 않는다(괄호 병기가 아니다).
  *
  * 빼고 난 자리의 이중 공백·구두점 앞 공백을 정리한다. 순수 함수.
- * 번역문에는 기호 치환(`normalizeSpeech`)을 하지 않는다(6-1).
+ * 번역문에는 기호 치환(`normalizeSpeech`)을 하지 않는다(6-1). `[8h-1]` 각주 기호 정리(`speechMarks`)만 **끝 단계**에서
+ * 한다 — AI 가 원문 기호를 옮겨 적은 경우("…∗")만 걸린다(spec 6-6-4).
  *
  * @param {string} text 번역문(화면에 보이는 그대로)
  * @returns {string} 음성 엔진에 넣을 문자열
@@ -185,7 +236,7 @@ export function trSpeechText(text) {
     if (paren && !NON_LATIN_LETTER.test(r.text)) { out += /\s$/.test(out) || !out ? ' ' : ''; continue; }
     out += r.text;
   }
-  return out.replace(/\s+/g, ' ').replace(SPACE_BEFORE_PUNCT, '$1').trim();
+  return speechMarks(out.replace(/\s+/g, ' ').replace(SPACE_BEFORE_PUNCT, '$1').trim());
 }
 
 /**
@@ -251,6 +302,9 @@ export function buildUnits(paras, unit, opts) {
     const joined = joinPieces(lines);
     const sentences = splitSentences(joined.text, { lang: lang });
     if (!sentences.length) { emit(out, joined, para.id, undefined, undefined, meta); continue; }
+    // `[8h-1 — spec 6-6-2]` 인용·참고문헌 문장(A1 ∪ A2). 표 안내는 판별하지 않는다. 같은 문단 안에서만 본다.
+    const cites = meta.kind === TABLE_NOTICE_KIND ? null : markReferences(sentences);
+    const citeMeta = { kind: meta.kind, seq: seq, symbols: symbols, cite: true };
 
     // `splitSentences` 는 공백 하나로 정확히 되붙는다(그 함수의 계약). 그래서
     // 누적 길이로 각 문장이 원문의 어느 구간인지 되찾을 수 있다.
@@ -261,7 +315,7 @@ export function buildUnits(paras, unit, opts) {
       const from = start < 0 ? cursor : start;
       const to = from + sent.length;
       cursor = to + 1;
-      emit(out, { text: sent, spans: spansIn(joined.spans, from, to) }, para.id, from, to, meta);
+      emit(out, { text: sent, spans: spansIn(joined.spans, from, to) }, para.id, from, to, cites && cites[s] ? citeMeta : meta);
     }
   }
 
@@ -316,8 +370,8 @@ export function localRange(sp, from, to) {
  *
  * @param {number} [from] `joined.spans` 와 같은 좌표계의 구간 시작(문장 모드)
  * @param {number} [to]   같은 구간 끝. 주지 않으면 **덩어리 전체**(줄 모드)다.
- * @param {{kind:string, seq:{next:number}, symbols?:Object}} [meta] ★ 8a — 문단 kind 와 쪽 안의 문장 번호 계수기
- *   (`[7c]` `symbols` = 원문 언어의 기호 표. 없으면 en 표)
+ * @param {{kind:string, seq:{next:number}, symbols?:Object, cite?:boolean}} [meta] ★ 8a — 문단 kind 와 쪽 안의 문장 번호 계수기
+ *   (`[7c]` `symbols` = 원문 언어의 기호 표. 없으면 en 표. `[8h-1]` `cite` = 인용 문장 — 번호를 받지 않는다)
  */
 function emit(out, joined, paraId, from, to, meta) {
   const ids = [];
@@ -330,8 +384,10 @@ function emit(out, joined, paraId, from, to, meta) {
   //   문장 모드에서는 `splitSentences` 가 낸 그 문장 = `joinPieces` 결과의 [from, to) 구간.
   const kind = meta && meta.kind ? meta.kind : 'body';
   const src = String(joined.text).replace(/\s+/g, ' ').trim();
+  // ★ 8h-1 — 인용(`cite`)은 표 안내처럼 번호를 받지 않는다 → `sentencesOf`·번역 요청·창·readStats 에서 저절로 빠진다.
+  const cite = !!(meta && meta.cite);
   let seg = null;
-  if (kind !== TABLE_NOTICE_KIND && meta && meta.seq) seg = meta.seq.next++;
+  if (kind !== TABLE_NOTICE_KIND && !cite && meta && meta.seq) seg = meta.seq.next++;
 
   const parts = splitLong(spoken, TTS.MAX_UTTER_CHARS);
 
@@ -356,6 +412,7 @@ function emit(out, joined, paraId, from, to, meta) {
       seg: seg,
       kind: kind
     };
+    if (cite) u.cite = true;      // 아닌 단위에는 속성을 두지 않는다 — 8h 이전 큐와 JSON 이 같다(T-U)
     if (ranges) u.ranges = ranges;
     out.push(u);
   }
@@ -423,4 +480,25 @@ export function indexOfLine(units, lineId) {
     if (units[i].lineIds.indexOf(id) >= 0) return i;
   }
   return -1;
+}
+
+/**
+ * `[8h-1 — spec 6-6-2]` 줄 탭 — 그 줄의 발화, 없으면(인용 줄은 큐에서 걸러졌다) **화면 줄 순서로 그 뒤의 첫 발화**.
+ * @param {Unit[]} units 지금 큐
+ * @param {string} lineId 탭한 줄
+ * @param {string[]} order 화면의 낭독 줄 순서(`view.lineOrder()`)
+ * @returns {number} 큐 번호. 그 줄 뒤에 발화가 없으면 `units.length`(쪽 끝). 줄 순서에 없는 줄이면 -1.
+ */
+export function indexAtOrAfterLine(units, lineId, order) {
+  const list = Array.isArray(units) ? units : [];
+  const direct = indexOfLine(list, lineId);
+  if (direct >= 0) return direct;
+  const ids = Array.isArray(order) ? order.map(String) : [];
+  const at = ids.indexOf(String(lineId));
+  if (at < 0) return -1;
+  for (let k = at + 1; k < ids.length; k++) {
+    const i = indexOfLine(list, ids[k]);
+    if (i >= 0) return i;
+  }
+  return list.length;
 }

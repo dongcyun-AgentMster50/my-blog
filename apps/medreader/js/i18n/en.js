@@ -293,6 +293,9 @@ export default {
   'settings.ai.consent.agree': "Agree",
   'settings.ai.open': "Set up key",
   'settings.readalong.title': "Read-along translation",
+  /* `[8h-1 — spec 6-6-2]` 설정 낭독 묶음 — 인용 거르기 스위치 */
+  'settings.tts.readCitations': "Also read citations and references",
+  'settings.tts.readCitations.help': "Authors, journals and PMID numbers are skipped by default. When on, they are read in the book's language only and are not translated.",
   'settings.readalong.target': "Translation language",
   'settings.readalong.voice.checking': "Translation voice: checking…",
   'settings.readalong.voice.yes': "Translation voice: available",

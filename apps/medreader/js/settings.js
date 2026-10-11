@@ -52,6 +52,9 @@ export const DEFAULTS = Object.freeze({
   'tts.voice.ko': '',
   'tts.autoSummarize': false,   // 9-3 — 기본 false. 자동 호출 금지(18절)
   'tts.wakeLock': true,
+  // `[8h-1 — spec 6-6-2]` 인용·참고문헌(저자·학술지·PMID)도 읽는가. 기본 false — 거른다.
+  // 켜도 원서 언어 음성으로만 읽고 번역하지 않는다(인용은 번역 입력이 아니다).
+  'tts.readCitations': false,
 
   /* 낭독 동반 번역 (7-8-1) — `[신설 2026-09-28]`. 7b 는 **저장만** 하고 동작은 8b 가 붙인다.
      설정 AI 탭과 리더 속도 팝오버가 **이 두 키 하나씩**을 같은 그리기 함수로 보인다. */

@@ -291,6 +291,9 @@ export default {
   'settings.ai.consent.agree': "동의",
   'settings.ai.open': "키 설정",
   'settings.readalong.title': "낭독 동반 번역",
+  /* `[8h-1 — spec 6-6-2]` 설정 낭독 묶음 — 인용 거르기 스위치 */
+  'settings.tts.readCitations': "인용·참고문헌도 읽기",
+  'settings.tts.readCitations.help': "저자·학술지·PMID 번호는 기본으로 건너뜁니다. 켜면 원서 언어로만 읽고 번역하지 않습니다.",
   'settings.readalong.target': "번역 언어",
   'settings.readalong.voice.checking': "번역문 음성: 확인 중…",
   'settings.readalong.voice.yes': "번역문 음성: 있음",

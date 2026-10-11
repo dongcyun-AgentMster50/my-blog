@@ -356,6 +356,21 @@ export const TTS_SYMBOLS = Object.freeze({
   ko: Object.freeze({})
 });
 
+/* `[8h-1 — spec 6-6-4 C]` 각주·기호 문자. **언어 무관** — 기호 표(`TTS_SYMBOLS`)와 따로 둔다.
+ * 낭독 사본에서만(`tts/text.js` 의 `speechMarks`): 피연산자 사이("HLA-B∗58:01" "STAR*D")면 `∗` → `*` 로만 바꾸고,
+ * 그 밖(단어 끝 "Practice∗", 줄머리 "∗See", 따옴표 뒤)은 지운다. `src`·화면·번역 입력은 그대로(캐시 키 불변). */
+export const SPEECH_MARKS = Object.freeze(['∗', '*', '†', '‡', '§']);   // ∗ * † ‡ §
+
+/* `[8h-1 — spec 6-6-2 A · 6-6-3 B]` 인용 단위·참고문헌 묶음·글머리 경계 (`text/cite.js` · `text/segment.js`).
+ * 판별은 **언어·책에 기대지 않는 꼴**(식별자 토큰·국제 인용 꼴·글리프)만 쓴다. 숫자의 출처는 spec 6-6-1(CMDT 2026 전수). */
+export const CITE = Object.freeze({
+  MAX_UNIT_CHARS: 200,     // A1 — 이보다 긴 단위는 인용으로 보지 않는다(본문일 가능성이 크다)
+  REF_MAX_FOLLOW: 4,       // A2 — 머리 다음 이 문장 수 안에서 닫혀야 묶음이다
+  REF_MAX_CHARS: 400,      // A2 — 머리부터 닫는 문장까지 합계 글자 상한
+  /* B1 — 글머리 글리프. 단위 중간에서 "공백 + 글리프 + 공백" 이면 글리프 **앞**에서 끊는다. */
+  BULLETS: Object.freeze(['•', '▪', '◦', '‣', '●', '■', '▸', '►'])
+});
+
 /* `[7c — spec 6-1]` 고를 음성이 없을 때 `utterance.lang` 에 넣는 언어별 기본 지역.
  * 음성이 있으면 그 음성의 `voice.lang` 이 우선이다(`tts/voices.js` 의 `utteranceLang`).
  * 코드의 다른 곳에 지역 태그를 박지 않는다 — 여기 한 곳이다. */

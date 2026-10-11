@@ -637,7 +637,8 @@ export function initSettingsScreen() {
     target: q('aiTargetLang'),
     voice: q('aiVoiceStatus'),
     howTo: q('aiVoiceHowTo'),
-    howToBody: q('aiVoiceHowToBody')
+    howToBody: q('aiVoiceHowToBody'),
+    readCitations: null      // `[8h-1]` 아래 buildCitationsRow 가 만든다(정적 HTML 은 import map 만 고친다)
   };
   // 반쪽 캐시(옛 index.html + 새 JS) — 그릇이 없으면 조용히 물러난다. 던지지 않는다.
   if (!els.keyInput || !els.verifyBtn || !els.testBtn) { els = null; return; }
@@ -662,10 +663,45 @@ export function initSettingsScreen() {
   els.onDevice.addEventListener('change', () => {
     settings.set('ai.useOnDevice', !!els.onDevice.checked).catch(() => { });
   });
+  els.readCitations = buildCitationsRow(root.querySelector('#settingsReadalong'));
+  if (els.readCitations) {
+    els.readCitations.addEventListener('change', () => {
+      settings.set('tts.readCitations', !!els.readCitations.checked).catch(() => { });
+    });
+  }
   els.keyInput.addEventListener('input', paintFormatWarning);
   els.consentCheck.addEventListener('change', () => { if (els.consentCheck.checked) els.consentHint.hidden = true; });
 
   onLangChange(() => { if (root && !root.hidden) paintAll(); });
+}
+
+/**
+ * `[8h-1 — spec 6-6-2]` 낭독 묶음(번역 따라가기 카드) 끝에 "인용·참고문헌도 읽기" 한 줄을 만든다.
+ * 정적 HTML 에 그릇을 두지 않는다(이번 단계는 index.html 의 import map 만 고친다) — 카드가 없으면(반쪽 캐시) 만들지 않는다.
+ * 켜도 원서 언어로만 읽고 번역하지 않는다는 안내를 한 줄 붙인다. 속도 팝오버에는 넣지 않는다(조작을 늘리지 않는다).
+ * @returns {HTMLInputElement|null}
+ */
+function buildCitationsRow(card) {
+  if (!card) return null;
+  const old = card.querySelector('#ttsReadCitations');
+  if (old) return old;
+  const row = document.createElement('div');
+  row.className = 'consent-row';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.id = 'ttsReadCitations';
+  const label = document.createElement('label');
+  label.setAttribute('for', 'ttsReadCitations');
+  label.setAttribute('data-i18n', 'settings.tts.readCitations');
+  row.appendChild(box);
+  row.appendChild(label);
+  const help = document.createElement('p');
+  help.className = 'muted';
+  help.setAttribute('data-i18n', 'settings.tts.readCitations.help');
+  card.appendChild(row);
+  card.appendChild(help);
+  applyTranslations(card);
+  return box;
 }
 
 /** 라우터가 이 화면을 보일 때마다. `params.tab` 은 지금 `ai` 하나뿐이다. */
@@ -741,6 +777,7 @@ function paintAll() {
   paintModels();
   els.dailyCap.value = String(settings.get('ai.dailyCap'));
   els.onDevice.checked = settings.get('ai.useOnDevice') !== false;
+  if (els.readCitations) els.readCitations.checked = settings.get('tts.readCitations') === true;
   renderReadalongRow(els.readalongHost);
   paintTarget();
   paintVoiceText();
