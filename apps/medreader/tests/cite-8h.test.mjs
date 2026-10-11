@@ -153,7 +153,7 @@ test('T-A3 isPublicationOnly — "연도;권(호):쪽[-쪽]." 꼴뿐 · 낱말 �
   for (const s of [
     'In 2024;332:957.',          // 낱말이 섞인 문장
     '2024;8:bvae033.',           // 전자 위치 — 글자가 있다
-    '2021 Mar;12(3):45.',        // 월 이름 — 글자가 있다
+    '2021 March;12(3):45.',      // 월 전체 철자 — 넓힘(8h-3)은 약어 12개뿐
     '2023;10(Suppl 1):12.',      // 보충호 — 글자가 있다
     '2024;332.',                 // 쪽이 없다
     '2024:332:957.',             // 세미콜론이 없다
@@ -196,7 +196,64 @@ test('T-A3 ★ 음성 — 뒤가 식별자가 아님 · 식별자가 앞 · 사�
 test('T-A3 ★ 음성 — 낱말이 섞인 문장("In 2024;…") · 글자 있는 출판 정보는 식별자 앞이어도 읽는다', () => {
   assert.deepEqual(markReferences(['In 2024;332:957.', PMID]), [false, true]);
   assert.deepEqual(markReferences(['2024;8:bvae033.', PMID]), [false, true]);
-  assert.deepEqual(markReferences(['2021 Mar;12(3):45.', PMID]), [false, true]);
+  assert.deepEqual(markReferences(['2021 March;12(3):45.', PMID]), [false, true]);
+});
+
+/* ── 8h-3 A3 넓힘 (spec 6-6-2 "A3 넓힘" — 운영자 승인 2026-10-12) ── */
+
+test('T-A3w ★ 양성 — 연도 뒤 월 약어(+일) · 콜론 바로 뒤 e+숫자, 뒤에 식별자 → 둘 다 cite', () => {
+  for (const s of [
+    '2021 Mar;9(3):1-9.', '2020 Nov 12;383(20):1907-19.', '2024;10:e123.',
+    '2019 Jan. 5;12:45.', '2022 Sep;7:e38–360.', '2018 Dec 1;4(2):e11.'
+  ]) {
+    assert.equal(isPublicationOnly(s), true, s);
+  }
+  // [Review 8h-3] 월 약어 12개가 모두 받혀야 한다(하나가 빠져도 빨강)
+  for (const m of ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']) {
+    assert.equal(isPublicationOnly('2019 ' + m + ' 5;12(3):45–9.'), true, m);
+  }
+  assert.deepEqual(markReferences(['JAMA.', '2021 Mar;9(3):1-9.', PMID]), [false, true, true]);
+  assert.deepEqual(markReferences(['Lancet.', '2020 Nov 12;383(20):1907-19.', 'PMID 31234567.', 'Fever resolved.']), [false, true, true, false]);
+  assert.deepEqual(markReferences(['Cureus.', '2024;10:e123.', PMID]), [false, true, true]);
+  const units = buildUnits([para('p', [ln('1', 'Rest is advised. 2024;10:e123.'), ln('2', PMID + ' Fever resolved.')])], 'sentence');
+  assert.deepEqual(units.map((u) => [u.src, !!u.cite, u.seg]), [
+    ['Rest is advised.', false, 0],
+    ['2024;10:e123.', true, null],
+    [PMID, true, null],
+    ['Fever resolved.', false, 1]
+  ]);
+});
+
+test('T-A3w ★ 음성 — 전체 철자·계절·다른 글자·월이 앞·월 꼴인데 뒤가 본문·낱말이 앞', () => {
+  for (const s of [
+    '2021 March;9(3):1-9.',      // 전체 철자 — 약어 12개만
+    '2021 Spring;9(3):1-9.',     // 계절
+    '2021 Mar 123;9(3):1-9.',    // 일이 3자리
+    '2021 Mar;9(3):Mar.',        // 월 약어는 연도 바로 뒤에서만
+    '2021;9(3):1-9 Mar.',
+    '2024;10:x123.',             // e 말고 다른 글자
+    '2024;10:E123.',             // 대문자 E
+    '2024;10:e.',                // e 뒤 숫자 없음
+    '2024;10:ee123.',
+    '2024;e10:123.',             // 콜론 바로 뒤가 아니다(권 자리)
+    '2024;10:e38–e360.',         // 범위 끝의 e 는 걷지 않는다
+    '2024;10: e123.',            // 콜론 "바로" 뒤가 아니다
+    '2024 e;10:123.',
+    '2021 mar;9(3):1-9.',        // [Review 8h-3] 소문자 — 약어 12개의 정확한 꼴만
+    '2021 MAR;9(3):1-9.',
+    '2021 Mar5;9(3):1-9.'        // [Review 8h-3] 월과 일 사이 공백 필수
+  ]) {
+    assert.equal(isPublicationOnly(s), false, s);
+  }
+  assert.deepEqual(markReferences(['2021 March;9(3):1-9.', PMID]), [false, true]);
+  assert.deepEqual(markReferences(['2021 Spring;9(3):1-9.', PMID]), [false, true]);
+  assert.deepEqual(markReferences(['2024;10:x123.', PMID]), [false, true]);
+  assert.deepEqual(markReferences(['Mar 2021 data showed a rise.', PMID]), [false, true]);
+  assert.deepEqual(markReferences(['In 2021 Mar;9(3):1-9.', PMID]), [false, true]);
+  // 월 꼴·전자 위치 꼴인데 뒤가 본문 — 닫힘 조건 그대로
+  assert.deepEqual(markReferences(['2021 Mar;9(3):1-9.', 'Doses were halved.']), [false, false]);
+  assert.deepEqual(markReferences(['2024;10:e123.', 'Doses were halved.']), [false, false]);
+  assert.deepEqual(markReferences([PMID, '2020 Nov 12;383(20):1907-19.', 'Doses were halved.']), [true, false, false]);
 });
 
 test('T-A3 ★ 음성 — 다른 문단의 식별자 · 줄 단위 모드', () => {

@@ -57,7 +57,14 @@ const PUB_ONLY = /^\d{4}(?:\s\p{Lu}\p{Ll}{2}(?:\s\d{1,2})?)?;\s?\d+(?:\(\w+\))?(
 /** A3 꼴 — "연도;권(호):쪽[-쪽]." (spec 6-6-2 A3). 꼴만 본다 — 글자 0 조건은 `isPublicationOnly` 가 따로 건다.
  *  "2024;332:957." · "2023;40(2):381-9." · "2022; 17: 101–9" */
 const PUB_INFO = /^\d{4};\s?[\p{L}\p{N}]+(?:\([\p{L}\p{N}\s\-–]+\))?:\s?[\p{L}\p{N}]+(?:[\-–][\p{L}\p{N}]+)?\.?$/u;
-/** 낱말 글자 — 출판 정보만인 문장에는 하나도 없어야 한다("2024;8:bvae033" · "2021 Mar;…" 는 A3 가 아니다). */
+/** A3 넓힘 (가) `[운영자 승인 2026-10-12 — 8h-2 Review]` — 연도 **바로 뒤** 월 약어 12개(마침표 선택) + 선택적 일.
+ *  "2021 Mar;9(3):1-9." · "2020 Nov 12;383(20):1907-19." — 이 자리만 걷어 내고 나머지에 아래 두 검사를 그대로 건다.
+ *  전체 철자("March")·계절("Spring")·다른 자리의 월은 걷히지 않아 글자로 남는다(읽는다). */
+const PUB_MONTH = /^(\d{4}) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?(?: \d{1,2})?;/u;
+/** A3 넓힘 (나) — 쪽 자리에서 **콜론 바로 뒤** 소문자 `e` + 숫자(전자 위치 "2024;10:e123."). `e` 하나만 걷는다. */
+const PUB_ELOC = /:e(?=\d)/u;
+/** 낱말 글자 — 출판 정보만인 문장에는 하나도 없어야 한다("2024;8:bvae033" · "2021 March;…" 는 A3 가 아니다).
+ *  위 두 넓힘이 걷어 낸 뒤에 검사한다 — 그 밖의 글자는 여전히 불허. */
 const ANY_LETTER = /\p{L}/u;
 
 function str(v) { return String(v == null ? '' : v); }
@@ -105,10 +112,13 @@ export function isIdOnly(src) {
 
 /**
  * spec 6-6-2 A3 — 문장 **전체**가 출판 정보 꼴뿐인가("2024;332:957." · "2023;40(2):381-9.").
- * 낱말 글자가 하나라도 있으면 아니다(월 이름·전자 위치 "bvae033"·"Suppl" 도 아니다 — 좁게).
+ * 낱말 글자가 하나라도 있으면 아니다("bvae033"·"Suppl"·"March" 도 아니다 — 좁게).
+ * 넓힘(8h-3): 연도 바로 뒤 월 약어(+일) · 콜론 바로 뒤 `e`+숫자 — 그 두 자리만 걷어 낸 뒤 같은 검사를 건다.
  */
 export function isPublicationOnly(src) {
-  const s = str(src).replace(/\s+/g, ' ').trim();
+  const s = str(src).replace(/\s+/g, ' ').trim()
+    .replace(PUB_MONTH, '$1;')
+    .replace(PUB_ELOC, ':');
   if (!s || ANY_LETTER.test(s)) return false;
   return PUB_INFO.test(s);
 }
