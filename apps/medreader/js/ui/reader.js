@@ -68,7 +68,13 @@ import { pickAnchorLine } from './original.js';
  *   90° 회전 아이템의 `width` 를 수평 폭으로 더한다). 그래서 이 뷰는 어떤
  *   줄의 좌표도 쓰지 않는다. **텍스트만** 그린다.
  */
-export const FOLD_ROLES = Object.freeze(['header', 'footer', 'pageno', 'rotated']);
+export const FOLD_ROLES = Object.freeze(['header', 'footer', 'pageno', 'rotated', 'colhead']);
+
+/* `[8i — spec 4-13-5 · D3 · D4]` 행 표의 쪽 번호 줄(role 'ref'). 이름표(rowhead) 문단이 그 행의 쪽 번호를
+ * `refLineIds` 로 들고 있으면 이름표 끝에 작은 회색 숫자로 보여 준다(`span.rt-ref` — `.line` 이 아니다 →
+ * 하이라이트·탭·낭독 대상 아님). 이름표가 없는 행의 쪽 번호 줄만 접힌 줄로 간다 — 잃어버리지 않는다.
+ * 열 머리 행(role 'colhead')은 늘 접는다(위 FOLD_ROLES). */
+export const REF_ROLE = 'ref';
 
 /** 쪽 번호는 1..pageCount 안으로 접는다. 쪽수를 모르면 1 이상만 본다. */
 export function clampPage(page, pageCount) {
@@ -121,6 +127,13 @@ export function describePage(layout) {
   }
 
   const foldSet = new Set(FOLD_ROLES);
+  // [8i] 이름표 문단이 보여 주는 쪽 번호 줄 — 블록으로 내지 않는다(rowhead 블록의 refs 가 보여 준다)
+  const refShown = new Set();
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
+    if (p.kind !== 'rowhead' || !Array.isArray(p.refLineIds)) continue;
+    for (let k = 0; k < p.refLineIds.length; k++) if (lineById.has(p.refLineIds[k])) refShown.add(p.refLineIds[k]);
+  }
   const blocks = [];
   const folded = [];
   const doneParas = new Set();
@@ -141,6 +154,12 @@ export function describePage(layout) {
 
     if (foldSet.has(l.role)) {
       folded.push({ id: l.id, text: textOf(l), role: l.role });
+      continue;
+    }
+
+    // [8i] 쪽 번호 줄은 흐름 밖이다 — 이름표 끝에 보이거나(refShown), 아니면 접힌 줄로. 절대 낭독 문단이 되지 않는다.
+    if (l.role === REF_ROLE) {
+      if (!refShown.has(l.id)) folded.push({ id: l.id, text: textOf(l), role: l.role });
       continue;
     }
 
@@ -263,7 +282,17 @@ function paraBlock(p, lineById) {
     const r = joinHyphen(out[i].text, out[i + 1].text);
     out[i].hyphen = r.hyphenJoin ? 'hidden' : (r.keptHyphen ? 'kept' : 'none');
   }
-  return { type: 'para', id: p.id, kind: p.kind || 'body', lines: out };
+  const block = { type: 'para', id: p.id, kind: p.kind || 'body', lines: out };
+  // [8i — D4] 이름표 문단: 그 행의 쪽 번호 글자들(화면 표시만 — flowLineIdsOf·flowParasOf 는 lines 만 본다)
+  if (p.kind === 'rowhead' && Array.isArray(p.refLineIds)) {
+    const refs = [];
+    for (let i = 0; i < p.refLineIds.length; i++) {
+      const l = lineById.get(p.refLineIds[i]);
+      if (l && textOf(l)) refs.push(textOf(l));
+    }
+    if (refs.length) block.refs = refs;
+  }
+  return block;
 }
 
 function textOf(l) { return String((l && l.text) || '').trim(); }
@@ -905,6 +934,12 @@ function paraEl(b) {
     const last = i === b.lines.length - 1;
     const joinSpace = !last && ln.hyphen === 'none';
     p.appendChild(lineEl(ln, 1, joinSpace));
+  }
+  // [8i — spec 4-13-5 · D4] 행 표 이름표 끝의 쪽 번호. `.line` 이 아니다 — 하이라이트·탭·낭독이 닿지 않는다.
+  if (b.refs && b.refs.length) {
+    const r = el('span', 'rt-ref');
+    r.textContent = b.refs.join(' · ');
+    p.appendChild(r);
   }
   return p;
 }

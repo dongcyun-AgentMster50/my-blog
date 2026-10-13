@@ -116,7 +116,7 @@ export function toStored(pageLayout) {
       if (keepRunText) rec.text = r.text;      // 규칙 2
       outRuns.push(rec);
     }
-    outLines.push({
+    const rec = {
       id: l.id,
       text: l.text,                            // 줄 text 는 본문이다 — 줄일 수 없다
       bbox: round2Box(l.bbox),                 // 규칙 3
@@ -128,13 +128,16 @@ export function toStored(pageLayout) {
       paraId: l.paraId == null ? null : l.paraId,
       regionId: l.regionId == null ? null : l.regionId,
       runs: outRuns
-    });
+    };
+    // [8i — spec 4-13-7] 행 표 줄의 표·행·칸. 행 표 줄에만 둔다(없으면 필드 자체가 없다 — 옛 레코드와 같은 모양).
+    if (l.rt) rec.rt = { t: l.rt.t, row: l.rt.row, cell: l.rt.cell, k: l.rt.k };
+    outLines.push(rec);
   }
 
   const outParas = [];
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
-    outParas.push({
+    const prec = {
       id: p.id,
       lineIds: Array.isArray(p.lineIds) ? p.lineIds.slice() : [],
       // 규칙 1 — text 는 저장하지 않는다. fromStored 가 lineIds 로 조립한다.
@@ -142,7 +145,10 @@ export function toStored(pageLayout) {
       bbox: round2Box(p.bbox),
       continuesNext: !!p.continuesNext,
       continuesPrev: !!p.continuesPrev
-    });
+    };
+    // [8i] 이름표(rowhead) 문단의 그 행 쪽 번호 줄 id — 화면 표시용(낭독·번역 아님)
+    if (Array.isArray(p.refLineIds)) prec.refLineIds = p.refLineIds.slice();
+    outParas.push(prec);
   }
 
   const outRegions = [];
@@ -223,7 +229,7 @@ export function fromStored(stored, opts = null) {
       if (l) texts.push(l.text);
     }
     const joined = joinParagraphText(texts, keepPrefixes, keepSuffixes);
-    paragraphs.push({
+    const para = {
       id: p.id,
       lineIds: ids.slice(),
       text: joined.text,
@@ -231,7 +237,9 @@ export function fromStored(stored, opts = null) {
       bbox: p.bbox,
       continuesNext: !!p.continuesNext,
       continuesPrev: !!p.continuesPrev
-    });
+    };
+    if (Array.isArray(p.refLineIds)) para.refLineIds = p.refLineIds.slice();   // [8i] 없으면 필드 없음
+    paragraphs.push(para);
   }
 
   const cols = S.columns || { count: 1, gutters: [] };

@@ -253,6 +253,26 @@
   margin-block-end: 0.35em;
 }
 
+/* ── 행 표의 이름표 (8i — spec 4-13-5 · D4) ───────────────
+   행마다 이름표 칸 하나가 문단 하나다. 굵게 + 위에 얇은 행 구분선. 그 행의 쪽 번호는
+   끝에 작은 회색 숫자(span.rt-ref — .line 이 아니라 하이라이트·낭독이 닿지 않는다). */
+.reflow .para[data-kind="rowhead"] {
+  font-weight: 700;
+  border-block-start: 1px solid var(--c-border);
+  padding-block-start: 0.6em;
+  margin-block: 1em 0.35em;
+  color: var(--c-text);
+}
+
+.reflow .para[data-kind="rowhead"] .rt-ref {
+  margin-inline-start: 0.6em;
+  font-size: 0.75em;
+  font-weight: 400;
+  color: var(--c-text-dim);
+  white-space: nowrap;
+  letter-spacing: normal;
+}
+
 /* ── 표 자리표시자 (6단계가 채운다) ───────────────────── */
 .reflow .table-fallback {
   margin: 1em 0;

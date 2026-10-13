@@ -421,7 +421,7 @@ function firstRunText(line) {
  * 그 함수들은 "라벨 + 공백 + 비공백"을 요구하므로 최소 토큰을 붙여 본다. 라벨 전용
  * run 은 공백을 품지 않으므로, 공백이 있으면(= 셀 텍스트가 붙어 있으면) 라벨이 아니다.
  */
-function isLabelOnly(text) {
+export function isLabelOnly(text) {
   const t = String(text == null ? '' : text).trim();
   if (!t || /\s/.test(t)) return false;
   const probe = t + ' x';
@@ -464,7 +464,8 @@ export function detectTables(lines, pageInfo, params = LAYOUT, stats = null) {
     let prevCand = null;
     for (let i = 0; i < colLines.length; i++) {
       const l = colLines[i];
-      const isCand = l.role === 'body' && (l.runs || []).length >= 2 && !hasLabelOnlyFirstRun(l);
+      // [8i — spec 4-13-5] 7b 가 행 표로 다시 만든 줄(rt)은 후보가 아니다 — 행 단위로 이미 읽힌다.
+      const isCand = l.role === 'body' && !l.rt && (l.runs || []).length >= 2 && !hasLabelOnlyFirstRun(l);
       if (!isCand) { cur = null; prevCand = null; continue; }
       if (cur && prevCand && (prevCand.baseline - l.baseline) <= P.TABLE_LEADING_FACTOR * Lm) {
         cur.push(l);
@@ -510,7 +511,7 @@ export function detectTables(lines, pageInfo, params = LAYOUT, stats = null) {
       // 표 사이에 끼어 있는 run 1개짜리 줄(긴 셀 텍스트)도 bbox 안이면 포함
       for (let i = 0; i < colLines.length; i++) {
         const l = colLines[i];
-        if (l.regionId || l.role !== 'body' || !l.bbox) continue;
+        if (l.regionId || l.role !== 'body' || l.rt || !l.bbox) continue;
         if (l.bbox.y0 >= bbox.y0 && l.bbox.y1 <= bbox.y1 && l.bbox.x0 >= bbox.x0 - 1 && l.bbox.x1 <= bbox.x1 + 1) {
           l.role = 'table';
           l.regionId = rid;
@@ -575,6 +576,16 @@ export function newParagraph(prev, cur, ctx, params = LAYOUT) {
   return false;
 }
 
+/* [8i — spec 4-13-5] 행 표 줄의 문단 경계. true = 새 문단, false = 잇는다, null = 4-9 newParagraph 에 맡긴다.
+ * 칸 = (표, 행, 칸 종류, 칸 번호). 이름표 칸은 줄이 여럿이어도 한 문단이다("& Pseudo-" + "hypo…"). */
+function rtBreak(prev, cur) {
+  if (!prev || !prev.rt || !cur.rt) return true;
+  const a = prev.rt, b = cur.rt;
+  if (a.t !== b.t || a.row !== b.row || a.cell !== b.cell || a.k !== b.k) return true;
+  if (b.cell === 'A') return false;
+  return null;
+}
+
 /* spec 4-9 [수정 2026-09-18] — 문단 kind 우선순위:
  *   answer → question → option → heading → list → body
  *
@@ -623,7 +634,10 @@ export function groupParagraphs(lines, pageInfo, params = LAYOUT, stats = null) 
     const line = flow[i];
     const cm = colIndex.get(String(line.col)) || { left: line.bbox.x0, width: 1 };
     const ctx = { Lm: m.medianLeading, Fm: m.medianFontSize, colLeft: cm.left, colWidth: cm.width || 1 };
-    if (newParagraph(prev, line, ctx, P)) {
+    // [8i — spec 4-13-5] 행 표 줄: 칸이 다르면 늘 새 문단, 이름표(A) 칸은 통째로 한 문단,
+    // 내용(P) 칸은 칸 안에서만 4-9 newParagraph 로 나눈다 — 칸을 넘는 문단은 없다.
+    const rtCell = (line.rt || (prev && prev.rt)) ? rtBreak(prev, line) : null;
+    if (rtCell === true || (rtCell === null && newParagraph(prev, line, ctx, P))) {
       cur = { id: pageNo + ':p' + paragraphs.length, lineIds: [], _lines: [], kind: 'body', bbox: null, text: '', continuesNext: false, continuesPrev: false };
       paragraphs.push(cur);
     }
@@ -631,6 +645,18 @@ export function groupParagraphs(lines, pageInfo, params = LAYOUT, stats = null) 
     cur._lines.push(line);
     line.paraId = cur.id;
     prev = line;
+  }
+
+  // [8i] 행 표의 행마다: 내용(P) 줄이 있는가, 쪽 번호(R) 줄 id 들(읽기 순서)
+  const rtRows = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!l.rt) continue;
+    const key = l.rt.t + ':' + l.rt.row;
+    if (!rtRows.has(key)) rtRows.set(key, { hasP: false, refs: [] });
+    const r = rtRows.get(key);
+    if (l.rt.cell === 'P') r.hasP = true;
+    else if (l.rt.cell === 'R') r.refs.push(l.id);
   }
 
   for (let i = 0; i < paragraphs.length; i++) {
@@ -641,6 +667,13 @@ export function groupParagraphs(lines, pageInfo, params = LAYOUT, stats = null) 
     for (let k = 0; k < p._lines.length; k++) p._lines[k].hyphenJoin = joined.hyphenJoins[k];
     p.bbox = unionBBox(p._lines.map(function (l) { return l.bbox; }));
     p.kind = paragraphKind(p._lines, p.text);
+    // [8i — spec 4-13-5 · D6] 내용이 옆에 있는 이름표 칸 = 'rowhead'(heading 이 아니다 — 8g 목차 폴백·
+    // continuesNext 가 heading 을 건너뛴다). 그 행의 쪽 번호 줄 id 는 화면 표시용으로만 단다(낭독·번역 아님).
+    const f = p._lines[0];
+    if (f && f.rt && f.rt.cell === 'A') {
+      const r = rtRows.get(f.rt.t + ':' + f.rt.row);
+      if (r && r.hasP) { p.kind = 'rowhead'; p.refLineIds = r.refs.slice(); }
+    }
     delete p._lines;
   }
 

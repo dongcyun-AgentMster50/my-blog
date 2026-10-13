@@ -5,12 +5,13 @@
    출력은 spec 3-3 의 PageLayout 이다. 브라우저 API를 전혀 모른다.
    ============================================================ */
 
-import { LAYOUT } from '../config.js';
+import { LAYOUT, ROWTABLE } from '../config.js';
 import {
   normalizeItems, clusterLines, splitRuns, joinText, lineBBox
 } from './lines.js';
 import { detectColumns, reassignByColumn, orderLines } from './columns.js';
 import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './blocks.js';
+import { detectRowTables } from './rowtable.js';
 
 /**
  * 알고리즘 버전. 알고리즘을 고치면 값을 올린다.
@@ -81,8 +82,15 @@ import { classifyRoles, detectTables, groupParagraphs, columnMetrics } from './b
  *     고친 뒤 0쪽. 띠 조건이 상단 영역 안의 본문(참고문헌 줄·문항 라벨 등)을 머리말로 빼던
  *     오판도 줄였다(표본 CMDT 16→0줄, Harrison 전수 27→5줄, Harrison 정답 연결 1186→1190).
  *     lines[].role·paragraphs 경계·kind 가 바뀐다 — **전 책 재추출**.
+ * 11 — 2026-10-13 8i: 7b 단계 **행 표**(spec 4-13, text/rowtable.js). "이름표 | 쪽 번호 | 산문" 표의 줄을
+ *     열별 줄로 다시 만들어 행 순서(이름표 → 쪽 번호 → 내용)로 끼우고, 이름표 칸은 문단 하나(kind 'rowhead'),
+ *     쪽 번호 줄은 role 'ref'·열 머리 행은 role 'colhead'(둘 다 흐름 밖 — 낭독·번역 안 함)로 둔다.
+ *     줄 rt·문단 refLineIds 가 새로 저장된다. 저장본만으로는 7b 를 다시 할 수 없다(run 텍스트가 없다)
+ *     — **전 책 재추출**. 행 표가 없는 쪽은 10 과 바이트 단위로 같다(dev/measure-rowtable-8i.mjs).
+ *     [되돌림] config ROWTABLE.ENABLED = false 로 끌 때는 이 값을 **12** 로 올린다(버전은 앞으로만 —
+ *     11 로 저장된 쪽이 옛 코드에서 다시 뽑히지 않고 ref 줄을 읽는 일을 막는다). tests/rowtable-8i M10 이 고정.
  */
-export const algoVersion = 10;
+export const algoVersion = 11;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {
@@ -96,7 +104,7 @@ function publicRun(run, params) {
 // 출력용 Line — 내부 누적값(_wsum 등)을 제거한다(결정성·직렬화 크기).
 function publicLine(line, params) {
   const runs = (line.runs || []).map(function (r) { return publicRun(r, params); });
-  return {
+  const out = {
     id: line.id,
     text: line.text,
     bbox: line.bbox,
@@ -117,6 +125,9 @@ function publicLine(line, params) {
       };
     })
   };
+  // [8i] 행 표 줄만 rt 를 단다 — 행 표가 없는 쪽의 출력은 한 바이트도 바뀌지 않는다(4-13 원칙 2).
+  if (line.rt) out.rt = { t: line.rt.t, row: line.rt.row, cell: line.rt.cell, k: line.rt.k };
+  return out;
 }
 
 /**
@@ -125,9 +136,10 @@ function publicLine(line, params) {
  * @param {Array} rawItems getTextContent().items 그대로
  * @param {Object} pageInfo { pageNo, width, height, styles, neighborLayouts }
  * @param {Object} params 알고리즘 파라미터(기본 LAYOUT). 프로토타입 페이지가 일부만 덮어쓴다.
+ * @param {Object} rowParams 7b 행 표 상수(기본 config ROWTABLE). 테스트가 `ENABLED:false` 로 "7b 없을 때"를 만든다.
  * @returns {Object} PageLayout
  */
-export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT) {
+export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT, rowParams = ROWTABLE) {
   const P = params || LAYOUT;
   const pageNo = pageInfo.pageNo != null ? pageInfo.pageNo : 0;
   const width = Number(pageInfo.width) || 0;
@@ -151,7 +163,7 @@ export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT) {
   lines = reassignByColumn(lines, columns, info, P);
 
   // 5단계 — 읽기 순서
-  const ordered = orderLines(lines, columns, info);
+  let ordered = orderLines(lines, columns, info);
 
   // 6단계 — 텍스트 결합과 bbox
   for (let i = 0; i < ordered.length; i++) {
@@ -174,6 +186,16 @@ export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT) {
 
   // 7단계 — 역할 판정
   const metrics = classifyRoles(ordered, info, P, info.neighborLayouts);
+
+  // 7b단계 — 행 표 (spec 4-13). 잡히면 줄을 열별로 다시 만들어 행 순서로 끼우고 줄 id 를 다시 매긴다
+  // (7단계까지는 id 를 저장하지 않는다). 안 잡히면 줄 배열이 그대로다.
+  const rowTables = detectRowTables(ordered, info, P, rowParams || ROWTABLE);
+  if (rowTables.tables.length) {
+    ordered = rowTables.lines;
+    for (let i = 0; i < ordered.length; i++) ordered[i].id = pageNo + ':' + i;
+  }
+  // dev 측정 도구용 진단 훅(저장·출력에 들어가지 않는다)
+  if (typeof pageInfo.rowTableProbe === 'function') pageInfo.rowTableProbe(rowTables);
 
   // 8단계 — 표 영역
   const regions = detectTables(ordered, info, P, metrics);
