@@ -23,7 +23,9 @@ import { createSpeaker, CODES } from '../tts/speaker.js';
 import { pickVoice, utteranceLang, sharedVoiceWatch, speechLang } from '../tts/voices.js';
 import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
-  onLineTap, onPageRender, sourceLang, loadFlowParas, flowLineIds
+  onLineTap, onPageRender, sourceLang, loadFlowParas, flowLineIds,
+  // `[8i-1]` 판 바뀜 재추출 중 지금 쪽을 새 판으로(spec 4-13-9)
+  setSpeechState, currentPageReady, whenCurrentPageReady, remapLineId, setCurrentLines
 } from './reader.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
 import { renderReadalongRow } from './settings.js';
@@ -108,7 +110,12 @@ export function initControls() {
         for (let i = 0; i < ids.length; i++) markDone(ids[i], true);
       },
       // `[8h-1]` 걸러진 인용 줄을 탭하면 화면 순서로 그 뒤의 첫 발화로 간다(spec 6-6-2).
-      lineOrder: flowLineIds
+      lineOrder: flowLineIds,
+      // `[8i-1]` 지금 쪽이 옛 판이면 재생이 새 판을 기다린다 · 새 판으로 다시 그린 뒤 줄 id 대응 · 멈춘 자리 다시 칠하기
+      ready: currentPageReady,
+      whenReady: function () { return whenCurrentPageReady(); },
+      remapLine: remapLineId,
+      highlight: function (u) { return setCurrentLines(u.lineIds || [], u.ranges); }
     },
     requestWakeLock: requestWakeLock,
     // `[8h-1 — spec 6-6-2]` 9-3 `tts.readCitations`(기본 false). speaker 가 **큐를 만들 때마다** 읽는다 —
@@ -188,6 +195,7 @@ export function initControls() {
     readalong.onQueue(d.page, d.units, d.seg);
   });
   speaker.addEventListener('statechange', () => {
+    setSpeechState(speaker.getState());          // 8i-1 — 낭독 중이면 지금 쪽 다시 그리기를 미룬다
     paintBar();
     readalong.setActive(speaker.getState() === 'speaking');   // 낭독 중일 때만 요청한다
   });
@@ -207,6 +215,9 @@ export function initControls() {
      `[7c]` 원문 언어가 바뀌었으면(서재 [⋯]·자동 추정 — 리더가 `medreader:doclang` 을 듣고
      여기를 부른다) **음성을 먼저** 다시 고르고 큐를 간다. 순서가 바뀌면 새 큐가 옛 언어로 나뉜다. */
   onPageRender(() => { syncSourceVoice(); speaker.reload(); syncReadalong(); attachDebugHook(); });
+  // `[8i-1]` `refreshed` — 같은 쪽을 새 판으로 다시 그렸다(멈춘 채). 위 구독자가 큐를 새 판으로 갈았다(줄 id 는
+  // `view.remapLine` 으로 옮김) — 멈춘 자리(다음 재생 시작점)를 스크롤 없이 다시 칠한다. 구독 순서 = 부르는 순서.
+  onPageRender((p) => { if (p && p.refreshed) speaker.reshow(); });
 
   /* ── 6-4 백그라운드 ────────────────────────────────
      hidden 이면 일시정지로 **상태를 분명히 하고**, 다시 보일 때
@@ -465,7 +476,8 @@ function paintBar() {
   paintRate();
 
   if (s === 'waiting-page') {
-    els.progress.textContent = t('reader.tts.waitingPage');
+    // `[8i-1]` 지금 쪽 새 판을 기다릴 때는 "다음 쪽"이 아니다 — 리더 자리표시자와 같은 문구(새 키 없음).
+    els.progress.textContent = t(speaker.isWaitingFresh() ? 'reader.preparing.unknown' : 'reader.tts.waitingPage');
   }
 }
 

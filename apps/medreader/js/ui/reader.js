@@ -55,6 +55,8 @@ import * as render from '../pdf/render.js';
 import * as charhl from './charhl.js';
 import * as original from './original.js';
 import { pickAnchorLine } from './original.js';
+// `[8i-1]` 지금 그린 저장본이 옛 판인가 — 추출기와 같은 전역 버전(4-1)을 본다.
+import { algoVersion as ALGO_VERSION } from '../text/layout.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
@@ -298,6 +300,160 @@ function paraBlock(p, lineById) {
 function textOf(l) { return String((l && l.text) || '').trim(); }
 
 /* ────────────────────────────────────────────────────────
+   1-b. `[8i-1 — spec 4-13-9]` 판 바뀜 재추출 중 "지금 보고 있는 쪽"을 새 판으로
+
+   `algoVersion` 이 오르면(4-13-7) 추출기가 모든 쪽을 다시 쓴다(지금 쪽 ±5 우선). 그런데 리더는 쪽을
+   **연 순간의 저장본**으로 그리고, 추출 `page` 이벤트에는 자리표시자일 때만 반응했다 — 지금 쪽은 새 판이
+   저장돼도 옛 판 그대로 남아 재생하면 옛 읽기("& Pseudo- 1130")가 나왔다(8i Review 8i-8).
+   이제: **옛 판으로 그린 쪽**은 그 쪽 저장을 따라가 다시 그린다. 낭독 중이면 멈출 때까지 미룬다.
+   평소(옛 판이 아닌 쪽)에는 지금까지와 같다 — 역할 재계산(4-7) 저장에도 다시 그리지 않는다.
+   ──────────────────────────────────────────────────────── */
+
+/** 이 저장본이 지금 알고리즘보다 옛 판인가. 저장본이 없으면 거짓(자리표시자는 옛 판이 아니다). */
+export function isStaleRecord(rec, algo) {
+  if (!rec) return false;
+  const cur = algo === undefined ? ALGO_VERSION : Number(algo);
+  return (Number(rec.algoVersion) || 0) < cur;
+}
+
+/**
+ * 다시 그리기 문지기. **순수**하다 — DOM·추출기·speaker 를 모르고 `refresh()` 만 부른다(테스트가 고정).
+ *
+ *   shown(docId, page, stale)  쪽을 그렸다. 다른 쪽이면 따라가기를 끊는다. 옛 판이면 따라가기 시작.
+ *                              어느 경우든 미뤄 둔 다시 그리기는 버린다(방금 최신 저장본을 읽었다).
+ *   saved(docId, page)         추출기가 그 쪽을 저장했다 → 'ignore' | 'deferred' | 'refresh'
+ *                              지금 쪽이 아니거나 따라가는 쪽이 아니면 무시(평소 동작 불변).
+ *   speech(state)              speaker 상태. `'speaking'` 이면 미룬다. 멈춤·처음·오류가 되면 미뤄 둔 것을 한다.
+ *                              `'waiting-page'`(다음 쪽·새 판을 기다림)은 읽는 중이 아니다 — 바로 다시 그리되,
+ *                              미뤄 둔 것을 거기서 풀지는 않는다(쪽 끝 → 곧 다른 쪽이 그려져 무의미하다).
+ *   left()                     리더를 떠났다.
+ */
+export function createRefreshGate(refresh) {
+  let key = null;
+  let follow = false;
+  let pending = false;
+  let speaking = false;
+  const keyOf = (docId, page) => String(docId) + '\u0000' + String(Math.floor(Number(page)));
+  function run() {
+    try {
+      const r = refresh();
+      if (r && typeof r.catch === 'function') r.catch(() => { /* 다시 그리기 실패가 낭독·읽기를 막지 않는다 */ });
+    } catch (e) { /* 같은 이유 */ }
+  }
+  return {
+    shown(docId, page, stale) {
+      const k = keyOf(docId, page);
+      if (k !== key) { key = k; follow = false; }
+      pending = false;
+      if (stale) follow = true;
+    },
+    saved(docId, page) {
+      if (keyOf(docId, page) !== key || !follow) return 'ignore';
+      if (speaking) { pending = true; return 'deferred'; }
+      run();
+      return 'refresh';
+    },
+    speech(st) {
+      speaking = st === 'speaking';
+      if (speaking || st === 'waiting-page' || !pending) return null;
+      pending = false;
+      run();
+      return 'refresh';
+    },
+    left() { key = null; follow = false; pending = false; },
+    snapshot() { return { following: follow, pending: pending, speaking: speaking }; }
+  };
+}
+
+/**
+ * 옛 판 → 새 판 **줄 id 대응**(낭독 줄만). 같은 쪽을 새 판으로 다시 그리면 줄 id 가 바뀔 수 있다(8i: 이름표·쪽 번호
+ * 칸이 갈라지고 읽기 순서가 바뀐다). 스크롤 기준 줄·멈춘 자리(다음 재생 시작점)·탭한 줄을 옮길 때 쓴다.
+ *   ① 같은 id 에 같은 글자 → 그대로
+ *   ② 같은 글자의 새 줄 → 여럿이면 쪽 위 자리(bbox 중심)가 가장 가까운 것
+ *   ③ 쪽 위에서 겹치는 넓이가 가장 큰 새 줄(같은 글자 자리 — "& Pseudo- 1130" → "& Pseudo-")
+ *   ④ 같은 문단 순서 — 낭독 줄 순번을 비례로 옮긴다
+ * @returns {Map<string,string>} 옛 id → 새 id
+ */
+export function buildLineRemap(oldLayout, newLayout) {
+  const out = new Map();
+  if (!oldLayout || !newLayout) return out;
+  let oldIds = [];
+  let newIds = [];
+  try {
+    oldIds = flowLineIdsOf(describePage(oldLayout));
+    newIds = flowLineIdsOf(describePage(newLayout));
+  } catch (e) { return out; }
+  if (!newIds.length) return out;
+  const oldById = new Map();
+  const newById = new Map();
+  for (const l of (oldLayout.lines || [])) oldById.set(String(l.id), l);
+  for (const l of (newLayout.lines || [])) newById.set(String(l.id), l);
+  const newPos = new Map();
+  const byText = new Map();
+  for (let i = 0; i < newIds.length; i++) {
+    const id = String(newIds[i]);
+    newPos.set(id, i);
+    const tx = textOf(newById.get(id));
+    if (!byText.has(tx)) byText.set(tx, []);
+    byText.get(tx).push(id);
+  }
+  const lastOld = Math.max(1, oldIds.length - 1);
+  for (let k = 0; k < oldIds.length; k++) {
+    const id = String(oldIds[k]);
+    const ol = oldById.get(id);
+    const tx = textOf(ol);
+    if (newPos.has(id) && textOf(newById.get(id)) === tx) { out.set(id, id); continue; }
+    let pick = null;
+    const same = tx ? (byText.get(tx) || []) : [];
+    if (same.length === 1) pick = same[0];
+    else if (same.length > 1) pick = nearestByBox(same, ol, newById, k, newPos);
+    if (!pick) pick = maxOverlap(newIds, ol, newById);
+    if (!pick) pick = String(newIds[Math.min(newIds.length - 1, Math.round(k * (newIds.length - 1) / lastOld))]);
+    out.set(id, pick);
+  }
+  return out;
+}
+
+function boxOf(l) {
+  const b = l && l.bbox;
+  if (!b) return null;
+  const x0 = Number(b.x0), y0 = Number(b.y0), x1 = Number(b.x1), y1 = Number(b.y1);
+  if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+  return { x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1), y1: Math.max(y0, y1) };
+}
+
+function nearestByBox(ids, ol, byId, k, pos) {
+  const a = boxOf(ol);
+  let best = null;
+  let bestD = Infinity;
+  for (const id of ids) {
+    const b = boxOf(byId.get(id));
+    const d = a && b
+      ? Math.hypot((a.x0 + a.x1) / 2 - (b.x0 + b.x1) / 2, (a.y0 + a.y1) / 2 - (b.y0 + b.y1) / 2)
+      : Math.abs((pos.get(id) || 0) - k);
+    if (d < bestD) { bestD = d; best = id; }
+  }
+  return best;
+}
+
+function maxOverlap(ids, ol, byId) {
+  const a = boxOf(ol);
+  if (!a) return null;
+  let best = null;
+  let bestA = 0;
+  for (const raw of ids) {
+    const id = String(raw);
+    const b = boxOf(byId.get(id));
+    if (!b) continue;
+    const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+    const h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+    if (w <= 0 || h <= 0) continue;
+    if (w * h > bestA) { bestA = w * h; best = id; }
+  }
+  return best;
+}
+
+/* ────────────────────────────────────────────────────────
    2. 상태 — 한 번에 한 쪽. 이전 쪽은 DOM 에서 버린다.
    ──────────────────────────────────────────────────────── */
 
@@ -316,6 +472,12 @@ const state = {
   progress: null,
   /** 렌더 경쟁 방지 — 늦게 끝난 옛 렌더가 새 쪽을 덮어쓰지 않는다. */
   renderToken: 0,
+  /** `[8i-1]` 지금 그린 저장본이 옛 판(`algoVersion` 이 낮다)인가 — 재생이 새 판을 기다린다. */
+  stale: false,
+  /** `[8i-1c]` 지금 쪽을 새 판으로 **다시 그리는 중**인 렌더의 token(0 = 아님). 그리기·`refreshed` 알림이 끝나야 0. */
+  refreshing: 0,
+  /** `[8i-1]` 방금 새 판으로 다시 그렸다면 옛 줄 id → 새 줄 id. 다른 렌더에서는 null. */
+  lineRemap: null,
 
   /* ── 6-5 자동 스크롤 ─────────────────────────────── */
   /** 지금 하이라이트된 줄들(문장 모드에서는 여럿). */
@@ -350,7 +512,61 @@ const lineTapListeners = new Set();
 const pageListeners = new Set();
 
 export function onLineTap(fn) { lineTapListeners.add(fn); return () => lineTapListeners.delete(fn); }
+/** 구독자는 `{docId, page, refreshed?}` 를 받는다. `refreshed` 는 `[8i-1]` 같은 쪽을 새 판으로 다시 그렸을 때만 참. */
 export function onPageRender(fn) { pageListeners.add(fn); return () => pageListeners.delete(fn); }
+
+/** `[8i-1]` 지금 쪽 다시 그리기 문지기(1-b). */
+const refreshGate = createRefreshGate(() => refreshCurrentPage());
+
+/**
+ * `[8i-1]` speaker 상태를 알려 준다(`ui/controls.js` — 리더는 speaker 를 import 하지 않는다).
+ * 낭독 중이면 지금 쪽 다시 그리기를 미루고, 멈추면 미뤄 둔 것을 한다.
+ */
+export function setSpeechState(st) { refreshGate.speech(st); }
+
+/**
+ * `[8i-1c]` 지금 쪽을 읽어도 되는가 — 옛 판이 아니고, 새 판으로 **다시 그리는 중이 아니다**.
+ * 다시 그리기는 저장본을 읽자마자 `stale` 을 내리지만 원본 보기는 canvas 그리기가 비동기라, 그 사이 재생이 시작되면
+ * 뒤이은 `refreshed` 알림의 `reload()` 가 읽던 첫 문장을 처음부터 다시 읽었다(8i-1b 6-5 ①). 그래서 다시 그리는 렌더는
+ * 시작부터 `notifyPage` 뒤까지 `refreshing` 을 세워 둔다. 평소 렌더는 `refreshing` 을 세우지 않는다 — 동작 불변.
+ * **순수**(테스트가 고정).
+ */
+export function pageFresh(st) { return !!st && !st.stale && !st.refreshing; }
+
+/** `[8i-1]` 지금 쪽 글자가 최신 판인가(speaker `view.ready`). 자리표시자·깨진 쪽은 참 — 그때 동작은 그대로. */
+export function currentPageReady() { return pageFresh(state); }
+
+/**
+ * `[8i-1]` 지금 쪽이 새 판으로 다시 그려질 때까지(speaker `view.whenReady`). 상한 `TTS.FRESH_WAIT_MS`.
+ * 그 사이 다른 쪽·문서로 가면 false.
+ */
+export function whenCurrentPageReady(timeoutMs) {
+  if (pageFresh(state)) return Promise.resolve(true);
+  const ms = Number(timeoutMs) > 0 ? Number(timeoutMs) : TTS.FRESH_WAIT_MS;
+  const docId = state.docId;
+  const page = state.page;
+  return new Promise((resolve) => {
+    let timer = null;
+    let poll = null;
+    const done = (v) => {
+      if (timer !== null) { clearTimeout(timer); timer = null; }
+      if (poll !== null) { clearInterval(poll); poll = null; }
+      resolve(v);
+    };
+    timer = setTimeout(() => done(false), ms);
+    poll = setInterval(() => {
+      if (state.docId !== docId || state.page !== page) done(false);
+      else if (pageFresh(state)) done(true);       // `[8i-1c]` 다시 그리기의 `refreshed` 알림 뒤에야 풀린다
+    }, TTS.PAGE_POLL_MS);
+  });
+}
+
+/** `[8i-1]` 새 판으로 다시 그린 뒤 옛 줄 id → 새 줄 id(speaker `view.remapLine`). 모르면 그대로. */
+export function remapLineId(id) {
+  if (id == null || !state.lineRemap) return id;
+  const v = state.lineRemap.get(String(id));
+  return v == null ? id : v;
+}
 
 export function initReader() {
   const root = document.querySelector('[data-screen="reader"]');
@@ -536,6 +752,10 @@ export function leaveReader() {
   original.leaveOriginal();
   state.desc = null;
   state.layout = null;
+  state.stale = false;
+  state.refreshing = 0;
+  state.lineRemap = null;
+  refreshGate.left();
   state.currentLineId = null;
   state.currentLineIds = [];
   state.currentRanges = null;
@@ -550,15 +770,25 @@ export function leaveReader() {
    3. 쪽 그리기
    ──────────────────────────────────────────────────────── */
 
-async function renderPage() {
+/**
+ * @param {Object} [opts]
+ * @param {Object} [opts.refresh] `[8i-1]` 같은 쪽을 새 판으로 다시 그린다 — `captureView()` 가 잡은 옛 화면
+ *                                (옛 layout · 스크롤 기준 줄). 줄 id 를 옮기고 스크롤을 지키고 구독자에게 `refreshed` 를 알린다.
+ */
+async function renderPage(opts) {
+  const cap = (opts && opts.refresh) || null;
   const token = ++state.renderToken;
   const docId = state.docId;
   const pageNo = state.page;
+  // `[8i-1c]` 다시 그리기는 **시작부터** 지금 쪽을 "준비 안 됨"으로 둔다(`pageFresh`) — 저장본을 읽는 동안·그리는 동안
+  // 재생이 시작되면 뒤이은 `refreshed` 의 `reload()` 가 첫 문장을 다시 읽는다. 끝(`notifyPage` 뒤)에서 내린다.
+  if (cap) state.refreshing = token;
 
   let rec = null;
   try {
     rec = await db.get('pages', [docId, pageNo]);
   } catch (e) {
+    if (token === state.renderToken) state.refreshing = 0;
     banner(e, db.ERR.OPEN);
     return;
   }
@@ -572,9 +802,16 @@ async function renderPage() {
   state.currentRanges = null;
   // 버린 DOM 을 가리키는 `Range` 를 레지스트리에 남기지 않는다(10a).
   clearCharHighlight();
+  // `[8i-1]` 방금 읽은 저장본이 옛 판이면 이 쪽 저장을 따라간다(1-b). 최신을 읽었으니 미뤄 둔 다시 그리기는 버린다.
+  state.stale = isStaleRecord(rec);
+  // `[8i-1c]` 이 렌더가 지금 쪽의 주인이다 — 다시 그리기면 계속 세워 두고, 평소 렌더면(앞 다시 그리기가 버려졌어도) 내린다.
+  state.refreshing = cap ? token : 0;
+  state.lineRemap = null;
+  refreshGate.shown(docId, pageNo, state.stale);
 
   if (!rec) {
     // 아직 추출되지 않은 쪽 — **빈 화면을 보여주지 않는다**(12-3).
+    state.refreshing = 0;
     state.desc = null;
     state.layout = null;
     els.mount.appendChild(preparingBlock());
@@ -591,9 +828,15 @@ async function renderPage() {
     // 저장본이 깨졌어도 리더가 죽지는 않는다. 9-4 가 그 쪽을 다시 뽑는다.
     state.desc = null;
     state.layout = null;
+    state.stale = false;
+    state.refreshing = 0;
     els.mount.appendChild(noticeBlock('reader.page.broken'));
     paintViewToggle();
     return;
+  }
+  if (cap && cap.layout) {
+    state.lineRemap = buildLineRemap(cap.layout, layout);
+    state.lastTappedLineId = remapLineId(state.lastTappedLineId);
   }
   state.desc = desc;
   state.layout = layout;
@@ -608,9 +851,70 @@ async function renderPage() {
 
   // ★ **낭독 큐는 뷰와 무관하다.** `desc` 는 두 뷰에서 똑같이 만들어 두고
   //   화면만 갈아 끼운다 — 원본 뷰에서도 낭독이 끊기지 않는다(6-4).
-  await paintView(token);
-  if (token !== state.renderToken) return;
-  notifyPage();
+  try {
+    await paintView(token);
+    if (token !== state.renderToken) return;
+    if (cap) restoreView(cap);
+    notifyPage(cap ? { refreshed: true } : null);
+  } finally {
+    // `[8i-1c]` 그리기와 `refreshed` 알림(큐를 새 판으로 갈았다)이 끝난 **뒤에야** 지금 쪽이 준비됨 — 기다리던 재생이
+    // 여기서 풀린다. 더 새 렌더가 시작했으면 그 렌더가 정한다(역할 재계산 다시 그리기가 겹친 경우).
+    if (token === state.renderToken && state.refreshing === token) state.refreshing = 0;
+  }
+  // `[8i-1]` 옛 판을 읽는 사이에 새 판이 이미 저장됐을 수 있다(이벤트가 `shown` 보다 먼저 왔다) — 따라잡는다.
+  if (state.stale && token === state.renderToken) catchUpStale();
+}
+
+/** `[8i-1]` 추출기가 지금 쪽을 이미 최신 판으로 저장했는데 화면이 옛 판이면 다시 그리기를 청한다. */
+function catchUpStale() {
+  if (!state.stale || !state.docId) return;
+  const ex = extractorFor(state.docId);
+  if (ex && typeof ex.hasCurrent === 'function' && ex.hasCurrent(state.page)) refreshGate.saved(state.docId, state.page);
+}
+
+/**
+ * `[8i-1]` 지금 쪽을 새 판으로 다시 그린다(문지기가 부른다 — 낭독 중이 아닐 때만).
+ * 화면을 비우기 **전에** 스크롤 기준을 잡는다.
+ */
+async function refreshCurrentPage() {
+  if (!els || els.root.hidden || !state.docId) return;
+  await renderPage({ refresh: captureView() });
+}
+
+/** 다시 그리기 직전의 화면 — 옛 layout, 리플로우면 가운데 줄과 그 화면 위치, 원본이면 스크롤 상자 위치. */
+function captureView() {
+  const cap = { layout: state.layout, view: state.view, anchorId: null, anchorTop: 0, scrollY: 0, orig: null };
+  try { cap.scrollY = window.scrollY || window.pageYOffset || 0; } catch (e) { cap.scrollY = 0; }
+  if (state.view === 'original') {
+    const sc = els && els.mount ? els.mount.querySelector('.original-scroll') : null;
+    if (sc) cap.orig = { top: sc.scrollTop, left: sc.scrollLeft };
+    return cap;
+  }
+  const seen = visibleNow();
+  const id = seen.center || (seen.visible.length ? seen.visible[0] : null);
+  const node = id ? lineElement(id) : null;
+  if (node) { cap.anchorId = String(id); cap.anchorTop = node.getBoundingClientRect().top; }
+  return cap;
+}
+
+/** 다시 그린 뒤 — 같은 줄(새 id)이 같은 화면 높이에 오게 한다. 못 찾으면 옛 스크롤 값으로. */
+function restoreView(cap) {
+  if (!cap || cap.view !== state.view) return;
+  state.programScrollAt = Date.now();          // 우리가 굴린 것 — 사용자 스크롤로 읽지 않게(6-5)
+  if (state.view === 'original') {
+    const sc = els.mount.querySelector('.original-scroll');
+    if (sc && cap.orig) { sc.scrollTop = cap.orig.top; sc.scrollLeft = cap.orig.left; }
+    return;
+  }
+  const node = cap.anchorId ? lineElement(remapLineId(cap.anchorId)) : null;
+  if (node) {
+    const dy = node.getBoundingClientRect().top - cap.anchorTop;
+    if (Math.abs(dy) >= 1) {
+      try { window.scrollBy({ top: dy, behavior: 'instant' }); } catch (e) { window.scrollBy(0, dy); }
+    }
+    return;
+  }
+  try { window.scrollTo({ top: cap.scrollY, behavior: 'instant' }); } catch (e) { window.scrollTo(0, cap.scrollY); }
 }
 
 /**
@@ -845,9 +1149,9 @@ async function openRegionInOriginal(regionId) {
 }
 
 /** 새 쪽이 그려졌다 — 낭독 큐가 이 쪽 것으로 갈아탄다(`ui/controls.js`). */
-function notifyPage() {
+function notifyPage(extra) {
   for (const fn of pageListeners) {
-    try { fn({ docId: state.docId, page: state.page }); } catch (e) { /* 구독자 예외 */ }
+    try { fn(Object.assign({ docId: state.docId, page: state.page }, extra || null)); } catch (e) { /* 구독자 예외 */ }
   }
   paintQuizChip();
 }
@@ -1134,7 +1438,9 @@ async function wireExtractor(docId) {
     };
     const onPage = (e) => {
       // 지금 보고 있는 쪽이 방금 준비됐다 — 자리표시자를 진짜 본문으로 바꾼다.
-      if (Number(e.detail.pageNo) === state.page && !state.desc) renderPage();
+      if (Number(e.detail.pageNo) === state.page && !state.desc) { renderPage(); return; }
+      // `[8i-1]` 옛 판으로 그린 쪽의 새 판이 저장됐다 — 문지기가 판단한다(지금 쪽·따라가는 쪽만, 낭독 중이면 미룸).
+      refreshGate.saved(docId, Number(e.detail.pageNo));
     };
     ex.addEventListener('progress', onProgress);
     ex.addEventListener('page', onPage);
@@ -1147,6 +1453,8 @@ async function wireExtractor(docId) {
     };
   }
   ex.setCurrentPage(state.page);
+  // `[8i-1]` 배선 전에 지금 쪽 새 판이 이미 저장됐을 수 있다(이벤트를 놓쳤다).
+  catchUpStale();
 }
 
 function unwire() {
@@ -1481,7 +1789,9 @@ function hideBackChip() { if (els && els.backToLine) els.backToLine.hidden = tru
 export function goToPageForSpeech(pageNo) {
   const target = clampPage(pageNo, state.pageCount);
   if (state.pageCount > 0 && Number(pageNo) > state.pageCount) return Promise.resolve(false);
-  if (state.page === target && state.desc) return Promise.resolve(true);
+  // `[8i-1]` 옛 판으로 그려진 쪽은 아직 "그려지지 않은" 쪽으로 본다 — 새 판이 그려질 때까지 기다린다(재추출 중에만).
+  // `[8i-1c]` 새 판으로 다시 그리는 중인 쪽도 — `refreshed` 알림 뒤에 넘어간다(그 알림의 `reload()` 가 첫 문장을 다시 읽지 않게).
+  if (state.page === target && state.desc && pageFresh(state)) return Promise.resolve(true);
 
   return new Promise((resolve) => {
     let timer = null;
@@ -1493,7 +1803,7 @@ export function goToPageForSpeech(pageNo) {
     };
     timer = setTimeout(() => done(false), TTS.PAGE_WAIT_MS);
     poll = setInterval(() => {
-      if (state.page === target && state.desc) done(true);
+      if (state.page === target && state.desc && pageFresh(state)) done(true);
     }, TTS.PAGE_POLL_MS);
     go(readerHash(state.docId, target));
   });

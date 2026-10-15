@@ -309,6 +309,12 @@ export class Extractor extends EventTarget {
 
   setSpeaking(on) { this.speaking = !!on; }
 
+  /**
+   * `[8i-1]` 이 쪽이 **지금 `algoVersion`** 으로 저장돼 있는가(값을 읽지 않는다 — 메모리 집합).
+   * 리더가 옛 판으로 그린 쪽의 새 판이 이벤트보다 먼저 저장됐는지 따라잡을 때 쓴다.
+   */
+  hasCurrent(n) { return this.stored.has(Math.floor(Number(n))); }
+
   pause() {
     if (!this.running) return;
     this.running = false;

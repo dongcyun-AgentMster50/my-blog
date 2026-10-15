@@ -123,6 +123,11 @@ export function snapRepeatCount(n) {
  *   markDone(unit)     → 읽은 표시
  *   lineOrder()        → `string[]` (선택, `[8h-1]`) 지금 쪽의 낭독 줄 id 를 화면 순서로 — 걸러진 인용 줄을 탭했을 때
  *                        그 뒤의 첫 발화를 찾는다
+ *   ready()            → `boolean` (선택, `[8i-1]`) 지금 쪽 글자가 **최신 판**인가. false 면 `play()` 가 옛 판을
+ *                        읽지 않고 `whenReady()` 를 기다린다(판 바뀜 재추출 중 — spec 4-13-9). 없으면 늘 참
+ *   whenReady()        → `Promise<boolean>` (선택, `[8i-1]`) 지금 쪽이 새 판으로 다시 그려지면 true, 상한을 넘으면 false
+ *   remapLine(id)      → `string` (선택, `[8i-1]`) 지금 쪽을 새 판으로 다시 그린 뒤 옛 줄 id → 새 줄 id(모르면 그대로)
+ *   highlight(unit)    → (선택, `[8i-1]`) 스크롤 없이 하이라이트만 — 멈춘 채 쪽이 다시 그려졌을 때 `reshow()` 가 쓴다
  *
  * `[8b-1]` `deps.translation`(선택) — 낭독 동반 번역 서비스(`ai/readalong.js`):
  *   get(unit)          → `{state:'ready'|'pending'|'failed'|'blocked'|'none', text?}` **동기**
@@ -182,6 +187,10 @@ export function createSpeaker(deps) {
   /* ── `[8h-1]` 인용 거르기 (spec 6-6-2) ─────────────── */
   let readCitations = false;     // 9-3 tts.readCitations — 기본 false(거른다). `deps.readCitations` 가 있으면 그것이 우선
   let citeOnlyQueue = false;     // 마지막으로 만든 큐가 "인용을 걸러서" 비었는가(본래 빈 쪽과 구별)
+
+  /* ── `[8i-1]` 옛 판 쪽에서 재생 (spec 4-13-9) ─────────── */
+  let freshGen = -1;             // 지금 쪽 새 판을 기다리기 시작한 세대(`'waiting-page'` 의 한 갈래 — 상태는 늘리지 않는다)
+  let rebuildNext = false;       // 기다림이 끝난 `play()` 는 큐를 새로 만든다
 
   /* ── 반복 재생 (5b) ───────────────────────────────────
      ★ 반복은 **큐 위의 인덱스 계산**일 뿐이다. `speechSynthesis.pause()` 는
@@ -728,11 +737,17 @@ export function createSpeaker(deps) {
    * 탭 핸들러에서 곧장 불리면 `synth.speak()` 가 그 이벤트 안에서 나간다.
    */
   function play(fromLineId) {
+    // `[8i-1 — spec 4-13-9]` 지금 쪽이 옛 판(판 바뀜 재추출 전)이면 옛 읽기를 내지 않는다 —
+    // 그 쪽 새 판이 그려질 때까지 기다렸다가 새 판으로 시작한다. 기다리는 중에 또 누르면 그대로 기다린다.
+    if (waitingFresh()) return;
+    if (!viewReady()) { waitFresh(fromLineId); return; }
     // `[8b-1]` 번역문 단계에서 멈췄으면 같은 단계로 돌아간다(6-1 resume).
     const resumeTr = fromLineId == null && state === 'paused' && units.length > 0 &&
       (phase === 'tr' || phase === 'tr-wait') && index >= 0 && index < units.length;
     let rebuilt = false;
-    if (!units.length || fromLineId != null || state === 'idle') {
+    const forced = rebuildNext;
+    rebuildNext = false;
+    if (!units.length || fromLineId != null || state === 'idle' || forced) {
       units = queueOf((view && view.paras && view.paras()) || []);
       queueRebuilt();
       rebuilt = true;
@@ -766,6 +781,38 @@ export function createSpeaker(deps) {
     }
     // Wake Lock 은 speak 뒤에 — 앞에 두면 첫 재생이 제스처를 잃는다.
     requestWakeLock();
+  }
+
+  /* ── `[8i-1 — spec 4-13-9]` 옛 판 쪽에서 재생 ─────────────
+     판 바뀜 재추출 중에는 지금 쪽이 옛 저장본으로 그려져 있을 수 있다. 그대로 읽으면 고치려던 바로 그 읽기
+     ("& Pseudo- 1130")가 나온다. 화면(`view.ready`)이 "옛 판"이라 하면 `'waiting-page'` 로 두고 그 쪽 새 판이
+     그려지기를 기다린다 — 지금 쪽은 우선순위 0 이라 짧다. 새 재생 경로를 만들지 않는다: 다 그려지면 같은
+     `play()` 로 다시 들어온다(그 사이 화면이 `reload()` 로 큐를 새 판으로 갈았다 — 그래도 한 번 더 만든다).
+     `pause()`·`stop()` 은 세대를 올리므로 기다림이 저절로 물러난다. 상한을 넘으면 `'paused'`(옛 판을 읽지 않는다). */
+  function viewReady() {
+    if (!view || typeof view.ready !== 'function') return true;
+    try { return view.ready() !== false; } catch (e) { return true; }
+  }
+
+  function waitingFresh() { return state === 'waiting-page' && freshGen === gen; }
+
+  function remapLine(id) {
+    if (id == null || !view || typeof view.remapLine !== 'function') return id;
+    try { const v = view.remapLine(id); return v == null ? id : v; } catch (e) { return id; }
+  }
+
+  async function waitFresh(fromLineId) {
+    cancelSynth();
+    freshGen = gen;
+    setState('waiting-page');
+    const myGen = gen;
+    let ok = false;
+    try { ok = typeof view.whenReady === 'function' ? !!(await view.whenReady()) : false; } catch (e) { ok = false; }
+    if (myGen !== gen || state !== 'waiting-page') return;     // 그 사이 멈췄다·떠났다
+    freshGen = -1;
+    if (!ok) { setState('paused'); return; }
+    rebuildNext = true;
+    play(fromLineId != null ? remapLine(fromLineId) : null);
   }
 
   /** 6-4 (1) — `speechSynthesis.pause()` 를 쓰지 않는다. */
@@ -910,7 +957,12 @@ export function createSpeaker(deps) {
     const k = trPart;
     units = queueOf((view && view.paras && view.paras()) || []);
     queueRebuilt();
-    const found = anchorId == null ? -1 : indexOfLine(units, anchorId);
+    let found = anchorId == null ? -1 : indexOfLine(units, anchorId);
+    // `[8i-1]` 같은 쪽을 새 판으로 다시 그렸으면 줄 id 가 바뀌었을 수 있다 — 화면이 옛 → 새 줄을 알려 준다.
+    if (found < 0 && anchorId != null) {
+      const mapped = remapLine(anchorId);
+      if (mapped !== anchorId) found = indexOfLine(units, mapped);
+    }
     index = found >= 0 ? found : 0;
     const same = !!before && !!units[index] && before.src === units[index].src && before.seg === units[index].seg;
     if (!same || fromLineId != null) { phase = 'src'; audibleIdx = -1; }
@@ -922,6 +974,15 @@ export function createSpeaker(deps) {
       return;
     }
     restart(index);
+  }
+
+  /**
+   * `[8i-1]` 멈춘 채로 지금 쪽이 새 판으로 다시 그려졌다 — 멈춘 자리(다음 재생 시작점)의 하이라이트를 다시 칠한다.
+   * 스크롤하지 않는다(`view.highlight`). 낭독 중·대기 중·처음 상태에서는 아무것도 하지 않는다.
+   */
+  function reshow() {
+    if (state !== 'paused' || !units[index] || !view || typeof view.highlight !== 'function') return false;
+    try { return !!view.highlight(units[index]); } catch (e) { return false; }
   }
 
   /** `[8b-1]` 큐를 새로 만들었다 — 낭독 동반 번역이 그 쪽 문장을 흐름에 넣는다(7-8-3 onQueue). */
@@ -977,6 +1038,7 @@ export function createSpeaker(deps) {
     setDocLang: setDocLang,
     setReadCitations: setReadCitations,
     reload: reload,
+    reshow: reshow,
     setReadalong: setReadalong,
     setTrVoice: setTrVoice,
     setNoticeVoice: setNoticeVoice,
@@ -984,6 +1046,8 @@ export function createSpeaker(deps) {
     releaseWakeLock: releaseWakeLock,
 
     getState: function () { return state; },
+    /** `[8i-1]` `'waiting-page'` 이 다음 쪽이 아니라 **지금 쪽 새 판**을 기다리는 것인가(UI 문구가 갈린다). */
+    isWaitingFresh: function () { return waitingFresh(); },
     getRate: function () { return rate; },
     getUnit: function () { return unit; },
     /** `[8h-1]` 인용·참고문헌도 읽는가(9-3 `tts.readCitations`). */
