@@ -545,21 +545,52 @@ export function whenCurrentPageReady(timeoutMs) {
   const ms = Number(timeoutMs) > 0 ? Number(timeoutMs) : TTS.FRESH_WAIT_MS;
   const docId = state.docId;
   const page = state.page;
-  return new Promise((resolve) => {
-    let timer = null;
-    let poll = null;
-    const done = (v) => {
-      if (timer !== null) { clearTimeout(timer); timer = null; }
-      if (poll !== null) { clearInterval(poll); poll = null; }
-      resolve(v);
-    };
-    timer = setTimeout(() => done(false), ms);
-    poll = setInterval(() => {
-      if (state.docId !== docId || state.page !== page) done(false);
-      else if (pageFresh(state)) done(true);       // `[8i-1c]` 다시 그리기의 `refreshed` 알림 뒤에야 풀린다
-    }, TTS.PAGE_POLL_MS);
-  });
+  // `[8i-3]` 폴링 대신 렌더 끝 알림(`renderDone`)마다 판정한다 — 다른 쪽·문서로 가면 그 렌더의 끝에서 false.
+  return renderDone.wait(() => {
+    if (state.docId !== docId || state.page !== page) return false;
+    if (pageFresh(state)) return true;             // `[8i-1c]` 다시 그리기의 `refreshed` 알림 뒤에야 풀린다
+    return undefined;
+  }, ms);
 }
+
+/**
+ * `[8i-3]` 렌더 끝 알림 대기열 — 쪽 렌더가 **다 그리고 구독자에게 알린(`notifyPage`) 뒤**, 기다리던 쪽을 깨운다.
+ * 예전에는 200 ms 폴링이 `state.desc`(그리기 **앞**에서 선다)를 보고 풀려, 원본 보기에서 canvas 를 그리는 사이에
+ * 다음 쪽 낭독이 시작되고 뒤이은 `notifyPage` 의 `reload()` 가 그 첫 문장을 처음부터 다시 읽었다(6b 부터).
+ * `check(info)` 가 true → 참으로, false → 거짓으로 풀고, 그 밖(undefined)이면 계속 기다린다. 상한 `ms` 뒤 거짓.
+ * **순수**(테스트가 고정) — 시계는 주입할 수 있다.
+ */
+export function createRenderDone(clock) {
+  const c = clock || { setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (k) => clearTimeout(k) };
+  const waiters = new Set();
+  return {
+    wait(check, ms) {
+      return new Promise((resolve) => {
+        let timer = null;
+        const w = (info) => {
+          let v;
+          try { v = check(info); } catch (e) { v = false; }
+          if (v === true || v === false) done(v);
+        };
+        const done = (v) => {
+          if (!waiters.has(w)) return;
+          waiters.delete(w);
+          if (timer !== null) { c.clearTimeout(timer); timer = null; }
+          resolve(v);
+        };
+        waiters.add(w);
+        timer = c.setTimeout(() => done(false), ms);
+      });
+    },
+    /** 렌더 하나가 끝났다(`{docId, page}` — 그 렌더가 그린 쪽). 기다리던 것을 모두 한 번씩 판정한다. */
+    settled(info) {
+      for (const w of Array.from(waiters)) w(info || {});
+    },
+    size() { return waiters.size; }
+  };
+}
+
+const renderDone = createRenderDone();
 
 /** `[8i-1]` 새 판으로 다시 그린 뒤 옛 줄 id → 새 줄 id(speaker `view.remapLine`). 모르면 그대로. */
 export function remapLineId(id) {
@@ -756,6 +787,8 @@ export function leaveReader() {
   state.refreshing = 0;
   state.lineRemap = null;
   refreshGate.left();
+  // `[8i-3]` 폴링 시절처럼 떠난 순간의 상태로 기다리던 것을 판정한다(쪽 넘김은 `desc` 가 없어 상한 뒤 false).
+  renderDone.settled({ docId: state.docId, page: null });
   state.currentLineId = null;
   state.currentLineIds = [];
   state.currentRanges = null;
@@ -788,7 +821,7 @@ async function renderPage(opts) {
   try {
     rec = await db.get('pages', [docId, pageNo]);
   } catch (e) {
-    if (token === state.renderToken) state.refreshing = 0;
+    if (token === state.renderToken) { state.refreshing = 0; renderDone.settled({ docId: docId, page: pageNo }); }
     banner(e, db.ERR.OPEN);
     return;
   }
@@ -816,6 +849,7 @@ async function renderPage(opts) {
     state.layout = null;
     els.mount.appendChild(preparingBlock());
     paintViewToggle();
+    renderDone.settled({ docId: docId, page: pageNo });   // `[8i-3]` 렌더 끝 — 기다리던 쪽 판정(이 쪽은 아직 읽을 것이 없다)
     return;
   }
 
@@ -832,6 +866,7 @@ async function renderPage(opts) {
     state.refreshing = 0;
     els.mount.appendChild(noticeBlock('reader.page.broken'));
     paintViewToggle();
+    renderDone.settled({ docId: docId, page: pageNo });
     return;
   }
   if (cap && cap.layout) {
@@ -860,6 +895,9 @@ async function renderPage(opts) {
     // `[8i-1c]` 그리기와 `refreshed` 알림(큐를 새 판으로 갈았다)이 끝난 **뒤에야** 지금 쪽이 준비됨 — 기다리던 재생이
     // 여기서 풀린다. 더 새 렌더가 시작했으면 그 렌더가 정한다(역할 재계산 다시 그리기가 겹친 경우).
     if (token === state.renderToken && state.refreshing === token) state.refreshing = 0;
+    // `[8i-3]` 그리기·`notifyPage`(큐를 이 쪽 것으로 갈았다)·`refreshing` 내림 **뒤** — 기다리던 쪽 넘김·새 판 대기가 여기서 풀린다.
+    // 버려진 렌더(token 이 밀림)는 알리지 않는다 — 마지막 렌더가 알린다.
+    if (token === state.renderToken) renderDone.settled({ docId: docId, page: pageNo });
   }
   // `[8i-1]` 옛 판을 읽는 사이에 새 판이 이미 저장됐을 수 있다(이벤트가 `shown` 보다 먼저 왔다) — 따라잡는다.
   if (state.stale && token === state.renderToken) catchUpStale();
@@ -1793,20 +1831,18 @@ export function goToPageForSpeech(pageNo) {
   // `[8i-1c]` 새 판으로 다시 그리는 중인 쪽도 — `refreshed` 알림 뒤에 넘어간다(그 알림의 `reload()` 가 첫 문장을 다시 읽지 않게).
   if (state.page === target && state.desc && pageFresh(state)) return Promise.resolve(true);
 
-  return new Promise((resolve) => {
-    let timer = null;
-    let poll = null;
-    const done = (v) => {
-      if (timer !== null) { clearTimeout(timer); timer = null; }
-      if (poll !== null) { clearInterval(poll); poll = null; }
-      resolve(v);
-    };
-    timer = setTimeout(() => done(false), TTS.PAGE_WAIT_MS);
-    poll = setInterval(() => {
-      if (state.page === target && state.desc && pageFresh(state)) done(true);
-    }, TTS.PAGE_POLL_MS);
-    go(readerHash(state.docId, target));
-  });
+  // `[8i-3 — spec 4-13-9]` 200 ms 폴링 대신 **그 쪽 렌더의 끝 알림**(그리기·`notifyPage` 뒤)으로 푼다. 폴링은 `state.desc` 가
+  // 그리기 앞에서 서는 바람에 원본 보기 canvas 를 그리는 사이에 풀렸다 → 낭독 시작 → `notifyPage` 의 `reload()` 가 첫 문장을
+  // 처음부터 다시 읽었다. 이제 원본 보기는 그리기 시간만큼 늦게 시작하고(운영자 결정), 리플로우는 폴링 틱을 기다리지 않는다.
+  // 상한·다른 쪽으로 감·리더를 떠남은 전과 같이 상한 뒤 false. 버려진 렌더는 알리지 않는다.
+  const docId = state.docId;
+  const waiting = renderDone.wait((r) => {
+    if (r.docId !== docId || r.page !== target) return undefined;
+    if (state.page === target && state.desc && pageFresh(state)) return true;
+    return undefined;
+  }, TTS.PAGE_WAIT_MS);
+  go(readerHash(state.docId, target));
+  return waiting;
 }
 
 /* ────────────────────────────────────────────────────────

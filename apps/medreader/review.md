@@ -4091,3 +4091,85 @@ Build 보고(97 · 757, 꼴 분포, 일 있음 281, 쪽 수, 글자 수)와 자�
    - (다) 그대로 둔다(6b 이후 늘 그랬다).
 2. (기록 — 결정 불요) 안드로이드에서 "옛 판 쪽 재생 → 대기 → 새 판 첫 발화"가 탭 밖 `speak()` 로 막히지 않는지 실기기 1회 확인(8i1R-4 #7). 막히면 배너가 뜨고 다시 누르면 된다.
 3. (기록 — 결정 불요) 단위 테스트가 배선 둘(R3·R4)을 묶지 않는다 — 다음 Build 때 소스 테스트 두 줄로 보강 권장(8i1R-5).
+
+# 8i-3 Review — 원본 보기 쪽 넘김 첫 문장 중복: 폴링 → 그리기 완료 알림 (spec 4-13-9) (2026-10-15)
+
+> 지침: `.claude/tasks/medreader-review-8i-3.md`. Build 보고(`.claude/tasks/medreader-build-8i-3-report.md`)를 믿지 않고 다시 쟀다. 커밋하지 않았다. 앱 코드는 고치지 않았다(변이는 되돌리고 `cmp` 로 확인). 진짜 API 키 없음. 원서 인용은 모두 40자 이하.
+> 작업 폴더: 스크래치패드 `r8i3/`(백업 `bak/` · HEAD 판 `head/js/ui/reader.js` · 변이 출력 `mut/` · 스크립트 `scripts/` · 로그 `rv-*.log`), 캡처 `shots-8i3/`(`shots-8i1/` 과 같은 자리 — 스크래치패드). 8000번 서버(PID 34392)는 그대로 쓰고 끄지 않았다.
+
+## 8i3R-1. 결론 — **통과**(차단 문제 없음) · 테스트 보강 권장(낮음) · 운영자 결정 없음(기록 3)
+
+- 고쳐졌다: 8i-1 Review 가 재현한 **32쪽**(데스크톱)과 **53쪽 "Common Symptoms"**(CPU 4배 감속)를 내 스크립트로 다시 돌려 지금 코드는 **끊긴 발화 0 · 첫 문장 연달아 두 번 0 · 그리기 전에 말한 쪽 0**. 같은 복사본·같은 쪽에서 **HEAD(`51815bc`) `reader.js` 는 두 곳 모두 다시 재현**했다(8i3R-2).
+- 리플로우 쪽 넘김은 늦어지지 않고 오히려 빨라졌다(앞 쪽 끝 → 첫 발화 평균 12 ms, HEAD 206 ms). 8i-1 C2 회귀 없음.
+- 코드: 대기열 누수·멈춤 갈래를 모두 따라가 봤고 폴링 판과 결과가 다른 길은 "사용자가 canvas 를 그리는 도중 직접 쪽을 옮김" 하나뿐이다(낮음, 8i3R-4 #6).
+- 내 변이 4개 중 **2개가 살아남았다**(X2 `state.desc` 판정 뺌 · X4 `docId` 판정 뺌). PT3–PT8 이 실제 `goToPageForSpeech` 가 아니라 테스트 안의 **복사본**을 돌리고, 실제 소스는 PT9 가 문자열 몇 개로만 묶기 때문이다. X2 는 앱에서 "아직 추출 안 된 다음 쪽을 건너뜀"이 되는 변이라 보강을 권한다(8i3R-5).
+
+## 8i3R-2. 고쳐졌는가 — headless (Edge · 412px · 캐시 끔 · 흉내 음성 · 복사본 `r8i3/p1`)
+
+스크립트 `r8i3/scripts/rv.mjs` — 8i-1 Review 의 내 `rv.mjs` 에 발화 끝 기록·지연 집계·리플로우 모드(`TURNR`)·캡처를 더했다(Build `b8i3/scripts/` 는 쓰지 않음). `head` 는 같은 출처에서 `reader.js` 하나만 `git show HEAD:` 판으로 가로채 내보낸다. 흉내 발화 150 ms.
+
+| 실행 (로그) | 결과 |
+|---|---|
+| **TURN 원본 보기 31→41** (`rv-TURN.log`) | 10쪽 넘김: 끊긴 발화 **0** · 첫 문장 연달아 두 번 **0** · 같은 문장 연속 **0** · 그리기 전에 말한 쪽 **0**. 첫 발화 − canvas 다 그림 3–7 ms. **32쪽**: 본문 교체 → 첫 발화 965 ms(canvas 를 다 그린 3 ms 뒤 "CHAPTER 36: HIV INFECTION & A…" 1번) — 운영자가 받아들인 지연. 나머지 쪽 앞 쪽 끝 → 첫 발화 20–82 ms |
+| 대조 **TURN-head** (`rv-TURN-head.log`) | **32쪽 재현**: 216 ms 발화 시작(canvas 보다 615 ms 앞섬) → 831 ms canvas → 832 ms 끊김 → 893 ms 같은 문장 다시("link antiviral-tecovirimat-sa…"). 다른 쪽은 늘 약 200 ms(폴링 틱) 뒤 시작 |
+| **TURN-x4 CPU 4배 감속 46→56** (`rv-TURN-x4.log`) | 10쪽: 끊긴 발화 0 · 첫 문장 두 번 0 · 그리기 전에 말한 쪽 0. **53쪽 "Common Symptoms" 1번**(본문 교체 → 256 ms, canvas 뒤 18 ms). 같은 문장 연속 1건은 51쪽 "(3) Weekly (4) Daily or almos…" — 끊김 0 이고 HEAD 실행에도 똑같이 있어 내용(설문 선택지 반복)이다 |
+| 대조 **TURN-head-x4** (`rv-TURN-head-x4.log`) | **53쪽 재현**: 239 ms "Common Symptoms" → 241 ms canvas → 245 ms 끊김 → 340 ms "Common Symptoms" 다시. 8i-1 Review 와 같은 쪽·같은 꼴 |
+| **TURNR 리플로우 33→38** (`rv-TURNR.log`) | **지연 없음**: 앞 쪽 마지막 발화 끝 → 첫 발화 8–17 ms(평균 12), 첫 발화 − 본문 교체 6–11 ms. 연속·끊김 0 |
+| 대조 **TURNR-head** (`rv-TURNR-head.log`) | 202–212 ms(평균 206) / 197–207 ms — 폴링 틱. 쪽마다 발화 수·첫 발화 같음 |
+
+캡처: `shots-8i3/turn-p32-original-speaking.png`(32쪽 원본 보기, 24줄 중 4번째 낭독 중, 하이라이트가 표 첫 행 "Complications" 칸) · `turn-x4-p47-original-speaking.png` · `c2-p30-original-paused-box.png`.
+
+## 8i3R-3. 불변 · 회귀
+
+- **8i-1 C2**(원본 보기, 연 즉시 옛 판 30쪽 재생, `rv-C2.log`): 15 ms 재생 → "Preparing text…", 발화 0 → 532 ms 첫 발화 "Thyroid Nodules & Multinodular Goiter" 한 덩어리(1번). 30쪽 발화 27 · "& Pseudo- 1130" **0** · "1130" 0 · 정수만 0. 멈춘 자리 상자 3개(`30:9·30:10·30:11`) 쪽 번호 칸과 교차 0, 간격 24.7 pt. 낭독 중 다시 그림 0. 30 → 31쪽 넘김 정상("CHAPTER 32: DIABETES MELLITUS & HYPOGLY…").
+- **멈춤 → 재생은 그 문장 처음부터**: C2 의 유일한 같은 문장 연속 = 멈춤 직후 "Hypoparathyroidism & Pseudo-hypoparathy…" 1건(끊긴 발화 2 = 멈춤 1 + 스크립트 끝 멈춤 1).
+- **8h 인용**: C2 30쪽 발화 27(= 26 + 멈춤→재생 1, 8i-1 Review 와 같은 수). **8i 행 표**: 이름표 한 덩어리, "1130"·정수만 발화 0.
+- **뷰 전환·원문 언어 변경 때 `reload()`**: controls 의 `onPageRender` 첫 구독자(`syncSourceVoice → reload`)·둘째(`reshow`) 그대로, controls·speaker 는 바이트 변경 없음(`git diff` 에 없음). `setView` → `renderPage` → `notifyPage` 경로 그대로. 기존 테스트 초록.
+- `TTS.PAGE_POLL_MS`: `js/` 안에서는 `config.js` 정의 한 곳뿐 — 앱은 더 쓰지 않는다(새 테스트의 대조 흉내만 읽음). 확인.
+
+## 8i3R-4. 코드 검토 (`createRenderDone` · `renderPage` · `goToPageForSpeech` · `whenCurrentPageReady`)
+
+| # | 본 것 | 판정 |
+|---|---|---|
+| 1 | 대기열 누수 — 대기자마다 상한 타이머가 있고 `done` 이 지우므로 버려진 렌더·다른 쪽·`leaveReader`·연속 쪽 넘김 어디서든 늦어도 5초(쪽 넘김)/`FRESH_WAIT_MS`(새 판 대기) 뒤 빠진다. `settled` 는 사본(`Array.from`)을 돌아 판정 중 추가·삭제에 안전 | 문제 없음 |
+| 2 | 알림이 안 와서 상한까지 가는 갈래 — `renderToken` 을 올리는 곳은 `renderPage` 하나뿐(검색 확인) → 버려진 렌더 뒤엔 반드시 마지막 렌더가 끝에서 알린다(db 오류·저장본 없음·깨짐·`finally` 네 곳 모두 마지막 렌더일 때). `showReader` 의 `documents` 읽기 오류는 `renderPage` 전에 끝나 알림 없음 → 상한 뒤 false — 폴링 판도 `state.page` 가 안 바뀌어 같은 false | 폴링 판과 같은 결과 |
+| 3 | 같은 쪽 재렌더 — `go()` 는 같은 해시면 라우터 handler 를 직접 부른다(`router.js` `go`) → `renderPage` → 알림. 저장본 없음(자리표시자)은 `desc` 가 없어 계속 기다리고, 추출기 `onPage` 의 `renderPage()` 끝 알림에 풀린다 | 문제 없음 |
+| 4 | 대기를 `go` **앞**에 건다 — 같은 해시 갈래에서도 `renderPage` 는 `await db.get` 뒤에야 알리므로 순서상 늘 안전. PT9 가 묶는다 | 문제 없음 |
+| 5 | 8i-1c `refreshing` 과의 순서 — `finally` 에서 `refreshing` 내림 → 알림. 다시 그리기 R1 중 평소 렌더 R2 가 끼면 R2 가 동기 구간에서 내리고 R2 끝 알림에 풀림(R1 은 버려져 안 알림). 문지기는 `waiting-page` 를 낭독 중으로 보지 않아 대기 중 새 판 다시 그리기가 미뤄지지 않는다 | 문제 없음 |
+| 6 | 빠른 연속 쪽 넘김·쪽 이동 버튼과 겹침 — 대기 중 사용자가 다른 쪽으로 가면 그 렌더 끝은 `r.page !== target` 이라 무시 → 상한 뒤 `TTS_PAGE_TIMEOUT`(paused). 폴링 판도 `state.page !== target` 이라 대개 같은 결과. 다만 사용자가 **canvas 를 그리는 도중** 다른 쪽으로 가면 폴링 판은 이미 선 `desc` 로 먼저 풀려 낭독이 이어졌을 수 있는데(곧 `notifyPage` 로 바뀐 쪽 큐로 갈림), 이제는 5초 뒤 멈춘다 | 기록(낮음) — 사용자가 직접 쪽을 옮긴 경우라 받아들일 만함 |
+| 7 | `paintView` 가 던지면 `notifyPage` 없이 `finally` 알림 → 참으로 풀려 speaker 가 `view.paras()`(새 쪽 `desc`)로 큐를 만든다 — 폴링 판과 같음 | 문제 없음 |
+| 8 | `leaveReader` 알림 `page: null` — 쪽 넘김은 무시(상한 뒤 false, speaker 는 이미 `leaveControls` 로 멈춰 결과를 버림), 새 판 대기는 그 순간 상태로 판정(폴링 판과 같은 값) | 문제 없음 |
+| 9 | Build "남은 문제" 2 — db 오류로 새 쪽 저장본을 못 읽으면 `state.desc` 가 앞 쪽 것이라 참으로 풀려 앞 쪽 글자를 새 쪽에서 읽는다. 코드로 확인 — 폴링 판도 같고 IndexedDB 오류 배너가 함께 뜬다. 고치려면 db 오류 갈래(마지막 렌더일 때)에서 `state.desc = null` | 동의 — 기록(낮음, 이전부터) |
+| 10 | Build "남은 문제" 3 — `whenCurrentPageReady` 가 다른 쪽으로 간 것을 알아채는 때가 "폴링 틱" → "그 쪽 렌더의 끝". 결과(false)는 같고, speaker 는 그 사이 `waiting-page` 그대로라 사용자에게 차이가 없다 | 동의 — 문제 없음 |
+
+## 8i3R-5. 테스트의 힘 · 변이
+
+- PT1 은 실제 `createRenderDone` 을, PT10·PT11 은 실제 소스의 배선을 묶는다(8i-1 Review R3·R4 를 메움 — Build M5·M6 이 빨강). **PT3–PT8 은 테스트 안의 흉내 `goToPage`/`renderPage` 를 돌린다** — 실제 `goToPageForSpeech` 의 판정식이 바뀌어도 흉내는 그대로라 초록이다. 실제 소스와의 연결은 PT9 뿐인데, PT9 는 문자열 첫 출현 위치와 `r\.page !== target` 정규식 하나만 보므로 판정식의 나머지(`docId` 비교 · `state.desc` · `pageFresh`)는 묶지 않는다(`pageFresh` 는 RF23 이 우연히 잡는다).
+- 내 변이(`r8i3/scripts/mut.mjs`: 정확히 1회 일치 → `MUT-Xn` 표식 1건 → 전체 테스트 → `r8i3/bak/` 에서 복원 → `cmp` 같음, 4개 모두). 해시 테스트 IM2·IM6·IM7b 는 매번 빨강이라 뺐다. 출력 `r8i3/mut/X1–X4.txt`.
+
+| # | 변이(Build 가 안 한 곳) | 빨개진 테스트 | 판정 |
+|---|---|---|---|
+| X1 | `goToPageForSpeech` 대기 판정에서 `pageFresh(state)` 뺌(옛 판 쪽에서 풀림) | RF23 | 잡힘(RF23 이 같은 줄 문자열을 본다) |
+| X2 | 대기 판정에서 `state.desc` 뺌 | 0 — **살아남음** | **앱에선 회귀**: 다음 쪽이 아직 추출 안 됐으면 자리표시자 렌더 끝(`desc` 없음, `pageFresh` 참)에 참으로 풀려 speaker 가 빈 큐 → `advancePage(hop + 1)` 로 그 쪽을 **건너뛴다** |
+| X3 | `settled` 가 첫 대기자만 판정 | PT1(끝나지 않아 `--test-timeout` 취소) | 잡힘 |
+| X4 | 대기 판정에서 `r.docId !== docId` 뺌 | 0 — 살아남음 | 영향 작음(다른 문서의 같은 쪽 번호 렌더 끝에도 판정 — 그때도 `state.page === target && desc` 가 필요하고 문서를 바꾸면 speaker 는 이미 멈춰 있다) |
+
+→ **권장(낮음, 다음 Build 에 얹기)**: 판정식을 순수 함수로 꺼내(예: `speechPageReady(st, r, docId, target)`) `goToPageForSpeech` 와 흉내가 **같은 함수**를 쓰게 하고, "자리표시자 렌더 끝에는 안 풀림 → 추출 뒤 렌더 끝에 풀림"을 PT 로 하나 더 묶는다. 그러면 X2·X4 가 빨개진다.
+
+- 전체 `node --test apps/medreader/tests/*.test.mjs` **1043/1043 × 4회**(변이 전 2 + 끝 2). `node apps/medreader/dev/stamp-importmap.mjs --check` → "그대로다 (모듈 53개 · CSS 4개)", 종료 0. 끝에 `reader.js`·`controls.js`·`index.html` 이 내 백업과 `cmp` 같음.
+- (기록) X1 실행 한 번에서 `pipeline-8a.test.mjs` M7("같은 캐시 키 동시 요청 → 호출 1건", 2 !== 1)이 빨강이었다 — `reader.js` 와 무관한 파일이고 다른 실행에선 초록이라 타이밍에 흔들리는 테스트로 본다(이번 변경 탓 아님).
+
+## 8i3R-6. 디스크 · 복사본 · 정리
+
+- 복사 전 `df -h /c` 2.8 GB. 복사본 **1개**: `r8i3/p1`(`shot-profile/Default/` 만 40 MB → 블롭 되넣은 뒤 146 MB; 106,843,404 B · `%PDF-` · 30쪽 algoVersion 10 확인). 같은 복사본으로 C2 → TURN · TURN-head · TURN-x4 · TURN-head-x4 · TURNR · TURNR-head 7회. `shot-profile/` 은 읽기만 했다. 끝 `df -h /c` **2.6 GB**.
+- 지울 경로(`rm -rf` 금지라 지우지 않음): 스크래치패드 `r8i3/p1`(146 MB, 재추출이 진행돼 C2 용으로는 다시 못 씀). 그 밖 `r8i3/`·`shots-8i3/` 은 합 2 MB 미만.
+- 띄운 Edge 는 스크립트 `finally` 에서 닫았고, 끝에 headless `msedge.exe` 0.
+- **남은 node 프로세스 2개**(PID 47980 `node --test …` · 50268 `… pageturn-8i3.test.mjs`): X3 변이를 처음 돌릴 때 테스트 상한 없이 걸어 PT1 이 끝나지 않고 멈춘 테스트 실행이다. 셸 작업은 멈췄고 `reader.js` 는 곧바로 복원(`cmp` 같음)했지만, 두 프로세스를 끄는 명령이 권한 분류기에 막혀 변형을 찾지 않고 남겨 두었다 — 운영자가 작업 관리자에서 끄면 된다. 두 번째 X3 실행부터는 `--test-timeout=20000` 을 걸었다.
+- 콘솔 오류: 매 실행 `/favicon.ico` 404 하나(앱 무관).
+
+## 8i3R-7. 운영자 결정 필요 사항
+
+없음(차단 아님). 기록:
+1. (기록) 원본 보기 무거운 쪽은 그리기 시간만큼 늦게 시작한다 — 32쪽 데스크톱 약 0.97초, 4배 감속의 다른 쪽은 0.1–0.3초. 운영자가 받아들인 대가. 실기기(안드로이드) 원본 보기 쪽 넘김 한 번 체감 확인 권장(Build 와 같은 의견).
+2. (기록) 테스트 보강(8i3R-5 권장) — 판정식을 순수 함수로 꺼내 X2(미추출 다음 쪽 건너뜀)를 묶기. 앱 동작은 지금 맞다.
+3. (기록) `TTS.PAGE_POLL_MS` 는 앱에서 쓰지 않는다 — 다음 정리 때 새 테스트의 대조 흉내와 함께 지워도 된다. 남은 node 프로세스 2개(8i3R-6) 정리.
