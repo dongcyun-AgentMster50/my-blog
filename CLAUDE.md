@@ -27,6 +27,22 @@
 - 블로그 본체(`index.html`, `post.html`, `css/`, `js/`)는 CDN을 쓰지 않는다. 라이브러리가 필요하면 `vendor/`에 내려받아 포함한다. 현재 marked 12.0.2, highlight.js 11.9.0.
 - 모바일에서도 사용할 수 있어야 한다.
 
+## 전용 저장소로 옮긴 앱
+
+2026-10-16에 규모가 커진 두 앱을 커밋 이력째 전용 저장소로 옮겼다. **이 앱들의 작업은 이 저장소가 아니라 각 저장소에서 한다.**
+
+| 앱 | 저장소 | 주소 |
+|---|---|---|
+| MedReader | `dongcyun-AgentMster50/medreader` | https://dongcyun-agentmster50.github.io/medreader/ |
+| 데이터 사이언스 레벨2 | `dongcyun-AgentMster50/ds-level2` | https://dongcyun-agentmster50.github.io/ds-level2/ |
+
+- `apps/medreader/index.html`, `apps/ds-level2/index.html`은 새 주소로 넘겨주는 안내 페이지다. 옛 북마크와 홈 화면 바로가기를 살리기 위해 남겨 둔다.
+- 두 폴더의 나머지 파일과 `.claude/tasks/medreader-*`, `.claude/tasks/ds-level2-*`는 옮기기 전의 사본이다. 수정하지 않는다.
+- 옮기기 직전 상태는 `claude/backup-before-split-20261016` 브랜치에 그대로 남아 있다.
+- 블로그 메인 카드는 옮긴 앱의 새 주소를 iframe으로 띄운다. 같은 출처라 임베드와 저장 데이터가 그대로 동작한다.
+
+새로 만드는 작은 웹앱은 지금처럼 `/apps/{앱이름}/`에 둔다.
+
 ## 규칙
 
 - 승인 없이 구현을 시작하지 않는다.
