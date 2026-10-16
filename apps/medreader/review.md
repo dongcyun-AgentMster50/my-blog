@@ -4173,3 +4173,54 @@ Build 보고(97 · 757, 꼴 분포, 일 있음 281, 쪽 수, 글자 수)와 자�
 1. (기록) 원본 보기 무거운 쪽은 그리기 시간만큼 늦게 시작한다 — 32쪽 데스크톱 약 0.97초, 4배 감속의 다른 쪽은 0.1–0.3초. 운영자가 받아들인 대가. 실기기(안드로이드) 원본 보기 쪽 넘김 한 번 체감 확인 권장(Build 와 같은 의견).
 2. (기록) 테스트 보강(8i3R-5 권장) — 판정식을 순수 함수로 꺼내 X2(미추출 다음 쪽 건너뜀)를 묶기. 앱 동작은 지금 맞다.
 3. (기록) `TTS.PAGE_POLL_MS` 는 앱에서 쓰지 않는다 — 다음 정리 때 새 테스트의 대조 흉내와 함께 지워도 된다. 남은 node 프로세스 2개(8i3R-6) 정리.
+
+---
+
+# 8i-3b Review — 쪽 넘김 판정식을 순수 함수로 · 테스트 보강 · `PAGE_POLL_MS` 삭제 (2026-10-16)
+
+> 지침: `.claude/tasks/medreader-review-8i-3b.md`. Build 보고(`.claude/tasks/medreader-build-8i-3b-report.md`)를 믿지 않고 다시 쟀다. 커밋하지 않았다. 앱 코드·테스트는 고치지 않았다(변이는 되돌리고 `cmp` 로 확인). headless 재현은 하지 않았다(판정이 같게 나와 지침 6 의 조건에 들지 않음).
+> 작업 폴더: 스크래치패드 `r8i3b/`(백업 `bak/` · `6594f48` 판 `old/reader.js` · 비교 스크립트 `equiv.mjs` · 변이 `scripts/mut.mjs`·`run-mut.sh` · 출력 `mut/*.txt` · 로그 `base.log`·`full-1.log`·`full-2.log`).
+
+## 8i3bR-1. 결론 — **통과**(차단 문제 없음) · 운영자 결정 없음
+
+- 판정식 동치: 옛 식과 새 식이 실제 `state`(평범한 객체 리터럴, getter 없음)에서 도달할 수 있는 모든 입력에서 **같은 결과**를 낸다(8i3bR-2).
+- 8i-3 Review 가 살려 둔 **X2·X4 가 이제 빨강**이고, 내 변이 5개도 모두 빨강(8i3bR-3).
+- 기존 PT 기대값은 그대로이며, PT9 는 옮기면서 오히려 강해졌다(8i3bR-4). `PAGE_POLL_MS` 는 앱에 남은 참조가 없다. 전체 **1048/1048 × 4회**(이 절을 덧붙인 뒤 1회 포함), stamp `--check` 0.
+
+## 8i3bR-2. 동작 불변 — 옛·새 판정식을 같은 입력 표로
+
+`git diff js/ui/reader.js` 를 줄 단위로 읽음: 바뀐 곳은 호출 자리 3곳(`goToPageForSpeech` 바로 풀기·렌더 끝 check, `whenCurrentPageReady` check)과 새 export `freshWaitCheck`·`speechPageReady`·`pageTurnCheck` 뿐이다. 상한(`TTS.PAGE_WAIT_MS`·`ms`), `docId` 를 잡는 자리(`go()` 앞), `go(readerHash(...))` 순서, `whenCurrentPageReady` 첫 줄 바로 풀기, `pageFresh` 본문은 그대로.
+
+`r8i3b/equiv.mjs`: `git show 6594f48:` 판과 지금 판에서 세 판정식을 **소스 텍스트 그대로 정규식으로 꺼내**(손으로 옮겨 적지 않음) `new Function` 으로 평가하고, 새 순수 함수는 실제 모듈에서 import 했다. `pageFresh` 는 두 판의 텍스트가 같음을 먼저 확인. 결과는 `createRenderDone` 과 같은 해석(던짐 → false, true/false, 그 밖 → 계속 기다림), 바로 풀기는 `if` 의 참·거짓으로 비교.
+- 입력: `state` 1152가지(`docId` A/B/null/undefined × `page` 32/33/'33'/undefined × `desc` 객체/null/undefined/''/'x'/0 × `stale` false/true/undefined/1 × `refreshing` 0/7/undefined) × 잡은 `docId` 3 × `target` 3(33/32/'33') × 렌더 끝 `r` 6가지(같은 문서·쪽/다른 문서/다른 쪽/'33'/`{}`/docId null).
+- **평범한 상태 82,944건 — 다른 결과 0건**, 반환 원값(`true`/`false`/`undefined`)까지 같음. `state` 가 null 인 갈래도 둘 다 던져 같은 결과.
+- 예외 갈래(참고): `stale`·`refreshing` 이 **던지는 getter** 일 때만 다르다(132건) — 새 식은 `pageFresh(state)` 를 인자로 먼저 재므로, 옛 식이 단락 평가로 `pageFresh` 에 닿지 않던 경우(다른 쪽·다른 문서의 렌더 끝, 리더가 다른 쪽)에도 던진다 → 렌더 끝 check 는 "계속 기다림" 대신 false, 바로 풀기는 거짓 대신 던짐. 실제 `state` 는 데이터 속성뿐인 객체 리터럴이라(`reader.js` 461줄, `defineProperty`·Proxy 없음) **도달할 수 없다**. `settled` 는 `info || {}` 로 부르므로 `r` 이 null 인 갈래도 없다. Build 보고의 "단락 평가가 사라져도 부수 효과 없음" 설명과 맞다.
+
+## 8i3bR-3. 테스트의 힘 · 변이
+
+`r8i3b/scripts/run-mut.sh`: 정확히 1회 일치 → `MUT-` 표식 1건 → 전체 테스트(`timeout 300`, `--test-timeout=20000`) → `bak/` 에서 복원 → `cmp` 같음(7개 모두). 해시 테스트 IM2·IM6·IM7b 는 `reader.js` 가 바뀌면 매번 빨강이라 표에서 뺐다. 7개 모두 종료 코드 1, cancelled 0.
+
+| # | 변이 | 빨개진 테스트(IM 제외) | 판정 |
+|---|---|---|---|
+| X2 (재변이) | `pageTurnCheck` 렌더 끝 판정에서 `desc` 뺌(`st.page === target && fresh`) | PT12 · PT13 · PT13b | **잡힘**(8i-3 땐 0) |
+| X4 (재변이) | `pageTurnCheck` 에서 `r.docId !== docId` 뺌 | PT12 · PT9 | **잡힘**(8i-3 땐 0) — 흉내 동작이 아니라 표·소스로 |
+| Y1 | `freshWaitCheck` 에서 `st.page !== page` 뺌 | PT12b · PT8b · PT9 | 잡힘(흉내 동작 PT8b 도) |
+| Y2 | `pageTurnCheck` 에서 `r.page !== target` 뺌 | PT12 · PT9 | 잡힘 |
+| Y3 | `speechPageReady` 의 `===` → `==`(쪽 번호 꼴) | PT12 | 잡힘 |
+| Y4 | `freshWaitCheck` 끝 `return undefined` → `return false`(옛 판이면 바로 포기) | PT12b | 잡힘 |
+| Y5 | `whenCurrentPageReady` 호출 자리 `page` → `state.page`(떠난 것을 못 알아챔) | PT9 | 잡힘(소스 문자열만) |
+
+- (기록, 낮음) 흉내의 **호출 자리**(`harness` 의 `goToPage`·`whenReady`)는 여전히 복사본이라, 실제 호출 자리의 인자를 바꾸는 변이(Y5·Build X8)는 PT9 의 정확한 문자열 검사로만 잡힌다. 판정식 자체는 이제 실제 함수라 8i-3 Review 권장은 충족됐다.
+
+## 8i3bR-4. 기대값 · `PAGE_POLL_MS` · 실행
+
+- `git diff tests/pageturn-8i3.test.mjs`: 기존 PT 의 assert 기대값·메시지는 바뀌지 않았다. 바뀐 것은 흉내 판정식 → import 한 함수, `TTS.PAGE_POLL_MS` → 지역 `LEGACY_POLL_MS = 200`(PT2·PT3·PT4 의 `advance` 값 같음)뿐.
+- PT9 옮김: 옛 `go` 의 `/r\.page !== target/` → `pageTurnCheck` 본문의 `r.docId !== docId || r.page !== target` 정규식 + 호출 자리 정확한 문자열 2개 + `docId` 를 대기 앞에서 잡는지. 옛 `wr` 의 `state.docId !== docId || state.page !== page) return false` → `freshWaitCheck` 본문 + 호출 자리 문자열. 폴링 금지 정규식에 `setTimeout` 이 더해졌다. **약해진 곳 없음**(X4·Y2·Y5 가 PT9 로 빨개진 것이 증거).
+- 새 테스트 PT12·PT12b(판정식 표)·PT13·PT13b(자리표시자 다음 쪽 — 상한까지 `waiting-page`, 추출 뒤 렌더 끝에 첫 문장 1번)·PT14 를 읽었다 — 지침 3번 표의 다섯 줄이 모두 있다.
+- `PAGE_POLL_MS` grep: 앱(`js/`·`index.html`·`dev/`)에 **0건**. 남은 참조는 `tests/pageturn-8i3.test.mjs` 의 주석 1·PT14 "없음" 검사·PT9 금지 정규식 2 — 모두 "없어야 한다"는 쪽이라 맞다. `TTS` 를 키로 훑는 코드(`Object.keys(TTS)`·`TTS[...]`)도 없어 지운 것이 다른 곳을 깨지 않는다. 나머지는 `review.md`·`.claude/tasks/` 기록.
+- 전체 `timeout 300 node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` — 변이 전 1회 + 끝 2회 + review.md 덧붙인 뒤 1회 모두 **1048/1048**, fail 0, cancelled 0(한 번 7초 안팎). `node apps/medreader/dev/stamp-importmap.mjs --check` → "그대로다 (모듈 53개 · CSS 4개)", 종료 0.
+- 끝에 `reader.js`·`config.js`·`pageturn-8i3.test.mjs`·`index.html` 이 내 백업과 `cmp` 같음. 띄운 프로세스 없음(서버·브라우저 안 씀) — `tasklist` 의 node.exe 는 PID 25148 하나(Build 보고 때부터 있던 것, 내 것 아님). 8i-3 Review 가 남긴 PID 47980·50268 은 목록에 없다.
+
+## 8i3bR-5. 운영자 결정 필요 사항
+
+없음. 기록: 흉내 호출 자리는 복사본으로 남아 PT9 문자열 검사가 그 연결을 맡는다(8i3bR-3, 낮음 — 고칠 필요는 없음).

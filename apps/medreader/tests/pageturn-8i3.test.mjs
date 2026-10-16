@@ -11,6 +11,8 @@
      · 상한(PAGE_WAIT_MS)·버려진 렌더·다른 쪽으로 감·리더를 떠남 — 전과 같은 결과
      · 8i-1c — 다시 그리기는 `refreshing` 을 내린 뒤에야 풀린다(`whenCurrentPageReady` 도 같은 알림)
      · 배선(8i-1 Review R3·R4) — 추출기 `page` → 문지기, speaker 상태 → 문지기
+     · 8i-3b — 판정식은 reader.js 의 순수 함수(`speechPageReady`·`pageTurnCheck`·`freshWaitCheck`)를 흉내도 그대로 쓴다.
+       자리표시자 다음 쪽(아직 추출 안 됨)의 렌더 끝에는 풀리지 않는다 — 풀리면 speaker 가 그 쪽을 건너뛴다(8i-3 Review X2)
 
    원서 문장은 넣지 않는다. 전부 지어낸 글자다.
    ============================================================ */
@@ -19,9 +21,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { createRenderDone, pageFresh } from '../js/ui/reader.js';
+import { createRenderDone, pageFresh, speechPageReady, pageTurnCheck, freshWaitCheck } from '../js/ui/reader.js';
 import { createSpeaker } from '../js/tts/speaker.js';
 import { TTS } from '../js/config.js';
+
+/* 고치기 전 판의 폴링 간격(옛 config `PAGE_POLL_MS` — 8i-3b 에서 앱 설정에서 뺐다). PT2·PT4 대조 흉내만 쓴다. */
+const LEGACY_POLL_MS = 200;
 
 /* ── 가짜 시계·음성 엔진 (refresh-8i1.test.mjs 와 같은 모양) ── */
 function fakeTimers() {
@@ -89,6 +94,8 @@ function noRepeat(spoken) {
  *   go → (라우터, 비동기) state.page = n → renderPage: db.get(비동기) → token 검사 → stale·refreshing·**desc(그리기 앞)**
  *   → paintView(원본: 비동기 canvas — 테스트가 끝낸다 / 리플로우: 동기) → notifyPage = controls `reload()`
  *   → finally: refreshing 내림 → `renderDone.settled({docId, page})`(마지막 렌더만).
+ * `[8i-3b]` 판정식(`speechPageReady`·`pageTurnCheck`·`freshWaitCheck`)은 복사본이 아니라 **실제 reader.js 의 것**을 import 해
+ *   쓴다 — 판정식을 고치면 이 흉내의 PT3–PT8·PT12–PT13 이 함께 빨개진다. 호출 모양은 PT9 가 소스로 묶는다.
  * `legacyPoll` 이면 고치기 전 판(200 ms 폴링)으로 쪽 넘김을 기다린다 — 이 흉내가 그 버그를 재현하는지 대조용.
  */
 function harness(o) {
@@ -133,7 +140,7 @@ function harness(o) {
   function goToPage(pageNo) {
     const target = pageNo;
     if (st.pageCount > 0 && Number(pageNo) > st.pageCount) return Promise.resolve(false);
-    if (st.page === target && st.desc && pageFresh(st)) return Promise.resolve(true);
+    if (speechPageReady(st, target, pageFresh(st))) return Promise.resolve(true);
     if (opt.legacyPoll) {
       return new Promise((resolve) => {
         let fin = false;
@@ -141,19 +148,15 @@ function harness(o) {
         timers.setTimeout(() => end(false), TTS.PAGE_WAIT_MS);
         const poll = () => {
           if (fin) return;
-          if (st.page === target && st.desc && pageFresh(st)) { end(true); return; }
-          timers.setTimeout(poll, TTS.PAGE_POLL_MS);
+          if (speechPageReady(st, target, pageFresh(st))) { end(true); return; }
+          timers.setTimeout(poll, LEGACY_POLL_MS);
         };
-        timers.setTimeout(poll, TTS.PAGE_POLL_MS);
+        timers.setTimeout(poll, LEGACY_POLL_MS);
         go(target);
       });
     }
     const docId = st.docId;
-    const waiting = done.wait((r) => {
-      if (r.docId !== docId || r.page !== target) return undefined;
-      if (st.page === target && st.desc && pageFresh(st)) return true;
-      return undefined;
-    }, TTS.PAGE_WAIT_MS);
+    const waiting = done.wait((r) => pageTurnCheck(st, pageFresh(st), r, docId, target), TTS.PAGE_WAIT_MS);
     go(target);
     return waiting;
   }
@@ -161,11 +164,7 @@ function harness(o) {
     if (pageFresh(st)) return Promise.resolve(true);
     const docId = st.docId;
     const page = st.page;
-    return done.wait(() => {
-      if (st.docId !== docId || st.page !== page) return false;
-      if (pageFresh(st)) return true;
-      return undefined;
-    }, TTS.FRESH_WAIT_MS);
+    return done.wait(() => freshWaitCheck(st, pageFresh(st), docId, page), TTS.FRESH_WAIT_MS);
   }
   function leave() {                                       // leaveReader — speaker 를 멈추고 상태를 비운 뒤 알린다
     st.left = true;
@@ -240,7 +239,7 @@ test('PT2 대조 — 고치기 전(200 ms 폴링)이면 같은 흉내에서 다�
   const h = harness({ view: 'original', legacyPoll: true });
   await readToPageEnd(h);
   assert.equal(h.paints.length, 1, '32쪽을 그리는 중');
-  h.timers.advance(TTS.PAGE_POLL_MS);                       // canvas 가 폴링 틱보다 늦다
+  h.timers.advance(LEGACY_POLL_MS);                       // canvas 가 폴링 틱보다 늦다
   await settle();
   assert.deepEqual(h.synth.spoken.slice(1), ['Beta opening sentence here.'], '폴링이 그리기 도중에 풀렸다(버그 재현)');
   h.paints[0].finish();                                     // canvas 다 그림 → notifyPage → reload → restart
@@ -255,7 +254,7 @@ test('PT3 ★ 원본 보기 쪽 넘김 — 그리는 동안(폴링 틱을 넘겨
   await readToPageEnd(h);
   assert.equal(h.paints.length, 1);
   assert.equal(h.st.desc, PAGES[32], 'desc 는 그리기 앞에서 이미 섰다(이 틈이 문제였다)');
-  h.timers.advance(TTS.PAGE_POLL_MS * 5);
+  h.timers.advance(LEGACY_POLL_MS * 5);
   await settle();
   assert.deepEqual(h.synth.spoken, ['Alpha closing sentence here.'], '그리기 도중에 다음 쪽을 말하기 시작했다');
   assert.equal(h.sp.getState(), 'waiting-page');
@@ -285,7 +284,7 @@ test('PT4 ★ 리플로우 쪽 넘김 — 지연 없음: 시계를 한 틱도 �
   L.synth.finish();
   await settle();
   assert.deepEqual(L.synth.spoken, ['Alpha closing sentence here.'], '대조: 폴링 판은 틱 전에 풀리지 않는다');
-  L.timers.advance(TTS.PAGE_POLL_MS);
+  L.timers.advance(LEGACY_POLL_MS);
   await settle();
   assert.deepEqual(L.synth.spoken.slice(1), ['Beta opening sentence here.']);
 });
@@ -400,6 +399,92 @@ test('PT8b whenCurrentPageReady 도 알림으로 — 다시 그리기 끝에 tru
   assert.equal(await c, true, '떠난 순간 지금 쪽(같은 쪽·옛 판 아님) — 폴링 판과 같은 값');
 });
 
+/* ══ 8i-3b 판정식 — 실제 reader.js 의 순수 함수 ═════════ */
+
+test('PT12 ★ 쪽 넘김 판정식 표 — 자리표시자(desc 없음)·다른 문서·다른 쪽·옛 판·다시 그리는 중이면 안 풀림, 정상이면 풀림', () => {
+  const ok = { docId: 'doc', page: 32, desc: PAGES[32], stale: false, refreshing: 0 };
+  const r = { docId: 'doc', page: 32 };
+  const check = (st, rr) => pageTurnCheck(st, pageFresh(st), rr || r, 'doc', 32);
+  const ready = (st) => speechPageReady(st, 32, pageFresh(st));
+  const rows = [
+    ['정상', ok, undefined, true, true],
+    ['자리표시자 쪽(desc 없음)', { ...ok, desc: null }, undefined, undefined, false],
+    ['다른 문서의 렌더 끝', ok, { docId: 'other', page: 32 }, undefined, true],
+    ['다른 쪽의 렌더 끝', ok, { docId: 'doc', page: 33 }, undefined, true],
+    ['리더가 다른 쪽에 있음', { ...ok, page: 33 }, undefined, undefined, false],
+    ['옛 판(stale)', { ...ok, stale: true }, undefined, undefined, false],
+    ['다시 그리는 중(refreshing)', { ...ok, refreshing: 7 }, undefined, undefined, false],
+    ['떠난 알림(page null)', { ...ok, desc: null }, { docId: 'doc', page: null }, undefined, false]
+  ];
+  for (const [name, st, rr, want, wantReady] of rows) {
+    assert.equal(check(st, rr), want, name);
+    assert.equal(ready(st), wantReady, name + ' (바로 풀기)');
+  }
+  // 판정은 true 아니면 undefined 뿐 — 쪽 넘김 대기는 판정으로 거짓을 내지 않는다(상한 뒤에만 false)
+  assert.equal(pageTurnCheck(ok, false, r, 'doc', 32), undefined, 'fresh 거짓인데 풀렸다');
+  assert.equal(speechPageReady(ok, 32, false), false);
+  assert.equal(speechPageReady(ok, '32', true), false, '쪽 번호는 같은 값·같은 꼴이어야 한다(===)');
+});
+
+test('PT12b 새 판 대기 판정식 표 — 다른 문서·다른 쪽이면 false, 최신이면 true, 옛 판·다시 그리는 중이면 계속 기다림', () => {
+  const st = { docId: 'doc', page: 32, desc: PAGES[32], stale: false, refreshing: 0 };
+  const check = (s) => freshWaitCheck(s, pageFresh(s), 'doc', 32);
+  assert.equal(check(st), true);
+  assert.equal(check({ ...st, desc: null }), true, '자리표시자 쪽은 새 판 대기를 막지 않는다(전과 같음)');
+  assert.equal(check({ ...st, stale: true }), undefined);
+  assert.equal(check({ ...st, refreshing: 3 }), undefined);
+  assert.equal(check({ ...st, docId: 'other' }), false);
+  assert.equal(check({ ...st, page: 33 }), false);
+  assert.equal(check({ ...st, page: 33, stale: true }), false, '떠났으면 옛 판이어도 false');
+});
+
+test('PT13 ★ 다음 쪽이 자리표시자(아직 추출 안 됨)면 그 렌더 끝에 풀리지 않고 상한까지 기다린다 — 건너뛰지 않는다', async () => {
+  let extracted = false;
+  const h = harness({ view: 'original', pageOf: (n) => (n === 32 && !extracted ? null : PAGES[n] || null) });
+  await readToPageEnd(h);
+  assert.equal(h.st.page, 32);
+  assert.equal(h.st.desc, null, '32쪽은 자리표시자');
+  assert.equal(h.paints.length, 0, '자리표시자는 그리지 않는다');
+  assert.equal(h.done.size(), 1, '자리표시자 렌더 끝에 대기가 풀렸다');
+  h.timers.advance(TTS.PAGE_WAIT_MS - 1);
+  await settle();
+  assert.equal(h.sp.getState(), 'waiting-page');
+  assert.equal(h.st.page, 32, '다음 쪽을 건너뛰었다');
+  assert.deepEqual(h.synth.spoken, ['Alpha closing sentence here.'], '자리표시자에서 풀려 다음 쪽을 건너뛰었다');
+  h.timers.advance(1);
+  await settle();
+  assert.equal(h.sp.getState(), 'paused');
+  assert.ok(h.errors.includes('TTS_PAGE_TIMEOUT'), JSON.stringify(h.errors));
+  assert.equal(h.st.page, 32);
+  assert.equal(h.done.size(), 0);
+});
+
+test('PT13b 자리표시자 렌더 끝에는 안 풀림 → 추출 뒤 그 쪽 렌더 끝(그리기·notifyPage 뒤)에 풀려 그 쪽 첫 문장 1번', async () => {
+  let extracted = false;
+  const h = harness({ view: 'original', pageOf: (n) => (n === 32 && !extracted ? null : PAGES[n] || null) });
+  await readToPageEnd(h);
+  h.timers.advance(TTS.PAGE_WAIT_MS / 2);
+  await settle();
+  assert.deepEqual(h.synth.spoken, ['Alpha closing sentence here.']);
+  extracted = true;                                          // 추출기가 32쪽을 저장 → renderPage
+  h.renderPage(false);
+  await settle();
+  assert.equal(h.paints.length, 1);
+  assert.deepEqual(h.synth.spoken, ['Alpha closing sentence here.'], '그리기 도중에 풀렸다');
+  h.paints[0].finish();
+  await settle();
+  assert.equal(h.sp.getState(), 'speaking');
+  assert.deepEqual(h.synth.spoken, ['Alpha closing sentence here.', 'Beta opening sentence here.']);
+  assert.deepEqual(h.synth.cut, []);
+  assert.equal(h.done.size(), 0);
+});
+
+test('PT14 TTS.PAGE_POLL_MS 는 앱 설정에서 빠졌다(쪽 넘김은 폴링하지 않는다 — 대조 흉내는 지역 상수)', () => {
+  assert.equal(TTS.PAGE_POLL_MS, undefined);
+  assert.equal(typeof TTS.PAGE_WAIT_MS, 'number');
+  assert.equal(LEGACY_POLL_MS, 200);
+});
+
 /* ══ 실제 소스가 흉내와 같은 순서인가 ════════════════ */
 
 const READER = readFileSync(new URL('../js/ui/reader.js', import.meta.url), 'utf8');
@@ -415,16 +500,21 @@ function exportedFn(src, name) {
 
 test('PT9 ★ 리더 소스 — 쪽 넘김·새 판 대기는 폴링 없이 renderDone.wait, renderPage 는 notifyPage·refreshing 내림 뒤 마지막 렌더만 알린다', () => {
   const go = exportedFn(READER, 'goToPageForSpeech');
-  assert.ok(!/setInterval|PAGE_POLL_MS/.test(go), '쪽 넘김이 아직 폴링한다');
+  assert.ok(!/setInterval|setTimeout|PAGE_POLL_MS/.test(go), '쪽 넘김이 아직 폴링한다');
   assert.ok(go.indexOf('renderDone.wait(') > 0, '쪽 넘김이 렌더 끝 알림을 기다리지 않는다');
   assert.ok(go.indexOf('TTS.PAGE_WAIT_MS') > go.indexOf('renderDone.wait('), '상한이 없다');
   assert.ok(go.indexOf('renderDone.wait(') < go.indexOf('go(readerHash('), '알림 대기를 쪽 이동보다 먼저 걸어야 한다');
-  assert.match(go, /r\.page !== target/);
+  // `[8i-3b]` 판정식은 흉내와 **같은** 순수 함수 — 바로 풀기·렌더 끝 판정 모두(PT12·PT13 이 그 함수를 직접 잰다)
+  assert.ok(go.includes('if (speechPageReady(state, target, pageFresh(state))) return Promise.resolve(true);'), '바로 풀기가 speechPageReady 가 아니다');
+  assert.ok(go.includes('renderDone.wait((r) => pageTurnCheck(state, pageFresh(state), r, docId, target), TTS.PAGE_WAIT_MS);'), '렌더 끝 판정이 pageTurnCheck 가 아니다');
+  assert.ok(go.indexOf('const docId = state.docId;') < go.indexOf('renderDone.wait('), '기다리기 시작한 문서를 잡지 않는다');
+  assert.match(exportedFn(READER, 'pageTurnCheck'), /if \(r\.docId !== docId \|\| r\.page !== target\) return undefined;/);
 
   const wr = exportedFn(READER, 'whenCurrentPageReady');
-  assert.ok(!/setInterval|PAGE_POLL_MS/.test(wr), '새 판 대기가 아직 폴링한다');
+  assert.ok(!/setInterval|setTimeout|PAGE_POLL_MS/.test(wr), '새 판 대기가 아직 폴링한다');
   assert.ok(wr.indexOf('renderDone.wait(') > 0);
-  assert.match(wr, /state\.docId !== docId \|\| state\.page !== page\) return false/);
+  assert.ok(wr.includes('return renderDone.wait(() => freshWaitCheck(state, pageFresh(state), docId, page), ms);'), '새 판 대기 판정이 freshWaitCheck 가 아니다');
+  assert.match(exportedFn(READER, 'freshWaitCheck'), /st\.docId !== docId \|\| st\.page !== page\) return false/);
 
   const a = READER.indexOf('async function renderPage(');
   const b = READER.indexOf('function catchUpStale(', a);

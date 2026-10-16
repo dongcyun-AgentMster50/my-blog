@@ -546,11 +546,41 @@ export function whenCurrentPageReady(timeoutMs) {
   const docId = state.docId;
   const page = state.page;
   // `[8i-3]` 폴링 대신 렌더 끝 알림(`renderDone`)마다 판정한다 — 다른 쪽·문서로 가면 그 렌더의 끝에서 false.
-  return renderDone.wait(() => {
-    if (state.docId !== docId || state.page !== page) return false;
-    if (pageFresh(state)) return true;             // `[8i-1c]` 다시 그리기의 `refreshed` 알림 뒤에야 풀린다
-    return undefined;
-  }, ms);
+  // `[8i-3b]` 판정식은 `freshWaitCheck`(순수 — 테스트가 같은 함수를 쓴다).
+  return renderDone.wait(() => freshWaitCheck(state, pageFresh(state), docId, page), ms);
+}
+
+/**
+ * `[8i-3b]` 새 판 대기(`whenCurrentPageReady`)의 렌더 끝 판정 — `renderDone.wait` 의 check. **순수**.
+ *   st     리더 상태(`docId`·`page`)
+ *   fresh  지금 쪽이 최신 판인가 — 부르는 쪽이 `pageFresh(state)` 로 잰다(옛 판·다시 그리는 중이면 거짓)
+ * 기다리기 시작한 문서·쪽(`docId`·`page`)을 떠났으면 false, 최신이면 true(`[8i-1c]` 다시 그리기의 `refreshed` 알림 뒤에야),
+ * 그 밖은 undefined(계속 기다림 — 상한 뒤 false).
+ */
+export function freshWaitCheck(st, fresh, docId, page) {
+  if (st.docId !== docId || st.page !== page) return false;
+  if (fresh) return true;
+  return undefined;
+}
+
+/**
+ * `[8i-3b]` 낭독이 넘어갈 쪽 `target` 을 지금 읽어도 되는가. **순수**.
+ *   같은 쪽 · 글자(`desc`)가 있음(자리표시자·깨진 쪽은 없다) · `fresh`(부르는 쪽이 `pageFresh(state)` 로 잰다 — 옛 판·다시 그리는 중이면 거짓).
+ * `goToPageForSpeech` 의 바로 풀기와 렌더 끝 판정(`pageTurnCheck`)이 같이 쓴다.
+ */
+export function speechPageReady(st, target, fresh) {
+  return st.page === target && !!st.desc && !!fresh;
+}
+
+/**
+ * `[8i-3b]` 쪽 넘김 대기(`goToPageForSpeech`)의 렌더 끝 판정 — `renderDone.wait` 의 check. **순수**.
+ * 기다리던 문서(`docId`)·쪽(`target`)의 렌더 끝(`r`)이 아니면 undefined(계속 기다림). 그 렌더 끝에서 `speechPageReady` 면 true,
+ * 아니면 undefined — 자리표시자(아직 추출 안 됨)·옛 판 렌더 끝에는 풀지 않고 다음 렌더 끝(또는 상한 뒤 false)을 기다린다.
+ */
+export function pageTurnCheck(st, fresh, r, docId, target) {
+  if (r.docId !== docId || r.page !== target) return undefined;
+  if (speechPageReady(st, target, fresh)) return true;
+  return undefined;
 }
 
 /**
@@ -1829,18 +1859,15 @@ export function goToPageForSpeech(pageNo) {
   if (state.pageCount > 0 && Number(pageNo) > state.pageCount) return Promise.resolve(false);
   // `[8i-1]` 옛 판으로 그려진 쪽은 아직 "그려지지 않은" 쪽으로 본다 — 새 판이 그려질 때까지 기다린다(재추출 중에만).
   // `[8i-1c]` 새 판으로 다시 그리는 중인 쪽도 — `refreshed` 알림 뒤에 넘어간다(그 알림의 `reload()` 가 첫 문장을 다시 읽지 않게).
-  if (state.page === target && state.desc && pageFresh(state)) return Promise.resolve(true);
+  // `[8i-3b]` 판정식은 `speechPageReady`·`pageTurnCheck`(순수 — 테스트가 같은 함수를 쓴다).
+  if (speechPageReady(state, target, pageFresh(state))) return Promise.resolve(true);
 
   // `[8i-3 — spec 4-13-9]` 200 ms 폴링 대신 **그 쪽 렌더의 끝 알림**(그리기·`notifyPage` 뒤)으로 푼다. 폴링은 `state.desc` 가
   // 그리기 앞에서 서는 바람에 원본 보기 canvas 를 그리는 사이에 풀렸다 → 낭독 시작 → `notifyPage` 의 `reload()` 가 첫 문장을
   // 처음부터 다시 읽었다. 이제 원본 보기는 그리기 시간만큼 늦게 시작하고(운영자 결정), 리플로우는 폴링 틱을 기다리지 않는다.
   // 상한·다른 쪽으로 감·리더를 떠남은 전과 같이 상한 뒤 false. 버려진 렌더는 알리지 않는다.
   const docId = state.docId;
-  const waiting = renderDone.wait((r) => {
-    if (r.docId !== docId || r.page !== target) return undefined;
-    if (state.page === target && state.desc && pageFresh(state)) return true;
-    return undefined;
-  }, TTS.PAGE_WAIT_MS);
+  const waiting = renderDone.wait((r) => pageTurnCheck(state, pageFresh(state), r, docId, target), TTS.PAGE_WAIT_MS);
   go(readerHash(state.docId, target));
   return waiting;
 }
