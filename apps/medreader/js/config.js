@@ -187,8 +187,9 @@ export const LAYOUT = Object.freeze({
    `[8i — spec 4-13]` 행 표("이름표 | (쪽 번호) | 산문")를 행 단위로 읽는 7b 단계(`text/rowtable.js`).
    **책 고유 값이 아니다** — x 좌표·글자 크기 절댓값·머리 낱말을 쓰지 않고, 쪽 폭·띠 글자 크기·
    열의 글 모양(길이·정수뿐)에 대한 **비율**만 둔다(2-4 · 여러 권·여러 언어 원칙).
-   되돌림(4-13-8): `ENABLED = false` 로 끄면 **반드시** `layout.js` 의 `algoVersion` 을 12 이상으로 올린다
-   (11 로 저장된 쪽을 다시 뽑게 — `tests/rowtable-8i.test.mjs` M10 계약이 둘을 묶어 고정한다).
+   되돌림(4-13-8·4-13-10): `ENABLED = false`(7b 전부) 또는 `REQUIRE_REF = true`(8i-2 2열 표만)로 되돌리면
+   **반드시** `layout.js` 의 `algoVersion` 을 **지금 값 + 1** 로 올린다(버전은 앞으로만 — 지금 판으로 저장된 쪽을
+   다시 뽑게. `tests/rowtable-8i.test.mjs` M10 계약이 셋을 묶어 고정한다).
    ──────────────────────────────────────────────────────── */
 export const ROWTABLE = Object.freeze({
   ENABLED: true,
@@ -209,7 +210,9 @@ export const ROWTABLE = Object.freeze({
   SYNC: 0.8,                 // R3 (b) — 이름표 칸 중 산문 세로 범위 안에 든 비율 하한
   SYNC_TOL: 0.25,            // R3 (b) — 그 범위의 허용폭(× 띠 글자 크기 중앙값)
   LABEL_GUARD: 0.5,          // R3 (d) — 이름표 칸 첫 조각이 번호 라벨뿐인 비율이 이 이상이면 아니다
-  REQUIRE_REF: true,         // R3 (e) — [D1 (가)] 쪽 번호 열(R)이 하나 이상 있어야 한다
+  REQUIRE_REF: false,        // R3 (e) — true 면 쪽 번호 열(R)이 하나 이상 있어야 한다(8i D1 (가)). [8i-2 — 4-13-9 D1 (나)]
+                             //   false: R 없는 2열 표("이름표 | 설명")도 행 표 — 아래 HIDDEN_COL·ROW_GAP 등 2열 규칙이 열린다.
+                             //   되돌림 = true 와 함께 algoVersion 지금 값 + 1(spec 4-13-10 7절)
   CELL_GAP: 1.4,             // R4 — 이웃 줄 간격 > 이 값 × 행간이면 새 칸
   LEAD_CAP: 1.3,             // R4 — 행간 = min(이웃 간격 중앙값, 이 값 × 열 글자 크기)
   ASC: 0.8,                  // R4 — 칸 위끝 = 첫 줄 baseline + 이 값 × 글자 크기

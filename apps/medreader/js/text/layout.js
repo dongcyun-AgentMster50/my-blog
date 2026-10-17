@@ -87,10 +87,18 @@ import { detectRowTables } from './rowtable.js';
  *     쪽 번호 줄은 role 'ref'·열 머리 행은 role 'colhead'(둘 다 흐름 밖 — 낭독·번역 안 함)로 둔다.
  *     줄 rt·문단 refLineIds 가 새로 저장된다. 저장본만으로는 7b 를 다시 할 수 없다(run 텍스트가 없다)
  *     — **전 책 재추출**. 행 표가 없는 쪽은 10 과 바이트 단위로 같다(dev/measure-rowtable-8i.mjs).
- *     [되돌림] config ROWTABLE.ENABLED = false 로 끌 때는 이 값을 **12** 로 올린다(버전은 앞으로만 —
- *     11 로 저장된 쪽이 옛 코드에서 다시 뽑히지 않고 ref 줄을 읽는 일을 막는다). tests/rowtable-8i M10 이 고정.
+ *     [되돌림] config ROWTABLE.ENABLED = false 로 끌 때는 이 값을 **지금 값 + 1** 로 올린다(버전은 앞으로만 —
+ *     저장된 쪽이 옛 코드에서 다시 뽑히지 않고 ref 줄을 읽는 일을 막는다). tests/rowtable-8i M10 이 고정.
+ * 12 — 2026-10-17 8i-2: 7b 행 표를 **쪽 번호 열 없는 본문 "이름표 | 설명" 2열 표**까지(spec 4-13-10, config
+ *     ROWTABLE.REQUIRE_REF false). 2열 표에만 숨은 열 가드·캡션 끊기·띠 넓히기·표 끝 자르기·붙은 run 쪼개기·
+ *     이름표 칸 쪼개기·2열 열 머리·구획 역할 유지를 더했다(R 있는 표 — CMDT 2026 21–38쪽 — 는 11 과 바이트 같다).
+ *     잡히는 쪽: CMDT 2026 15쪽 · Harrison 3쪽(75·412·542) · CMDT 2021 0. 그 쪽의 줄·문단(rowhead·colhead)이
+ *     바뀌고 나머지 쪽은 11 과 바이트 같다(dev/measure-rowtable-8i2.mjs --app). 저장본에 run 이 없어 7b 를 다시 할 수
+ *     없으므로 — **전 책 재추출**.
+ *     [되돌림] config ROWTABLE.REQUIRE_REF = true 와 함께 이 값을 **지금 값 + 1**(13)로 올린다(버전은 앞으로만 —
+ *     12 로 저장된 2열 표 쪽이 옛 규칙으로 다시 뽑히게). tests/rowtable-8i M10 이 고정.
  */
-export const algoVersion = 11;
+export const algoVersion = 12;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {
