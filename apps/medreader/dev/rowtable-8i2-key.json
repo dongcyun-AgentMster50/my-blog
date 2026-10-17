@@ -1,0 +1,29 @@
+{
+  "_about": "8i-2 Plan 정답표(사람 판단, 2026-10-17) — 본문 이름표·설명 2열 표의 행 시작. rows = [이름표 첫 줄 baseline, 이름표 앞 20자 이하], head = 열 머리 줄 baseline(읽지 않아야 함), groups = 묶음 제목 줄(옆 설명 없음 — 홀로 선 행), exclude = 2열 표가 아님(셋 이상 열이 붙어 보임 — 잡지 않아야 함). 앱 레이아웃 7단계 줄 덤프(scratchpad p8i2/dump-*.txt)를 보고 뜻으로 판단했다: 둘째 줄 이후가 이름표의 이어짐인지(예: 'junction cancer'), 새 이름표인지(예: 'Step 4'). 측정: dev/measure-rowtable-8i2.mjs --key.",
+  "cmdt2026": {
+    "42":   { "exclude": true, "why": "Vaccine | Recommendation | Comment 세 열" },
+    "1319": { "exclude": true, "why": "Infection | Treatment | Complications 세 열" },
+    "45":   { "head": 277.0, "rows": [[261.5, "Communicate your"], [219.5, "Encourage the pat"], [168.0, "Provide basic info"], [107.0, "Encourage the pat"]] },
+    "365":  { "head": 668.8, "rows": [[653.4, "Progressive"], [526.0, "Severe"], [341.6, "Very severe"]] },
+    "484":  { "head": null, "rows": [[671.3, "Step 1"], [638.8, "Step 2"], [615.8, "Step 3"], [602.3, "Step 4"]] },
+    "587":  { "head": 668.8, "groups": [652.8, 493.8], "rows": [[639.3, "Heparins"], [568.8, "Unfractionated"], [536.3, "LMWH"], [480.3, "DOACs"], [428.8, "Dabigatran"], [405.8, "Apixaban"], [354.3, "Rivaroxaban"], [302.8, "Warfarin"]] },
+    "810":  { "head": 283.0, "groups": [200.0], "rows": [[267.5, "Specimen adequacy"], [240.5, "General categoriz"], [186.5, "Squamous cell"], [119.0, "Glandular cell"]] },
+    "1587": { "head": 660.3, "rows": [[644.8, "Acute lymphoblastic"], [584.3, "Acute myeloid"], [496.3, "Anal cancer"], [473.3, "Bladder cancer"], [439.3, "Breast cancer"], [331.3, "Carcinoid"], [317.8, "Cervical cancer"], [285.3, "Chronic lymphocytic"], [271.8, "Chronic myeloid"], [258.8, "Colon cancer"], [169.3, "Esophageal and"], [116.3, "Head and neck"]] },
+    "1588": { "head": 660.3, "rows": [[645.0, "Hepatocellular"], [622.0, "Hodgkin lymphoma"], [590.0, "Kidney (renal cell)"], [557.5, "Melanoma"], [515.5, "Mesothelioma"], [492.5, "Multiple myeloma"], [432.5, "Non-Hodgkin"], [390.5, "Non-Hodgkin (low)"], [348.5, "Non–small cell"], [184.0, "Ovarian cancer"], [161.0, "Pancreatic cancer"], [91.5, "Prostate cancer"]] },
+    "1589": { "head": 660.3, "rows": [[645.0, "Rectal cancer"], [631.5, "Small cell lung"], [608.5, "Soft tissue"], [538.0, "Stomach (gastric)"], [496.0, "Testicular cancer"], [463.5, "Thyroid cancer"], [450.0, "Uterine cancer"], [389.0, "Waldenström"]] },
+    "1653": { "head": 668.8, "rows": [[653.3, "Head and neck"], [611.3, "Eye abnormalities"], [569.3, "Ear abnormalities"], [546.3, "Cardiovascular"], [494.8, "GI disorders"], [424.3, "Kidney abnormal"], [410.8, "Gonadal abnormal"], [397.3, "Skeletal and"], [317.3, "CNS disorders"], [284.8, "Skin and nail"], [252.3, "Associated cond"]] },
+    "1658": { "head": 668.8, "rows": [[653.3, "Inspection"], [630.3, "palpation"], [583.8, "Flexion"], [289.8, "external rotation"]] },
+    "1659": { "head": 668.8, "groups": [424.3], "rows": [[653.8, "Internal rotation"], [410.8, "Supraspinatus"], [283.3, "external rotation"]] },
+    "1661": { "head": 668.8, "groups": [526.3], "rows": [[653.8, "hawkins impingement"], [512.8, "apprehension test"], [390.8, "Load and shift"], [229.8, "O’Brien test"]] },
+    "1681": { "head": 668.8, "groups": [400.3], "rows": [[653.3, "Inspection"], [620.8, "palpation"], [578.8, "range of motion"], [423.8, "Knee strength"], [386.8, "Lachman test"], [254.8, "anterior drawer"]] },
+    "1682": { "head": 668.8, "rows": [[653.8, "pivot shift"], [406.3, "Valgus stress"]] },
+    "1683": { "head": 668.8, "groups": [394.3], "rows": [[653.8, "Varus stress"], [380.8, "McMurray test"], [281.8, "Modified McMurray"]] }
+  },
+  "harrison": {
+    "125": { "exclude": true, "why": "Vaccine 와 오른쪽 세 열" },
+    "403": { "exclude": true, "why": "Class | NYHA | CCS 세 열" },
+    "75":  { "head": 313.4, "rows": [[299.9, "Moderate symptoms"]] },
+    "412": { "head": 729.0, "rows": [[715.4, "High-risk nonortho"], [680.4, "Cancer surgery"], [656.3, "Major orthopedic"], [533.3, "Medically ill"], [487.2, "Medically ill (and)"], [463.2, "Anticoagulation"]] },
+    "542": { "head": 729.0, "rows": [[715.4, "Quantity"], [680.4, "Gender"], [656.3, "Hepatitis C"], [621.3, "Genetics"], [597.2, "Fatty liver"]] }
+  }
+}

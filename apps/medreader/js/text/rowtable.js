@@ -19,6 +19,18 @@
                 닻 사이 칸은 위 정렬(앞 닻으로) / 가운데 정렬(DP).
      R6 열 머리 표 맨 윗줄 바로 위(또는 띠 맨 윗줄)의 한 줄짜리 줄이 A 와 그 오른쪽 열 시작에 걸치면 열 머리.
      R7 물려받기 행 표 띠와 이웃한 띠를 그 열 경계로 다시 나눠, 같은 표의 행이면 행 표로 본다(같은 쪽 안, 연쇄).
+   ── [8i-2 — spec 4-13-10] 쪽 번호 열(R)이 **없는** 표(본문 "이름표 | 설명" 2열 표)에만 더하는 규칙 ──
+     R3 (f)  숨은 열 가드: P 줄 중 조각이 둘 이상인 줄 ≥ HIDDEN_COL 이면 다열 표(1차·넓힌·물려받은 띠 모두).
+     R1b     캡션 줄(figure-caption)이 띠를 끊는다 — R 표로 잡힌 1차 띠는 다시 자르지 않는다.
+     R1c     띠 넓히기: 2열 표의 P 열 시작 뒤에서 시작하는 넓은 조각은 띠를 끊지 않는다(다시 만든 띠는 그 표의 열 경계로).
+     R1d     표 끝 자르기: 그 열 경계로 가로지름 줄이 두 줄 연달아 나오면 거기부터 표 밖.
+     R2b     붙은 run 쪼개기: P 시작을 넘어 걸친 run 을 아이템 경계에서 둘로(글자 그대로, 원래 run 은 소비).
+     R5b     이름표 칸 쪼개기: 이름표 둘째 줄 이후가 행 시작 P 줄(P 칸 첫 줄 · 위 간격 > ROW_GAP×행간)과 같은 높이면 새 칸.
+     R6b     2열 열 머리: 맨 윗 P 줄 + P 밖 조각, 조각마다 ≤ COLHEAD_MAX_CHARS, 문장 끝 아님, 바로 아래 P 줄이 행 시작.
+     역할    홀로 선 칸·구획 줄은 7단계 역할을 지킨다(heading·figure-caption 그대로, 그 밖 body).
+     R7      2열 부모의 물려받기는 R1d·좁힌 통로(P 시작 쪽 끝)를 쓴다.
+   R 이 있는 표(CMDT 21–38)는 위 규칙을 하나도 거치지 않는다(D10). 시제품 `dev/proto-rowtable-8i2.mjs`(R.X8I2 옵션)의
+   규칙을 옮겼다 — 대조는 `dev/measure-rowtable-8i2.mjs --app`.
    **책 고유 x 좌표·글자 크기 절댓값·머리 낱말을 쓰지 않는다.** 상수는 `config.ROWTABLE`(비율)뿐이다.
    시제품 `dev/proto-rowtable-8i.mjs` 의 규칙을 옮겼다 — 수치 대조는 `dev/measure-rowtable-8i.mjs`.
 
@@ -35,6 +47,7 @@
 import { LAYOUT, ROWTABLE } from '../config.js';
 import { joinText, lineBBox } from './lines.js';
 import { isLabelOnly } from './blocks.js';
+import { endsSentence } from './segment.js';
 
 /* 시제품과 같은 중앙값(짝수 개면 위쪽) — 수치 대조가 어긋나지 않게 lines.js 의 평균형 중앙값을 쓰지 않는다. */
 function med(a) {
@@ -61,7 +74,8 @@ export function piecesOf(lines, pageInfo, R = ROWTABLE, P = LAYOUT) {
       out.push({
         x0: run.x0, x1: run.x1, y: l.baseline, fs: l.fontSize,
         text: run.text != null ? String(run.text) : joinText({ items: run.items || [] }, P),
-        line: l, run: run, li: i, ri: k, pageno: l.role === 'pageno'
+        line: l, run: run, li: i, ri: k, pageno: l.role === 'pageno',
+        cap: l.role === 'figure-caption'      // [8i-2] R1b
       });
     }
   }
@@ -72,12 +86,15 @@ export function piecesOf(lines, pageInfo, R = ROWTABLE, P = LAYOUT) {
 /* R1 — 띠. 폭 > SPAN_RATIO×W 인 조각은 띠 경계이고 어느 띠에도 들지 않는다.
  * 4-13-3: pageno 줄은 표의 세로 범위 안에 있을 때만 넣는다 — 띠의 맨 위·맨 아래(다른 조각보다 바깥)에 있는
  * pageno 조각은 뺀다(쪽 자체의 쪽 번호). */
-export function bandsOf(ps, W, R = ROWTABLE) {
+export function bandsOf(ps, W, R = ROWTABLE, opt = null) {
   const out = [];
   let cur = [];
+  // [8i-2] opt.keepWide(p): 2열 표의 P 열 안에서 시작하는 넓은 조각은 띠를 끊지 않는다(R1c) · opt.capBreak: 캡션 줄이 띠를 끊는다(R1b)
+  const keepWide = opt && opt.keepWide, capBreak = !!(opt && opt.capBreak);
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i];
-    if (W > 0 && p.x1 - p.x0 > R.SPAN_RATIO * W) { if (cur.length) out.push(cur); cur = []; continue; }
+    const wide = W > 0 && p.x1 - p.x0 > R.SPAN_RATIO * W;
+    if ((wide && !(keepWide && keepWide(p))) || (capBreak && p.cap)) { if (cur.length) out.push(cur); cur = []; continue; }
     cur.push(p);
   }
   if (cur.length) out.push(cur);
@@ -181,7 +198,22 @@ export function judge(T, R = ROWTABLE) {
   if (other.length) return { why: 'multi' };
   // (e) [D1 (가)] 쪽 번호 열이 있어야 한다
   if (R.REQUIRE_REF && !Rs.length) return { why: 'noRef' };
+  // [8i-2] (f) 숨은 열 가드 — 2열 표(R 없음)만. P 열에 좁은 통로로 붙은 글 열이 있으면 다열 표(4-8 의 몫)
+  if (!Rs.length) {
+    const ratio = hiddenRatio(P);
+    if (ratio >= R.HIDDEN_COL) return { why: 'hidden', hiddenRatio: ratio };
+    return { A: A, P: P, R: Rs, sync: sync, hiddenRatio: ratio };
+  }
   return { A: A, P: P, R: Rs, sync: sync };
+}
+
+/* [8i-2] R3 (f) — P 열 줄(같은 baseline) 중 조각이 둘 이상인 줄의 비율. */
+function hiddenRatio(P) {
+  const byY = new Map();
+  for (const p of P.ps) { const k = r10(p.y); byY.set(k, (byY.get(k) || 0) + 1); }
+  let multi = 0;
+  for (const v of byY.values()) if (v >= 2) multi++;
+  return byY.size ? multi / byY.size : 0;
 }
 
 /* ── R5 행 ────────────────────────────────────────────── */
@@ -307,9 +339,48 @@ function solve(ac, pc, R) {
   return { mid: { rows: midRows }, top: { rows: topRows }, aligned: aligned, anchors: anchors };
 }
 
+/* [8i-2] R5b — 2열 표(R 없음)의 이름표 칸을 행 시작에서 자른다.
+ * 이름표 칸의 둘째 줄 이후가 P 줄과 같은 높이(±ALIGN_TOL×글자)이고, 그 P 줄이 P 칸 첫 줄이거나 바로 위 P 줄과의 간격이
+ * ROW_GAP × P 행간을 넘으면 거기서 새 이름표 칸. 옆에 P 줄이 없는 이름표 줄(묶음 제목)은 다음 줄이 행 시작이면
+ * 그 자체로 한 칸이 되어 solve 의 "홀로 선 행"이 된다. 이름표 줄바꿈의 둘째 줄도 P 줄과 같은 높이에 앉으므로
+ * "같은 높이"만으로는 자르지 않는다 — P 쪽 틈(또는 P 칸 시작)과 함께 본다. */
+function mkCell(rows, R) {
+  const f = rows[0][0], l = rows[rows.length - 1][0];
+  return { rows: rows, top: f.y, bot: l.y, yTop: f.y + R.ASC * (f.fs || 8), yBot: l.y - R.DESC * (f.fs || 8) };
+}
+function splitLabels(A, P, R) {
+  const pl = [];
+  for (const c of P.cells) c.rows.forEach(function (row, i) { pl.push({ y: row[0].y, first: i === 0 }); });
+  pl.sort(function (a, b) { return b.y - a.y; });
+  const isStart = function (row) {
+    const fs = row[0].fs || 8;
+    const k = pl.findIndex(function (q) { return Math.abs(q.y - row[0].y) <= R.ALIGN_TOL * fs; });
+    if (k < 0) return false;
+    if (pl[k].first) return true;
+    return k > 0 && pl[k - 1].y - pl[k].y > R.ROW_GAP * P.lead;
+  };
+  const out = [];
+  let nSplit = 0;
+  for (const c of A.cells) {
+    let cur = [];
+    for (let i = 0; i < c.rows.length; i++) {
+      if (i > 0 && isStart(c.rows[i])) { out.push(mkCell(cur, R)); cur = []; nSplit++; }
+      cur.push(c.rows[i]);
+    }
+    if (cur.length) out.push(mkCell(cur, R));
+  }
+  return { cells: out, nSplit: nSplit };
+}
+
 /** R5 — 한 띠의 행들. 가로지름(A·P 의 구획 조각)은 단단한 경계, 정렬 모형은 띠마다 한 번 고른다. */
 export function rowsOf(det, R = ROWTABLE) {
-  const A = det.A, P = det.P;
+  let A = det.A;
+  const P = det.P;
+  if (!det.R.length) {                 // [8i-2] R5b — 2열 표(R 없음)만
+    const sp = splitLabels(A, P, R);
+    A = Object.assign({}, A, { cells: sp.cells });
+    det.nSplit = sp.nSplit;
+  }
   const crossPs = A.cross.concat(P.cross);
   const secs = Array.from(new Set(crossPs.map(function (p) { return p.y; }))).sort(function (x, y) { return y - x; });
   const bounds = [Infinity].concat(secs, [-Infinity]);
@@ -343,6 +414,10 @@ function inheritFrom(parent, ps, R) {
   const T0 = parent.T, d0 = parent.det;
   const cuts = [];
   for (let k = 0; k < T0.length - 1; k++) cuts.push([T0[k].hi, T0[k + 1].lo]);
+  // [8i-2] 2열 부모: 통로를 오른쪽 끝(P 시작)으로 좁힌다 — 부모 띠의 이름표가 짧아 통로가 넓게 잡혔을 때
+  // 더 긴 이름표가 중심으로 P 열에 들어가지 않게. 가로지름 = P 시작을 넘어 걸친 조각.
+  const two = !d0.R.length;
+  if (two) for (let k = 0; k < cuts.length; k++) cuts[k] = [cuts[k][1] - 0.01, cuts[k][1]];
   const T = tracksOf(ps, cuts, R);
   // 열은 k(경계 번호)로 찾는다 — 빈 열이 걸러져 배열 자리가 밀려도 같은 열을 가리키게
   const byK = function (k) { return T.find(function (t) { return t.k === k; }) || null; };
@@ -366,7 +441,111 @@ function inheritFrom(parent, ps, R) {
   const nCross = T.reduce(function (a, t) { return a + t.cross.length; }, 0);
   const nLines = new Set(ps.map(function (q) { return q.line; })).size;
   if (nCross > R.INH_CROSS * nLines) return { why: 'cross' };
+  // [8i-2] (f) 숨은 열 가드를 넓힌 띠·물려받은 띠에도 다시 건다(시제품은 1차 띠에서만 — spec 4-13-10 3절 "알려진 것" 2)
+  if (two) {
+    const ratio = hiddenRatio(P);
+    if (ratio >= R.HIDDEN_COL) return { why: 'hidden' };
+    return { T: T, det: { A: A, P: P, R: Rs, sync: 1, hiddenRatio: ratio } };
+  }
   return { T: T, det: { A: A, P: P, R: Rs, sync: 1 } };
+}
+
+/* 열 배열 → 그 열 경계(통로). 배열 자리 k 의 열이 새 tracksOf 의 k 번 열이 된다. */
+function cutsOf(T) {
+  const cuts = [];
+  for (let k = 0; k < T.length - 1; k++) cuts.push([T[k].hi, T[k + 1].lo]);
+  return cuts;
+}
+
+/* [8i-2] R1d 표 끝 자르기 — 부모 표의 열 경계로 볼 때 통로를 가로지르는 줄이 **두 줄 연달아** 나오면
+ * 거기부터는 표가 아니다(표 아래·위 산문). dir: 'mid'(부모 조각이 가장 많이 든 구간) · 'below'(첫 연속 가로지름 앞까지)
+ * · 'above'(끝 연속 가로지름 뒤부터). 돌려줌 { keep, rest } — rest 는 보통 띠로 돌아간다. */
+function tailCut(parent, ps, dir) {
+  const cuts = cutsOf(parent.T);
+  const ys = Array.from(new Set(ps.map(function (p) { return r10(p.y); }))).sort(function (a, b) { return b - a; });
+  const cy = new Set(ps.filter(function (p) { return cuts.some(function (c) { return p.x0 < c[0] && p.x1 > c[1]; }); }).map(function (p) { return r10(p.y); }));
+  const run2 = ys.map(function (y, i) { return cy.has(y) && ((i > 0 && cy.has(ys[i - 1])) || (i + 1 < ys.length && cy.has(ys[i + 1]))); });
+  let keepY;
+  if (dir === 'below') { const f = run2.indexOf(true); keepY = new Set(f < 0 ? ys : ys.slice(0, f)); }
+  else if (dir === 'above') { const l = run2.lastIndexOf(true); keepY = new Set(l < 0 ? ys : ys.slice(l + 1)); }
+  else {
+    const segs = [];
+    let cur = [];
+    for (let i = 0; i < ys.length; i++) { if (run2[i]) { if (cur.length) segs.push(cur); cur = []; } else cur.push(ys[i]); }
+    if (cur.length) segs.push(cur);
+    const pset = new Set(parent.ps);
+    let bn = -1;
+    keepY = new Set();
+    for (const sg of segs) {
+      const set = new Set(sg);
+      const n = ps.filter(function (p) { return pset.has(p) && set.has(r10(p.y)); }).length;
+      if (n > bn) { bn = n; keepY = set; }
+    }
+  }
+  return { keep: ps.filter(function (p) { return keepY.has(r10(p.y)); }), rest: ps.filter(function (p) { return !keepY.has(r10(p.y)); }) };
+}
+
+/* [8i-2] R2b 붙은 run 쪼개기 — 2열 띠에서 P 시작을 넘어 걸친 run(이름표와 설명이 한 run)을 아이템 경계에서 둘로 나눈다.
+ * 아이템 하나가 P 시작 이후에서 시작하고 바로 앞 아이템이 P 시작 전에 끝나면 거기서 자른다. 글자(아이템)는 그대로.
+ * 나뉜 조각은 원래 run 을 origRun 으로 기억한다 — 읽기 순서 배열을 다시 짤 때 원래 run 도 소비된 것으로(두 번 내지 않게).
+ * 나눴으면 같은 열 경계로 열(칸)을 다시 만든다. */
+function splitStraddling(b, P, R) {
+  const P0 = b.det.P, lo = P0.lo;
+  if (!Number.isFinite(lo)) return;
+  const tolX = R.ALIGN_TOL * (P0.fs || 8);
+  let changed = false;
+  const nps = [];
+  for (const p of b.ps) {
+    const its = (p.run.items || []).slice().sort(function (u, v) { return (u.x - v.x) || (u.idx - v.idx); });
+    let cut = -1;
+    if (p.x0 < lo - tolX && p.x1 > lo) {
+      for (let i = 1; i < its.length; i++) if (its[i].x >= lo - tolX && its[i - 1].x + (its[i - 1].w || 0) <= lo) { cut = i; break; }
+    }
+    if (cut < 0) { nps.push(p); continue; }
+    const mk = function (items) {
+      let x0 = Infinity, x1 = -Infinity;
+      for (const it of items) { if (it.x < x0) x0 = it.x; if (it.x + (it.w || 0) > x1) x1 = it.x + (it.w || 0); }
+      const run = { x0: x0, x1: x1, items: items };
+      run.text = joinText({ items: items }, P);
+      return Object.assign({}, p, { x0: x0, x1: x1, run: run, text: run.text, origRun: p.run });
+    };
+    nps.push(mk(its.slice(0, cut)), mk(its.slice(cut)));
+    changed = true;
+  }
+  if (!changed) return;
+  const T = tracksOf(nps, cutsOf(b.T), R);
+  const ia = b.T.indexOf(b.det.A), ip = b.T.indexOf(b.det.P);
+  const A = T.find(function (t) { return t.k === ia; }), P2 = T.find(function (t) { return t.k === ip; });
+  if (A && P2 && A.ps.length && P2.ps.length) { b.ps = nps; b.T = T; b.det = Object.assign({}, b.det, { A: A, P: P2, R: [] }); b.xsplit = true; }
+}
+
+/* [8i-2] R6b — 2열 표의 열 머리 행: 맨 윗 **P 줄**(그 위 이름표 열의 홀로 선 줄·구획 줄은 건너뛴다)이
+ * (1) P 조각과 P 밖 조각(이름표 열 또는 통로 안 — 가운데 둔 머리)을 함께 가지고 (2) 조각마다 ≤ COLHEAD_MAX_CHARS,
+ * P 글이 문장 끝이 아니고 (3) 바로 아래 P 줄이 행 시작(이름표 줄과 같은 높이이거나 간격 > ROW_GAP×P 행간)이면 열 머리.
+ * 글꼴(굵기)은 보지 않는다 — 머리와 본문 글꼴이 같은 책이 있다(spec 4-13-10 3절). */
+function colheadTwo(band, R) {
+  const det = band.det;
+  let top = -Infinity;
+  for (const p of det.P.ps) if (p.y > top) top = p.y;
+  // P 줄 위에 이름표 열·구획(가로지름) 밖 조각이 있으면 아니다
+  const crossAll = band.T.reduce(function (a, t) { return a.concat(t.cross); }, []);
+  for (const p of band.ps) if (p.y > top && det.A.ps.indexOf(p) < 0 && crossAll.indexOf(p) < 0) return null;
+  const G = band.ps.filter(function (p) { return Math.abs(p.y - top) < 0.5; });
+  // P 조각 = P 열 안이고 P 열 왼끝(통로 끝) 이후에서 시작. 통로 안에서 시작하는 조각은 P 밖으로 본다.
+  const tolX = R.ALIGN_TOL * (det.P.fs || 8);
+  const inPcol = function (p) { return det.P.ps.indexOf(p) >= 0 && p.x0 >= det.P.lo - tolX; };
+  const inP = G.filter(inPcol);
+  const notP = G.filter(function (p) { return !inPcol(p); });
+  if (!inP.length || !notP.length) return null;
+  if (G.some(function (p) { return trimLen(p) > R.COLHEAD_MAX_CHARS; })) return null;
+  const pText = inP.map(function (p) { return String(p.text).trim(); }).join(' ');
+  if (endsSentence(pText)) return null;
+  const below = det.P.ps.filter(function (p) { return p.y < top - 0.5; }).map(function (p) { return p.y; });
+  if (!below.length) return null;
+  const y1 = Math.max.apply(null, below);
+  const aAt = det.A.ps.some(function (p) { return p.y < top - 0.5 && Math.abs(p.y - y1) <= R.ALIGN_TOL * (p.fs || 8); });
+  if (!aAt && !(top - y1 > R.ROW_GAP * det.P.lead)) return null;
+  return G;
 }
 
 /* ── R6 열 머리 ───────────────────────────────────────── */
@@ -483,6 +662,9 @@ function rowSpan(r) {
 /* 띠 하나 → 새 줄 목록(행 순서). rowBase 는 표 안 행 번호의 시작. */
 function emitBand(band, t, rowBase, colhead, P, R) {
   const det = band.det, T = band.T;
+  // [8i-2] 2열 표(R 없음)의 홀로 선 칸·구획 줄은 7단계 역할을 지킨다 — 표 제목("TABLE …")이 heading 이 되지 않게.
+  const two = !det.R.length;
+  const keepRole = function (s) { return s.role === 'heading' || s.role === 'figure-caption' ? s.role : 'body'; };
   const head = new Set(colhead || []);
   const out = [];
   const keep = function (ps) { return ps.filter(function (p) { return !head.has(p); }); };
@@ -524,7 +706,7 @@ function emitBand(band, t, rowBase, colhead, P, R) {
     const nr = rowNo++;
     const ls = [];
     if (r.section) {
-      for (const l of linesFromPieces(keep(r.sec), 'rS', 'heading', { t: t, row: nr, cell: 'S', k: 0 }, P)) ls.push(l);
+      for (const l of linesFromPieces(keep(r.sec), 'rS', two ? keepRole : 'heading', { t: t, row: nr, cell: 'S', k: 0 }, P)) ls.push(l);
       keep(r.sec).forEach(function (p) { placed.add(p); });
     } else {
       r.a.forEach(function (c, k) {
@@ -532,7 +714,7 @@ function emitBand(band, t, rowBase, colhead, P, R) {
         ps.forEach(function (p) { placed.add(p); });
         // [8i Review] 홀로 선 이름표 칸(옆에 내용 없음 — 표 안에 든 짧은 장 제목 "CHAPTER 44: …" 등)은 7단계 역할이
         // heading 이면 heading 으로 둔다(8i 전과 같은 화면·목차). 내용이 있는 이름표 칸은 body(→ 문단 kind rowhead).
-        const role = r.alone ? function (s) { return s.role === 'heading' ? 'heading' : 'body'; } : 'body';
+        const role = r.alone ? (two ? keepRole : function (s) { return s.role === 'heading' ? 'heading' : 'body'; }) : 'body';
         for (const l of linesFromPieces(ps, 'rA', role, { t: t, row: nr, cell: 'A', k: k }, P)) ls.push(l);
       });
       const refs = refByRow.get(i) || [];
@@ -598,16 +780,59 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
   const ps = piecesOf(src, pageInfo, R, P);
   if (!ps.length) return none;
   const reject = [];
-  // 1차 — 띠마다 R3
-  const BS = bandsOf(ps, W, R).map(function (b) {
+  const judgeBand = function (b) {
     if (b.ps.length < R.MIN_PIECES) return { ps: b.ps, det: null };
     const T = tracksOf(b.ps, null, R);
     if (T.length < 2) return { ps: b.ps, T: T, det: null };
     const j = judge(T, R);
     if (!j.A) { reject.push(j.why); return { ps: b.ps, T: T, det: null }; }
     return { ps: b.ps, T: T, det: j };
-  });
+  };
+  const isRefTable = function (b) { return !!(b.det && b.det.R.length); };
+  // 1차 — 띠마다 R3
+  let BS = bandsOf(ps, W, R).map(judgeBand);
+  // [8i-2] R1b — 캡션 줄이 띠를 끊는다. 2열 표가 열릴 수 있을 때(REQUIRE_REF false)만, R 표로 잡힌 띠는 다시 자르지 않는다
+  // (21–38쪽 경로는 8i 와 같은 띠 — D10). 자른 띠는 다시 R3 를 묻는다.
+  if (!R.REQUIRE_REF && ps.some(function (p) { return p.cap; })) {
+    const nb = [];
+    for (const b of BS) {
+      if (isRefTable(b) || !b.ps.some(function (p) { return p.cap; })) { nb.push(b); continue; }
+      for (const sb of bandsOf(b.ps, W, R, { capBreak: true })) nb.push(judgeBand(sb));
+    }
+    BS = nb;
+  }
   if (!BS.some(function (b) { return b.det; })) return Object.assign({}, none, { reject: reject });
+  const topY = function (b) { let t = -Infinity; for (const p of b.ps) if (p.y > t) t = p.y; return t; };
+  // [8i-2] R1c 띠 넓히기 — 2열 표가 있으면 그 표의 P 열 안에서 시작하는 넓은 조각은 띠를 끊지 않게 띠를 다시 만든다.
+  // 합쳐진 띠는 R1d(표 끝 자르기) 뒤 그 2열 표의 열 경계로 다시 나눈다(R7 과 같은 검사 + 숨은 열). 실패하면 1차 띠 그대로.
+  // R 표 띠가 섞이는 합침은 하지 않는다(D10).
+  const ends = [];
+  for (const b of BS) if (b.det && !b.det.R.length) { const k = b.T.indexOf(b.det.A); if (b.T[k + 1]) ends.push(b.T[k + 1].lo); }
+  if (ends.length) {
+    const fsAll = med(ps.map(function (p) { return p.fs; })) || 8;
+    const keepWide = function (p) { return ends.some(function (e) { return p.x0 >= e - R.ALIGN_TOL * fsAll; }); };
+    const B2 = bandsOf(ps, W, R, { keepWide: keepWide, capBreak: !R.REQUIRE_REF });
+    const old = BS.slice();
+    const pieceBand = new Map();
+    old.forEach(function (b, i) { b.ps.forEach(function (p) { pieceBand.set(p, i); }); });
+    const out = [];
+    const pushOld = function (idx) { for (const i of idx) if (out.indexOf(old[i]) < 0) out.push(old[i]); };
+    for (const nb of B2) {
+      const idx = Array.from(new Set(nb.ps.map(function (p) { return pieceBand.get(p); }).filter(function (i) { return i != null; }))).sort(function (a, b) { return a - b; });
+      const extra = nb.ps.some(function (p) { return !pieceBand.has(p); });
+      const par = idx.map(function (i) { return old[i]; }).find(function (b) { return b.det && !b.det.R.length; });
+      if (!par || (idx.length <= 1 && !extra) || idx.some(function (i) { return isRefTable(old[i]); })) { pushOld(idx); continue; }
+      const seg = tailCut(par, nb.ps, 'mid');
+      const got = seg.keep.length ? inheritFrom(par, seg.keep, R) : { why: 'empty' };
+      if (!got.det) { pushOld(idx); continue; }
+      out.push({ ps: seg.keep, T: got.T, det: got.det, grown: true });
+      if (seg.rest.length) for (const rb of bandsOf(seg.rest, W, R, { capBreak: !R.REQUIRE_REF })) out.push(judgeBand(rb));
+    }
+    // 1차 띠 중 새 띠 어디에도 들지 않은 것(방어 — 조각이 모두 넓은 띠 경계였던 경우는 없다)
+    for (const b of old) if (out.indexOf(b) < 0 && !b.ps.some(function (p) { return out.some(function (o) { return o.ps.indexOf(p) >= 0; }); })) out.push(b);
+    out.sort(function (a, b) { return topY(b) - topY(a); });
+    BS = out;
+  }
   // 2차 — R7 물려받기(같은 쪽 안, 연쇄)
   for (let changed = true; changed;) {
     changed = false;
@@ -616,9 +841,13 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
       for (const j of [i - 1, i + 1]) {
         const par = BS[j];
         if (!par || !par.det) continue;
-        const got = inheritFrom(par, BS[i].ps, R);
+        // [8i-2] 2열 부모면 R1d(표 끝 자르기) 뒤에 물려받는다 — 남은 조각은 표 밖 띠로 둔다
+        let cand = BS[i].ps, rest = [];
+        if (!par.det.R.length) { const sg = tailCut(par, cand, j < i ? 'below' : 'above'); cand = sg.keep; rest = sg.rest; }
+        const got = cand.length ? inheritFrom(par, cand, R) : { why: 'empty' };
         if (!got.det) { if (got.why === 'cross') reject.push('inheritCross'); continue; }
-        BS[i] = { ps: BS[i].ps, T: got.T, det: got.det, inherited: true, parent: par };
+        BS[i] = { ps: cand, T: got.T, det: got.det, inherited: true, parent: par };
+        if (rest.length) BS.splice(j < i ? i + 1 : i, 0, { ps: rest, det: null });
         changed = true;
         break;
       }
@@ -629,6 +858,8 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
   for (const b of BS) if (b.det && !b.inherited) b.t = tNext++;
   for (let guard = 0; guard < BS.length; guard++) for (const b of BS) if (b.det && b.inherited && b.t == null && b.parent.t != null) b.t = b.parent.t;
 
+  // [8i-2] R2b 붙은 run 쪼개기 — 2열 띠만
+  for (const b of BS) if (b.det && !b.det.R.length) splitStraddling(b, P, R);
   const tableBands = BS.filter(function (b) { return b.det; });
   const used = new Set();
   for (const b of tableBands) for (const p of b.ps) used.add(p.line);
@@ -636,6 +867,17 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
   const headAbove = new Map();
   for (const b of tableBands) {
     b.colhead = colheadInBand(b, R);
+    // [8i-2] R6b — 2열 표(물려받지 않은 띠)의 열 머리. 머리 조각을 뺀 조각으로 열(칸)을 다시 만든다.
+    if (!b.colhead && !b.det.R.length && !b.inherited) {
+      const G = colheadTwo(b, R);
+      if (G) {
+        const gs = new Set(G);
+        const T = tracksOf(b.ps.filter(function (p) { return !gs.has(p); }), cutsOf(b.T), R);
+        const ia = b.T.indexOf(b.det.A), ip = b.T.indexOf(b.det.P);
+        const A = T.find(function (t) { return t.k === ia; }), P2 = T.find(function (t) { return t.k === ip; });
+        if (A && P2 && A.ps.length && P2.ps.length) { b.T = T; b.det = Object.assign({}, b.det, { A: A, P: P2, R: [] }); b.colhead = G; b.head2 = true; }
+      }
+    }
     if (!b.colhead) {
       const G = colheadAbove(src, used, b, R);
       if (G) { headAbove.set(b, G); for (const l of G) used.add(l); }
@@ -658,7 +900,8 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
     diag.push({
       t: b.t, inherited: !!b.inherited, rows: e.rows, align: e.align,
       refCells: b.det.R.reduce(function (a, r) { return a + r.cells.length; }, 0),
-      colhead: !!(b.colhead || G), lines: e.lines.length
+      colhead: !!(b.colhead || G), lines: e.lines.length,
+      nSplit: b.det.nSplit || 0, grown: !!b.grown, head2: !!b.head2, hiddenRatio: b.det.hiddenRatio
     });
   }
   // 읽기 순서 배열 다시 짜기: 띠가 쓴 원래 줄은 빼고, 띠 첫 줄 자리에 새 줄을 끼운다.
@@ -672,6 +915,7 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
     for (const p of b.ps) {
       if (!consumedRuns.has(p.line)) consumedRuns.set(p.line, new Set());
       consumedRuns.get(p.line).add(p.run);
+      if (p.origRun) consumedRuns.get(p.line).add(p.origRun);   // [8i-2] R2b 로 나눈 run 의 원래 run
       f = Math.min(f, idxOf.get(p.line));
     }
     const G = headAbove.get(b);
