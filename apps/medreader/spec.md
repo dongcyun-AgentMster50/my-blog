@@ -35,7 +35,7 @@
 14. 오프라인/네트워크 실패 UX
 15. 사용량 대시보드와 상한
 16. Phase 1 수용 기준 ★
-17. Phase 2·3 개요와 확장 지점 (`[수정 2026-10-03]` 무료 한도 원칙 · 자료 추가·수정 · 백업·옮기기 · 스캔본 OCR 비교 · `[신설 2026-10-12]` 17-7 단어장 · `[신설 2026-10-12]` 17-8 검색 — 키워드·제목·목차)
+17. Phase 2·3 개요와 확장 지점 (`[수정 2026-10-03]` 무료 한도 원칙 · 자료 추가·수정 · 백업·옮기기 · 스캔본 OCR 비교 · `[신설 2026-10-12]` 17-7 단어장 · `[신설 2026-10-12]` 17-8 검색 — 키워드·제목·목차 · `[신설 2026-10-18]` 17-8-12 8g 단계 Plan — 바뀐 전제·실측·Build 나누기, 운영자 결정 대기)
 18. 미결정 사항과 판단
 19. 구현 순서(Build 권장) (`[수정 2026-10-03]` 8단계 이후 로드맵 재정렬)
 20. 예상되는 함정
@@ -3532,6 +3532,300 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 - [ ] `[D]` 아랍어 UI: 결과 조각·목차 제목이 `dir=ltr` 이고 `<mark>` 가 낱말을 가르지 않는다. 360×740 에서 가로 스크롤 0, 모든 결과 줄·버튼 ≥ 48px.
 - [ ] `[D]` 목차: 세 책의 개요 항목 수 37·61·50, 누르면 그 쪽. CMDT 2026 결과·목차에 인쇄 쪽 번호가 같이 보인다. 개요를 지운 합성 문서에서 폴백 목록이 200개 이하이고 반복 소제목이 없다.
 - [ ] `[M]` Nour 기기: `dev/search-bench.html` CMDT 2021 크기 결과 기록 — (i-b) ≤ 1초면 이 설계 그대로, 넘으면 (iii) 덩어리로 바꾼다(17-8-2). 실제 CMDT 에서 "sarcoidosis" 검색 → 제목 묶음 첫 줄 → 그 절 첫머리.
+
+#### 17-8-12. 8g 단계 Plan `[신설 2026-10-18 — 8g Plan, 운영자 결정 대기]` `[운영자 결정 2026-10-12: 17-8 방식 (i-b) · 2026-10-18: 8i 가 끝났으니 지금 8g]`
+
+17-8-1~11 은 2026-10-12 코드(algoVersion 10, DB 2, 배포 안전장치 작업 중)를 보고 썼다. 그 뒤 8i·8i-2(algoVersion 12, 행 표)·8h(인용)·8i-1·8i-3(다시 그리기·렌더 끝 알림)·배포 안전장치가 들어갔다. **이 소절이 17-8-1~11 과 다르면 이 소절이 이긴다**(앞 소절은 고치지 않았다 — 아래 "17-8-x 갱신"으로 적는다). 도구: `dev/measure-search-8g.mjs`(새 — 앱 모듈 그대로, 수치만 낸다). 원서 글자는 저장·출력하지 않았다.
+
+##### 1. 바뀐 전제 — 17-8-x 갱신 (A)
+
+| # | 17-8 이 전제한 것 | 지금 코드·실측 | 결정 |
+|---|---|---|---|
+| U1 | 17-8-3 "DB 버전 3" | `db.js` `DB_VERSION = 2` 그대로 — 3 이 맞다 | `MIGRATIONS[3]` = `reconcileSchema`(멱등). **되돌릴 때도 버전을 내리지 않는다**(내리면 이미 3 으로 연 기기가 `VersionError` 로 부팅 못 함 — 아래 9) |
+| U2 | 17-8-10 끝 "배포 안전장치 Build 진행 중" | 들어갔다(import map 도장 `dev/stamp-importmap.mjs` · `tests/importmap.test.mjs` · 부팅 실패 안내 · `db.resetDerived`). 남은 틈: 옛 판 탭이 열려 있을 때 새 판이 DB 를 3 으로 올리면 옛 탭은 `versionchange` 로 연결을 닫고 **그 뒤 조용히 실패**한다 — `main.js` 는 `blocked` 만 배너로 보인다 | 8g-1 에 **`versionchange` 배너 + [다시 불러오기]**(새 키 `err.dbUpgraded`, 네 언어). JS 를 고친 모든 Build 는 `stamp-importmap` |
+| U3 | 17-8-3 "`DERIVED_STORES` 에 searchText" | `DERIVED_STORES = ['pages','questions','sections']`, `CASCADE_STORES` 9개 | 두 목록에 `searchText`. `documents.outline`·`pageLabels` 는 **PDF 에서 온 것**이라 `derivedDocReset` 에 넣지 않는다([텍스트 다시 추출]이 지우지 않음) |
+| U4 | 17-8-3 경첩 `sv` + 인덱스 `docId_sv` | 저장본에는 문단 text 가 없고 읽을 때 하이픈 규칙으로 조립한다(9-2 `derivedHash`). 그런데 검색 글자는 **조립된 결과를 저장**한다. 그리고 지금 `Extractor` 는 `derivedHash` 로 되감아도 `_loadStoredSet`(`docId_algoVersion`)이 "이미 있음"으로 보아 `pages` 를 다시 쓰지 않는다(기존 동작 — 이 단계 범위 밖, 아래 10 기록) | 경첩을 **문자열 `sk = SEARCH.VERSION + '\|' + DERIVED_HASH`**, 인덱스 `docId_sk`(`[docId, sk]`)로. 하이픈 집합이 바뀌면 `sk` 범위가 비어 백필이 화면과 같은 글자로 다시 만든다. 레코드에 `algoVersion` 은 그대로 둔다(진단용) |
+| U5 | 17-8 머리 "검색 대상 = 리플로우가 보이는 글자 + 표 줄, 접힌 줄 제외" — 행 표 이전 | algoVersion 12: 문단 kind `rowhead`(이름표 칸 — `.line`), 줄 role `ref`(쪽 번호 칸 — 리플로우에 **회색 `span.rt-ref`, `.line` 아님**), `colhead`(열 머리 — 접힘). 8h: 인용(`cite`)은 낭독·번역에서 빠지지만 화면에는 있다 | **넣는다**: rowhead(본문 묶음), cite(본문 묶음 — 화면에 있다), 4-8 표 영역 줄(`table`). **뺀다**: `ref`(강조할 `.line` 이 없고 숫자 잡음 — CMDT 2026 21–38쪽 576자뿐), `colhead`·접힌 역할(머리말·꼬리말·쪽 번호·회전). 실측 빠지는 글자 = 접힌 역할 2.8만 / 18.5만 / 0, colhead 95 / 421 / 0, ref 0 / 576 / 0 (Harrison / CMDT 2026 / CMDT 2021) |
+| U6 | 17-8-3 `text` = `fromStored` 문단 text | 화면 글자는 `describePage → flowParasOf → joinPieces`(낭독·강조와 같은 함수). 실측 문단 81,224개 중 **Harrison 17개가 다르다** — 문단 안 빈 줄(공백만인 줄)에서 화면은 공백 둘·하이픈을 남기고 `fromStored` 는 접는다. CMDT 두 권 0, 문단에 속하지 않은 흐름 줄 0 | **저장 글자 = 화면 글자**(`joinPieces` 결과, 문단 사이 `'\n'`). 그래야 결과 쪽 다시 찾기가 1:1 이다(실측: 결과 쪽 7,015번 다시 찾기 — 수 불일치 **0**). 이를 위해 `describePage`·`flowParasOf`·`paraBlock`·`FOLD_ROLES`·`REF_ROLE`(ui/reader.js)과 `joinPieces`·`localRange`(tts/text.js)를 **새 순수 모듈 `js/text/screen.js`** 로 옮기고 두 파일이 **다시 export** 한다(함수 객체 동일 — 동작·테스트 import 경로 불변). 3-2 갱신: `tts/*` → `text/*` ○(segment·screen), `pdf/extract` → `text/*` ○ 그대로. 빈 줄 결함 자체는 범위 밖(10) |
+| U7 | 17-8-4 하이픈 → 공백 접기, 붙여 쓴 `betablocker` 는 안 맞춤 | 8i 이름표 "Pseudo-" + "hypoparathyroidism" 은 `KEEP_HYPHEN_PREFIXES` 의 `pseudo` 로 **하이픈이 살아** 접으면 "pseudo hypoparathyroidism" — **4-13-7 의 "Pseudohypoparathyroidism 이 찾아진다"는 틀렸다**(붙인 검색어로는 0). 같은 꼴: "pre-eclampsia"(본문 하이픈) | **합성어 변형** 추가: 한 낱말 검색어가 `KEEP_HYPHEN_PREFIXES` 중 **3자 이상** 접두 p 로 시작하면 "p␣나머지" 변형을, "p␣나머지"(하이픈·공백) 꼴이면 붙인 변형을 OR 로. 실측(아래 2-4): pre-eclampsia CMDT 2026 8 → 99, preeclampsia 91 → 99, nonsteroidal 18 → 22, pseudohypoparathyroidism 5 → 6(이름표 칸). 목록 밖 접두(`betablocker`)는 여전히 안 맞춘다 |
+| U8 | 17-8-5 제목 묶음 = heads 오프셋에 걸린 적중 | 흔한 낱말은 일반 소제목("Treatment" 등)이 제목 묶음을 채운다 — "treatment" CMDT 2026 제목 적중 961 중 **653** 이 같은 글자 10번 이상인 소제목 | **같은 글자가 그 책에서 `REPEAT_HEADING`(10)번 이상인 heading 의 적중은 본문 묶음으로.** CMDT 2026 961 → 308, CMDT 2021 737 → 73. 빈도표는 캐시를 채울 때 heads 에서 만든다(12,194개 — 수 ms) |
+| U9 | 17-8-8 결과로 이동 | 8i-1(옛 판 쪽 다시 그리기·`refreshed` 알림), 8i-3(`createRenderDone` — 낭독 쪽 넘김 전용), speaker `reload`·`reshow`·`waitFresh` | 아래 4-5 "이동 경로" 표 |
+| U10 | 17-8-3 "두 판이 어긋난 레코드는 그대로 찾는다" | `searchText` 는 처음 생기는 스토어 — 재추출 중(옛 algoVersion 쪽)에는 그 쪽 레코드가 아예 없다 | **백필은 지금 algoVersion 의 `pages` 만**(`docId_algoVersion` 범위) 대상. 옛 판 쪽은 재추출이 `pages` 와 함께 쓸 때 들어온다 → 그동안 "1,967쪽 중 812쪽에서 찾았습니다 — 텍스트 준비 중"(17-8-5 그대로). 앞으로 algoVersion 이 또 오르면 옛 판 레코드는 **있는 대로 찾고**(화면도 그 판을 보인다 — 8i-1 이 새 판 저장 때 다시 그림) 다시 찾기 실패는 쪽 맨 위 + 안내(17-8-3 그대로) |
+| U11 | 17-8-6 폴백 = 반복 제목 빼고 글자 크기 상위 층 ≤ 200 | 실측(아래 3): CMDT 두 권은 상위 층에 **장 번호 숫자만인 heading** 이 37·42개 섞인다(장 제목은 그 다음 heading) | 폴백에 **"숫자만인 항목은 같은 쪽 바로 다음 heading 을 제목으로 붙인다"** 한 줄. heads 는 kind `heading` 만(rowhead 0 — 4-13-7 그대로, 실측 행 표 쪽 항목 0) |
+| U12 | 17-8-7 "12-8 compact 에서 상단바가 숨으면 [≡]" | 12-8 compact 는 아직 없다(8e — 위치 미정) | 이번엔 상단바 [🔍] 만. compact 배치는 8e Plan 이 정한다 |
+| U13 | 17-8-1 pdf.js | 측정은 이 기계의 pdfjs-dist **5.6.205**(앱 CDN 5.4.149). 개요·쪽 라벨 API 는 같은 결과(37·61·50, 100% 해석 — 17-8-1 과 동일) | `getTextContent` 차이가 글자 수에 주는 영향은 8i-2 Review 와 같은 조건이라 작다 `[가정]` |
+| U14 | 17-8-7 `settings` `search.recent` · 17-8-9 `search.aiQuery` | `settings.js` `DEFAULTS` 에 둘 다 없다 | `search.recent`(기본 `[]`, 최대 `SEARCH.RECENT_MAX` 5, 기기 안) 를 9-3 에 더한다. `search.aiQuery` 는 **만들지 않는다**(17-8-9 가 — 기본 끔이면 키도 필요 없다) |
+
+`config.js` `SEARCH`(17-8-10 갱신): `{ ENABLED:true, VERSION:1, MIN_CHARS:2, MAX_CHARS:60, MAX_HITS_PER_DOC:1000, SNIPPET:40, DEBOUNCE_MS:250, READ_BATCH:200, BACKFILL_BATCH:50, TOC_FALLBACK_MAX:200, REPEAT_HEADING:10, RECENT_MAX:5, COMPOUND_MIN_PREFIX:3 }`.
+
+`searchText` 레코드(17-8-3 갱신): `{ docId, pageNo, sk, algoVersion, text, table, heads:[{i, o, r}] }` — 키 `[docId, pageNo]`, 인덱스 `docId`·`docId_sk`. `text` = 화면 글자(U6), `table` = 4-8 영역 줄 글자(줄마다 공백 하나로 접고 `'\n'`), `heads` = kind `heading` 문단만(`i` 흐름 문단 순번, `o` text 안 오프셋, `r` 첫 줄 글자 크기 ÷ 쪽 중앙값, 소수 둘째).
+
+##### 2. 실측 — 세 권 전권, 앱 모듈 `[실측 2026-10-18 — dev/measure-search-8g.mjs, Node 24, 16코어, pdf.js 5.6.205]` (B)
+
+경로: 쪽마다 `getTextContent(PDF_TEXT_CONTENT_OPTIONS)` → `buildPageLayout`(이웃 = 앞 쪽 최종본 + 뒤 쪽 예비본 — 4-7 역할 재계산을 흉내) → `toStored` → `fromStored` → `describePage` → 검색 레코드. 크기는 `v8.serialize`(Chrome IndexedDB 와 같은 직렬화기).
+
+**2-1. 글자·저장소 증가**
+
+| | Harrison 729쪽 | CMDT 2026 1,967쪽 | CMDT 2021 5,051쪽 |
+|---|---|---|---|
+| 검색 글자 text / table | 284만 / 7.1만 (표 2.4%) | 893만 / 75.7만 (7.8%) | 955만 / 0 |
+| `pages` (v8) | 16.7MB | 62.7MB | 51.7MB |
+| **`searchText` 증가 (v8)** | **5.6MB** (×0.34) | **19.7MB** (×0.31) | **18.9MB** (×0.37) |
+| 같은 레코드 JSON 크기(하한 참고) | 3.0MB | 10.2MB | 10.2MB |
+| 두 바이트 문자열인 쪽 | 650 | 1,892 | 4,523 |
+
+- 세 권 합 **+44MB**(`pages` 131MB 의 약 1/3). 17-8-1 의 4.2·14.4·10.3MB 보다 큰 이유: 그때는 **접은** 글자(굽은 따옴표 → ASCII)를 쟀고, 지금은 원문(조각·대소문자 일치에 필요)이라 `’`·`β`·`•` 하나만 있어도 그 쪽 문자열 전체가 2바이트다. 실제 IndexedDB 증가는 브라우저 압축에 따라 이 값 이하 `[추정]` — `[M]` 에서 `navigator.storage.estimate()` 전후로 잰다.
+- 줄일 길(나중): `text` 를 UTF-8 `ArrayBuffer` 로 저장하면 약 절반(JSON 크기 수준), 캐시를 채울 때 `TextDecoder` 1회 `[추정 10–20ms]`. 이번에는 문자열 그대로(단순함 우선).
+
+**2-2. 시간 (데스크톱 Node → 폰 `[추정 ×3–5]`, 브라우저 IndexedDB 는 17-8-1 의 Chrome 실측 비율 ×1.3)**
+
+| | Harrison | CMDT 2026 | CMDT 2021 |
+|---|---|---|---|
+| 추출 중 쪽마다 검색 레코드 만들기(`describePage`+`joinPieces`+레코드) | 0.12ms | 0.13ms | 0.04ms |
+| └ 추출 한 쪽(`getTextContent`+레이아웃) 대비 | 1% 미만 | 1% 미만 | 1% 미만 |
+| 백필 전권(`pages` 역직렬화 → 레코드 → 직렬화) | 0.36초 | 1.24초 | 0.90초 |
+| └ 폰 추정(한 번만) | 1.4–2.3초 | 4.8–8초 | 3.5–5.9초 |
+| 캐시 채우기(레코드 역직렬화 + 접기) | 18ms | 72ms | 71ms |
+| └ 첫 검색 폰 추정(IDB 읽기 포함) | 0.15–0.3초 | **0.45–1.0초** | 0.45–0.9초 |
+| 메모리 캐시(원문 + 접은 글자) | 9.7MB | 33.4MB | 28.4MB |
+| 검색 1회 — 상한 1,000 까지 / 끝까지 (가장 느린 검색어) | ≤ 4.2 / 6.7ms | ≤ 13.1 / 16.4ms | ≤ 15.4 / 18.8ms |
+| └ 폰 추정 | ≤ 35ms | ≤ 80ms | ≤ 95ms |
+| 결과 쪽 다시 찾기(강조 경로 — 쪽 저장본 → 화면 글자 → 일치) | 1.3ms/쪽 | 1.6ms/쪽 | 0.8ms/쪽 |
+
+→ 목표(17-8-2: 첫 검색 ≤ 1초, 다음 검색 ≤ 150ms, 서재 전체 ≤ 3초) 안이다. 단 **CMDT 2026 첫 검색이 폰에서 1초 가까이** 갈 수 있다(두 바이트 문자열로 레코드가 17-8-1 벤치보다 크다) → 결정: **검색 화면을 여는 순간 캐시 채우기를 시작**한다(타이핑하는 몇 초 동안 끝난다). 리더를 열 때 미리 채우지는 않는다(읽기만 하는 동안 33MB 를 들지 않게). 서재 전체(세 권 합 Node 161ms) 폰 추정 1–2.5초 — 책마다 끝나는 대로 보인다.
+
+**2-3. 결과 쪽 다시 찾기·낭독 시작점** (검색어 28개 × 결과 쪽 최대 400, 합 7,015쪽 · 37,860 적중)
+
+| | Harrison | CMDT 2026 | CMDT 2021 |
+|---|---|---|---|
+| 쪽 적중 수가 저장 글자와 다른 쪽 | **0** / 1,567 | **0** / 2,433 | **0** / 3,015 |
+| 두 줄에 걸친 적중(줄바꿈 하이픈 등 — 구간 둘) | 98 | 140 | 63 |
+| 빈 구간 | 0 | 0 | 0 |
+| 적중 → 낭독 단위 찾음 | 100% | 100% | 100% |
+| └ 그 단위가 인용(`cite`) | 0% | 2.0% | 3.4% |
+| └ 300자 분할 단위(ranges 없음 — 줄로 찾음) | 4.7% | 7.6% | 10.6% |
+
+**2-4. 검색어별 적중 — 전체 적중 / 쪽 (제목 묶음 = 일반 소제목 뺀 heading 적중)** `T` = 책당 1,000 상한에 걸림
+
+| 검색어 (규칙) | Harrison | CMDT 2026 | CMDT 2021 |
+|---|---|---|---|
+| patients (접두) | 1,937 / 509 `T` | 11,281 / 1,653 `T` | 11,324 / 3,232 `T` |
+| the (낱말) | 18,273 `T` | 42,139 `T` | 42,972 `T` |
+| sarcoidosis | 95 / 44 · 제목 0 | 82 / 64 · 제목 3 · 표 8 | 99 / 82 · 제목 2 |
+| pheochromocytoma | 38 / 16 | 107 / 40 | 180 / 77 |
+| heart failure (구) | 138 / 79 | 129 / 83 · **표 79** | 575 / 324 |
+| beta-blocker = beta blocker = β-blocker | 27 / 25 (세 꼴 같음) | 249 / 127 (같음) | 192 / 126 (같음) |
+| MI (대문자 약어 — 대소문자·낱말) | 12 / 7 | 276 / 142 | 144 / 87 |
+| mi (3자 이하 — 낱말) | 12 | 277 | 147 |
+| HbA1c · IL-6 | 5 · 5 | 69 · 23 | 69 · 12 |
+| metform (접두) | 17 | 82 | 92 |
+| pre-eclampsia (합성어 변형 없을 때) | 9 (0) | 99 (8) | 102 (1) |
+| pseudohypoparathyroidism (없을 때) | 0 (0) | 6 (5) — 이름표 1 | 7 (7) |
+| 아랍 문자 검색어 | 0 | 0 | 0 |
+
+- CMDT 2026 은 적중의 상당수가 **표**(4-8 영역)에 있다("heart failure" 129 중 79) — 표 묶음을 따로 보이는 17-8-7 이 맞다.
+- 이름표(rowhead) 적중은 검색어당 0–3개 — 본문 묶음에 그대로 둔다.
+
+##### 3. 목차 (C) `[실측 2026-10-18]`
+
+| | Harrison | CMDT 2026 | CMDT 2021 |
+|---|---|---|---|
+| 개요 항목 / 최상위 / 깊이 | 37 / 17 / 2 | 61 / 61 / 1 | 50 / 50 / 1 |
+| 쪽 해석 | 37/37 (명시 대상) | 61/61 | 50/50 |
+| 읽기+해석 (Node) | 4 + 1ms | 2 + **218ms** | 8 + 1ms |
+| `documents.outline` 크기(JSON) | 1.5KB | 3.5KB | 2.6KB |
+| 쪽 라벨 | 없음 | 1,967개 (12.7KB) — 숫자 1,801(**PDF−38 이 1,704**, PDF−166 이 97) · 로마 35 · 그 밖 131. **개요 61항목 전부 인쇄 쪽 ≠ PDF 쪽** | 없음 |
+| heading 문단 (algoVersion 12) | 1,017 | 12,194 (17-8-1 의 12,670 보다 적은 것은 주로 8i·8i-2 가 표 칸을 rowhead·body 로 바꾼 몫 — 측정 조건(이웃 저장본)도 달라 정확히 가르지는 않았다) | 5,997 |
+| rowhead 문단 / 행 표 쪽 / 행 표 쪽의 heading | 12 / 3 / 0 | 220 / 33 / 62 | 0 / 0 / 0 |
+
+**heading 폴백(개요를 없다고 치고 만든 목록)의 품질** — 개요를 정답으로 쓴다
+
+| 규칙 | Harrison | CMDT 2026 | CMDT 2021 |
+|---|---|---|---|
+| 17-8-6 그대로(A): 항목 수 · 최소 크기 비 | 154 · 1.27 | 106 · **3.0** | 98 · 1.43 |
+| └ 숫자만인 항목 | 0 | 37 | 42 |
+| └ 개요 항목 쪽(±1)에 항목이 있다 | 27/37 (73%) | 52/61 (85%) | 47/50 (94%) |
+| └ 개요 제목과 같은 항목 | 13/37 | 2/61 | 42/50 |
+| 숫자·3자 이하를 먼저 뺌(B) | 153 · 13/37 | 69 · 2/61 | 56 · 42/50 |
+| **숫자만 → 같은 쪽 다음 heading 을 붙임(C) — 채택** | 154 · 27/37 · **13/37** | 106 · 52/61 · **5/61** | 98 · 47/50 · **45/50 (90%)** |
+| 행 표 쪽 항목 · rowhead 항목 | 0 · 0 | 0 · 0 | 0 · 0 |
+
+→ 폴백은 CMDT 2021 꼴(장 번호 + 장 제목이 큰 글자)에서 쓸 만하고(90%), Harrison 은 자리는 맞되 제목이 갈린다(73% / 35%), **CMDT 2026 꼴은 쓸모가 없다**(장 제목이 소제목과 같은 크기 층 — 1.15–1.4배에 5,704개). 세 권 모두 개요가 있어 폴백은 실제로 쓰이지 않는다. 폴백 머리 문구("PDF 에 목차가 없어 큰 제목으로 만든 목록입니다")가 이 한계를 말한다. 4-13-7 의 "rowhead 를 섞지 않는다"는 실측으로 확인(heads 에 rowhead 를 넣지 않으므로 구조로 0).
+
+**개요 읽기 시점**: 리더가 그 책의 추출기(`pdfDoc`)를 붙인 뒤 한가할 때 한 번 `outline.ensure(docId, pdfDoc)` → `db.patch` 로 `outline`·`pageLabels`(라벨이 있고 하나라도 PDF 쪽과 다를 때만)·`outlineV:1`. 이미 있으면 PDF 를 보지 않는다. pdf.js 를 못 받으면(오프라인 첫 열기) 저장하지 않고, 목차 탭은 heading 폴백 + "목차를 아직 읽지 못했습니다" 한 줄(폴백은 `searchText` 만 쓰므로 오프라인 ○).
+
+**쪽 표시**: `pageLabels[p−1]` 가 있고 `String(p)` 와 다르면 "p. {라벨} (PDF {p})", 아니면 "p. {p}". 숫자는 `formatNumber`(UI 언어), 라벨 글자(로마 숫자 등)는 그대로.
+
+##### 4. 화면 (D) — `ui/search.js`
+
+**4-1. 412px 세로 (360px 도 같은 구조)**
+
+```
+┌──────────────────── 412 ────────────────────┐
+│ [뒤로]  검색                [이 책 | 서재]    │ 48  상단바 — 범위 분절(서재에서 들어오면 '서재'만)
+│ [🔍  낱말·제목으로 찾기 ............ ] [✕] │ 48  type=search · enterkeyhint=search · dir=auto
+│ [ 찾기 ] [ 목차 ]                             │ 48  탭 — 서재 범위엔 목차 없음
+│ 최근  (sarcoidosis) (heart failure) (MI) …    │ 48  입력이 비었을 때만 · 가로 스크롤 칩
+│ 812/1,967쪽에서 찾았습니다 — 텍스트 준비 중   │     부분 추출일 때만
+│ ── 제목 3 ─────────────────────────────────  │
+│ p. 1046 (PDF 1084)                    2곳    │ ≥48 줄 전체가 누르는 자리
+│   …evaluation of «sarcoidosis» in…           │     조각: dir=ltr lang=문서 언어, <mark> 는 textContent 조각
+│ ── 본문 79 ─────────────────────────────────  │
+│ ── 표 8 ───────────────────────────────────  │
+└───────────────────────────────────────────────┘
+리더 — 상단바 아래 검색 띠(퀴즈 칩 자리, 48px):
+│ "sarcoidosis"…  [‹] 3/82 [›]  [읽던 곳으로] [✕] │
+```
+
+- 리더 상단바: `[뒤로] 제목… [⧉] [퀴즈?] [Aa] [🔍]` — 새 [🔍] 48×48(`search.open` aria). 360px·fr·퀴즈 버튼 보임에서도 버튼은 줄지 않고 제목만 말줄임(`.topbar .title` 규칙 그대로) — 수용 기준 S20 이 잰다.
+- 서재 상단 줄에 [검색] → `#/search`.
+- 결과 줄: 쪽 표시 · 그 쪽 그 묶음의 적중 수 · 첫 조각(앞뒤 40자, 낱말 경계로 넓힘 — 원문 레코드를 그 줄을 그릴 때만 `get`, 한 번에 30줄). 서재 범위는 책 머리 "제목 — n곳 · 검색한 쪽 m/N"(접기).
+- 1,000 상한에 걸리면 목록 끝에 "결과가 너무 많습니다 — 낱말을 더 넣어 보세요".
+
+**4-2. 키보드 없이 쓰는 길** — (1) **목차 탭**(타이핑 0, 지금 읽는 쪽이 든 항목 표시·그 자리로 스크롤) (2) **최근 검색 칩** 5개(누르면 바로 검색) (3) Gboard 음성 입력(앱 작업 없음 `[가정 — M 확인]`) (4) 결과에서 리더로 간 뒤에는 띠의 ‹ › 로 이동(타이핑 없음). 9b 음성 명령 "찾기 …"는 9b 설계 때.
+
+**4-3. 흐름** — 리더 [🔍] → 검색 화면(이때 **읽던 자리** `{docId, page, lineId, start, speaking}` 를 기억 — 낭독 중이면 지금 단위의 첫 줄·글자, 아니면 화면 가운데 줄) → 결과 줄 누름 → `#/reader/:docId/:p`(보통 쪽 이동) + 모듈 상태 `pendingHit{query, pageNo, nth}` → 리더 그림 → 강조·스크롤 → 띠. **Android 뒤로 = 검색 화면**(검색어·결과·스크롤을 모듈 메모리에 둔다 — URL 에 검색어를 넣지 않는다). 띠 [읽던 곳으로] → 기억한 쪽·줄로 가서 그 줄로 스크롤 + 낭독 시작점도 그 자리(멈춘 채 — 운영자 결정 G3). ✕ → 강조·띠 지움(검색 화면 상태는 남김).
+
+**4-4. 아랍어 UI(RTL)** — 17-8-7 그대로 + 두 가지: 띠의 ‹ › 는 **논리 방향**(‹ = 이전 = inline-start 쪽 — RTL 에서는 글리프를 `:dir(rtl)` 로 좌우 뒤집음), 검색어를 되풀이하는 문구("…을 찾지 못했습니다", 띠의 검색어)는 `bididom` 으로 검색어를 격리. 목차 제목·조각은 원서 글자라 `dir="ltr" lang={documents.lang}`.
+
+**4-5. 이동 경로 — 8i-1·8i-3·낭독과 맞물림 (U9)**
+
+| 상황 | 하는 일 |
+|---|---|
+| 결과 누름 — 낭독 아님 | `go(readerHash)` 보통 쪽 이동. `goToPageForSpeech`·`renderDone` 은 **쓰지 않는다**(낭독 쪽 넘김 전용으로 둔다). 처리는 `onPageRender` 구독(그리기·`notifyPage` 뒤, controls 의 `speaker.reload` 구독 **뒤에** 등록) |
+| 결과 누름 — 낭독 중 · 쪽 넘김 대기(`waiting-page`) · 새 판 대기(`waitFresh`) | **먼저** `controls.pauseForJump()`(= `speaker.pause()` — `gen` 이 올라 `advancePage`·`waitFresh` 의 대기가 스스로 끝난다. 남은 `renderDone` 대기자는 상한 뒤 false — 무해) → 쪽 이동 → `speaker.reload()`(멈춤이라 index 0) → 검색이 `controls.cueAt(lineId, start)` → speaker 새 메서드 **`cue(lineId, start)`**: `ranges` 가 그 글자를 품은 단위, 없으면(300자 분할) 그 줄을 품은 첫 단위, 그 단위가 큐에 없으면(인용 — `tts.readCitations` 끔) 화면 순서로 그 뒤 첫 발화(8h 탭 규칙 `indexAtOrAfterLine`). **멈춘 채** `reshow`. `readalong.setActive(false)` 그대로라 번역 요청 0 |
+| 간 쪽이 옛 판(8i-1 따라가기) | 옛 판 글자에서 다시 찾아 칠한다. 새 판 저장 → 8i-1 다시 그리기 → `onPageRender{refreshed}` → **새 판에서 다시 찾아 다시 칠하고 다시 cue**. 못 찾으면 쪽 맨 위 + "이 쪽에서 정확한 위치를 찾지 못했습니다" |
+| 같은 쪽 안 ‹ › | 렌더 없이 `search-cur` 만 옮기고 스크롤(`programScrollAt` — 6-5 사용자 스크롤로 읽지 않게), 멈춤이면 cue 갱신 |
+| 언어 바꾸기(`relabelReader`)·뷰 전환 | DOM 을 다시 만들면 Range 가 떠 버린다 → 리더에 새 훅 **`onPageRepaint`**(DOM 을 새로 붙인 뒤마다 — `notifyPage` 와 따로, 큐를 갈지 않는다) → 검색이 다시 칠함. 원본 보기는 `original.scrollToLine(적중 줄)` + 줄 오버레이(글자 구간은 리플로우 전용) |
+| 다른 쪽으로 감·리더 떠남 | `search-hit`·`search-cur` 레지스트리를 지운다(`renderPage` 의 `clearCharHighlight` 는 `HL_NAME` 만 지운다) |
+| 표 적중 | `figure[data-region-id]` 로 스크롤 + 테두리 + "표 안에서 찾았습니다" + 기존 [원본으로 보기] |
+
+**4-6. i18n 키** (`search.*` 37개 + `err.dbUpgraded` 1개, **네 언어 모두** — ar 먼저 쓰고 en·fr·ko. `tests/i18n.test.mjs` 의 키 대칭)
+
+| 키 | ko 문구(뜻) | 쓰임 |
+|---|---|---|
+| `search.open` | 검색 | 리더 [🔍] aria·서재 [검색] |
+| `search.title` | 검색 | 화면 제목 |
+| `search.scope.doc` · `search.scope.library` | 이 책 · 서재 전체 | 범위 분절 |
+| `search.input.label` · `search.input.placeholder` | 검색어 · 낱말이나 제목으로 찾기 | 입력 칸 |
+| `search.clear` | 지우기 | ✕ aria |
+| `search.tab.find` · `search.tab.toc` | 찾기 · 목차 | 탭 |
+| `search.recent` | 최근 검색 | 칩 줄 머리 |
+| `search.group.head` · `search.group.body` · `search.group.table` | 제목 · 본문 · 표 | 묶음 머리(`{n}` 포함) |
+| `search.page` · `search.pageLabeled` | p. {page} · p. {label} (PDF {page}) | 쪽 표시 |
+| `search.count` | {n}곳 | 결과 줄 |
+| `search.minChars` | 두 글자 이상 입력하세요 | |
+| `search.tooMany` | 결과가 너무 많습니다 — 낱말을 더 넣어 보세요 | 상한 |
+| `search.empty` | “{q}”을(를) 찾지 못했습니다 | `{q}` 는 bididom 격리 |
+| `search.scriptHint` | 이 책은 {lang} 원서입니다 — {lang} 낱말로 찾아 보세요 | 검색어 문자가 책 언어와 다를 때(17-8-9 가) |
+| `search.partial` | {total}쪽 중 {done}쪽에서 찾았습니다 — 텍스트 준비 중 | |
+| `search.continuePrep` | 이 책 텍스트 준비 계속 | 서재 범위·안 연 책 |
+| `search.preparing` | 검색 준비 중 {done}/{total} | 백필 |
+| `search.library.doc` | {title} — {n}곳 · {done}/{total}쪽 | 서재 범위 책 머리 |
+| `search.toc.fallback` | PDF 에 목차가 없어 큰 제목으로 만든 목록입니다 | |
+| `search.toc.unavailable` | 목차를 아직 읽지 못했습니다 | 오프라인 첫 열기 |
+| `search.toc.empty` | 이 책에서 목차를 만들지 못했습니다 | 개요·폴백 모두 0 |
+| `search.toc.here` | 지금 읽는 곳 | 현재 항목 aria |
+| `search.band.label` | 검색 결과 | 띠 aria |
+| `search.band.prev` · `search.band.next` | 이전 결과 · 다음 결과 | ‹ › aria |
+| `search.band.pos` | {i}/{n} | |
+| `search.band.back` | 읽던 곳으로 | |
+| `search.band.close` | 검색 강조 지우기 | ✕ aria |
+| `search.notOnPage` | 이 쪽에서 정확한 위치를 찾지 못했습니다 | |
+| `search.inTable` | 표 안에서 찾았습니다 | 표 적중 |
+| `search.paused` | 낭독을 멈췄습니다 — ▶ 를 누르면 이 문장부터 읽습니다 | 낭독 중 이동했을 때 한 번 |
+| `err.dbUpgraded` | 앱이 새 판으로 바뀌었습니다. 다시 불러오세요. | `versionchange` 배너(U2) + 기존 [다시 불러오기] |
+
+새 키 38개 × 4언어. `search.scriptHint` 의 `{lang}` 은 기존 원문 언어 이름 키를 쓴다.
+
+##### 5. 운영자 결정 (선택지 · 권장)
+
+| # | 쟁점 | 선택지 | 권장 |
+|---|---|---|---|
+| G1 | 배포 나누기 | (가) **8g-1(데이터)만 먼저 배포** — DB 3·추출이 `searchText` 를 함께 씀·`versionchange` 배너. 화면 변화 없음. 그 뒤 8g-2~4 를 한 번에 · (나) 8g 전부를 한 번에 | **(가)** — DB 버전을 올리는 위험(U1·U2)을 화면 변화와 떼어 혼자 확인하고, 그동안 Nour 기기의 추출·재추출이 검색 글자를 미리 쌓아 첫 검색의 백필(폰 CMDT 2026 5–8초)이 거의 없어진다. 8i-2(algoVersion 12 — 전 책 재추출)가 아직 Nour 에게 가지 않았다면 8g-1 과 같은 배포에 실으면 그 재추출이 검색 글자까지 한 번에 만든다(8i-2 를 8g-1 때문에 늦출 필요는 없다 — 백필이 있다) |
+| G2 | 인용(참고문헌) 문장의 적중 | (가) 본문 묶음에 그대로 · (나) 따로 "참고문헌" 묶음 · (다) 찾지 않음 | **(가)** — 화면에 있는 글자는 찾는다(17-8 원칙). 적중의 0–3.4%뿐이다. 낭독 시작점은 그 뒤 첫 발화(4-5) |
+| G3 | [읽던 곳으로] 뒤의 낭독 | (가) 멈춘 채 원래 문장을 다음 [▶] 시작점으로 · (나) 검색 전에 낭독 중이었으면 자동으로 이어 읽기 | **(가)** — 18절 "결과로 갈 때 멈춘다"와 같은 규칙. 이어폰 [재생] 한 번이면 이어진다 |
+| G4 | 쪽 번호 칸(행 표 `ref`, 인쇄 쪽 번호) | (가) 찾지 않음 · (나) 찾되 쪽으로만 이동(강조 없음) | **(가)** — `.line` 이 아니라 강조할 수 없고 숫자 검색의 잡음이다. CMDT 2026 21–38쪽 576자 |
+| G5 | 인쇄 쪽 번호로 쪽 이동(쪽 칸에 "p. 170" 입력) | (가) 이번에도 안 함(표시만) · (나) 이번에 — 라벨이 있는 책만 | **(가)** — 17-8-6 결정 유지. 검색·목차가 먼저 길을 준다. 라벨 저장은 이번에 하므로 다음에 작게 붙는다 |
+
+기술 결정(권장대로 Build — 운영자 확인만): U4 경첩 `sk`, U6 저장 글자 = 화면 글자 + `text/screen.js` 이동, U7 합성어 변형, U8 일반 소제목 강등, U11 폴백 숫자 붙이기, 2-2 캐시는 검색 화면을 열 때 채움, 문자열 그대로 저장(UTF-8 은 나중).
+
+**승인 2026-10-18**: G1 (가) 8g-1 데이터 먼저 배포 · G2 (가) · G3 (가) · G4 (가) · G5 (가) 이번엔 안 함(쪽 라벨 저장만). 기술 결정(U4 `sk` 경첩 · U6 `text/screen.js` · 합성어 변형 등)도 권장대로.
+
+##### 6. Build 나누기 — 데이터 → 엔진 → 목차 → 화면
+
+| Build | 범위(파일) | 테스트 | 배포 |
+|---|---|---|---|
+| **8g-1 데이터** | `js/text/screen.js`(새 — 옮김만, `ui/reader.js`·`tts/text.js` 는 다시 export), `js/text/search.js`(새 — `searchRecordOf(F, desc?)`·`foldText`·`parseQuery`·`findIn`·`classifyHit`·`snippetAt`·`rangesFor`·`headingToc` — 엔진·화면이 쓸 순수 함수 전부를 여기서 먼저), `config.js` `SEARCH`, `db.js`(`DB_VERSION 3`·스키마 표 `searchText`·`MIGRATIONS[3]`·`CASCADE_STORES`·`DERIVED_STORES`), `pdf/extract.js`(`_buildAndStore` 가 `pages`+`searchText` 한 트랜잭션), `main.js` `versionchange` 배너 + `err.dbUpgraded` ×4, `settings.js` `search.recent`, `tests/fixtures/fake-idb.mjs` 보강(`getAll`·범위 키·인덱스 `getAllKeys(range)`) | S1–S7 | 단독 배포 가능(G1 가) |
+| **8g-2 엔진** | `js/search/engine.js`(새 — 백필·캐시·`searchDoc`·`searchLibrary`·세대 취소·`notePage`/`invalidate`), `dev/measure-search-8g.mjs` 의 시제품 규칙을 앱 함수로 바꿔 부르는 `--app` 비교(시제품 = 앱 결과 0 차이) | S8–S15 | 8g-4 와 함께(화면 없이는 보이지 않는다) |
+| **8g-3 목차·쪽 라벨** | `js/search/outline.js`(새 — 개요 펼침·쪽 해석·라벨 → `db.patch`), `text/search.js` `headingToc`(U11), 리더가 한가할 때 `outline.ensure` 부르기 | S16–S19 | 8g-4 와 함께 |
+| **8g-4 화면·이동** | `js/ui/search.js`(새), `router.js`(`#/search`·`#/search/:docId`), `ui/reader.js`(🔍 입구·띠·`onPageRepaint`·`readingSpot()`·`revealLine`/`revealRegion`), `ui/controls.js`(`pauseForJump`·`cueAt`), `tts/speaker.js`(`cue`), `ui/library.js`([검색]·`reextractDoc` 뒤 `engine.invalidate`), `index.html`(상단바 [🔍]·띠 자리·서재 [검색] — **8i-2b 가 커밋된 뒤**), `css/*`(`::highlight(search-hit)`·`::highlight(search-cur)`·띠·결과 줄), `i18n/*` ×4 | S20–S30 | 8g-2·3 과 한 배포 |
+
+각 Build 끝에 `node apps/medreader/dev/stamp-importmap.mjs` · `--check` 0 · 전체 `node --test` 2회(시간 상한). 8g-1 의 `text/screen.js` 옮김은 **다른 줄을 한 줄도 바꾸지 않는 커밋**으로 먼저(그 커밋만으로 테스트 전부 녹색 — 리뷰가 diff 를 "옮김"으로만 읽을 수 있게).
+
+##### 7. 수용 기준 (16절 형식)
+
+**8g-1 데이터**
+- [ ] `[N]` S1 `foldText` 가 무작위 유니코드 1만 개(서로게이트·결합 부호·`İ` 포함)에서 길이를 보존하고, `β-blocker`·`Beta-Blockers`·`beta blocker`·`β blocker` 를 같은 접은 꼴로 만든다(`β` 는 그대로, 검색어 변형이 잇는다). 굽은 따옴표 → `'`/`"`, 악센트 라틴 → 기본 글자.
+- [ ] `[N]` S2 `searchRecordOf` 의 `text` 가 `flowParasOf(describePage(fromStored(rec))).map(joinPieces).join('\n')` 과 **바이트 같다** — 픽스처: 2단 쪽, 문단 안 빈 줄(Harrison 꼴), 행 표 쪽(rowhead·ref·colhead), 4-8 표 쪽, 인용 문장. `ref`·`colhead`·머리말 글자는 `text`·`table` 어디에도 없고, rowhead·인용 글자는 `text` 에 있으며, 4-8 영역 줄은 `table` 에만. `heads` 는 kind `heading` 만(rowhead 0).
+- [ ] `[N]` S3 `text/screen.js` 옮김 무변: 기존 테스트 전부 녹색, `ui/reader.js` 와 `tts/text.js` 가 내보내는 `describePage`·`flowParasOf`·`joinPieces`·`localRange` 가 `text/screen.js` 의 것과 **같은 함수 객체**. `text/screen.js`·`text/search.js` 가 `document`·`window`·`indexedDB`·`fetch` 를 참조하지 않는다(16-A grep).
+- [ ] `[N]` S4 DB 2 → 3(fake-idb, 데이터 있는 버전 2 DB): `searchText`(인덱스 `docId`·`docId_sk`)만 생기고 다른 스토어 레코드 수 불변, 두 번 열어도 같다. `deleteDocument` 뒤 그 문서 `searchText` 0. `resetDerived` 뒤 `searchText` 0 이고 `documents.outline`·`pageLabels` 는 남는다. `DB_VERSION >= 3` 단언(되돌림 가드).
+- [ ] `[N]` S5 한 트랜잭션: `searchText.put` 이 던지게 주입 → 그 쪽 `pages` 도 없고 `failed` 에 든다. 정상 → 두 레코드가 함께 있고 `sk = SEARCH.VERSION|DERIVED_HASH`. 역할 재계산(`_recomputeRoles`)도 둘을 함께 다시 쓴다.
+- [ ] `[D]` S6 탭 둘: 옛 판(DB 2) 탭을 연 채 새 판 탭을 열면 옛 탭에 `err.dbUpgraded` 배너 + [다시 불러오기], 새 탭은 막힘 없이 뜬다. 콘솔에 처리되지 않은 예외 0.
+- [ ] `[N]` S7 `tests/importmap.test.mjs` 녹색(새 모듈 `text/screen.js`·`text/search.js` 가 표에 있다).
+
+**8g-2 엔진**
+- [ ] `[N]` S8 `parseQuery`·`findIn` 표 테스트: `MI` 는 mild·mi·`MIS` 를 안 찾고 `MI.`·`(MI)` 는 찾음 · `mi` 는 낱말 전체 · `metform` → metformin · `beta blocker` 세 꼴 · `pre-eclampsia` ↔ `preeclampsia` ↔ `pre eclampsia` · `pseudohypoparathyroidism` 이 "Pseudo-hypoparathyroidism"(이름표 픽스처)을 찾음 · `betablocker` 는 "beta-blocker" 를 안 찾음 · 1자 → `ERR_SEARCH_SHORT`, 61자 → `ERR_SEARCH_LONG` · 정규식 메타 문자 검색어(`(a+b)*[`)가 예외 없이 글자 그대로.
+- [ ] `[N]` S9 백필: `pages` 10쪽(지금 algoVersion) 중 6쪽만 `searchText` → `pages.get` 정확히 4회. `SEARCH.VERSION` 을 올리면 10쪽, `DERIVED_HASH` 가 바뀌면 10쪽 다시. 옛 algoVersion `pages` 는 백필하지 않는다(`pagesCovered` 에 안 든다).
+- [ ] `[N]` S10 부분 추출: 1,000쪽 중 300쪽만 → `pagesCovered 300`, 결과는 그 쪽들에서만.
+- [ ] `[N]` S11 상한 1,000 에서 `truncated`. 세대 취소: 첫 검색이 끝나기 전에 둘째를 시작하면 첫 결과는 `onPartial`·반환 모두 버려진다.
+- [ ] `[N]` S12 묶음: heading 적중 = `head`, 같은 글자가 10번 이상인 heading 적중 = `body`, 표 = `table`, rowhead·인용 = `body`. 묶음 순서 head → body → table, 묶음 안은 쪽 순서.
+- [ ] `[N]` S13 캐시: 추출기 `page` 이벤트(`notePage`) 뒤 다음 검색이 그 쪽 새 글자를 찾고 옛 글자를 안 찾는다. `invalidate`(다시 추출) 뒤 캐시가 비고 다음 검색이 다시 채운다.
+- [ ] `[D]` S14 `node apps/medreader/dev/measure-search-8g.mjs <pdf> --app` 세 권: 시제품 규칙과 앱 함수의 적중·쪽·묶음 차이 0, 결과 쪽 다시 찾기 불일치 0(이 Plan 실측 7,015쪽 0 과 같아야).
+- [ ] `[D]` S15 실제 CMDT 2026 을 가져온 데스크톱 Chrome: 백필 ≤ 2초, 첫 검색(검색 화면을 열고 2초 뒤 입력) ≤ 300ms, 다음 검색 ≤ 50ms, 서재 전체(세 권) ≤ 1초.
+- [ ] `[M]` S15m Nour 기기(Realme GT7T): 검색 화면을 열자마자 "sarcoidosis" 를 붙여 넣어도 첫 결과 ≤ 1초, 다음 검색 ≤ 150ms. CMDT 2026 백필 시간·`navigator.storage.estimate()` 증가량을 기록(추정 +20MB 안팎).
+
+**8g-3 목차·쪽 라벨**
+- [ ] `[N]` S16 `outline.ensure`(가짜 pdfDoc): 이름 대상·명시 대상·대상 없음(`p:null`, 흐리게)·`getPageIndex` 가 던짐(`p:null`, 예외 없음)·깊이. 라벨이 없거나 전부 `String(p)` 와 같으면 `pageLabels` 를 쓰지 않는다. 두 번째 열기에서 PDF 를 부르지 않는다(`outlineV`).
+- [ ] `[N]` S17 `headingToc`(합성 heads): 10번 반복 제목 빠짐, 숫자만인 항목은 같은 쪽 다음 heading 을 붙임, 항목 ≤ 200, 글자 큰 rowhead 를 섞어도 0(heads 에 없으므로 — 변이 V10 이 heads 에 rowhead 를 넣으면 빨강).
+- [ ] `[D]` S18 `measure-search-8g.mjs` 세 권: 폴백 C 가 CMDT 2021 개요 제목 45/50 이상·항목 ≤ 200, Harrison 개요 쪽 27/37 이상(이 Plan 실측과 같거나 낫다).
+- [ ] `[D]` S19 목차 탭: 37·61·50 항목, Harrison 깊이 2 들여쓰기, 누르면 그 쪽 맨 위, 지금 쪽이 든 항목 표시. CMDT 2026 목차·결과에 "p. {인쇄} (PDF {쪽})". pdf.js 를 막고 개요가 저장되지 않은 문서 → 폴백 + `search.toc.unavailable`.
+
+**8g-4 화면·이동**
+- [ ] `[D]` S20 360×740·412×915, 네 언어, 퀴즈 버튼 보임/숨김: 리더 상단바 버튼 전부 48×48 이상·한 줄, 가로 스크롤 0(`scrollWidth ≤ innerWidth`), 제목만 말줄임. 검색 화면·띠도 같다.
+- [ ] `[D]` S21 결과 목록: 묶음 순서 제목 → 본문 → 표, 줄 높이 ≥ 48px, 조각의 `<mark>` 는 `textContent` 조각(검색어 `<img src=x onerror=alert(1)>` 가 글자로 보인다), 1,000 상한 문구.
+- [ ] `[D]` S22 아랍어 UI: 조각·목차 제목 `dir=ltr lang=문서 언어`, `<mark>` 가 낱말을 가르지 않는다, 띠 ‹ › 가 논리 방향(아랍어에서 ‹ 가 오른쪽), `search.empty` 의 검색어가 격리되어 문장 순서가 깨지지 않는다.
+- [ ] `[D]` S23 결과 → 리더: 고른 적중이 본문 영역 세로 중앙 ±20%, `search-hit`·`search-cur` 와 낭독 하이라이트가 동시에 살아 있다(레지스트리 이름 셋이 다르다). `searchText` 레코드를 손으로 고쳐 판을 어긋나게 하면 쪽 맨 위 + `search.notOnPage`.
+- [ ] `[D]` S24 낭독 중 결과로 → 낭독 멈춤, `search.paused` 한 번, [▶] 가 적중 문장부터(인용 문장 적중이면 그 뒤 첫 발화). 이동부터 [▶] 전까지 번역 요청 0(fetch 스텁 카운트). [읽던 곳으로] → 원래 쪽·줄, [▶] 가 원래 문장부터. 쪽 넘김 대기 중(`waiting-page`)에 결과를 눌러도 같다.
+- [ ] `[D]` S25 옛 판 쪽(algoVersion−1 저장본을 넣은 쪽)으로 이동 → 옛 판에 강조 → 새 판 저장 뒤 다시 그려지면 새 판에서 다시 칠함(또는 안내). `tests/pageturn-8i3.test.mjs`·`refresh-8i1.test.mjs` 녹색 그대로.
+- [ ] `[D]` S26 언어 전환·뷰 전환(리플로우 ↔ 원본) 뒤에도 강조가 남는다. 원본 보기에서는 적중 줄로 스크롤 + 줄 오버레이.
+- [ ] `[D]` S27 표 적중 → 그 표 크롭으로 스크롤·테두리·`search.inTable`·[원본으로 보기].
+- [ ] `[D]` S28 Android 뒤로(데스크톱 `history.back()`): 결과 목록·검색어·스크롤 위치가 그대로. 검색어가 URL 에 없다.
+- [ ] `[D]` S29 빈 결과: 아랍 문자 검색어 → `search.scriptHint`, 부분 추출 → `search.partial`, 서재 범위의 안 연 책 → [이 책 텍스트 준비 계속].
+- [ ] `[M]` S30 Nour 기기 412px: 실제 CMDT 에서 "sarcoidosis" → 제목 묶음 첫 줄 → 그 절 첫머리. 목차 탭만으로 장 이동(타이핑 0). Gboard 음성 입력으로 검색 칸 채우기. 낭독 중 결과 이동 → 멈춤 → [읽던 곳으로] → 이어폰 [재생].
+
+##### 8. 테스트·변이 목록
+
+새 테스트 파일: `tests/search-text-8g.test.mjs`(S1–S3·S8·S12·S17), `tests/search-db-8g.test.mjs`(S4·S5·S9–S11·S13 — fake-idb), `tests/search-outline-8g.test.mjs`(S16), `tests/search-ui-8g.test.mjs`(순수 부분 — 결과 묶기·쪽 표시·띠 위치 계산·`speaker.cue` 스텁 — 멈춤 유지·readalong 비활성).
+
+변이(빨개져야 하는 것): **V1** `foldText` 의 길이 가드 제거(`İ` 를 두 글자로) → S1 · **V2** 하이픈을 공백으로 접지 않음 → S1·S8 · **V3** 대문자 약어 규칙 제거 → S8(MI 가 mild) · **V4** 합성어 변형 제거 → S8(pseudohypo…) · **V5** `searchRecordOf` 가 `fromStored` 문단 text 를 씀 → S2(빈 줄 픽스처) · **V6** `ref` 줄을 넣음 → S2 · **V7** `pages` 와 `searchText` 를 따로 씀 → S5 · **V8** `sk` 에서 `DERIVED_HASH` 를 뺌 → S9 · **V9** 일반 소제목 강등 제거 → S12 · **V10** heads 에 rowhead 를 넣음 → S2·S17 · **V11** 검색 강조 이름을 `HL_NAME` 으로 → S23·search-ui 의 이름 상수 테스트 · **V12** 이동 전 `pauseForJump` 생략 → search-ui(스텁 speaker 가 speaking 으로 남음)·S24 · **V13** `DERIVED_STORES` 에서 `searchText` 를 뺌 → S4 · **V14** `DB_VERSION` 을 2 로 → S4 가드 · **V15** 백필이 옛 algoVersion 쪽도 만듦 → S9.
+
+##### 9. 되돌림
+
+- **`SEARCH.ENABLED = false`**: [🔍]·[검색]·띠·라우트를 숨긴다. 추출은 `searchText` 를 계속 써도 무해(저장 +1/3)하다 — 다시 켜면 백필이 없다.
+- **`DB_VERSION` 은 3 아래로 내리지 않는다.** 커밋을 되돌리더라도 `db.js` 의 버전·스키마 표(`searchText` 포함)는 남긴다(내리면 이미 3 으로 연 기기가 `VersionError` 로 부팅하지 못한다 — 되돌릴 수 없는 유일한 부분). S4 가 가드.
+- 8g-1 만 배포된 상태에서 문제가 나면 `_buildAndStore` 의 `searchText` 쓰기만 끄는 것(`SEARCH.ENABLED` 를 추출에서도 본다)으로 충분하다.
+
+##### 10. 이번엔 못 함 (경계)
+
+- 아랍어 검색어를 영어로 바꿔 찾기(17-8-9 나·다·라) — 이번엔 안내(가)만.
+- 목록 밖 붙여 쓰기(`betablocker`)·어간·동의어(약어 ↔ 풀어 쓴 이름)·철자 교정.
+- 인쇄 쪽 번호 입력으로 쪽 이동(G5), 행 표 쪽 번호 칸(인쇄 쪽)을 눌러 그 쪽으로 가기(라벨이 있으니 가능해 보이나 다음).
+- CMDT 2026 꼴 책(장 제목이 소제목과 같은 크기 층)의 쓸 만한 heading 폴백 — 개요가 없는 그런 책이 오면 그때(실측 5/61).
+- **문단 안 빈 줄 결함**(Harrison 17문단 — 화면·낭독이 "res-" + 공백 둘 + 나머지로 잇는다): 검색은 화면 글자를 따르므로 그 낱말을 붙여서는 못 찾는다. 4-10·12-4 의 별도 항목.
+- **`derivedHash` 되감기가 `pages` 를 다시 쓰지 않는 기존 동작**(`_loadStoredSet` 이 algoVersion 만 본다 — 저장된 kind 가 옛 규칙 판정으로 남는다): 검색은 `sk` 로 스스로 맞추지만 원인은 9-4 의 별도 항목.
+- 원본 보기의 글자 구간 강조(줄 오버레이만), 12-8 compact(8e) 배치, 9b 음성 명령 "찾기 …", 9c 백업(검색 글자는 담지 않는다 — 그대로).
+- 브라우저·폰 실측: 이번 수치는 Node(데스크톱)뿐이다. 브라우저 IndexedDB 는 17-8-1 의 `search-bench.html` 비율로 환산했다 — `[M]` S15m 이 실제 값을 정한다. `text` UTF-8 저장(크기 절반)은 S15m 에서 저장·첫 검색이 문제일 때.
 
 ---
 
