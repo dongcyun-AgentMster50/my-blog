@@ -42,7 +42,7 @@ import * as db from '../db.js';
 import * as settings from '../settings.js';
 import { t, applyTranslations, formatNumber, onLangChange } from '../i18n/index.js';
 import { fromStored } from '../text/store.js';
-import { joinHyphen } from '../text/hyphen.js';
+import { FOLD_ROLES, REF_ROLE, describePage, flowParasOf } from '../text/screen.js';
 import { go, replace, readerHash, libraryHash, quizHash } from '../router.js';
 import { openDoc, extractorFor } from './library.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
@@ -62,21 +62,8 @@ import { algoVersion as ALGO_VERSION } from '../text/layout.js';
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
    ──────────────────────────────────────────────────────── */
 
-/**
- * 4-7 의 비본문 역할. 이 줄들은 문단에 들어가지 않고 `details` 로 접힌다
- * (4-7 오판의 복구 수단 — 본문이 머리말로 잘못 판정돼도 사용자가 펼쳐 볼 수 있다).
- *
- * ★ `rotated` 줄의 `bbox` 는 신뢰할 수 없다(Review 주의사항 5 — `lineBBox` 가
- *   90° 회전 아이템의 `width` 를 수평 폭으로 더한다). 그래서 이 뷰는 어떤
- *   줄의 좌표도 쓰지 않는다. **텍스트만** 그린다.
- */
-export const FOLD_ROLES = Object.freeze(['header', 'footer', 'pageno', 'rotated', 'colhead']);
-
-/* `[8i — spec 4-13-5 · D3 · D4]` 행 표의 쪽 번호 줄(role 'ref'). 이름표(rowhead) 문단이 그 행의 쪽 번호를
- * `refLineIds` 로 들고 있으면 이름표 끝에 작은 회색 숫자로 보여 준다(`span.rt-ref` — `.line` 이 아니다 →
- * 하이라이트·탭·낭독 대상 아님). 이름표가 없는 행의 쪽 번호 줄만 접힌 줄로 간다 — 잃어버리지 않는다.
- * 열 머리 행(role 'colhead')은 늘 접는다(위 FOLD_ROLES). */
-export const REF_ROLE = 'ref';
+// `[8g-1 — spec 17-8-12 U6]` 화면 글자 함수는 순수 모듈 `text/screen.js` 로 옮겼다 — 같은 함수 객체를 다시 export 한다.
+export { FOLD_ROLES, REF_ROLE, describePage, flowParasOf };
 
 /** 쪽 번호는 1..pageCount 안으로 접는다. 쪽수를 모르면 1 이상만 본다. */
 export function clampPage(page, pageCount) {
@@ -85,109 +72,6 @@ export function clampPage(page, pageCount) {
   if (!Number.isFinite(n) || n < 1) return 1;
   if (max >= 1 && n > max) return max;
   return n;
-}
-
-/**
- * `fromStored` 로 되살린 `PageLayout` → **DOM 기술(記述)**. 순수 함수다.
- *
- * 블록 셋:
- *   { type:'para',   id, kind, lines:[{id, text, hyphen:'none'|'hidden'|'kept'}] }
- *   { type:'table',  regionId, kind }
- *   { type:'folded', lines:[{id, text, role}] }
- *
- * 순서는 **읽기 순서**다 — `lines` 는 4-5 가 이미 컬럼 순서로 정렬해 두었으므로
- * 줄을 훑으며 처음 만나는 문단·표를 그 자리에 낸다. 접히는 줄은 모아서 맨 뒤에
- * 한 덩어리로 둔다(12-4 의 `details.folded`).
- *
- * `hyphen` 은 **줄 사이를 어떻게 이을지**다:
- *   'hidden' — 하이픈을 지우고 붙인다(`cardio-` + `vascular` → cardiovascular).
- *              끝의 `-` 를 `span.hy` 로 감춰 시각만 결합한다.
- *   'kept'   — 하이픈을 살려 붙인다(`methicillin-` + `resistant`).
- *   'none'   — 공백으로 잇는다.
- * 판정은 `fromStored` 가 문단 텍스트를 만들 때 쓴 것과 **같은 함수**(`joinHyphen`)다.
- * 그래서 화면 글자와 `paragraphs[].text` 가 어긋날 수 없다(테스트가 고정한다).
- */
-export function describePage(layout) {
-  const L = layout || {};
-  const lines = Array.isArray(L.lines) ? L.lines : [];
-  const paragraphs = Array.isArray(L.paragraphs) ? L.paragraphs : [];
-  const regions = Array.isArray(L.regions) ? L.regions : [];
-
-  const lineById = new Map();
-  for (let i = 0; i < lines.length; i++) lineById.set(lines[i].id, lines[i]);
-
-  const paraById = new Map();
-  for (let i = 0; i < paragraphs.length; i++) paraById.set(paragraphs[i].id, paragraphs[i]);
-
-  const regionById = new Map();
-  const regionOfLine = new Map();
-  for (let i = 0; i < regions.length; i++) {
-    const g = regions[i];
-    regionById.set(g.id, g);
-    const ids = Array.isArray(g.lineIds) ? g.lineIds : [];
-    for (let k = 0; k < ids.length; k++) regionOfLine.set(ids[k], g.id);
-  }
-
-  const foldSet = new Set(FOLD_ROLES);
-  // [8i] 이름표 문단이 보여 주는 쪽 번호 줄 — 블록으로 내지 않는다(rowhead 블록의 refs 가 보여 준다)
-  const refShown = new Set();
-  for (let i = 0; i < paragraphs.length; i++) {
-    const p = paragraphs[i];
-    if (p.kind !== 'rowhead' || !Array.isArray(p.refLineIds)) continue;
-    for (let k = 0; k < p.refLineIds.length; k++) if (lineById.has(p.refLineIds[k])) refShown.add(p.refLineIds[k]);
-  }
-  const blocks = [];
-  const folded = [];
-  const doneParas = new Set();
-  const doneRegions = new Set();
-
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i];
-    const regionId = regionOfLine.get(l.id) || l.regionId || null;
-
-    if (regionId) {
-      if (!doneRegions.has(regionId)) {
-        doneRegions.add(regionId);
-        const g = regionById.get(regionId);
-        blocks.push({ type: 'table', regionId: regionId, kind: (g && g.kind) || 'table' });
-      }
-      continue;
-    }
-
-    if (foldSet.has(l.role)) {
-      folded.push({ id: l.id, text: textOf(l), role: l.role });
-      continue;
-    }
-
-    // [8i] 쪽 번호 줄은 흐름 밖이다 — 이름표 끝에 보이거나(refShown), 아니면 접힌 줄로. 절대 낭독 문단이 되지 않는다.
-    if (l.role === REF_ROLE) {
-      if (!refShown.has(l.id)) folded.push({ id: l.id, text: textOf(l), role: l.role });
-      continue;
-    }
-
-    if (l.paraId && paraById.has(l.paraId)) {
-      if (!doneParas.has(l.paraId)) {
-        doneParas.add(l.paraId);
-        blocks.push(paraBlock(paraById.get(l.paraId), lineById));
-      }
-      continue;
-    }
-
-    // 문단에 속하지 않은 본문 줄 — 잃어버리지 않는다. 한 줄짜리 문단으로 낸다.
-    if (textOf(l)) blocks.push({ type: 'para', id: null, kind: 'body', lines: [{ id: l.id, text: textOf(l), hyphen: 'none' }] });
-  }
-
-  // 줄 목록에 없는 문단(저장본이 깨진 경우) — 조용히 버리지 않고 뒤에 붙인다.
-  for (let i = 0; i < paragraphs.length; i++) {
-    if (!doneParas.has(paragraphs[i].id)) {
-      const b = paraBlock(paragraphs[i], lineById);
-      if (b.lines.length) blocks.push(b);
-    }
-  }
-
-  if (folded.length) blocks.push({ type: 'folded', lines: folded });
-
-  return { pageNo: L.pageNo, blocks: blocks };
 }
 
 /** 기술된 블록들에서 **낭독이 도는 줄**의 id 를 읽기 순서로 뽑는다(5단계 계약). */
@@ -270,31 +154,6 @@ export function isTableNotice(id) {
 /** 안내 id → regionId. */
 export function regionOfNotice(id) {
   return isTableNotice(id) ? id.slice(TABLE_NOTICE_PREFIX.length) : null;
-}
-
-function paraBlock(p, lineById) {
-  const out = [];
-  const ids = Array.isArray(p.lineIds) ? p.lineIds : [];
-  for (let i = 0; i < ids.length; i++) {
-    const l = lineById.get(ids[i]);
-    if (!l) continue;                        // 저장본이 깨진 줄은 건너뛴다(fromStored 와 같은 태도)
-    out.push({ id: l.id, text: textOf(l), hyphen: 'none' });
-  }
-  for (let i = 0; i < out.length - 1; i++) {
-    const r = joinHyphen(out[i].text, out[i + 1].text);
-    out[i].hyphen = r.hyphenJoin ? 'hidden' : (r.keptHyphen ? 'kept' : 'none');
-  }
-  const block = { type: 'para', id: p.id, kind: p.kind || 'body', lines: out };
-  // [8i — D4] 이름표 문단: 그 행의 쪽 번호 글자들(화면 표시만 — flowLineIdsOf·flowParasOf 는 lines 만 본다)
-  if (p.kind === 'rowhead' && Array.isArray(p.refLineIds)) {
-    const refs = [];
-    for (let i = 0; i < p.refLineIds.length; i++) {
-      const l = lineById.get(p.refLineIds[i]);
-      if (l && textOf(l)) refs.push(textOf(l));
-    }
-    if (refs.length) block.refs = refs;
-  }
-  return block;
 }
 
 function textOf(l) { return String((l && l.text) || '').trim(); }
@@ -1597,26 +1456,6 @@ export function flowParas() {
   const blocks = (state.desc && state.desc.blocks) || [];
   // 4-8 (3) — 표 자리에 안내 한 마디를 끼운다. 이미 말한 표는 빠진다.
   return insertTableNotices(flowParasOf(state.desc), blocks, state.announcedTables, t('reader.tts.tableSkipped'));
-}
-
-/**
- * ★ `[8a]` spec 7-8-2 원칙 2 — `flowParas()` 의 **순수 부분**. 표 안내를 끼우기 전의 문단들.
- *
- * 지금 쪽(`flowParas()`)과 그 뒤의 쪽들(UI 가 낭독 동반 번역에 주입할
- * `loadParas(n) = flowParasOf(describePage(fromStored(rec)))`)이 **같은 함수**를 지나게 하려고
- * 떼어 냈다. 동작은 그대로다 — `flowParas()` 가 이것에 표 안내만 더한다.
- *
- * @param {{blocks?:Array}} desc `describePage()` 결과
- * @returns {{id:string|null, kind:string, lines:Array}[]} 읽기 순서
- */
-export function flowParasOf(desc) {
-  const blocks = (desc && desc.blocks) || [];
-  const out = [];
-  for (let i = 0; i < blocks.length; i++) {
-    if (blocks[i].type !== 'para') continue;
-    out.push({ id: blocks[i].id, kind: blocks[i].kind, lines: blocks[i].lines });
-  }
-  return out;
 }
 
 /**

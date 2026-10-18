@@ -49,6 +49,7 @@
 
 import { TTS, TTS_SYMBOLS, READALONG, SPEECH_MARKS } from '../config.js';
 import { splitSentences, endsSentence } from '../text/segment.js';
+import { joinPieces, localRange } from '../text/screen.js';
 // `[8h-1]` 인용·참고문헌 판별(spec 6-6-2) — 순수 모듈. 문장을 나누지 않는다(나누는 곳은 아래 buildUnits 한 곳).
 import { markReferences } from '../text/cite.js';
 // `[8b-1]` 번역문 발화 텍스트의 괄호 판정은 화면(bdi 격리)과 **같은 함수**를 쓴다 — 규칙이 두 벌이 되지 않게.
@@ -62,40 +63,8 @@ const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[\w.+-]+@[\w-]+\.[\w.-]+\b/gi;
 
 function str(v) { return String(v == null ? '' : v); }
 
-/**
- * 줄 하나를 **다음 줄과 어떻게 이을지**에 따라 다듬는다.
- * `describePage()` 의 `hyphen` 값을 그대로 받는다(4단계 계약).
- *
- *   'hidden' — 줄바꿈 하이픈. 끝의 `-` 를 **지우고** 공백 없이 붙인다.
- *   'kept'   — 진짜 하이픈. `-` 를 살리고 공백 없이 붙인다.
- *   'none'   — 공백으로 잇는다.
- *
- * ★ `'hidden'` 의 `-` 제거가 이 단계의 핵심 함정 대응이다.
- */
-export function joinPieces(lines) {
-  const list = Array.isArray(lines) ? lines : [];
-  let text = '';
-  const spans = [];   // [{id, start, end}] — text 안에서 그 줄이 차지한 구간
-
-  for (let i = 0; i < list.length; i++) {
-    const ln = list[i] || {};
-    let piece = str(ln.text).replace(/\s+/g, ' ').trim();
-    const hy = ln.hyphen || 'none';
-    const last = i === list.length - 1;
-
-    if (!last && hy === 'hidden' && piece.endsWith('-')) piece = piece.slice(0, -1);
-
-    const start = text.length;
-    text += piece;
-    spans.push({ id: ln.id, start: start, end: text.length });
-
-    if (last) continue;
-    // 'hidden'·'kept' 는 공백 없이 다음 줄과 붙는다(12-4 의 화면 글자와 같다).
-    if (hy === 'none') text += ' ';
-  }
-
-  return { text: text, spans: spans };
-}
+// `[8g-1 — spec 17-8-12 U6]` `joinPieces`·`localRange` 는 순수 모듈 `text/screen.js` 로 옮겼다 — 같은 함수 객체를 다시 export 한다.
+export { joinPieces, localRange };
 
 /**
  * `[7c — spec 6-1]` 원문 언어의 기호 표. 언어가 없으면 en(지금까지와 같다),
@@ -333,37 +302,6 @@ function spansIn(spans, from, to) {
   }
   // 어디에도 안 걸리면(계산이 어긋난 병적 입력) 줄을 잃지 않도록 첫 줄에 붙인다.
   return out.length ? out : spans.slice(0, 1);
-}
-
-/**
- * ★ 10a — 줄 span 하나를 **그 줄 안의 오프셋**으로 접는다.
- *
- * **export 하는 이유**: `emit` 을 거치면 `Math.max`/`Math.min` 과 아래 `e <= s`
- * 폴백이 이미 값을 가둬서 클램프가 **한 번도 시험되지 않는다**(변이를 넣어도
- * 아무 테스트가 빨개지지 않았다). 클램프는 `spansIn` 이 어긋난 span 을 돌려주는
- * 병적 경로의 마지막 방어선이므로, 그 경계를 테스트가 직접 고정한다.
- *
- * `from`/`to` 는 문단을 이어 붙인 텍스트 안의 문장 구간이고, `sp.start`/`sp.end`
- * 는 같은 좌표계의 줄 구간이다. 둘의 교집합을 줄 시작점 기준으로 옮긴다.
- *
- * 줄 길이로 **클램프**한다 — `joinPieces` 가 `'hidden'` 하이픈의 `-` 를 떼므로
- * 여기 길이는 화면 글자 수보다 1 작을 수 있고, 계산이 어긋나면 DOM 오프셋이
- * 범위를 벗어나 `Range` 가 던진다.
- *
- * 교집합이 비면(병적 입력 — `spansIn` 의 폴백 경로) **줄 통째**로 돌려준다.
- * 빈 구간을 그리는 것보다 넓게 칠하는 쪽이 낫다(이 단계의 일관된 판단).
- */
-export function localRange(sp, from, to) {
-  const len = Math.max(0, sp.end - sp.start);
-  if (len === 0) return { id: sp.id, start: 0, end: 0 };
-  // 줄 시작점 기준으로 옮기고 **줄 길이로 클램프**한다. 클램프가 교집합을
-  // 겸한다 — `max`/`min` 을 한 번 더 두면 클램프가 죽은 코드가 되고, 그러면
-  // 어떤 테스트도 이 경계를 지키지 못한다(변이로 확인했다).
-  const cl = (v) => Math.min(len, Math.max(0, v));
-  let s = cl(from - sp.start);
-  let e = cl(to - sp.start);
-  if (e <= s) { s = 0; e = len; }
-  return { id: sp.id, start: s, end: e };
 }
 
 /**

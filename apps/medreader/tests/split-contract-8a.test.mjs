@@ -200,7 +200,10 @@ test('3-2 ★ ai/* 는 ui/ 와 text/segment 를 import 하지 않는다', () => 
 
 test('flowParas() 는 flowParasOf 에 표 안내만 더한 것이다 (같은 함수를 지난다)', () => {
   const src = readFileSync(join(JS, 'ui/reader.js'), 'utf8');
-  const fn = src.slice(src.indexOf('export function flowParas()'), src.indexOf('export function flowParasOf('));
+  // `[8g-1]` flowParasOf 는 text/screen.js 로 옮겼다(다시 export) — flowParas() 본문은 그 함수의 끝(`\n}\n`)까지.
+  const a = src.indexOf('export function flowParas()');
+  assert.ok(a > 0);
+  const fn = src.slice(a, src.indexOf('\n}\n', a));
   assert.match(fn, /insertTableNotices\(flowParasOf\(state\.desc\)/);
   assert.doesNotMatch(fn, /for \(/, 'flowParas 안에 문단 고르기가 따로 남아 있다');
 });
