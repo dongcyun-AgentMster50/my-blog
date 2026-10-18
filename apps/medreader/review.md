@@ -4494,3 +4494,203 @@ Build 보고(97 · 757, 꼴 분포, 일 있음 281, 쪽 수, 글자 수)와 자�
 1. **[권장: 작은 테스트 Build — 다음 rowtable 작업 전]** M1–M3 공백 메우기(8i2bR-4). 2열 표시가 물려받기·R2b·R6b 뒤에도 남는지를 픽스처 셋으로 지킨다. 앱 코드는 그대로다. 지금 판은 맞으므로 **커밋은 그대로 해도 된다.**
 2. (기록) V2·D10f(그리고 내 M5·M6·M7)는 같은 동작을 내는 방어 코드다. 지울지는 운영자 판단이다(지워도 출력은 같다).
 3. (8i-2 Review 그대로) R6b 열 머리 오판은 다음 Plan 의 일이다.
+
+---
+
+# 8g-1 Review — 검색 데이터 단계 (text/screen.js 옮김 · DB 3 · searchText · versionchange 배너) (2026-10-19)
+
+> 지침 `.claude/tasks/medreader-review-8g-1.md`. Build 와 분리된 검증자다. Build 보고는 믿지 않고 직접 다시 쟀다.
+> 대상: 커밋 `165f2b9` 위의 작업 트리(바뀐 파일 18 + 새 파일 4), 단계 1 스냅숏 `b8g1/step1/`.
+> 스크래치 `r8g1b/`만 썼다(첫 Review 의 `r8g1/`은 보지 않았다). 앱 코드·테스트·spec 은 고치지 않았다. 커밋하지 않았다.
+
+## 8g1R-1. 결론 — **통과**(차단 문제 없음) · 테스트 보강 권장(낮음) 3건 · spec 문안 제안 2건은 맞다
+
+- 단계 1 은 **옮김만**이다. 옮긴 함수 7개와 상수 2개가 `165f2b9` 와 글자 하나까지 같다. 단계 1 스냅숏만으로 1071/1071 녹색이다.
+- spec 17-8-12 의 8g-1 범위(S1–S7, U1–U7·U8·U11·U14, G4)를 코드가 그대로 따른다.
+- 세 권 실물: `pages` 는 옛 판과 **값이 같다**(7,747쪽 전부). 저장 글자는 **옛 판 함수로 따로 만든 화면 글자**와 전 쪽 같다. `searchText` 크기는 Plan ±1% 안이다.
+- 브라우저(실제 IndexedDB): DB 2 → 3 업그레이드 뒤 옛 스토어 레코드 **전부** 바이트 단위로 같다. 새 쪽만 `searchText` 를 얻는다. 새 판 두 탭에서 배너·[다시 불러오기]·아랍어 RTL 이 맞다.
+- 내 변이 9개 중 5개 빨강, 1개는 시간 초과로만 빨강, 3개 살아남음(전부 낮음 — 8g1R-5).
+- 전체 1100/1100 × 3회, `stamp --check` 0.
+
+## 8g1R-2. 단계 1 — 옮김만인가
+
+- 스냅숏 무결성: `b8g1/step1-sha.txt` 6개 모두 OK.
+- **함수별 비교**(`r8g1b/fncmp.mjs`): `165f2b9` 의 `ui/reader.js`·`tts/text.js` 에서 `describePage`·`paraBlock`·`flowParasOf`·`joinPieces`·`localRange`·`textOf`·`str` 본문을 잘라 `screen.js` 의 것과 비교했다. **7개 모두 같다.** `FOLD_ROLES`·`REF_ROLE` 선언 줄도 같다.
+- **정렬 비교**: 두 옛 파일에서 빠진 줄은 모두 `screen.js` 에 있다. 예외는 `import { joinHyphen } from '../text/hyphen.js'` 하나로, 경로만 `./hyphen.js` 로 바뀌었다. `screen.js` 에만 있는 줄은 머리 주석·빈 줄·내부 도우미 `textOf`·`str` 사본뿐이다.
+  - 도우미 둘은 **옮긴 것이 아니라 복사**했다. `reader.js` 는 `textOf` 를 다른 함수(다시 그리기 대응)가 쓰므로 남겼고, `tts/text.js` 는 `str` 를 남겼다. 사본은 글자까지 같다. 비공개 함수라 동작에 영향이 없다.
+- 옛 두 파일의 남은 변경은 import 한 줄과 `export { … }` 한 줄씩뿐이다. 같은 함수 객체인지는 S3 테스트(`===`)가 본다(녹색).
+- `screen.js` 가 `document`·`window`·`indexedDB`·`fetch`·`localStorage`·`navigator`·`location` 을 참조한 곳은 0 이다.
+- **`split-contract-8a` 수정은 약해지지 않았다.**
+  - 옛 판은 `flowParas()` 부터 `export function flowParasOf(` 앞까지 잘랐다. 그 사이에 flowParasOf 의 JSDoc 주석이 끼어 있었다.
+  - 새 판은 `flowParas()` 부터 그 함수 끝(`\n}\n`)까지 자른다. 그래서 검사 범위가 **정확히 그 함수 본문**이다. 두 단언(`insertTableNotices(flowParasOf(state.desc)` 있음, `for (` 없음)도 그대로다.
+- **단계 1 스냅숏만으로 녹색**: `git archive 165f2b9 apps/medreader` 에 스냅숏 6개를 덮은 사본(`r8g1b/step1repo/`)에서 돌렸다.
+  - 전체 **1071/1071**
+  - `stamp --check` 0(모듈 54)
+- 포크가 섞은 흔적은 없다.
+  - 22개 파일의 sha 를 시작할 때 `r8g1b/base-sha.txt` 에 적었다. 끝에서 다시 대조해 모두 같았다.
+  - 단계 1 이후 바뀐 파일은 `index.html`(stamp 와 `search.js` 한 줄)과 `search-text-8g.test.mjs`(S1·S2·S7·S8·S12·S17 추가)뿐이다.
+  - 변이 표식 grep 결과는 0 이다.
+
+## 8g1R-3. spec 대조
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| `search.js` 여덟 함수 | ○ | `searchRecordOf(F, desc?, opts?)`·`foldText`·`parseQuery`·`findIn`·`classifyHit`·`snippetAt`·`rangesFor`·`headingToc`. 도우미로 `hitLength`·`headKey`·`headsOf`·`headFreq`·`isWordChar`·`searchKey`·`compoundPrefixes` 도 있다. import 는 `config`·`store`·`screen` 뿐이다(S3 grep). |
+| U7 합성어 | ○ | 접두는 `KEEP_HYPHEN_PREFIXES` 에서 3자 이상인 23개다(`co`·`re`·`x`·`t`·`b`·`de`·`ex` 제외). 한 낱말이면 띄운 꼴을, "p␣나머지" 꼴이면 붙인 꼴을 더한다. 나머지는 3자 이상이어야 한다. 낱말 전체 일치(3자 이하) 검색어에는 붙이지 않는다. 탐침: `preeclampsia`↔`pre eclampsia`, `nonsense`→`non sense`, `post-op` 는 변형 없음(나머지 2자). |
+| U8 소제목 강등 | ○ | `classifyHit`: 빈도가 `>= REPEAT_HEADING`(10) 이면 'body'. `headingToc`: `< 10` 만 남긴다. |
+| U11 숫자 붙이기 | ○ | `DIGITS_ONLY` 항목에 같은 쪽 바로 다음 heading(반복 제목 포함 전체 목록 기준)을 붙인다. |
+| 검색 대상(G4) | ○ | `text` = 흐름 문단(본문·heading·rowhead·인용). `ref` 는 `describePage` 가 접거나 이름표 `refs` 로만 보내고, `flowParasOf` 는 `lines` 만 본다. 그래서 구조로 빠진다. `colhead`·접힌 역할도 빠진다. `table` 은 4-8 영역 줄뿐이다. 실물 세 권: `describePage` 가 표 블록으로 보내는 줄 **집합**과 `table` 이 0 차이(8g1R-4). |
+| `config.SEARCH` | ○ | 이름·값이 17-8-12 §1 끝 목록과 같다. |
+| `db.js` | ○ | `DB_VERSION 3`(내리지 말라는 주석, S4 가드), 스키마 표 `searchText`(`[docId,pageNo]`·`docId`·`docId_sk`), `MIGRATIONS[3]` = `reconcileSchema`, `CASCADE_STORES`·`DERIVED_STORES` 에 searchText, `ERR.UPGRADED`. "버전 내림 방지"는 코드가 아니라 **테스트 가드**(S4 `>= 3`, D1·DP13 `=== 3`)다. spec §9 가 정한 그대로다. |
+| `extract.js` | ○ | `writePageAndSearch` 가 `db.withTx(['pages','searchText'], 'readwrite')` 한 번으로 둘 다 쓴다. `_buildAndStore` 의 유일한 쓰기다. `_recomputeRoles` 는 `_buildAndStore` 를 부른다. `sk` = `SEARCH_KEY` = `'1|d1:9e94752b'`(실물 확인). `ENABLED=false` 면 만들지 않고 같은 트랜잭션에서 그 쪽 검색 글자를 지운다. 검색 레코드를 만들다 던지면 트랜잭션을 열기 전에 던지므로, 그 쪽은 `pages` 도 없이 `failed` 로 간다. 같은 저장본을 리더가 같은 함수로 그리므로 리더도 그 쪽에서 던졌을 경우라 새 위험은 아니다. |
+| `main.js` 배너 | ○ | `versionchange` → `showBanner({code: ERR.UPGRADED, actions:[{reload:true, key:'common.reload'}]})`. 같은 키는 한 번만 뜬다(브라우저 `nBanner 1`). |
+| i18n 네 언어 | ○ | `err.dbUpgraded` 를 ar·en·fr·ko 에 넣었다. `ERROR_KEYS` 에 더했다. |
+| `common.reload`(spec 밖) | **적절** | spec §4-6 의 "기존 [다시 불러오기]"는 `index.html` 부팅 실패 안내의 정적 다국어 버튼(`#bootFailReload`)이다. i18n 키가 아니다. JS 배너 버튼은 i18n 키가 있어야 언어 전환(`relabelBanners`)을 따른다. 그래서 새 키가 맞다. 기존 키 중 같은 뜻은 없다(grep). |
+| `settings.js` | ○ | `search.recent: []`. `defaultFor` 가 배열을 복사해 돌려준다(테스트 있음). `search.aiQuery` 는 없다. |
+
+## 8g1R-4. 측정 재현 — 세 권, 내 스크립트(`r8g1b/m8g1.mjs`)
+
+**방법**
+- 실제 `Extractor` 로 전권을 추출했다(이웃 레이아웃 + 역할 재계산). 저장소는 `tests/fixtures/fake-idb.mjs`.
+- 판 둘을 따로 돌렸다.
+  - 옛 판: `git archive 165f2b9` 사본(`r8g1b/old165/`)
+  - 새 판: 작업 트리
+- pdfjs-dist 5.6.205(`C:/Users/YDC/.cache/codex-runtimes/codex-primary-runtime/dependencies/node`)를 썼다.
+- `pages`: `extractedAt` 만 빼고 정규 문자열(키 정렬, -0·undefined 구분)로 만들어 쪽별 sha 를 비교했다.
+- `searchText` 의 기준은 Build 와 다르게 잡았다. **옛 판(165f2b9)의 `ui/reader.js`·`tts/text.js` 함수**로 화면 글자·heads 오프셋·표 줄을 따로 계산해 비교했다. 출력은 수치·해시뿐이다.
+
+| | Harrison 729 | CMDT 2026 1,967 | CMDT 2021 5,051 |
+|---|---|---|---|
+| 추출(옛/새) | done · 오류 0 · 17/18초 | done · 0 · 62/65초 | done · 0 · 81/81초 |
+| `pages` 값 — 옛 ↔ 새, 쪽별 | **0쪽 다름** | **0쪽 다름** | **0쪽 다름** |
+| 전체 정규 sha(옛 = 새) | `8f545fc7…` | `1699b2f6…` | `b90c3522…` |
+| searchText 레코드 · 빠짐 | 729 · 0 | 1,967 · 0 | 5,051 · 0 |
+| **text = 화면 글자**(옛 판 함수) | 729/729 | **1,967/1,967** | 5,051/5,051 |
+| heads (i, o) = 옛 판 흐름 문단의 heading | 0 차이 · 1,017 | 0 차이 · 12,194 | 0 차이 · 5,997 |
+| heads `r` = 0 인 것 | 0 | 0 | 0 |
+| table 줄 집합 = describePage 표 블록 줄 | 0 차이 | 0 차이(**순서만 14쪽 다름**) | 0 차이 |
+| `sk`·`algoVersion`·`docId` 어긋남 | 0 | 0 | 0 |
+| searchText v8 | **5.65MB** (Plan 5.6 · +0.9%, Plan 반올림 탓) | **19.75MB** (Plan 19.7 · +0.25%) | **18.94MB** (Plan 18.9 · +0.2%) |
+| text / table 글자 | 2,843,648 / 70,877 | 8,928,189 / 757,419 | 9,551,236 / 0 |
+
+- **세 권 모두 Plan ±1% 안이다.** heads `r` 분포도 Plan 표와 맞는다. CMDT 2026 의 1.15–1.4 층이 5,704개로 Plan 표의 수와 같다.
+- 표 줄 순서(정보, 결함 아님): CMDT 2026 14쪽에서 `searchRecordOf` 의 표 줄 순서가 화면 줄 순서와 다르다. `searchRecordOf` 는 영역 `lineIds` 순, 화면은 쪽 줄 순이다. spec 은 순서를 정하지 않았다. 줄 사이는 `'\n'` 이라 구 일치가 줄을 넘지 않는다. 그래서 적중 수에는 영향이 없다. 영향은 표 조각의 앞뒤 줄뿐이다.
+- **v8 직렬화가 불안정하다는 Build 관찰은 맞다.**
+  - 같은 객체를 두 번 직렬화하면 같다.
+  - 그러나 `v8.serialize(c)` 와 `v8.serialize(structuredClone(c))` 는 쪽 75/6/4개에서 바이트가 다르다(CMDT 2026/Harrison/CMDT 2021, 옛 판 기준).
+  - 값이 같은 옛·새 `pages` 도 v8 바이트가 5/0/1쪽 다르다.
+  - 원인 재현: 같은 값 1 을 정수 표현과 실수 표현으로 두면 v8 바이트가 다르다(`{a:1}` 대 `{a:0.5+0.5}`). 그래서 **값 비교로 판정한 것이 옳다.**
+
+## 8g1R-5. 찾은 문제 · 관찰
+
+차단 문제는 없다. 아래는 모두 **낮음** 또는 정보다.
+
+1. **[낮음 — 테스트 공백] `SEARCH.ENABLED=false` 갈래**(변이 R2 살아남음)
+   - 옛 검색 글자를 지우는 `else s.searchText.delete(...)` 를 빼도 모든 테스트가 녹색이다. S5 는 소스에 `SEARCH.ENABLED` 가 있는지만 본다.
+   - 이 갈래는 되돌림 스위치(§9)라서 쓰일 때는 이미 문제가 난 때다.
+   - `writePageAndSearch` 에 스위치를 인자로 받는 시험 지점을 두거나, 순수 함수로 떼어 내 행동을 시험하기를 권한다.
+2. **[낮음 — 테스트 공백] 3자 검색어 낱말 전체 경계**(변이 R5 살아남음)
+   - `whole = f.length <= 3` 을 `< 3` 으로 바꿔도 녹색이다. S8 은 2자 `mi` 만 본다. spec 17-8-4 의 "3자 이하 낱말 전체"는 경계값 3 이 핵심이다.
+   - 같은 꼴: 대문자 약어 상한 5 → 6(R9, 매우 낮음).
+   - 8g-2 의 S8 표 테스트에 `the`(3자 — `there` 를 안 찾음)·`COPD5`/`ABCDEF` 를 더하기를 권한다.
+3. **[낮음 — 테스트 강도] versionchange 에서 연결을 닫지 않는 변이**(R7)
+   - 이 변이는 `--test-timeout` 에 걸려 **취소 1** 로만 빨강이 된다. 흉내가 blocked 뒤 영영 기다리기 때문이다.
+   - S6 테스트에 짧은 시간 상한(예: 2초 안에 열리지 않으면 실패)을 두면 원인이 바로 보인다.
+4. [정보] **fake-idb 의 관대함**
+   - 복합 키의 한 칸이 `undefined` 여도 흉내는 받아들인다(`["X",null]` 로 저장). 실제 IndexedDB 는 `DataError` 로 거절한다(브라우저에서 확인).
+   - DataError 를 흉내는 요청 단계(비동기)에서, 실제는 `put` 호출 때(동기) 던진다. 두 꼴 모두 `withTx` 가 abort 로 처리한다.
+   - 지금 테스트가 이것 때문에 헛통과하지는 않는다. 변이 R8(검색 레코드에서 `pageNo` 빠뜨림)은 S5 가 키로 `peek` 해서 빨강이 된다.
+   - 흉내의 업그레이드·versionchange·롤백 순서는 실제와 같았다. 브라우저에서 같은 결과를 확인했다.
+   - 8g-2 백필 테스트(`docId_sk` 범위)를 쓸 때 이 차이를 기억하라.
+5. [정보] `foldText` 는 spec 표에 없는 `′ ″ ‛ ‟`(프라임·뒤집힌 따옴표)도 곧은 따옴표로 접는다. 길이를 보존하므로 무해하다.
+6. [정보] 합성어 변형에는 이론상 거짓 양성이 있다. 예: `present` → `pre sent`, `interest` → `inter est`. spec U7 규칙 그대로이고, 원문에 "pre sent"처럼 띄어 쓴 꼴이 있어야 맞는다. 실물 영향은 무시할 만하다.
+7. [정보] `main.js` `showBanner` 의 주석은 "동작은 `data-nav` 전역 위임이 맡는다 — 여기서 onclick 을 붙이지 않는다"이다. 그런데 새 [다시 불러오기]는 `addEventListener` 로 붙인다. 동작 문제는 없으니 다음에 주석만 고치면 된다.
+8. [기록 — spec] §9 첫째 줄 "추출은 `searchText` 를 계속 써도 무해"와 셋째 줄 "`SEARCH.ENABLED` 를 추출에서도 본다"가 엇갈린다.
+   - 코드는 셋째 줄을 따랐고, 옛 글자를 지우는 일까지 더했다.
+   - 결과로 스위치 하나가 입구 숨기기와 추출 끄기를 함께 맡는다. "입구만 숨기고 검색 글자는 계속 쌓기"는 이 스위치로 할 수 없다.
+
+## 8g1R-6. 브라우저 — Edge headless · 412×915 · 캐시 끔 (`r8g1b/br8g1.mjs`, 로그 `br-prof1.log`)
+
+**환경**
+- PID 45124 서버는 없었다(PC 재시작). 그래서 레포 루트에서 `python -m http.server 8000 --bind 127.0.0.1` 을 직접 띄웠고(PID 41152, 상한 25분), 끝에 껐다.
+- 새 프로필은 `r8g1b/prof1` **하나만** 썼다.
+- 옛 판 탭은 같은 출처에서 요청을 가로채 `old165/` 파일 57개를 내보냈다.
+- 문서는 내가 만든 지어낸 6쪽 PDF `mek6.pdf` 다(Helvetica, 쪽마다 heading 1개, 줄바꿈 하이픈 `cardio-`/`vascular`).
+- 진짜 키·AI 요청은 0 이다. 외부 요청 차단 기록도 0 이다.
+
+**A. 옛 판(DB 2)**
+- 가져오기 → 2쪽 → 추출 끝 → `aiCache`·`progress` 하나씩 넣음 → 다시 불러옴 → 5·6쪽 저장본 지움 → extraction 을 "4쪽까지·paused"로 바꿈.
+- 저장 DB 2, 스토어 13. lastPage 2, lastLineId 있음.
+
+**B. 옛 탭을 연 채 새 판 탭**
+- 새 탭이 555ms 에 부팅했다(막힘 없음, 두 탭 모두 배너 없음).
+- 저장 DB 3, 스토어 14. 새 스토어는 `searchText` 하나다.
+- **옛 스토어 13개의 레코드 전부가 업그레이드 전과 정규 문자열로 같다**(바뀐 스토어 0). 스키마는 `["docId","pageNo"]` · `docId` · `docId_sk ["docId","sk"]` 다.
+- 옛 탭의 다음 DB 일은 `ERR_DB_OPEN/VersionError` 다. **옛 탭에는 배너가 없다** — 165f2b9 에는 배너 코드가 없다. 조용히 실패한다.
+- 문서를 열자 5·6쪽이 추출되었다(done).
+  - **`searchText` 는 5·6쪽에만** 있다. `sk` 가 맞고, 화면 글자와 같고, heads 1, algoVersion 이 같고, `cardiovascular` 로 붙어 있다.
+  - 1–4쪽은 searchText 가 없다(백필은 8g-2 몫).
+  - 1–4쪽 `pages` 값과 `aiCache`·`progress`·`settings`·`blobs` 가 그대로다.
+  - lastPage 는 2 → 4 다. 4쪽을 열었으므로 맞다.
+- 실제 IndexedDB 에 `pageNo` 없는 searchText 를 `put` 하면 `DataError` 다(8g1R-5 의 4).
+
+**C. 새 판 탭 둘 — n2 가 `indexedDB.open('medreader', 4)`(가짜)**
+- 막힘 없이 열렸다(`blocked:false`).
+- **n1·n2 모두** `err.dbUpgraded` "앱이 새 판으로 바뀌었습니다. 다시 불러오세요." + [다시 불러오기](`data-reload="1"`)가 떴다. 배너는 탭마다 1개다.
+- 버튼 상자 136×48, `scrollWidth 412 = innerWidth`. 캡처: `c-ko.png`
+- 아랍어로 바꾸면 문구 "تم تحديث التطبيق…", 버튼 "إعادة التحميل", `dir=rtl`, 넘침 없음. 캡처: `c-ar.png`. 배너가 오른쪽 정렬이고 버튼 두 개가 왼쪽에 놓인다.
+- 버튼을 누르면 **다시 불러온다.** 다시 불러온 뒤에는 DB 가 시험용 4 라서 `err.dbOpen` 이 뜬다. 기대대로다.
+
+콘솔 오류는 옛 탭의 404 하나뿐이다(앱 밖 요청). 새 탭 둘은 0 이다.
+
+## 8g1R-7. 테스트의 힘 — 내 변이 (`r8g1b/mut.mjs`, 백업 `r8g1b/bak/`, 대상 7파일)
+
+Build 가 한 V1–V10·V13·V14 와 겹치지 않는 자리만 골랐다.
+
+| # | 변이 | 결과 |
+|---|---|---|
+| R1 | `CASCADE_STORES` 에서 `searchText` 뺌 | 빨강 2 (S4 가드 · deleteDocument) |
+| R2 | `ENABLED=false` 의 옛 글자 지우기 제거 | **살아남음** (8g1R-5 의 1) |
+| R3 | `main.js` versionchange 배너 배선 제거 | 빨강 1 (S6 main.js) |
+| R4 | 소제목 강등 문턱 `>=` → `>` | 빨강 1 (S12) |
+| R5 | 3자 검색어 낱말 전체 → 접두 | **살아남음** (8g1R-5 의 2) |
+| R6 | `MIGRATIONS[3]` 이 빈 함수 | 빨강 5 (S4 업그레이드 · S4 삭제 · S5 셋) |
+| R7 | versionchange 에서 `db.close()` 안 함 | 시간 초과 취소 1 (S6 — 60초) (8g1R-5 의 3) |
+| R8 | 검색 레코드에서 `pageNo` 빠뜨림 | 빨강 3 (S2 · S5 둘) |
+| R9 | 대문자 약어 상한 5 → 6 | **살아남음** (매우 낮음) |
+
+- 변이마다 복원 뒤 `cmp` 가 같았다. 끝에 22개 파일 sha 를 `base-sha.txt` 와 대조해 **모두 같았다.** 변이 표식 grep 은 0 이다.
+- R1·R6 은 S4 가 소스 grep 이 아니라 **행동**(실제 삭제·업그레이드)으로도 잡는다. 좋은 강도다.
+
+## 8g1R-8. 전체 테스트 · 정리
+
+- 전체 `node --test --test-timeout=120000 apps/medreader/tests/*.test.mjs`(실행 상한 600초): 변이 전 2회와 변이 뒤 1회, **세 번 모두 1100/1100**, fail 0.
+- `node apps/medreader/dev/stamp-importmap.mjs --check` → "그대로다 (모듈 55개 · CSS 4개)", 종료 0.
+- 레포에서 바꾼 것은 이 절뿐이다(review.md 끝). spec·앱 코드·테스트는 그대로다.
+- 남은 프로세스: 내가 띄운 node·Edge(PID 37864)·python(41152)은 모두 끝났다. 끝 `tasklist` 에 node 1개(PID 43840)가 남아 있는데, Adobe Creative Cloud 의 것이라 내 것이 아니다. msedge 0, python 0.
+- 스크래치 `r8g1b/` 28MB(옛 판 사본 둘·프로필 하나 포함), C: 여유 158GB.
+- 권한·훅에 막힌 명령은 없다. 커밋·checkout/restore/stash·`rm -rf`·npm·다운로드는 하지 않았다.
+
+## 8g1R-9. Build 의 spec 문안 제안 판정
+
+1. **S6 "옛 판 탭" → "8g-1 이후 판 탭" — 맞다.**
+   - 165f2b9 탭에는 `versionchange` 배너 코드가 없다. 그 탭의 다음 DB 일은 `VersionError` 로 조용히 실패한다(8g1R-6 B 에서 재현).
+   - S6 이 확인할 수 있는 것은 "8g-1 이후 판 탭 둘 중 하나가 더 높은 버전으로 열 때"(C)뿐이다.
+   - 문안에 한 줄을 더하기를 권한다: "**2 → 3 첫 배포 때 이미 열려 있던 옛 탭은 배너 없이 다음 DB 일에서 실패한다(되돌릴 수 없는 한 번 — 다시 불러오면 낫는다).**"
+2. **§4-6 키 수 38 → 39 — 맞다.**
+   - spec 표의 `search.*` 를 세면 37개다(open·title·scope×2·input×2·clear·tab×2·recent·group×3·page×2·count·minChars·tooMany·empty·scriptHint·partial·continuePrep·preparing·library.doc·toc×4·band×6·notOnPage·inTable·paused).
+   - 여기에 `err.dbUpgraded` 와 `common.reload` 를 더하면 39 다. `common.reload` 는 적절하다(8g1R-3).
+   - 8g-1 이 실제로 더한 키는 2개 × 4언어다.
+
+## 8g1R-10. 운영자 결정 필요 사항
+
+1. **커밋**: 지금 판은 그대로 커밋해도 된다. 단계 1 은 스냅숏 6개 그대로 먼저 커밋할 수 있다(그것만으로 1071 녹색 · stamp 0 — 8g1R-2). 단계 2 는 그다음 커밋이다.
+2. **spec 문안 두 개 반영 승인**(8g1R-9). S6 에는 첫 배포 때의 옛 탭 한계 한 줄을 함께 넣기를 권한다.
+3. **[기록] 첫 배포(2 → 3) 위험 받아들이기**: Nour 기기에서 새 판이 뜰 때 옛 판 탭이 함께 열려 있으면, 그 옛 탭은 배너 없이 멈춘 것처럼 보인다. 다시 불러오면 낫는다. 이 단계 코드로는 막을 수 없다(옛 코드의 일이다). 배포 안내에 "앱 탭을 하나만 열고 새로 고침"을 적을지 정해 주세요.
+4. **[권장 — 8g-2 Build 에 함께]** 테스트 보강 세 가지(8g1R-5 의 1–3):
+   - `ENABLED=false` 행동 테스트
+   - 3자·약어 길이 경계
+   - S6 의 짧은 시간 상한
+
+   앱 코드는 그대로다.
+5. [기록] §9 스위치 문안의 엇갈림(8g1R-5 의 8)을 정리할지 정해 주세요. 입구 숨김과 추출 끔을 따로 둘지는 8g-4 때 정해도 된다.

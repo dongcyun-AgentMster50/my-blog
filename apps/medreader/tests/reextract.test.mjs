@@ -91,7 +91,7 @@ function doc(id, extra) {
 }
 
 async function seed() {
-  for (const s of ['documents', 'pages', 'questions', 'sections', 'aiCache', 'attempts', 'cards', 'progress', 'mistakes', 'annotations', 'blobs']) {
+  for (const s of ['documents', 'pages', 'questions', 'sections', 'aiCache', 'attempts', 'cards', 'progress', 'mistakes', 'annotations', 'blobs', 'searchText']) {
     await db.clearStore(s);
   }
   await db.putAll('documents', [doc('A'), doc('B')]);
@@ -105,6 +105,12 @@ async function seed() {
     { id: 'B:sec-I:q1', docId: 'B', sectionId: 'sec-I', number: 1, source: 'parser' }
   ]);
   await db.putAll('sections', [{ docId: 'A', sectionId: 'sec-I' }, { docId: 'B', sectionId: 'sec-I' }]);
+  // [8g-1] 검색 글자(쪽 텍스트의 파생물) — A 2쪽 · B 1쪽
+  await db.putAll('searchText', [
+    { docId: 'A', pageNo: 1, sk: '1|x', algoVersion: 9, text: 'alpha', table: '', heads: [] },
+    { docId: 'A', pageNo: 2, sk: '1|x', algoVersion: 9, text: 'beta', table: '', heads: [] },
+    { docId: 'B', pageNo: 1, sk: '1|x', algoVersion: 9, text: 'gamma', table: '', heads: [] }
+  ]);
   await db.put('aiCache', { key: 'k1', docId: 'A', createdAt: 1, kind: 'translate', value: 'نص' });
   await db.put('attempts', { id: 't1', docId: 'A', sectionId: 'sec-I', at: 1 });
   await db.put('progress', { docId: 'A', sectionId: 'sec-I', updatedAt: 1 });
@@ -120,12 +126,13 @@ test('RX1 ★ resetDerived — 그 문서의 쪽·문항·섹션·extraction·�
   const before = idb.peek('medreader', 'documents', 'A');
   const res = await db.resetDerived('A');
   assert.equal(res.reset, true);
-  assert.deepEqual(res.counts, { pages: 3, questions: 2, sections: 1 });
+  assert.deepEqual(res.counts, { pages: 3, questions: 2, sections: 1, searchText: 2 });
 
   // 지운 것
   assert.deepEqual(all('pages').filter((p) => p.docId === 'A'), []);
   assert.deepEqual(all('questions').filter((q) => q.docId === 'A'), []);
   assert.deepEqual(all('sections').filter((q) => q.docId === 'A'), []);
+  assert.deepEqual(all('searchText').filter((q) => q.docId === 'A'), [], '[8g-1] 검색 글자도 지운다');
   const a = idb.peek('medreader', 'documents', 'A');
   assert.deepEqual(a.extraction, { done: false, pagesDone: 0, cursor: 1, failed: [], algoVersion: 0 });
   assert.deepEqual(a.sectionIndex, []);
@@ -151,6 +158,7 @@ test('RX1 ★ resetDerived — 그 문서의 쪽·문항·섹션·extraction·�
   // 다른 문서는 그대로
   assert.equal(all('pages').filter((p) => p.docId === 'B').length, 3);
   assert.equal(all('questions').filter((q) => q.docId === 'B').length, 1);
+  assert.equal(all('searchText').filter((q) => q.docId === 'B').length, 1);
   assert.deepEqual(idb.peek('medreader', 'documents', 'B'), doc('B'));
 });
 
@@ -172,7 +180,8 @@ test('RX3 ★ 지운 뒤의 extraction 은 새 문서와 같다 — 처음부터
   assert.equal(p.algoVersion, ALGO_VERSION);
   // library.attach 는 "이미 뽑아 둔 쪽이 있을 때만" 배너를 낸다 — pagesDone 0
   assert.equal(db.derivedDocReset().extraction.pagesDone, 0);
-  assert.deepEqual(db.DERIVED_STORES, ['pages', 'questions', 'sections']);
+  // [8g-1] 검색 글자도 쪽 텍스트의 파생물이다(spec 17-8-12 U3).
+  assert.deepEqual(db.DERIVED_STORES, ['pages', 'questions', 'sections', 'searchText']);
 });
 
 /* ── 2. Extractor.stopAndSettle ──────────────────────── */

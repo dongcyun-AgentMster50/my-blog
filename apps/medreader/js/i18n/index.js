@@ -167,7 +167,8 @@ export const ERROR_KEYS = Object.freeze({
   ERR_PDFJS_OFFLINE: 'err.pdfOffline',
   ERR_DB_QUOTA: 'err.quota',
   ERR_DB_BLOCKED: 'err.dbBlocked',
-  ERR_DB_OPEN: 'err.dbOpen'
+  ERR_DB_OPEN: 'err.dbOpen',
+  ERR_DB_UPGRADED: 'err.dbUpgraded'
 });
 
 /** 오류 코드 → i18n 키. 모르는 코드는 `err.unknown` 으로 떨어진다. */

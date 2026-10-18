@@ -57,11 +57,19 @@ function showBanner(detail) {
   const actions = Array.isArray(detail.actions) ? detail.actions : [];
   for (let i = 0; i < actions.length; i++) {
     const a = actions[i] || {};
-    if (typeof a.nav !== 'string' || a.nav.charAt(0) !== '#' || !a.key) continue;
+    if (!a.key) continue;
+    // `[8g-1]` [다시 불러오기] — 해시 이동이 아니라 페이지를 다시 불러온다(새 판 모듈을 받는다).
+    const reload = a.reload === true;
+    if (!reload && (typeof a.nav !== 'string' || a.nav.charAt(0) !== '#')) continue;
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'banner-action';
-    b.setAttribute('data-nav', a.nav);
+    if (reload) {
+      b.setAttribute('data-reload', '1');
+      b.addEventListener('click', () => { location.reload(); });
+    } else {
+      b.setAttribute('data-nav', a.nav);
+    }
     b.setAttribute('data-i18n', String(a.key));
     b.textContent = i18n.t(a.key);
     bar.appendChild(b);
@@ -80,6 +88,11 @@ function showBanner(detail) {
 
   host.appendChild(bar);
   shownBanners.set(key, bar);
+}
+
+/** `[8g-1]` versionchange 배너 기술(main.js 는 부팅을 돌리므로 Node 에서 import 하지 않는다 — 테스트는 소스로 본다). */
+function dbUpgradedBanner(code) {
+  return { code: code, tone: 'error', actions: [{ reload: true, key: 'common.reload' }] };
 }
 
 /** 언어가 바뀌면 이미 떠 있는 배너도 새 언어로 다시 쓴다. */
@@ -135,8 +148,12 @@ async function boot() {
   document.addEventListener('medreader:banner', (ev) => showBanner(ev.detail || {}));
 
   // db.js 의 blocked / versionchange 는 **코드가 아니라 이벤트**로 온다.
+  // `[8g-1 — spec 17-8-12 U2]` versionchange = 다른 탭(새 판)이 DB 버전을 올렸다. db.js 가 이 탭의 연결을
+  // 닫았으므로(그래야 그 탭이 막히지 않는다) 이 탭의 다음 DB 일은 옛 버전으로 열다 실패한다 — 조용히 실패하지
+  // 않게 배너 + [다시 불러오기]를 띄운다.
   db.onDbEvent((e) => {
     if (e.type === 'blocked') showBanner({ code: db.ERR.BLOCKED, tone: 'error' });
+    else if (e.type === 'versionchange') showBanner(dbUpgradedBanner(db.ERR.UPGRADED));
   });
 
   /* 1. 설정 — 실패해도 앱은 뜬다(기본값으로 돈다). */

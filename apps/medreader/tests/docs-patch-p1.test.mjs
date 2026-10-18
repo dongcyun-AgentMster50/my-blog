@@ -245,6 +245,7 @@ test('DP12 ★ 배선 — 다섯 곳과 7c 원문 언어가 같은 도우미를 
   assert.equal(/withTx\(\s*'documents'/.test(library), false, 'updateDocLang 의 손짜기 트랜잭션은 도우미로 바뀌었다');
 });
 
-test('DP13 DB_VERSION 은 그대로 2 다 (스키마 불변)', () => {
-  assert.equal(db.DB_VERSION, 2);
+test('DP13 DB_VERSION 은 P1 이 바꾸지 않았다 — 이후 올림은 8g-1(3, searchText)뿐', () => {
+  // P1 은 스키마를 건드리지 않았다(2). [2026-10-18] 8g-1 이 3 으로 올렸다(spec 17-8-12 U1) — 내리지 않는다.
+  assert.equal(db.DB_VERSION, 3);
 });

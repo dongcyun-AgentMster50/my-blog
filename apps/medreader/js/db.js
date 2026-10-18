@@ -17,7 +17,11 @@ export const DB_NAME = 'medreader';
 // 인덱스 추가는 IndexedDB 에서 버전 증가가 필요하다(9-1). 배포 후에는 되돌릴 수
 // 없으므로 배포 전인 지금 올린다. MIGRATIONS[2] 가 기존 스토어에 빠진 인덱스만
 // 보충하며 데이터는 건드리지 않는다.
-export const DB_VERSION = 2;
+// [2026-10-18 — 8g-1, spec 17-8-12 U1] 2 → 3. 새 스토어 `searchText`(쪽별 검색 글자). 스토어 추가도 버전 증가가
+// 필요하다. MIGRATIONS[3] 은 같은 조정 함수(없는 것만 만든다 — 멱등).
+// ★ **되돌릴 때도 이 값을 3 아래로 내리지 않는다**(17-8-12 §9). 이미 3 으로 연 기기에서 옛 값으로 열면
+//   `VersionError` 로 부팅하지 못한다 — 되돌릴 수 없는 유일한 부분이다. tests/search-db-8g.test.mjs 가 지킨다.
+export const DB_VERSION = 3;
 
 /* ────────────────────────────────────────────────────────
    spec 9-2 스토어 정의 — 선언으로 둔다.
@@ -84,7 +88,15 @@ export const SCHEMA_V1 = Object.freeze([
       { name: 'kind',         keyPath: 'kind' }
     ] },
   { name: 'sections',    keyPath: ['docId', 'sectionId'],
-    indexes: [ { name: 'docId', keyPath: 'docId' } ] }
+    indexes: [ { name: 'docId', keyPath: 'docId' } ] },
+  // [8g-1 — spec 17-8-12] 쪽별 검색 글자 `{docId, pageNo, sk, algoVersion, text, table, heads}`.
+  // `pages` 에서 다시 만들 수 있는 파생물이다(9c 백업에 담지 않는다). `docId_sk` 로 "지금 경첩의 레코드가
+  // 있는 쪽" 집합을 **값을 읽지 않고** 구한다(백필 — 8g-2).
+  { name: 'searchText',  keyPath: ['docId', 'pageNo'],
+    indexes: [
+      { name: 'docId',    keyPath: 'docId' },
+      { name: 'docId_sk', keyPath: ['docId', 'sk'] }
+    ] }
 ]);
 
 export const STORE_NAMES = Object.freeze(SCHEMA_V1.map((s) => s.name));
@@ -127,6 +139,11 @@ export const MIGRATIONS = {
   // 2 는 아무 일도 하지 않는다(멱등).
   2(db, tx) {
     reconcileSchema(db, tx);
+  },
+  // [2026-10-18 — 8g-1] v2 DB 에 `searchText` 스토어(인덱스 docId·docId_sk)를 더한다. 다른 스토어·데이터는
+  // 건드리지 않는다. 새 DB 는 1 이 이미 다 만들었으므로 아무 일도 하지 않는다(멱등).
+  3(db, tx) {
+    reconcileSchema(db, tx);
   }
 };
 
@@ -136,7 +153,9 @@ export const MIGRATIONS = {
 export const ERR = Object.freeze({
   QUOTA: 'ERR_DB_QUOTA',
   BLOCKED: 'ERR_DB_BLOCKED',
-  OPEN: 'ERR_DB_OPEN'
+  OPEN: 'ERR_DB_OPEN',
+  // [8g-1] 다른 탭이 DB 버전을 올려 이 연결이 닫혔다(`versionchange`). 이 탭은 옛 판이다 — 다시 불러와야 한다.
+  UPGRADED: 'ERR_DB_UPGRADED'
 });
 
 /** QuotaExceededError 인가. 브라우저마다 name/코드가 갈려 둘 다 본다. */
@@ -431,7 +450,7 @@ export function findByFileHash(fileHash) {
 /** docId 인덱스를 가진 스토어들 — 문서 삭제 시 함께 지운다(16-B). */
 const CASCADE_STORES = Object.freeze([
   'pages', 'progress', 'questions', 'attempts', 'mistakes',
-  'cards', 'aiCache', 'annotations', 'sections'
+  'cards', 'aiCache', 'annotations', 'sections', 'searchText'
 ]);
 
 /* ────────────────────────────────────────────────────────
@@ -442,10 +461,12 @@ const CASCADE_STORES = Object.freeze([
    · `pages`                  — 추출 결과 그 자체(`extract.js` `_buildAndStore`)
    · `questions`              — 5절 파서가 `pages` 에서 만든 문항(`quiz/engine.js` `buildSectionIndex`)
    · `sections`               — 같은 파서 몫의 스토어(P2, 지금은 쓰는 곳 없음 — 비어 있다)
+   · `searchText`             — `[8g-1]` 쪽 화면 글자에서 만든 검색 글자(`extract.js` 가 `pages` 와 한 트랜잭션)
    · documents.`extraction`   — 커서·실패 목록·algoVersion. 새 문서의 값으로 되돌린다
    · documents.`sectionIndex`·`sectionIndexDone`·`sectionIndexVersion` — 퀴즈 색인(`ui/quiz.js`)
 
    남긴다(사용자 데이터이거나, 텍스트가 바뀌어도 맞다)
+   · documents.`outline`·`pageLabels` — `[8g-3]` **PDF 에서 온 것**(개요·쪽 라벨)이라 쪽 텍스트와 무관하다
    · documents 의 나머지 — 원문 언어(`lang`·`langSource`·`langGuess`), 마지막 쪽(`lastPage`·
      `lastLineId`), `readStats`(비용 추정용 실측 — 쪽 글자 수는 다시 추출해도 거의 같다), 제목 등
    · `aiCache`(번역 캐시 — 같은 문장이면 키가 같아 그대로 맞는다), `cards`(단어장 예정·문장 카드),
@@ -454,7 +475,7 @@ const CASCADE_STORES = Object.freeze([
    ──────────────────────────────────────────────────────── */
 
 /** 문서별 파생 스토어 — 모두 `docId` 인덱스를 가진다. */
-export const DERIVED_STORES = Object.freeze(['pages', 'questions', 'sections']);
+export const DERIVED_STORES = Object.freeze(['pages', 'questions', 'sections', 'searchText']);
 
 /** documents 의 파생 필드를 되돌릴 값(새 문서의 값과 같다 — `ui/library.js` `newDocument`). */
 export function derivedDocReset() {

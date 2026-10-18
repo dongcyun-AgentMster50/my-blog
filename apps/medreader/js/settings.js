@@ -61,6 +61,10 @@ export const DEFAULTS = Object.freeze({
   'readalong.mode': 'speak',    // 'off' | 'show' | 'speak'. 기본 표시+낭독(요구가 "소리 내어 번역")
   'readalong.speakSource': true, // speak 모드에서 원문도 소리 내어 읽는가 — 기본 true(사용자 확정)
 
+  /* 검색 (8g — spec 17-8-7 · 17-8-12 U14) — 최근 검색어 칩. 기기 안에만, 최대 `SEARCH.RECENT_MAX`(5).
+     8g-1 은 키만 둔다(쓰는 화면은 8g-4). `search.aiQuery` 는 만들지 않는다(17-8-9 가 — 기본 끔). */
+  'search.recent': [],
+
   /* AI (7·8단계) */
   'ai.provider': 'gemini',
   'ai.model': '',

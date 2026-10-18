@@ -16,9 +16,11 @@
    · `extraction` 을 쪽마다 쓰지 않는다(7000번의 documents 쓰기). 묶어서 쓴다.
    ============================================================ */
 
-import { PDF_TEXT_CONTENT_OPTIONS, EXTRACT } from '../config.js';
+import { PDF_TEXT_CONTENT_OPTIONS, EXTRACT, SEARCH } from '../config.js';
 import { buildPageLayout, algoVersion as ALGO_VERSION } from '../text/layout.js';
-import { toStored, derivedHash as computeDerivedHash } from '../text/store.js';
+import { toStored, fromStored, derivedHash as computeDerivedHash } from '../text/store.js';
+// `[8g-1 — spec 17-8-3 · 17-8-12]` 쪽 검색 글자 — 화면 글자(describePage → joinPieces)와 같은 함수로 만든다.
+import { searchRecordOf } from '../text/search.js';
 import { hashHex } from '../hash.js';
 import * as db from '../db.js';
 
@@ -262,6 +264,30 @@ function cancelIdle(handle) {
   } else {
     clearTimeout(handle);
   }
+}
+
+/**
+ * `[8g-1 — spec 17-8-3 · 17-8-12 U4]` 쪽 저장본과 그 쪽 검색 글자를 **한 트랜잭션**으로 쓴다.
+ *
+ * 둘 중 하나만 써지는 일이 없으므로 재개 모델(커서·실패 목록)이 그대로 맞다 — 검색 글자 쓰기가
+ * 던지면 그 쪽은 `pages` 도 없고 `_tick` 이 `failed` 에 넣는다. 검색 레코드는 쓰려는 저장본을
+ * `fromStored` 로 되살린 **화면 글자**다(리더가 같은 저장본을 같은 함수로 그린다). 만들다 던지면
+ * 트랜잭션을 열기 전에 던진다(역시 `pages` 없음). 역할 재계산(4-7)도 이 길을 지난다.
+ *
+ * `SEARCH.ENABLED = false`(되돌림 스위치, 17-8-12 §9)면 검색 글자를 만들지 않고 **그 쪽의 옛 검색 글자를
+ * 같은 트랜잭션에서 지운다** — 다시 켰을 때 옛 글자가 지금 경첩(`sk`)으로 남아 있지 않게(백필이 만든다).
+ *
+ * @param {string} docId
+ * @param {number} pageNo
+ * @param {Object} rec `toStored` 결과(+ docId·pageNo·roleVersion…)
+ */
+export function writePageAndSearch(docId, pageNo, rec) {
+  const st = SEARCH.ENABLED ? Object.assign({ docId: docId }, searchRecordOf(fromStored(rec))) : null;
+  return db.withTx(['pages', 'searchText'], 'readwrite', (tx, s) => {
+    s.pages.put(rec);
+    if (st) s.searchText.put(st);
+    else s.searchText.delete([docId, pageNo]);
+  });
 }
 
 export class Extractor extends EventTarget {
@@ -537,7 +563,7 @@ export class Extractor extends EventTarget {
     for (let i = 0; i < rec.lines.length; i++) text += rec.lines[i].text + '\n';
     rec.textHash = await hashHex(text);
 
-    await db.put('pages', rec);
+    await writePageAndSearch(this.docId, pageNo, rec);
     return { rec: rec, mask: mask };
   }
 

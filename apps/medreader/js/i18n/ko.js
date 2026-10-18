@@ -28,6 +28,7 @@ export default {
   'common.close': '닫기',
   'common.continue': 'Continue',
   'common.dismiss': 'Dismiss',
+  'common.reload': '다시 불러오기',
   'common.loading': 'Loading…',
 
   /* ── 온보딩 (12-2) — 3화면 ───────────────────────── */
@@ -354,6 +355,8 @@ export default {
   'err.quota': 'This device is out of storage, so the text could not be saved. Free some space or delete a document, then try again.',
   'err.dbBlocked': 'Another tab has this app open with an older version. Close the other tabs and reload.',
   'err.dbOpen': 'Could not open local storage. Private browsing or blocked site data can cause this.',
+  // [8g-1 — spec 17-8-12 U2] 다른 탭(새 판)이 DB 를 올려 이 탭의 연결이 닫혔다 — `versionchange` 배너
+  'err.dbUpgraded': '앱이 새 판으로 바뀌었습니다. 다시 불러오세요.',
   'err.extractStalled.one': 'Text preparation stopped with {n} page left unread.',
   'err.extractStalled.other': 'Text preparation stopped with {n} pages left unread.',
   'err.reextract': '텍스트 엔진이 갱신되어 이 문서를 다시 준비하고 있습니다.',

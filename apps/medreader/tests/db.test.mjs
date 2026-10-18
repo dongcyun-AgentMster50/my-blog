@@ -56,13 +56,15 @@ test('D1 DB 이름·버전은 spec 9-1 그대로', () => {
   // [2026-09-21] spec 9-1 이 1 → 2 로 수정되었다. pages.docId_algoVersion 인덱스를
   // 더했고 IndexedDB 는 인덱스 추가에 버전 증가를 요구한다. 이 단언은 "spec 과
   // 코드가 같은 값을 말하는가"를 고정하는 것이므로 spec 이 바뀌면 함께 바뀐다.
-  assert.equal(DB_VERSION, 2);
+  // [2026-10-18 — 8g-1] spec 17-8-12 U1: 2 → 3(searchText 스토어). 3 아래로는 다시 내리지 않는다.
+  assert.equal(DB_VERSION, 3);
 });
 
 test('D2 spec 9-2 의 스토어가 전부 있다 (Phase 2·3 포함 — 9-1 결정)', () => {
   const want = [
     'documents', 'blobs', 'pages', 'progress', 'questions', 'attempts',
-    'mistakes', 'cards', 'aiCache', 'usage', 'settings', 'annotations', 'sections'
+    'mistakes', 'cards', 'aiCache', 'usage', 'settings', 'annotations', 'sections',
+    'searchText'   // [8g-1] spec 17-8-12
   ];
   assert.deepEqual([...STORE_NAMES].sort(), want.slice().sort());
 });

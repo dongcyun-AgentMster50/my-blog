@@ -694,3 +694,32 @@ export const REDACT_PATTERNS = Object.freeze([
   'Bearer\\s+\\S+',              // 13절이 명시한 형태 (openai-compat 계열)
   'sk-[A-Za-z0-9_\\-]{16,}'      // openai/mistral 계열 키가 헤더 밖에 나왔을 때
 ]);
+
+/* ────────────────────────────────────────────────────────
+   `[8g — spec 17-8-12]` 검색(키워드·제목·목차). **기존 키는 건드리지 않는다.**
+   8g-1 은 데이터만(DB 3 · `searchText` 스토어 · 추출이 함께 씀). 화면·엔진은 8g-2~4.
+   ──────────────────────────────────────────────────────── */
+export const SEARCH = Object.freeze({
+  /* 되돌림 스위치(17-8-12 §9) — false 면 입구를 숨기고 **추출도 `searchText` 를 쓰지 않는다**
+     (그 쪽의 옛 검색 글자는 같은 트랜잭션에서 지운다 — 다시 켜면 백필이 만든다). DB 버전은 내리지 않는다. */
+  ENABLED: true,
+  /* 검색 레코드 모양·조립 규칙의 판. 경첩 `sk = VERSION|DERIVED_HASH`(U4) — 오르면 백필이 전부 다시 만든다. */
+  VERSION: 1,
+  MIN_CHARS: 2,
+  MAX_CHARS: 60,
+  MAX_HITS_PER_DOC: 1000,
+  /* 결과 조각 — 적중 앞뒤 글자 수(낱말 경계로 넓힌다) */
+  SNIPPET: 40,
+  DEBOUNCE_MS: 250,
+  /* 캐시 채우기 getAll 한 번의 쪽 수 / 백필 한 트랜잭션의 쪽 수 */
+  READ_BATCH: 200,
+  BACKFILL_BATCH: 50,
+  /* 개요가 없는 책의 heading 폴백 목차 상한(17-8-6) */
+  TOC_FALLBACK_MAX: 200,
+  /* 같은 글자가 그 책에서 이만큼 이상 나오는 heading 은 일반 소제목 — 제목 묶음·폴백에서 뺀다(U8) */
+  REPEAT_HEADING: 10,
+  /* 최근 검색어 칩(기기 안 settings `search.recent`) */
+  RECENT_MAX: 5,
+  /* 합성어 변형(U7) — KEEP_HYPHEN_PREFIXES 중 이 길이 이상만 붙이고 띄운다 */
+  COMPOUND_MIN_PREFIX: 3
+});

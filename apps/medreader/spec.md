@@ -3736,7 +3736,7 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 | `search.paused` | 낭독을 멈췄습니다 — ▶ 를 누르면 이 문장부터 읽습니다 | 낭독 중 이동했을 때 한 번 |
 | `err.dbUpgraded` | 앱이 새 판으로 바뀌었습니다. 다시 불러오세요. | `versionchange` 배너(U2) + 기존 [다시 불러오기] |
 
-새 키 38개 × 4언어. `search.scriptHint` 의 `{lang}` 은 기존 원문 언어 이름 키를 쓴다.
+새 키 39개 × 4언어(`search.*` 37 + `err.dbUpgraded` + `common.reload` — 배너의 [다시 불러오기] 문구, `[정정 2026-10-19 — 8g-1 Review]`). `search.scriptHint` 의 `{lang}` 은 기존 원문 언어 이름 키를 쓴다.
 
 ##### 5. 운영자 결정 (선택지 · 권장)
 
@@ -3771,7 +3771,7 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 - [ ] `[N]` S3 `text/screen.js` 옮김 무변: 기존 테스트 전부 녹색, `ui/reader.js` 와 `tts/text.js` 가 내보내는 `describePage`·`flowParasOf`·`joinPieces`·`localRange` 가 `text/screen.js` 의 것과 **같은 함수 객체**. `text/screen.js`·`text/search.js` 가 `document`·`window`·`indexedDB`·`fetch` 를 참조하지 않는다(16-A grep).
 - [ ] `[N]` S4 DB 2 → 3(fake-idb, 데이터 있는 버전 2 DB): `searchText`(인덱스 `docId`·`docId_sk`)만 생기고 다른 스토어 레코드 수 불변, 두 번 열어도 같다. `deleteDocument` 뒤 그 문서 `searchText` 0. `resetDerived` 뒤 `searchText` 0 이고 `documents.outline`·`pageLabels` 는 남는다. `DB_VERSION >= 3` 단언(되돌림 가드).
 - [ ] `[N]` S5 한 트랜잭션: `searchText.put` 이 던지게 주입 → 그 쪽 `pages` 도 없고 `failed` 에 든다. 정상 → 두 레코드가 함께 있고 `sk = SEARCH.VERSION|DERIVED_HASH`. 역할 재계산(`_recomputeRoles`)도 둘을 함께 다시 쓴다.
-- [ ] `[D]` S6 탭 둘: 옛 판(DB 2) 탭을 연 채 새 판 탭을 열면 옛 탭에 `err.dbUpgraded` 배너 + [다시 불러오기], 새 탭은 막힘 없이 뜬다. 콘솔에 처리되지 않은 예외 0.
+- [ ] `[D]` S6 탭 둘: **8g-1 이후 판** 탭을 연 채 DB 버전을 올리는 새 판 탭을 열면 먼저 연 탭에 `err.dbUpgraded` 배너 + [다시 불러오기], 새 탭은 막힘 없이 뜬다. 콘솔에 처리되지 않은 예외 0. `[정정 2026-10-19 — 8g-1 Review]` 8g-1 이전 판에는 배너 코드가 없으므로 **2 → 3 첫 배포 때 이미 열린 옛 탭은 배너 없이 다음 DB 일이 실패한다**(멈춘 것처럼 보임) — 코드로 막을 수 없어 **배포 안내로 대응**한다("앱을 완전히 닫았다 다시 열기, 탭 하나만", 운영자 결정 2026-10-19).
 - [ ] `[N]` S7 `tests/importmap.test.mjs` 녹색(새 모듈 `text/screen.js`·`text/search.js` 가 표에 있다).
 
 **8g-2 엔진**
