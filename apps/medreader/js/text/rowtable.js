@@ -29,7 +29,9 @@
      R6b     2열 열 머리: 맨 윗 P 줄 + P 밖 조각, 조각마다 ≤ COLHEAD_MAX_CHARS, 문장 끝 아님, 바로 아래 P 줄이 행 시작.
      역할    홀로 선 칸·구획 줄은 7단계 역할을 지킨다(heading·figure-caption 그대로, 그 밖 body).
      R7      2열 부모의 물려받기는 R1d·좁힌 통로(P 시작 쪽 끝)를 쓴다.
-   R 이 있는 표(CMDT 21–38)는 위 규칙을 하나도 거치지 않는다(D10). 시제품 `dev/proto-rowtable-8i2.mjs`(R.X8I2 옵션)의
+   R 이 있는 표(CMDT 21–38)는 위 규칙을 하나도 거치지 않는다(D10). [8i-2b] 갈림은 "R 열 조각이 있나"가 아니라
+   판정 때 단 표시 `det.two`(R3 가 R 없이 잡은 표 · 그 표에서 물려받은 띠)와 `REQUIRE_REF` 를 함께 본다(`isTwo`) —
+   R 표에서 물려받은 띠는 그 띠에 쪽 번호가 하나도 없어도(`det.R = []`) 2열 경로가 아니다. 시제품 `dev/proto-rowtable-8i2.mjs`(R.X8I2 옵션)의
    규칙을 옮겼다 — 대조는 `dev/measure-rowtable-8i2.mjs --app`.
    **책 고유 x 좌표·글자 크기 절댓값·머리 낱말을 쓰지 않는다.** 상수는 `config.ROWTABLE`(비율)뿐이다.
    시제품 `dev/proto-rowtable-8i.mjs` 의 규칙을 옮겼다 — 수치 대조는 `dev/measure-rowtable-8i.mjs`.
@@ -202,9 +204,15 @@ export function judge(T, R = ROWTABLE) {
   if (!Rs.length) {
     const ratio = hiddenRatio(P);
     if (ratio >= R.HIDDEN_COL) return { why: 'hidden', hiddenRatio: ratio };
-    return { A: A, P: P, R: Rs, sync: sync, hiddenRatio: ratio };
+    return { A: A, P: P, R: Rs, sync: sync, hiddenRatio: ratio, two: true };   // [8i-2b] 2열 경로 표시
   }
   return { A: A, P: P, R: Rs, sync: sync };
+}
+
+/* [8i-2b] D10 — 이 띠가 2열 경로인가. 판정(R3) 때 단 표시와 되돌림 스위치를 함께 본다. R 열 조각이 비었는지(`det.R.length`)로
+ * 가르지 않는다 — R 표에서 물려받은 띠에 쪽 번호가 하나도 없으면 `det.R` 이 비지만 그 띠는 R 표다(8i 그대로). */
+function isTwo(det, R) {
+  return !!(det && det.two) && !R.REQUIRE_REF;
 }
 
 /* [8i-2] R3 (f) — P 열 줄(같은 baseline) 중 조각이 둘 이상인 줄의 비율. */
@@ -376,7 +384,7 @@ function splitLabels(A, P, R) {
 export function rowsOf(det, R = ROWTABLE) {
   let A = det.A;
   const P = det.P;
-  if (!det.R.length) {                 // [8i-2] R5b — 2열 표(R 없음)만
+  if (isTwo(det, R)) {                 // [8i-2] R5b — 2열 표(R 없음)만
     const sp = splitLabels(A, P, R);
     A = Object.assign({}, A, { cells: sp.cells });
     det.nSplit = sp.nSplit;
@@ -416,7 +424,7 @@ function inheritFrom(parent, ps, R) {
   for (let k = 0; k < T0.length - 1; k++) cuts.push([T0[k].hi, T0[k + 1].lo]);
   // [8i-2] 2열 부모: 통로를 오른쪽 끝(P 시작)으로 좁힌다 — 부모 띠의 이름표가 짧아 통로가 넓게 잡혔을 때
   // 더 긴 이름표가 중심으로 P 열에 들어가지 않게. 가로지름 = P 시작을 넘어 걸친 조각.
-  const two = !d0.R.length;
+  const two = isTwo(d0, R);            // [8i-2b] 부모의 표시를 물려준다(R 표 부모면 자식도 R 표 — 쪽 번호가 없어도)
   if (two) for (let k = 0; k < cuts.length; k++) cuts[k] = [cuts[k][1] - 0.01, cuts[k][1]];
   const T = tracksOf(ps, cuts, R);
   // 열은 k(경계 번호)로 찾는다 — 빈 열이 걸러져 배열 자리가 밀려도 같은 열을 가리키게
@@ -445,7 +453,7 @@ function inheritFrom(parent, ps, R) {
   if (two) {
     const ratio = hiddenRatio(P);
     if (ratio >= R.HIDDEN_COL) return { why: 'hidden' };
-    return { T: T, det: { A: A, P: P, R: Rs, sync: 1, hiddenRatio: ratio } };
+    return { T: T, det: { A: A, P: P, R: Rs, sync: 1, hiddenRatio: ratio, two: true } };
   }
   return { T: T, det: { A: A, P: P, R: Rs, sync: 1 } };
 }
@@ -663,7 +671,7 @@ function rowSpan(r) {
 function emitBand(band, t, rowBase, colhead, P, R) {
   const det = band.det, T = band.T;
   // [8i-2] 2열 표(R 없음)의 홀로 선 칸·구획 줄은 7단계 역할을 지킨다 — 표 제목("TABLE …")이 heading 이 되지 않게.
-  const two = !det.R.length;
+  const two = isTwo(det, R);
   const keepRole = function (s) { return s.role === 'heading' || s.role === 'figure-caption' ? s.role : 'body'; };
   const head = new Set(colhead || []);
   const out = [];
@@ -788,7 +796,7 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
     if (!j.A) { reject.push(j.why); return { ps: b.ps, T: T, det: null }; }
     return { ps: b.ps, T: T, det: j };
   };
-  const isRefTable = function (b) { return !!(b.det && b.det.R.length); };
+  const isRefTable = function (b) { return !!(b.det && !isTwo(b.det, R)); };   // [8i-2b] R 표 = 2열 경로가 아닌 표
   // 1차 — 띠마다 R3
   let BS = bandsOf(ps, W, R).map(judgeBand);
   // [8i-2] R1b — 캡션 줄이 띠를 끊는다. 2열 표가 열릴 수 있을 때(REQUIRE_REF false)만, R 표로 잡힌 띠는 다시 자르지 않는다
@@ -807,7 +815,7 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
   // 합쳐진 띠는 R1d(표 끝 자르기) 뒤 그 2열 표의 열 경계로 다시 나눈다(R7 과 같은 검사 + 숨은 열). 실패하면 1차 띠 그대로.
   // R 표 띠가 섞이는 합침은 하지 않는다(D10).
   const ends = [];
-  for (const b of BS) if (b.det && !b.det.R.length) { const k = b.T.indexOf(b.det.A); if (b.T[k + 1]) ends.push(b.T[k + 1].lo); }
+  for (const b of BS) if (isTwo(b.det, R)) { const k = b.T.indexOf(b.det.A); if (b.T[k + 1]) ends.push(b.T[k + 1].lo); }
   if (ends.length) {
     const fsAll = med(ps.map(function (p) { return p.fs; })) || 8;
     const keepWide = function (p) { return ends.some(function (e) { return p.x0 >= e - R.ALIGN_TOL * fsAll; }); };
@@ -820,7 +828,7 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
     for (const nb of B2) {
       const idx = Array.from(new Set(nb.ps.map(function (p) { return pieceBand.get(p); }).filter(function (i) { return i != null; }))).sort(function (a, b) { return a - b; });
       const extra = nb.ps.some(function (p) { return !pieceBand.has(p); });
-      const par = idx.map(function (i) { return old[i]; }).find(function (b) { return b.det && !b.det.R.length; });
+      const par = idx.map(function (i) { return old[i]; }).find(function (b) { return isTwo(b.det, R); });
       if (!par || (idx.length <= 1 && !extra) || idx.some(function (i) { return isRefTable(old[i]); })) { pushOld(idx); continue; }
       const seg = tailCut(par, nb.ps, 'mid');
       const got = seg.keep.length ? inheritFrom(par, seg.keep, R) : { why: 'empty' };
@@ -843,7 +851,7 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
         if (!par || !par.det) continue;
         // [8i-2] 2열 부모면 R1d(표 끝 자르기) 뒤에 물려받는다 — 남은 조각은 표 밖 띠로 둔다
         let cand = BS[i].ps, rest = [];
-        if (!par.det.R.length) { const sg = tailCut(par, cand, j < i ? 'below' : 'above'); cand = sg.keep; rest = sg.rest; }
+        if (isTwo(par.det, R)) { const sg = tailCut(par, cand, j < i ? 'below' : 'above'); cand = sg.keep; rest = sg.rest; }
         const got = cand.length ? inheritFrom(par, cand, R) : { why: 'empty' };
         if (!got.det) { if (got.why === 'cross') reject.push('inheritCross'); continue; }
         BS[i] = { ps: cand, T: got.T, det: got.det, inherited: true, parent: par };
@@ -859,7 +867,7 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
   for (let guard = 0; guard < BS.length; guard++) for (const b of BS) if (b.det && b.inherited && b.t == null && b.parent.t != null) b.t = b.parent.t;
 
   // [8i-2] R2b 붙은 run 쪼개기 — 2열 띠만
-  for (const b of BS) if (b.det && !b.det.R.length) splitStraddling(b, P, R);
+  for (const b of BS) if (isTwo(b.det, R)) splitStraddling(b, P, R);
   const tableBands = BS.filter(function (b) { return b.det; });
   const used = new Set();
   for (const b of tableBands) for (const p of b.ps) used.add(p.line);
@@ -868,7 +876,7 @@ export function detectRowTables(lines, pageInfo = {}, params = LAYOUT, R = ROWTA
   for (const b of tableBands) {
     b.colhead = colheadInBand(b, R);
     // [8i-2] R6b — 2열 표(물려받지 않은 띠)의 열 머리. 머리 조각을 뺀 조각으로 열(칸)을 다시 만든다.
-    if (!b.colhead && !b.det.R.length && !b.inherited) {
+    if (!b.colhead && isTwo(b.det, R) && !b.inherited) {
       const G = colheadTwo(b, R);
       if (G) {
         const gs = new Set(G);

@@ -1,5 +1,7 @@
 /* ============================================================
    MedReader — 8i-2 본문 이름표 2열 표(spec 4-13-10) 테스트 RT20–RT32 (+ RT25b: 넓힌·물려받은 띠의 숨은 열)
+   [8i-2b] RT30b–RT30e: D10 — R 표(쪽 번호 열)에서 물려받은 띠에 쪽 번호가 없어도 2열 경로가 아니다 · R 표의 P 열
+   여러 run · R 표 띠 안 캡션. RT23b·RT28b: 살아남던 방어 조건(R6b P 줄 위 바깥 조각 · R2b 걸친 아이템).
 
    픽스처는 전부 **지어낸 글**이다(낱말·이름표·캡션 모두). 원서 문장을 옮기지 않는다.
    기하는 실측 2열 표(4-13-10 1절)의 **모양**만 흉내 낸다: 위 정렬 · 이름표·설명 8pt · 행간 9.5pt ·
@@ -163,6 +165,21 @@ test('RT23 ★ 맨 윗줄 "머리A(통로 가운데) | 머리P", 아래 첫 줄�
   assert.ok(!units(L).some((u) => /Maneuver|Description/.test(u.text)), '열 머리는 낭독하지 않는다');
 });
 
+/* [8i-2b] RT23b — R6b "P 줄 위에 이름표 열·구획 밖 조각이 있으면 열 머리가 아니다"(Review 8i2R-7 V5).
+ * RT23 과 같은 머리 줄 위에, 이름표 열도 가로지름도 아닌 홀로 선 짧은 조각(오른쪽 끝 — 제3의 한 조각 열)을 둔다. */
+function f23b() {
+  const items = f23();
+  items.push(item('Gessel orvin', 420, 640 + GAP, 8));
+  return items;
+}
+test('RT23b R6b: 머리 줄 위에 이름표 열·구획 밖 조각이 있으면 맨 윗 P 줄을 열 머리로 접지 않는다', () => {
+  const L = lay(f23b());
+  assert.ok(lay(f23()).lines.some((l) => l.role === 'colhead'), '전제: 그 조각이 없으면(RT23) 열 머리');
+  assert.ok(L.lines.some((l) => l.rt), '전제: 표는 잡힌다');
+  assert.equal(L.lines.filter((l) => l.role === 'colhead').length, 0);
+  assert.ok(units(L).some((u) => /Description/.test(u.text)), '접지 않은 줄은 읽힌다');
+});
+
 /* ── RT24 ────────────────────────────────────────────── */
 const F24 = { rows: [
   { label: ['Zorvat'], p: ['Mekil plon trasse vendo quilar.'] }, { label: ['Trasse'], p: 3 }, { label: ['Vendo'], p: 3 }
@@ -289,6 +306,30 @@ test('RT28 ★ 이름표 줄과 설명 첫 줄이 한 run(아이템 둘) → 아
   assert.ok(!L.lines.some((l) => l.text.startsWith(JOINED + ' •')), '붙은 원래 줄이 다시 나오지 않는다');
 });
 
+/* [8i-2b] RT28b — R2b 는 "앞 아이템이 P 시작 **전에** 끝날 때"만 자른다(Review 8i2R-7 V3).
+ * 셋째 행 첫 줄: 이름표 아이템이 P 시작(160)을 지나 176 에서 끝나고, 바로 다음 아이템이 178 에서 시작하는 한 run —
+ * 자를 경계가 깨끗하지 않다. */
+const STRAD = 'Trasse vendo quilar basto ren';      // 29자 × 4 = 116 → 60..176
+const STRAD_P = 'xenoplast quarrin vetu';            // WORDS 에 없는 낱말(다른 줄과 헷갈리지 않게)
+function f28b() {
+  return twoCol({ rows: [
+    { label: ['Zorvat mekil pl'], p: 3 }, { label: ['Mekil plon tra'], p: 3 },
+    { label: [], p: [[[STRAD, XA], [STRAD_P, 178]]].concat(prose(2, 3, 36)) },
+    { label: ['Vendo quilar ba'], p: 3 }, { label: ['Renu fimal oska'], p: 3 }
+  ] });
+}
+test('RT28b R2b: 아이템이 P 시작을 넘어 걸치면 그 run 은 자르지 않는다 — 한 줄 그대로 · 글자 다중 집합 동일', () => {
+  const off = lay(f28b(), OFF);
+  const j = off.lines.find((l) => l.text.startsWith(STRAD));
+  assert.ok(j && j.runs.length === 1 && j.text.includes(STRAD_P), '전제: 7b 없을 때 걸친 아이템과 다음 아이템이 한 run');
+  const L = lay(f28b());
+  assert.ok(L.lines.some((l) => l.rt), '전제: 표는 잡힌다');
+  const got = L.lines.filter((l) => l.text.includes(STRAD) || l.text.includes(STRAD_P));
+  assert.equal(got.length, 1, '두 아이템이 한 줄에 그대로: ' + got.map((l) => l.text.slice(0, 20)).join(' / '));
+  assert.ok(got[0].text.startsWith(STRAD) && got[0].text.includes(STRAD_P));
+  assert.deepEqual(itemBag(L), itemBag(off));
+});
+
 /* ── RT29 ────────────────────────────────────────────── */
 const CAP1 = 'Figure 3. Zorvat mekil plon trasse vendo quilar (ab';   // 7단계 figure-caption, 통로를 덮음(띠 안 — 0.55W 미만)
 const CAP2 = 'diagnosis).';
@@ -326,12 +367,19 @@ function rowTable(spec) {
   for (const r of spec.rows) {
     if (r.section) { items.push(item(r.section, x.A, y, r.fs || 11)); y -= ROWG + 2; continue; }
     if (r.wide) { items.push(item(r.wide, x.A, y, 11)); y -= ROWG + 2; continue; }
+    if (r.line) { items.push(item(r.line, x.A, y, r.fs || 8)); y -= ROWG; continue; }   // [8i-2b] 임의의 한 줄(캡션)
     const first = y;
     const cellTop = [];
     r.cells.forEach(function (c, ci) {
       if (ci) y -= CELL - LD;
       cellTop.push(y);
-      for (const s of prose(c.n, seed++)) { items.push(item(s, x.P, y, 8)); y -= LD; }
+      prose(c.n, seed++).forEach(function (s, li) {
+        if (c.split && c.split.includes(li)) {   // [8i-2b] 이 줄은 run 둘(틈 12pt — 숨은 열 모양)
+          const a = s.slice(0, 20 + (li % 3) * 3).trim(), b = s.slice(a.length).trim();
+          items.push(item(a, x.P, y, 8)); items.push(item(b, x.P + a.length * 4 + 12, y, 8));
+        } else items.push(item(s, x.P, y, 8));
+        y -= LD;
+      });
     });
     const last = y + LD;
     const top = (first + last) / 2 + LAB * (r.label.length - 1) / 2;
@@ -381,10 +429,97 @@ test('RT30 ★ R(쪽 번호 열) 있는 표는 2열 규칙을 거치지 않는�
   assert.equal(lay(rowTable(T7b), OFF).lines.find((l) => l.text.startsWith('Chapter nine')).role, 'body', '전제: 7단계는 body');
 });
 
+/* ── RT30b–RT30e [8i-2b] ─────────────────────────────── */
+/* D10 구멍(Review 8i2R-6 B): R 표 → 넓은 장 제목 → R7 로 물려받은 아래 띠(행 사이 구획 줄 + P 칸 둘인 행)에 쪽 번호가 하나도 없다.
+ * 8i-2 판은 이 띠의 `det.R` 이 비어 2열 규칙(구획 역할 유지 · R5b 이름표 쪼개기 …)을 탔다 — REQUIRE_REF true 에서도.
+ * 아래 띠는 혼자서는 R3 를 못 넘는다(2열 표로 새로 잡히지 않고 물려받기만 한다). */
+const SEC_BELOW = 'Orvin tarma gessel pekal sarto nivo lumin';
+const d10 = (top) => ({ rows: top.concat([
+  { label: ['Lumin &', 'Drevalacia'], cells: [{ n: 3 }] },
+  { section: SEC_BELOW, fs: 8 },                                          // 구획 줄(7단계 body)
+  { label: ['Sarto &', 'Pekalosis'], cells: [{ n: 2 }, { n: 2 }] }        // 둘째 이름표 줄 = 둘째 P 칸 첫 줄 높이(R5b 가 새면 쪼갠다)
+]) });
+const D10_TOP = [
+  { label: ['Zorvat Lesions &', 'Mekil Goiter'], refs: ['104'], cells: [{ n: 3 }] },
+  { label: ['Plonitis &', 'Trasse'], refs: ['130'], cells: [{ n: 4 }] },
+  { label: ['Vendo Quilar'], refs: ['138'], cells: [{ n: 4 }] },
+  { label: ['Basto Renu &', 'Fimal Oskat'], refs: ['143'], cells: [{ n: 3 }] },
+  { wide: 'CHAPTER 3: DREVA LUMIN AND SARTO PEKAL DISORDERS OF GESSEL ORV' }
+];
+const belowSig = (L) => { const i = L.lines.findIndex((l) => /^CHAPTER 3/.test(l.text)); return L.lines.slice(i).map((l) => [l.role, l.col, l.rt ? l.rt.cell + l.rt.row : '-'].join(' ')); };
+/* 8i(246e392) 코드로 뽑은 아래 띠 줄 [role col 칸+행] — 장 제목부터 */
+const D10_8I = ['heading span -', 'body rA A4', 'body rA A4', 'body rP P4', 'body rP P4', 'body rP P4', 'heading rS S5',
+  'body rA A6', 'body rA A6', 'body rP P6', 'body rP P6', 'body rP P6', 'body rP P6'];
+test('RT30b ★ D10: R 표에서 물려받은 띠에 쪽 번호가 없어도 2열 경로가 아니다 — REQUIRE_REF false·true 모두 8i 와 같다', () => {
+  const items = rowTable(d10(D10_TOP));
+  const a = lay(items, TWO), b = lay(items, REF);
+  assert.equal(b.lines.filter((l) => l.role === 'ref').length, 4, '전제: 위 표만 쪽 번호가 있다');
+  assert.ok(b.lines.some((l) => l.text === 'Lumin &' && l.rt && l.rt.cell === 'A'), '전제: 아래 띠도 물려받아 행 표');
+  assert.equal(lay(items, OFF).lines.find((l) => l.text === SEC_BELOW).role, 'body', '전제: 구획 줄은 7단계 body');
+  for (const [name, L] of [['REQUIRE_REF false', a], ['REQUIRE_REF true', b]]) {
+    const sec = L.lines.find((l) => l.text === SEC_BELOW);
+    assert.equal(sec.rt && sec.rt.cell, 'S', name + ' 구획 줄');
+    assert.equal(sec.role, 'heading', name + ': R 표의 구획 줄은 8i 그대로 heading(2열 역할 유지 아님)');
+    assert.deepEqual(heads(L).slice(-2), ['Lumin & Drevalacia', 'Sarto & Pekalosis'], name + ': 이름표를 R5b 로 쪼개지 않는다');
+    assert.deepEqual(belowSig(L), D10_8I, name + ': 8i 와 같은 줄·역할·칸');
+  }
+  assert.equal(noAlgo(a), noAlgo(b), 'REQUIRE_REF false·true JSON 바이트 동일');
+});
+
+/* V4(Review 8i2R-7): (f) 숨은 열 가드는 2열 표에만 — R 표는 P 줄 여럿이 run 둘이어도 8i 그대로 R 표 */
+const T30c = [
+  { label: ['Zorvat Lesions &', 'Mekil Goiter'], refs: ['104'], cells: [{ n: 3, split: [1] }] },
+  { label: ['Plonitis &', 'Trasse'], refs: ['130'], cells: [{ n: 4, split: [0, 2] }] },
+  { label: ['Vendo Quilar'], refs: ['138'], cells: [{ n: 4, split: [1] }] },
+  { label: ['Basto Renu &', 'Fimal Oskat'], refs: ['143'], cells: [{ n: 3 }] }
+];
+test('RT30c R 표의 P 줄 일부가 run 둘(비율 ≥ HIDDEN_COL)이어도 숨은 열 가드를 걸지 않는다 — 8i 그대로 R 표', () => {
+  const items = rowTable({ rows: T30c });
+  const off = lay(items, OFF);
+  const pY = new Set(), multiY = new Set();
+  for (const l of off.lines) for (const r of l.runs) if (r.x0 >= 250) { pY.add(l.baseline); if (l.runs.filter((q) => q.x0 >= 250).length >= 2) multiY.add(l.baseline); }
+  assert.ok(multiY.size >= ROWTABLE.HIDDEN_COL * pY.size, '전제: run 둘인 P 줄 비율 ≥ HIDDEN_COL (' + multiY.size + '/' + pY.size + ')');
+  const a = lay(items, TWO), b = lay(items, REF);
+  assert.equal(b.lines.filter((l) => l.role === 'ref').length, 4, '8i 는 R 표로 잡는다');
+  assert.deepEqual(heads(a), ['Zorvat Lesions & Mekil Goiter', 'Plonitis & Trasse', 'Vendo Quilar', 'Basto Renu & Fimal Oskat']);
+  assert.equal(noAlgo(a), noAlgo(b));
+});
+
+/* V6(Review 8i2R-7): R1b(캡션 줄이 띠를 끊음)는 R 표 띠를 다시 자르지 않는다 */
+const CAP30 = 'Figure 3. Zorvat mekil plon trasse vendo quilar (ab';
+const T30d = [
+  { label: ['Zorvat Lesions &', 'Mekil Goiter'], refs: ['104'], cells: [{ n: 3 }] },
+  { label: ['Plonitis &', 'Trasse'], refs: ['130'], cells: [{ n: 4 }] },
+  { line: CAP30 },
+  { label: ['Vendo Quilar'], refs: ['138'], cells: [{ n: 4 }] },
+  { label: ['Basto Renu &', 'Fimal Oskat'], refs: ['143'], cells: [{ n: 3 }] }
+];
+test('RT30d R 표 띠 안의 figure-caption 줄 — REQUIRE_REF false 여도 띠를 끊지 않는다(8i 와 JSON 바이트 동일)', () => {
+  const items = rowTable({ rows: T30d });
+  assert.equal(lay(items, OFF).lines.find((l) => l.text === CAP30).role, 'figure-caption', '전제: 7단계 캡션');
+  const a = lay(items, TWO), b = lay(items, REF);
+  const c = b.lines.find((l) => l.text === CAP30);
+  assert.ok(c.rt && c.rt.cell === 'S', '8i: 캡션 줄은 R 표 띠 안 구획 줄');
+  assert.equal(b.lines.filter((l) => l.role === 'ref').length, 4);
+  assert.equal(noAlgo(a), noAlgo(b));
+});
+
+/* 위 셋을 한 쪽에 — R 표 + P 열 여러 run + 띠 안 캡션 + 쪽 번호 없는 물려받은 띠 */
+test('RT30e R 표 + run 둘 + 띠 안 캡션 + 쪽 번호 없는 물려받은 띠 → REQUIRE_REF false·true JSON 바이트 동일, 아래 띠는 8i 그대로', () => {
+  const top = T30c.slice(0, 2).concat([{ line: CAP30 }], T30c.slice(2), [D10_TOP[4]]);
+  const items = rowTable(d10(top));
+  const a = lay(items, TWO), b = lay(items, REF);
+  assert.equal(b.lines.filter((l) => l.role === 'ref').length, 4);
+  assert.ok(b.lines.find((l) => l.text === CAP30).rt, '전제: 캡션은 R 표 띠 안');
+  assert.equal(noAlgo(a), noAlgo(b));
+  assert.equal(a.lines.find((l) => l.text === SEC_BELOW).role, 'heading');
+  assert.deepEqual(heads(a).slice(-2), ['Lumin & Drevalacia', 'Sarto & Pekalosis']);
+});
+
 /* ── RT31 ────────────────────────────────────────────── */
 test('RT31 ★ 되돌림 스위치: REQUIRE_REF true 면 RT20–RT29 픽스처가 7b 없을 때와 바이트 동일', () => {
   const fx = { RT20: twoCol(F20), RT21: twoCol(F21), RT22: twoCol(F22), RT23: f23(), RT24: twoCol(F24), RT25: f25(), RT25b: f25b(),
-    RT26: f26(), RT27: f27(), RT28: f28(), RT29: f29(), RT32: f32() };
+    RT26: f26(), RT27: f27(), RT28: f28(), RT29: f29(), RT32: f32(), RT23b: f23b(), RT28b: f28b() };
   for (const [name, items] of Object.entries(fx)) {
     const on = lay(items, TWO);
     if (name !== 'RT25') assert.ok(on.lines.some((l) => l.rt), name + ' 전제: 2열 규칙이 켜지면 표가 잡힌다');
