@@ -2,6 +2,7 @@
    MedReader — 8i-2 본문 이름표 2열 표(spec 4-13-10) 테스트 RT20–RT32 (+ RT25b: 넓힌·물려받은 띠의 숨은 열)
    [8i-2b] RT30b–RT30e: D10 — R 표(쪽 번호 열)에서 물려받은 띠에 쪽 번호가 없어도 2열 경로가 아니다 · R 표의 P 열
    여러 run · R 표 띠 안 캡션. RT23b·RT28b: 살아남던 방어 조건(R6b P 줄 위 바깥 조각 · R2b 걸친 아이템).
+   [8i-2c] RT33–RT35: 2열 표시(det.two)가 R7 물려받기 · R2b · R6b 뒤에도 남는다(8i-2b Review M1–M3).
 
    픽스처는 전부 **지어낸 글**이다(낱말·이름표·캡션 모두). 원서 문장을 옮기지 않는다.
    기하는 실측 2열 표(4-13-10 1절)의 **모양**만 흉내 낸다: 위 정렬 · 이름표·설명 8pt · 행간 9.5pt ·
@@ -519,7 +520,8 @@ test('RT30e R 표 + run 둘 + 띠 안 캡션 + 쪽 번호 없는 물려받은 �
 /* ── RT31 ────────────────────────────────────────────── */
 test('RT31 ★ 되돌림 스위치: REQUIRE_REF true 면 RT20–RT29 픽스처가 7b 없을 때와 바이트 동일', () => {
   const fx = { RT20: twoCol(F20), RT21: twoCol(F21), RT22: twoCol(F22), RT23: f23(), RT24: twoCol(F24), RT25: f25(), RT25b: f25b(),
-    RT26: f26(), RT27: f27(), RT28: f28(), RT29: f29(), RT32: f32(), RT23b: f23b(), RT28b: f28b() };
+    RT26: f26(), RT27: f27(), RT28: f28(), RT29: f29(), RT32: f32(), RT23b: f23b(), RT28b: f28b(),
+    RT33: f33(), RT33b: f33b(), RT34: f34(), RT35: f35() };
   for (const [name, items] of Object.entries(fx)) {
     const on = lay(items, TWO);
     if (name !== 'RT25') assert.ok(on.lines.some((l) => l.rt), name + ' 전제: 2열 규칙이 켜지면 표가 잡힌다');
@@ -543,6 +545,93 @@ test('RT32 2열 표 안 "TABLE …" 구획 줄(7단계 body) → 구획 줄 role
   assert.equal(t.role, 'body');
   assert.notEqual(L.paragraphs.find((p) => p.lineIds.includes(t.id)).kind, 'heading');
   assert.deepEqual(heads(L), ['Zorvat', 'Mekil', 'Plon', 'Trasse']);
+});
+
+/* ── RT33–RT35 [8i-2c] ───────────────────────────────── */
+/* 2열 표시 `det.two` 는 det 를 다시 만드는 세 곳 — R7 `inheritFrom` 의 2열 가지 · R2b · R6b 의 `Object.assign` — 을
+ * 지나서도 남아야 한다(8i-2b Review 8i2bR-4 M1–M3). 빠지면 그 띠가 R 표 경로로 떨어져 띠 안 구획 줄이 heading 이 되고
+ * (R 표 경로 역할), R5b 이름표 쪼개기도 안 돈다. 세 테스트 모두 "그 단계가 실제로 돌았다"를 전제로 먼저 확인하고,
+ * 띠 안 구획 줄(7단계 body — 지어낸 낱말)이 2열 경로대로 body 인지 본다. */
+const SEC33 = 'Orvin tarma gessel pekal sarto nivo';        // 35자 × 4 = 140pt → 60..200: 통로를 덮는 구획 줄(0.55W 미만 — 띠 안)
+const WIDE33 = 'Zorvat mekil plon trasse vendo quilar basto renu fimal oskat dreva lumin sarto pekal nivo tarma gessel';   // > 0.55W, A 통로에서 시작 → 띠 경계
+const tablesOf = (items) => { const d = []; lay(items, TWO, (r) => d.push(...r.tables)); return d; };
+
+/* RT33 — M1: R7 물려받기(2열 부모 → 넓은 줄 아래 띠)가 자식 det 에 `two` 를 준다. */
+function f33() {
+  return twoCol({ rows: [
+    { label: ['Zorvat'], p: 3 }, { label: ['Mekil'], p: 3 }, { label: ['Plon'], p: 3 },
+    { line: WIDE33 },
+    { label: ['Trasse'], p: 3 }, { line: SEC33 }, { label: ['Vendo'], p: 3 }
+  ] });
+}
+function f33b() {
+  // 아래 띠 첫 행: 두 줄 이름표의 둘째 줄('Vendo')이 행 시작 P 줄과 같은 높이 — R5b 가 새 이름표 칸으로 자른다
+  return twoCol({ rows: [
+    { label: ['Zorvat'], p: 3 }, { label: ['Mekil'], p: 3 }, { label: ['Plon'], p: 3 },
+    { line: WIDE33 },
+    { label: ['Trasse quilar', 'Vendo'], p: ['Basto renu fimal oskat dreva lumin sarto pekal.', 'Gessel orvin nivo tarma plon mekil zorvat.'] },
+    { label: ['Oskat'], p: 3 }
+  ] });
+}
+test('RT33 R7: 2열 부모에게서 물려받은 띠도 2열 — 띠 안 구획 줄 body · R5b 이름표 쪼개기 (M1)', () => {
+  const L = lay(f33());
+  const tb = tablesOf(f33());
+  assert.ok(tb.some((t) => !t.inherited) && tb.some((t) => t.inherited), '전제: 1차 띠 + 물려받은 띠: ' + JSON.stringify(tb.map((t) => t.inherited)));
+  assert.ok(!L.lines.find((l) => l.text === WIDE33).rt, '전제: 넓은 줄은 표 밖(띠 경계)');
+  assert.deepEqual(heads(L), ['Zorvat', 'Mekil', 'Plon', 'Trasse', 'Vendo']);
+  const s = L.lines.find((l) => l.text === SEC33);
+  assert.equal(lay(f33(), OFF).lines.find((l) => l.text === SEC33).role, 'body', '전제: 7단계 body');
+  assert.ok(s.rt && s.rt.cell === 'S', '전제: 물려받은 띠 안 구획 줄');
+  assert.equal(s.role, 'body', '2열 경로 역할(R 표 경로면 heading)');
+  assert.notEqual(L.paragraphs.find((p) => p.lineIds.includes(s.id)).kind, 'heading');
+  // 두 줄 이름표: 둘째 줄이 행 시작 높이면 다음 행 이름표 — 앞 행에 붙지 않는다
+  const L2 = lay(f33b());
+  assert.ok(tablesOf(f33b()).some((t) => t.inherited), '전제: 물려받은 띠');
+  assert.deepEqual(heads(L2), ['Zorvat', 'Mekil', 'Plon', 'Trasse quilar Vendo', 'Oskat']);
+});
+
+/* RT34 — M2: R2b(붙은 run 쪼개기) 뒤 다시 만든 det 에도 `two` 가 남는다. RT28 꼴에 행을 늘리고(띠 줄 25 → 통로를 덮어도
+ * 되는 조각 ⌊0.08×25⌋ = 2: 붙은 run + 구획 줄) 띠 안에 구획 줄을 둔다. */
+function f34() {
+  return twoCol({ rows: [
+    { label: ['Zorvat mekil pl'], p: 3 }, { label: ['Mekil plon tra'], p: 3 },
+    { label: [JOINED], p: prose(3, 3, 36) },
+    { line: SEC33 },
+    { label: ['Vendo quilar ba'], p: 3 }, { label: ['Renu fimal oska'], p: 3 },
+    { label: ['Fimal oskat dre'], p: 3 }, { label: ['Lumin sarto pek'], p: 3 }, { label: ['Nivo tarma gess'], p: 3 }
+  ] });
+}
+test('RT34 R2b: 붙은 run 을 쪼갠 띠도 2열 — 띠 안 구획 줄 body (M2)', () => {
+  const off = lay(f34(), OFF);
+  assert.ok(off.lines.some((l) => l.text.startsWith(JOINED + ' •')), '전제: 7b 없을 때 이름표와 설명 첫 줄이 한 run');
+  assert.equal(off.lines.find((l) => l.text === SEC33).role, 'body', '전제: 7단계 body');
+  const L = lay(f34());
+  assert.ok(L.lines.some((l) => l.text === JOINED && l.rt && l.rt.cell === 'A'), '전제: R2b 가 쪼갰다');
+  assert.equal(heads(L).length, 8);
+  const s = L.lines.find((l) => l.text === SEC33);
+  assert.ok(s.rt && s.rt.cell === 'S', '전제: 띠 안 구획 줄');
+  assert.equal(s.role, 'body', '2열 경로 역할(R 표 경로면 heading)');
+  assert.deepEqual(itemBag(L), itemBag(off));
+});
+
+/* RT35 — M3: R6b(2열 열 머리) 뒤 다시 만든 det 에도 `two` 가 남는다. RT23 꼴 + 행 사이 구획 줄. */
+function f35() {
+  const items = twoCol({ top: 640 - GAP, rows: [
+    { label: ['Zorvat'], p: 3 }, { label: ['Mekil'], p: 3 }, { line: SEC33 }, { label: ['Plon'], p: 2 }, { label: ['Trasse'], p: 3 }
+  ] });
+  items.push(item('Maneuver', 112, 640, 8));      // 머리A — 통로 가운데
+  items.push(item('Description', XP, 640, 8));    // 머리P
+  return items;
+}
+test('RT35 R6b: 열 머리를 접은 띠도 2열 — 띠 안 구획 줄 body (M3)', () => {
+  const L = lay(f35());
+  assert.ok(tablesOf(f35()).some((t) => t.head2), '전제: R6b 가 열 머리를 접었다');
+  assert.ok(L.lines.some((l) => l.role === 'colhead' && /Description/.test(l.text)));
+  assert.deepEqual(heads(L), ['Zorvat', 'Mekil', 'Plon', 'Trasse']);
+  const s = L.lines.find((l) => l.text === SEC33);
+  assert.equal(lay(f35(), OFF).lines.find((l) => l.text === SEC33).role, 'body', '전제: 7단계 body');
+  assert.ok(s.rt && s.rt.cell === 'S', '전제: 띠 안 구획 줄');
+  assert.equal(s.role, 'body', '2열 경로 역할(R 표 경로면 heading)');
 });
 
 /* 결정성 — 2열 경로도 같은 입력 두 번이면 바이트 동일 */

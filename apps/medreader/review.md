@@ -4694,3 +4694,63 @@ Build 가 한 V1–V10·V13·V14 와 겹치지 않는 자리만 골랐다.
 
    앱 코드는 그대로다.
 5. [기록] §9 스위치 문안의 엇갈림(8g1R-5 의 8)을 정리할지 정해 주세요. 입구 숨김과 추출 끔을 따로 둘지는 8g-4 때 정해도 된다.
+
+---
+
+# 8i-2c Review — `two` 표시 옮기는 세 곳 테스트(RT33–RT35) (2026-10-19)
+
+> 지침 `.claude/tasks/medreader-review-8i-2c.md`. Build 와 분리된 검증자다. Build 보고는 믿지 않고 다시 쟀다. 앱 코드·테스트는 고치지 않았다(변이는 되돌리고 `cmp`). 커밋하지 않았다. 스크래치 `r8i2c/`(8.1 MB)만 썼다.
+
+## 8i2cR-1. 결론 — **통과**(차단 문제 없음) · 테스트 보강 권장(낮음, 선택) 1건
+
+- 바뀐 레포 파일은 `tests/rowtable-8i2.test.mjs` 하나다(+90 −1). `git diff --quiet HEAD -- apps/medreader/js apps/medreader/index.html` 통과 — 앱 코드·`index.html` 은 `9d55ac3` 과 같다.
+- M1·M2·M3 을 내 손으로 레포 `rowtable.js` 에 하나씩 걸었다. 각각 **새 테스트 하나만** 빨개진다(1:1).
+- 단계를 통째로 끄는 변이에서도 새 테스트가 **전제 단언**에서 떨어진다. 헛테스트가 아니다.
+- RT31 의 `REQUIRE_REF:true` 바이트 비교는 새 픽스처 넷에서 실제로 돈다.
+- 전체 1103/1103 × 2회, `stamp --check` 0.
+
+## 8i2cR-2. 변이 (`r8i2c/mut.mjs`, 백업 `r8i2c/bak/`)
+
+방식: 레포 `rowtable.js` 를 정확히 1곳 바꾼다 → 전체 테스트(`--test-timeout=60000`, 상한 300초) → `finally` 에서 백업으로 복원 → 바이트 비교. 여섯 번 모두 복원이 같았고, 끝 `cmp` 도 같다. 해시 테스트 IM2·IM6·IM7b 는 늘 빨강이라 뺐다.
+
+| # | 변이 | 빨개진 테스트 | 실패한 단언 |
+|---|---|---|---|
+| M1 | `inheritFrom` 2열 가지에서 `two: true` 뺌 | **RT33** | 본 단언 "2열 경로 역할" |
+| M2 | R2b `Object.assign` 에 `two: false` | **RT34** | 본 단언 "2열 경로 역할" |
+| M3 | R6b `Object.assign` 에 `two: false` | **RT35** | 본 단언 "2열 경로 역할" |
+| S7 | R7 물려받기 루프를 돌지 않게 | RT14·RT16·RT30b·RT30e·**RT33** | RT33 전제 "1차 띠 + 물려받은 띠" |
+| S2b | R2b 호출 지움 | RT28·**RT34** | RT34 전제 "R2b 가 쪼갰다" |
+| S6b | R6b 가지를 `if (false)` 로 | RT23·RT23b·**RT35** | RT35 전제 "R6b 가 열 머리를 접었다" |
+
+- 스크래치 사본 트리(`r8i2c/tree/<base|M1|M2|M3>`)의 탐침으로 픽스처별 바이트도 봤다. 각 픽스처는 **자기 변이에서만** 출력이 바뀐다. RT33 은 M1 에서만, RT34 는 M2 에서만, RT35 는 M3 에서만 다르다.
+- M1 은 RT33 안에서 두 번 잡힌다. 구획 줄이 heading 이 되고, `f33b` 에서는 이름표가 `Trasse quilar Vendo Oskat` 한 칸으로 붙는다.
+- 지금 판에서는 구획 줄이 OFF 에서 body 이고 표 안(`cell 'S'`)에 있다. 그래서 TWO 의 body 는 "표 밖이라 기본값"이 아니다. 실제로 2열 경로를 탄 결과다.
+
+## 8i2cR-3. 픽스처 · RT31
+
+- 낱말: `SEC33`·`WIDE33`·이름표·설명은 모두 지어낸 낱말이다(WORDS 목록·Zorvat 류). RT35 의 `Maneuver`·`Description` 은 RT23 에서 쓰던 흔한 낱말이다. 원서 문장은 없다.
+- RT31 확인: 사본 트리 X 에서 `REQUIRE_REF:true` 에도 2열 경로가 열리게 했다(`noRef` 떨어짐 끔 + `isTwo` 가 스위치 무시).
+  - 새 넷(`RT33`·`RT33b`·`RT34`·`RT35`)을 하나씩 비교하면 **넷 다 REF ≠ OFF** 다. 그래서 RT31 이 빨개진다.
+  - 원래 판에서는 넷 다 REF = OFF, TWO ≠ OFF 다. 비교가 실제로 돌고, 의미도 있다.
+
+## 8i2cR-4. Build 발견 1(RT28 이 칸 번호 `k` 를 안 봄) — 의견
+
+- Build 는 "행만 늘린 RT28" 에서 M2 가 Vendo 행 설명을 문단 둘로 쪼갠다고 했다. 내가 재 보니 **원래 RT28(행 5개)에서도 같다.** M2 에서 `Vendo quilar ba` 행 P 줄 둘이 `k` 0 → 1 이 되고 설명이 두 문단이 된다. 행을 늘린 꼴에서는 그런 행이 셋이다.
+- 지금 RT28 은 `pLinesByHead`(P 줄 수만 셈)·이름표·아이템 다중 집합만 본다. 그래서 이것을 놓친다.
+- 의견: **필수는 아니다.** M2 는 RT34 가 이미 잡는다.
+  - 다만 보는 증상이 다르다. RT34 는 구획 줄 역할을 보고, 이것은 설명 문단 나눔을 본다. 실물(Harrison 75)에서 보이는 증상에 더 가깝다.
+  - RT28 에 한 줄을 더하면 싸게 두 번째 그물이 생긴다. 예: `rowsOfL(L).every((r) => r.p.length === 1)` 또는 P 줄 `k` 가 모두 0. 다음 rowtable 작업 때 함께 넣으면 충분하다(낮음).
+
+## 8i2cR-5. 실행 · 정리
+
+- 전체 `node --test --test-timeout=120000 apps/medreader/tests/*.test.mjs`(상한 600초) **2회 모두 1103/1103**, fail 0, cancelled 0(7.0초·7.1초).
+- `node apps/medreader/dev/stamp-importmap.mjs --check` → "그대로다 (모듈 55개 · CSS 4개)", 종료 0.
+- 끝에 `rowtable.js`·`rowtable-8i2.test.mjs`·`index.html` 이 `r8i2c/bak/` 과 `cmp` 같다. 레포에서 내가 바꾼 것은 이 절뿐이다.
+- 작업 중 `.claude/tasks/medreader-plan-o1-o3.md` 가 새로 생겼다. 내가 만든 것이 아니다.
+- 남은 프로세스: 내가 띄운 것은 모두 끝났다. 끝 `tasklist`: node 1개(PID 43840 — Adobe, 내 것 아님), msedgewebview2(앱 호스트, 내 것 아님), python 0.
+- 권한·훅에 막힌 명령은 없다. checkout/restore/stash, `rm -rf`, npm 설치·다운로드, 커밋은 하지 않았다.
+
+## 8i2cR-6. 운영자 결정 필요 사항
+
+1. **커밋해도 된다.** 8i-2b Review 권장(M1–M3 공백)이 메워졌다.
+2. (선택·낮음) RT28 에 설명 문단 나눔(`k`) 단언 한 줄 — 8i2cR-4. 다음 rowtable 작업 때.
