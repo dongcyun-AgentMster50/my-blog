@@ -25,3 +25,9 @@
 12. 목차 탭: `tocOf` 의 `source`·`outlineRead`·빈 목록 → `search.toc.fallback`(폴백 머리 문구 **반드시** 보임)·`search.toc.unavailable`·`search.toc.empty`. 폴백 전에 `engine.prepareDoc` 권장(또는 `tocOf` 폴백이 엔진 캐시 재사용·세션 메모리). 쪽 표시는 `printedLabel`("p. {인쇄} (PDF {쪽})"), `p:null` 항목은 흐리게·누를 수 없게.
 13. (낮음) 배선 행동 테스트 — 가짜 `requestIdleCallback` 으로 `scheduleOutline` 동작(지금 테스트는 소스 정규식이라 R8·R9 변이가 살아남음), `SEARCH.ENABLED=false` 의 `off` 단언.
 14. 쓰레기 개요 판정·폴백 품질은 **8g-3b** 가 먼저 한다(운영자 결정 2026-10-19) — 8g-4 는 그 결과를 쓴다.
+
+## 8g-3b Review 에서 넘어온 것 (2026-10-19, 운영자: 권장안대로)
+15. 단위 테스트 보강 2개(94권 S36 은 잡지만 `node --test` 는 놓치던 변이 M2·M4): (a) `Is it ok? Yes it is` → `'multi'` (b) 남는 수의 누적이 max 와 **정확히 같아지는** 층(층 멈춤 `>` vs `>=`).
+16. **R2 약어 예외를 대소문자가 있는 글자(라틴 등)에만**: 지금은 한글 문장 끝("…이야.")도 "3자 이하 낱말 + 마침표" 약어 예외로 통과해 최종 목록 5,220항목 중 150항목·58권(대부분 스피쿠스)에 한국어 문장이 남는다. **기준 정의 `dev/measure-toc-8g3b.mjs` 의 같은 규칙도 함께 고치고** S36(94권 차이 0)을 다시 돌린다. spec §11 R2 에 정정 줄.
+17. 폴백 머리 문구(E5, 한 문구): "PDF 에 쓸 만한 목차가 없어 큰 제목으로 만든 목록입니다 — 빠지거나 틀린 항목이 있을 수 있습니다" — 네 언어. 쓰레기 개요를 버린 책(`outlineIgnored`)도 같은 문구. S19 에 쓰레기 개요 책 확인.
+18. `dev/measure-search-8g.mjs --toc` 는 옛 폴백과 맞대므로 이제 차이가 0 이 아니다 — S18 은 앞으로 `measure-toc-8g3b.mjs` 로 본다(필요하면 옛 스크립트의 `--toc` 를 새 정의로 맞추거나 안내 주석).

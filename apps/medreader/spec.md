@@ -3960,7 +3960,7 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 | # | 규칙 (빼는 것) | 정의 | Review 후보 |
 |---|---|---|---|
 | R1 | 본문보다 뚜렷이 작은 글자 | `r < 0.9` | ① (r<1 이 아니라 0.9 — 아래) |
-| R2 | 문장 끝 | 끝이 `글자 + [.!?]`(+ 닫는 따옴표). **아님**: 말줄임(`..`·`…`) 뒤의 부호, 닫는 괄호 뒤의 부호(`etc.)`), 3자 이하 낱말 + 마침표(`etc.` 같은 약어 꼴) | ② |
+| R2 | 문장 끝 | 끝이 `글자 + [.!?]`(+ 닫는 따옴표). **아님**: 말줄임(`..`·`…`) 뒤의 부호 `[정정 2026-10-19 — 8g-3b Review: 이 예외는 문장 끝 정규식과 함께 맞을 수 없어 효과 없음 — 설명용으로 남김, 변이 T5 는 동치 변이]`, 닫는 괄호 뒤의 부호(`etc.)`), 3자 이하 낱말 + 마침표(`etc.` 같은 약어 꼴) | ② |
 | R3 | 한 문단에 두 문장 | `소문자 2자 + [.!?] + 공백 + 대문자` | ② |
 | R4 | 대화 줄 | 따옴표(`" “ ” „ « » ‘ ’ ' ‹ ›`)로 시작하거나 끝남, 또는 `— `·`– `(줄표 + 공백)으로 시작. **붙임표 `-ing` 는 아님** | ④ |
 | R5 | 긴 줄 | 80자 초과 | ② |
@@ -4059,7 +4059,7 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 - [ ] `[N]` S33 `tocDropReason` 표(정의 하나에 남기는 꼴·빼는 꼴 짝): R2 `They have gone home.`·`home.` 뺌 / `Can / Could / Would you...?`·`(remember/regret etc.)`·`Myself /yourself/themselves etc.`·`When ... ? and How long ... ?` 남김(`Pass the pan.` 도 남는다 — 약어 예외의 대가, 알려진 한계) · R3 `He left. She stayed` 뺌 / `Had better` 남김 · R4 `"But I -"`·`— Yes, sir` 뺌 / `-ing clauses` 남김 · R5 81자 뺌 / 80자 남김 · R6 `A g#`·`e1-01` 뺌 / `12` 는 R6 아님 · R7 `Our neighbour, Mr French £44`·`Seal found \ hard`(역슬래시) 뺌 / `| think so / | hope so etc.` 남김 · R8 r 0.98 `The Burrow`·`her`·`VSD` 뺌 / r 0.98 `THE BURROW`·r 1.0 `학습목표`(대소문자 없음)·r 1.2 `The Burrow` 남김 · R1 r 0.89 `THE BURROW` 뺌 / r 0.9 `THE BURROW` 남김(R8 에 걸리지 않는 대문자로).
 - [ ] `[N]` S34 `headingToc` 묶음: 뺀 항목은 200 상한을 차지하지 않는다(상위 층 문장 줄 150 + 아래 층 제목 100 → 제목 100 이 들어온다) · R9 쪽 끝 숫자만 항목 없음, 같은 쪽 다음 heading 붙임은 그대로("1 Zorvat Chapter 2") · R10 `opts.pages` 없으면 문턱 10(8g-3 테스트 S17 그대로 녹색) · 결과는 쪽 순서·순수(입력을 바꾸지 않음).
 - [ ] `[N]` S35 계층·순수: `text/search.js` 가 `document`·`window`·`indexedDB` 를 쓰지 않는다(S3 grep 그대로) · `outline.js` 의 `isJunkOutline` 은 DB 를 부르지 않는다.
-- [ ] `[D]` S36 `node apps/medreader/dev/measure-toc-8g3b.mjs <의학 3권> <D:/OCR 아래 [OCR].pdf 91권>`(책마다 시간 상한): **모든 책 `symDiffAppVsProto` 0**, 앱 `isJunkOutline` = `protoJunk`(쓰레기 6 · 진짜 5), CMDT 2021 개요 제목 ≥ 45/50·항목 ≤ 200(이 Plan 98·45), Harrison 개요 쪽 ≥ 27/37(이 Plan 30), CMDT 2026 기록(이 Plan 97·51·5), Supplementary 쪽 ≥ 56/61·제목 ≥ 14/61, Harry Potter 33항목, 폴백 0 항목 책 0, OCR 1,000 heading 이상 책의 앱 `headingToc` 시간이 지금 앱(8g-3) 이하.
+- [ ] `[D]` S36 `node apps/medreader/dev/measure-toc-8g3b.mjs <의학 3권> <D:/OCR 아래 [OCR].pdf 91권>`(책마다 시간 상한): **모든 책 `symDiffAppVsProto` 0**, 앱 `isJunkOutline` = `protoJunk`(쓰레기 6 · 진짜 5), CMDT 2021 개요 제목 ≥ 45/50·항목 ≤ 200(이 Plan 98·45), Harrison 개요 쪽 ≥ 27/37(이 Plan 30), CMDT 2026 기록(이 Plan 97·51·5), Supplementary 쪽 ≥ 56/61·제목 ≥ 14/61, Harry Potter 33항목, 폴백 0 항목 책 0, OCR 1,000 heading 이상 책의 앱 `headingToc` 시간이 지금 앱(8g-3) 이하. `[정정 2026-10-19 — 8g-3b Review]` 시간은 **반복 실행 값**으로 판정한다(첫 호출은 정규식 첫 컴파일 비용으로 0.1–0.8ms 느릴 수 있어 기록만).
 - [ ] `[N]` S37 전체 `node --test`(시간 상한) 2회 녹색 · `stamp-importmap --check` 0.
 - `[정정 — 8g-3b Plan]` 8g-4 의 S19 에 더한다: 쓰레기 개요 책(Essential Grammar in Use 2판)의 목차 탭 = 폴백 + 머리 문구(E5 문구), 파일 이름 0 줄. `[M]` 운영자 기기에서 같은 책·Harry Potter 2 의 목차 탭을 열어 첫 화면 15줄을 본다.
 
