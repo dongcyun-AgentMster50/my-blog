@@ -20,3 +20,8 @@
 
 ## 브라우저·폰 실측 (8g-4 Review 몫)
 11. S15 데스크톱 Chrome(백필 ≤ 2초 · 첫 검색 ≤ 300ms · 다음 ≤ 50ms · 서재), S15m 폰, 실제 IndexedDB 의 할당량·versionchange 동작(fake-idb 는 관대함).
+
+## 8g-3 Review 에서 넘어온 것 (2026-10-19)
+12. 목차 탭: `tocOf` 의 `source`·`outlineRead`·빈 목록 → `search.toc.fallback`(폴백 머리 문구 **반드시** 보임)·`search.toc.unavailable`·`search.toc.empty`. 폴백 전에 `engine.prepareDoc` 권장(또는 `tocOf` 폴백이 엔진 캐시 재사용·세션 메모리). 쪽 표시는 `printedLabel`("p. {인쇄} (PDF {쪽})"), `p:null` 항목은 흐리게·누를 수 없게.
+13. (낮음) 배선 행동 테스트 — 가짜 `requestIdleCallback` 으로 `scheduleOutline` 동작(지금 테스트는 소스 정규식이라 R8·R9 변이가 살아남음), `SEARCH.ENABLED=false` 의 `off` 단언.
+14. 쓰레기 개요 판정·폴백 품질은 **8g-3b** 가 먼저 한다(운영자 결정 2026-10-19) — 8g-4 는 그 결과를 쓴다.
