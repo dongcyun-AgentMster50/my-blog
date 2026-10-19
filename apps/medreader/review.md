@@ -5080,3 +5080,78 @@ Build 의 V8·V9·V15·E1–E10·W1–W2·R2·R5·R7·R9 와 겹치지 않는 �
    - (c) 같은 세대의 `onPartial` 이 두 번 올 수 있으니 바꾸기로 그리기(3 의 4).
    - (d) 서재 결과의 책별 백필 진행(이미 §6 에 있음).
 4. **[다음 spec 정리 때] 17-8-5 문구 둘**(닫힌 연결 · "`onPartial` 한 번")과 17-8-2 "서재 전체 ≤ 3초"에 "백필이 끝난 뒤".
+
+# 8g-2c Review — 검색 엔진: 읽기 실패가 캐시에 붙는 문제 (2026-10-19)
+
+> 지침 `.claude/tasks/medreader-review-8g-2c.md`. Build 와 분리된 검증. 시작 상태 HEAD `f42f72e` + 작업 트리(engine.js · tests/search-db-8g.test.mjs · index.html stamp). 시작 sha256 이 Build 보고 5절 끝 값과 같다(engine `aa92ddb0…` · 테스트 `76ce5e54…` · index `90bec177…`). 스크래치 `r8g2c/` 만 썼다(백업 `bak/`). 앱 코드·테스트·spec 은 고치지 않았다. 변이는 되돌렸고 `cmp` 로 같음을 확인했다. 끝에 4개 파일(review.md 포함, 이 절을 쓰기 전) sha256 이 시작과 같다. 커밋하지 않았다. 브라우저는 쓰지 않았다(화면 변경 없음).
+
+## 8g2cR-1. 결론 — **통과**
+
+- ⓐ 채우기 실패 → 캐시 버림, ⓑ 다시 읽기 실패 → 표시 되돌림, 밖으로 나가는 오류 `db.ERR` 코드화가 지침대로 들어갔다. 경쟁에서도 맞게 돈다(2절).
+- 새 테스트 S13e·S13f 는 ⓐ·ⓑ 되돌림 변이를 잡는다. 다만 내 변이 둘(`cache === c` 검사 빼기 · 되돌릴 때 기존 표시 덮어쓰기)은 테스트가 못 잡고 내 경쟁 탐침만 잡는다. **[권장, 낮음] 테스트 2개 보강**(3절)을 제안한다. 커밋을 막는 일은 아니다.
+- 탐침 다시: P9·P10 만 바뀌었다(고쳐짐). 나머지 P1·P1b·P2·P3·P8·P11·P12·P13 은 8g-2b Review 출력과 JSON 이 같다.
+- 전체 테스트 1128/1128 × 2회, `stamp --check` 0.
+
+## 8g2cR-2. 확인 (탐침 `r8g2c/race.mjs` = `r8g2b/probe.mjs` 도우미 + R1–R6, 출력 `race.out`)
+
+**변경 범위** — `git diff --stat` 은 engine.js(+22/−4) · 테스트(+84) · index.html(stamp 한 줄)뿐이다. 미추적 `.codex/`·`AGENTS.md` 는 2026-08-27 파일로 이번 작업과 무관하다.
+
+**ⓐ `ensureLoaded` 실패 → 캐시 비움**
+
+| 경우 | 결과 |
+|---|---|
+| R1c A 채우기 요청이 걸린 순간 B 를 연다(실패 시점 캐시 = B) | A 만 reject `ERR_DB_OPEN`. B 캐시가 남는다(30쪽). |
+| R1d A 실패가 **B 가 다 채워져 쉬는 동안** 온다(순서 `B done → A fail`) | B 캐시가 남는다. 서재 검색이 B 를 먼저 연다. |
+| R3c 채우는 중 `invalidate` + 같은 책 새 캐시 → 옛 채우기 실패 | 새 캐시가 남는다(30쪽). 다음 검색 30. |
+| R1b B 를 연 뒤 A 검색 실패 | 캐시 null. 서재는 A 30 · B 0(정상), 오류 없음. |
+| R2b 같은 채우기를 함께 기다리던 `prepareDoc` 둘 | **둘 다** 같은 `ERR_DB_OPEN` 으로 reject. |
+| R2b 채우는 중 시작한 `searchDoc`(`documents` 읽기 뒤에 `ensureLoaded` 도착) | 실패가 이미 캐시를 비워 새로 채운다 → 30. |
+| R2 앞 세대 `searchDoc`(`ensureLoaded` 전에 세대가 바뀜) | `cancelled`. |
+
+- 머리 주석의 "그 검색만 거절한다"는 정확히는 **"그 채우기를 함께 기다리던 호출만"**이다. 같은 프라미스를 기다렸으니 자연스럽고, 다음 호출은 정상이다. 해는 없다.
+- 관찰(이번 범위 밖, 8g-2b 때부터): 채우기를 **기다리는 도중** 취소된 검색(signal abort · 세대 교체 · `invalidate`)은 `cancelled` 가 아니라 reject 로 끝난다(R3 · R3b · R6 `signalAbortedThenFail`). 그 검색이 `invalidate` 로 stale 이 된 경우에도 다시 채우지 않고 reject 한다. 다음 검색은 정상이다. → 8g-4 화면이 reject 를 잡을 때(8g2bR-1 조건 2) **앞 세대 검색의 reject 는 무시**해야 한다.
+
+**ⓑ `rereadDirty` 실패 → 표시 되돌림**
+
+- R4: 표시 {2} 를 비운 뒤 실패 요청을 거는 순간 `notePage(2)`·`notePage(3)` 을 넣었다. 실패 뒤 `dirty 2` 다. 빠지지 않았고 `Set` 이라 겹치지도 않는다. 다음 검색이 새 글자 [2,3] 을 찾고, 옛 글자는 [1,4,5] 다.
+- R4b(대조, 성공 길): 다시 읽는 동안 들어온 표시는 남고(`dirty 1`), 다음 검색이 읽는다.
+- R5: 같은 다시 읽기를 기다리던 `prepareDoc`·`searchDoc` 은 둘 다 `ERR_DB_OPEN` 이다. 표시는 1로 되돌아오고, 다음 검색은 정상이다.
+
+**`dbFailure`** (R6)
+- 이미 `DbError` 면 **같은 객체**를 그대로 낸다(QUOTA · UPGRADED).
+- IDB 트랜잭션의 `AbortError` 는 `ERR_DB_OPEN`(cause AbortError)이 된다. 엔진은 사용자 취소를 `AbortError` 로 던지지 않으므로(`alive()` 확인) 잘못 감싸는 경우가 아니다.
+- `QuotaExceededError` 는 `ERR_DB_QUOTA`, `InvalidStateError` 는 `ERR_DB_OPEN` 이 된다.
+- 검색어 오류는 읽기를 건드리지 않는다(읽기 0회). `searchDoc`·`searchLibrary` 모두 `ERR_SEARCH_SHORT` 다.
+- 관찰: `loadCache` 안의 **코드 버그**(TypeError 등)도 `ERR_DB_OPEN` 으로 감싸진다. 원인은 `cause` 에 남으므로 해는 작다.
+
+## 8g2cR-3. 테스트의 힘 (`r8g2c/mut.mjs` · `mut.log` · `mut-R?.log`)
+
+변이마다 engine.js 한 곳을 바꾸고 검색 DB 테스트 파일과 경쟁 탐침을 돌렸다. `finally` 로 `bak/engine.js` 를 복원했다. 다섯 번 모두 "복원 같음"이고, 끝에 `cmp` 도 같았다.
+
+| 변이 | 테스트 | 경쟁 탐침 |
+|---|---|---|
+| RA ⓐ 되돌림 | **빨강** S13e | (탐침이 처리 안 된 reject 로 멈춤) |
+| RB ⓑ 되돌림 | **빨강** S13f | — |
+| RC `cache === c` 검사 빼기(무조건 비움) | 초록 35/35 | R1d 가 잡음: B 캐시가 null, 서재가 A 를 먼저 엶 |
+| RD 되돌릴 때 기존 표시를 덮어씀(`clear` 후 ns) | 초록 35/35 | R4 가 잡음: 표시 1, 3쪽이 **옛 글자로 남음** |
+| RE `dbFailure` 가 `DbError` 도 다시 감쌈 | 초록 | 코드는 같고 객체만 다름 — 호출자에게 같은 동작 |
+
+- RC 가 테스트를 통과하는 까닭: 대개는 B 의 `ensureLoaded` 가 `cache !== c` 를 보고 다시 채워 스스로 낫는다. B 가 이미 쉬고 있을 때만 드러난다. 그때의 해는 다시 읽기 한 번과 서재의 "열린 책 먼저" 순서 정도다.
+- RD 는 다시 들어오면 **옛 글자 검색 결과**를 낸다.
+- **[권장, 낮음]** 위 두 경우를 묶는 테스트 2개(R1d 꼴: 빈 요청으로 A 트랜잭션을 늘여 B 가 쉬는 동안 A 실패 · R4 꼴: 실패 요청을 거는 순간 다른 쪽 `notePage`)를 8g-4 Build 에 함께 넣거나 작은 별도 작업으로 넣는다.
+
+## 8g2cR-4. 탐침 다시 · 전체 테스트 · 정리
+
+- `r8g2b/probe.mjs` 를 그대로 돌렸다(`r8g2c/probe.out`). 항목별 JSON 을 8g-2b Review 출력과 비교했다.
+  - **P9**: 전에는 1·2·3번째 검색, `prepareDoc`, 서재가 모두 `UnknownError` 였다. 지금은 첫 검색만 `ERR_DB_OPEN` 이고, 2·3번째·`prepareDoc`·서재는 30이다. "다시 실패"도 그 한 번만 `ERR_DB_OPEN` 이다.
+  - **P10**: 전에는 2번째가 `[]` 였다. 지금은 `[2]` 이고 `dirty 0` 이다.
+  - P1·P1b·P2·P3·P8·P9 after_invalidate·P11·P12·P13 은 **같다**. Build 출력(`b8g2c/probe.out`)과는 전 항목이 같다.
+- `node --test --test-timeout=120000 apps/medreader/tests/*.test.mjs`(상한 600초) 2회: **1128/1128**, fail 0, cancelled 0(8.6초·8.8초). 로그는 `r8g2c/full-1.log`·`full-2.log` 다.
+- `stamp-importmap.mjs --check`: "그대로다 (모듈 56개 · CSS 4개)", 종료 0.
+- 남은 프로세스: 내가 띄운 node 는 모두 끝났다. `node 43840` 은 이전 보고들이 적은 것으로, 내 것이 아니다. 권한·훅에 막힌 명령은 없었다.
+
+## 8g2cR-5. 운영자 결정 필요 사항
+
+1. **8g-2c 커밋 승인**(engine.js · 테스트 · index.html stamp). 미푸시로 두고 8g-4 와 함께 배포한다.
+2. **[권장, 낮음] 테스트 2개 보강**(8g2cR-3 의 RC·RD). 8g-4 Build 에 넣을지, 작은 별도 작업으로 할지 정해 주세요.
+3. **8g-4 조건 2 보충**: 화면이 reject 를 잡을 때 **앞 세대(취소된) 검색의 reject 는 무시**한다(8g2cR-2 관찰). 8g-4 지침에 한 줄 더할지 정해 주세요.

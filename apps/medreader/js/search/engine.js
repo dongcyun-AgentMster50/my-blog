@@ -28,6 +28,8 @@
      다음 검색은 **다시 시도**한다(빠진 쪽만 — 실패 전 묶음은 이미 커밋됐다): 공간이 비거나 다시 불러오면
      엔진이 알 길 없이 풀리는 오류이고, 시도 비용은 키 비교 + 실패하는 묶음 하나이며, 부분 결과가 그 전에 나간다.
    · `[8g-2b]` 검색 도중 `invalidate`(다시 추출·삭제)가 오면 옛 캐시로 결과를 내지 않고 다시 채운다(세 번까지).
+   · `[8g-2c]` 캐시 **읽기** 실패(채우기 · 표시된 쪽 다시 읽기)는 그 검색만 거절한다(`DbError` — `db.ERR` 코드).
+     채우기가 실패하면 캐시를 버리고, 다시 읽기가 실패하면 표시를 되돌린다 — 다음 검색이 다시 읽는다.
 
    ── 결과 모양 (17-8-5) ───────────────────────────────────
      { docId, query, hits:[{pageNo, at, len, kind:'head'|'body'|'table'}], pagesCovered, pageCount, truncated,
@@ -59,6 +61,11 @@ const DB_CODES = new Set(Object.values(db.ERR));
 function dbErrorCode(e) {
   if (e && DB_CODES.has(e.code)) return e.code;
   return db.isQuotaError(e) ? db.ERR.QUOTA : db.ERR.OPEN;
+}
+
+/** `[8g-2c]` 캐시 읽기 실패 → 밖으로 나가는 오류. 이미 `db.ERR` 코드면 그대로, 아니면 `DbError(코드, 원인)`. */
+function dbFailure(e) {
+  return e && DB_CODES.has(e.code) ? e : new db.DbError(dbErrorCode(e), e);
 }
 
 function reqP(r) {
@@ -162,8 +169,15 @@ async function refreshDirty(c) {
 async function rereadDirty(c) {
   const ns = [...c.dirty].sort((a, b) => a - b);
   c.dirty.clear();
-  const recs = await db.withTx('searchText', 'readonly', (tx, s) =>
-    Promise.all(ns.map((n) => reqP(s.searchText.get([c.docId, n])))));
+  let recs;
+  try {
+    recs = await db.withTx('searchText', 'readonly', (tx, s) =>
+      Promise.all(ns.map((n) => reqP(s.searchText.get([c.docId, n])))));
+  } catch (e) {
+    // [8g-2c — 8g2bR-3 ⓑ] 읽지 못했으면 표시를 되돌린다 — 다음 검색이 다시 읽는다(옛 글자로 남지 않게)
+    for (const n of ns) c.dirty.add(n);
+    throw dbFailure(e);
+  }
   if (c.stale) return;
   for (let i = 0; i < ns.length; i++) {
     const e = entryOf(recs[i]);
@@ -336,7 +350,9 @@ async function ensureLoaded(docId) {
   for (let tries = 0; tries < 3; tries++) {
     if (!cache || cache.docId !== docId || cache.stale) cache = newCache(docId);
     const c = cache;
-    if (!c.loading) c.loading = loadCache(c);
+    // [8g-2c — 8g2bR-3 ⓐ] 채우기 읽기가 실패하면 이 캐시를 버린다 — 거절된 채우기가 남아 같은 책·서재
+    // 검색을 계속 막지 않게(다음 검색이 다시 읽는다)
+    if (!c.loading) c.loading = loadCache(c).catch((e) => { if (cache === c) cache = null; throw dbFailure(e); });
     await c.loading;
     if (!c.stale && cache === c) return c;
   }

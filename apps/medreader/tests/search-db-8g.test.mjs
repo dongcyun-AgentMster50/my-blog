@@ -13,6 +13,7 @@
    S8  규칙 표를 searchDoc 으로(경계값 — 8g-1 Review 보강 ②)
    S9  백필: 빠진 쪽만 pages.get · 경첩(sk) · 옛 algoVersion 제외 · 묶음·진행·onPartial
    S10 부분 추출 · S11 상한 1,000·truncated·세대 취소 · S12 묶음·순서(서재 범위 포함) · S13 notePage·invalidate·배선
+   `[8g-2c]` S13e 캐시 채우기 읽기 1회 실패가 붙지 않는다 · S13f 다시 읽기 실패 뒤 표시가 남는다
 
    ★ 이 파일은 S6 이 DB 를 시험용 4 로 올린 뒤에는 db.js 가 열리지 않는다 — DB 를 쓰는 테스트는 S6 앞에 둔다.
    fake-idb 는 복합 키 한 칸이 undefined 여도 받아 준다(실제 IndexedDB 는 DataError) — 백필 레코드의 키 칸을 따로 본다.
@@ -928,6 +929,89 @@ test('S12c ★ 서재 범위는 안 연 책도 백필한다 — 그 책 결과�
   assert.equal(d.pagesCovered, 5);
   assert.equal(stCount(D), 5, '★ 백필이 썼다');
   assert.equal(engine.cacheInfo(), null, '캐시는 하지 않는다');
+});
+
+/* ══ 8g-2c — 캐시 읽기 실패가 붙지 않는다 (8g2bR-3 의 1 · 탐침 P9·P10) ═══════════ */
+
+/** 비동기 요청 실패(실제 IndexedDB 의 백엔드 I/O 오류 흉내) — 요청의 onerror → 트랜잭션 abort. */
+const asyncFail = (store, name) => store.tx._request(() => { const e = new Error(name); e.name = name; throw e; });
+
+test('S13e ★ 캐시 채우기 읽기가 한 번 실패하면 그 검색만 거절(ERR_DB_OPEN) — 캐시를 버려 다음 검색·prepareDoc·서재 전체 검색은 정상 (8g2bR-3 ⓐ · 탐침 P9)', async () => {
+  const D = 'G13';
+  await seedZorvat(D, 30, 30);
+  engine.invalidate();
+  const proto = await txStoreProto();
+  const orig = proto.getAll;
+  let fails = 0;
+  proto.getAll = function (q, n) {
+    if (this.name === 'searchText' && fails > 0) { fails--; return asyncFail(this, 'UnknownError'); }
+    return orig.call(this, q, n);
+  };
+  try {
+    fails = 1;
+    await assert.rejects(engine.searchDoc(D, 'zorvat'), (e) => {
+      assert.equal(e.code, db.ERR.OPEN, '★ 날것(UnknownError)이 아니라 db.ERR 코드');
+      assert.equal(e.cause && e.cause.name, 'UnknownError', '원인은 cause 에');
+      return true;
+    });
+    assert.equal(fails, 0, '전제: 한 번 실패했다');
+    assert.equal(engine.cacheInfo(), null, '★ 거절된 채우기를 캐시에 남기지 않는다');
+    const r2 = await engine.searchDoc(D, 'zorvat');
+    assert.equal(r2.error, undefined);
+    assert.equal(r2.hits.length, 30, '★ 다음 검색은 다시 읽어 정상');
+    assert.equal(r2.pagesCovered, 30);
+    assert.equal((await engine.searchDoc(D, 'page')).hits.length, 30);
+    assert.deepEqual(await engine.prepareDoc(D), { docId: D, pagesCovered: 30 });
+
+    // 서재 전체 — 실패 직후(그 책이 막 열린 책이던 자리)에도 거절하지 않는다
+    engine.invalidate();
+    fails = 1;
+    await assert.rejects(engine.searchDoc(D, 'zorvat'), (e) => e.code === db.ERR.OPEN);
+    const L = await engine.searchLibrary('zorvat');
+    assert.equal(L.cancelled, undefined);
+    const d = L.docs.find((x) => x.docId === D);
+    assert.ok(d, '★ 서재 전체 검색이 그 책 결과를 낸다');
+    assert.equal(d.hits.length, 30);
+    assert.equal(d.error, undefined);
+    assert.ok(L.docs.every((x) => !x.error), '다른 책에도 오류 없음');
+  } finally {
+    proto.getAll = orig;
+  }
+  // 그 뒤 열린 책 검색 → 서재(열린 책 먼저, searchDocAt 길)도 정상
+  assert.equal((await engine.searchDoc(D, 'zorvat')).hits.length, 30);
+  const L2 = await engine.searchLibrary('zorvat');
+  assert.equal(L2.docs[0].docId, D, '열린 책 먼저');
+  assert.equal(L2.docs[0].hits.length, 30);
+});
+
+test('S13f ★ notePage 로 표시된 쪽의 다시 읽기가 한 번 실패하면 표시를 되돌린다 — 다음 검색이 그 쪽 새 글자를 찾는다 (8g2bR-3 ⓑ · 탐침 P10)', async () => {
+  const D = 'K13';
+  await seedZorvat(D, 5, 5, 'Oldword');
+  assert.equal((await engine.searchDoc(D, 'oldword')).hits.length, 5, '전제: 캐시');
+  await writePageAndSearch(D, 2, epage(D, 2, [{ text: 'Newword page 2' }]));
+  engine.notePage(D, 2);
+  assert.equal(engine.cacheInfo().dirty, 1, '전제: 표시');
+  const proto = await txStoreProto();
+  const orig = proto.get;
+  let fails = 1;
+  proto.get = function (q) {
+    if (this.name === 'searchText' && this.tx.mode === 'readonly' && fails > 0) { fails--; return asyncFail(this, 'UnknownError'); }
+    return orig.call(this, q);
+  };
+  try {
+    await assert.rejects(engine.searchDoc(D, 'newword'), (e) => {
+      assert.equal(e.code, db.ERR.OPEN, '★ db.ERR 코드');
+      assert.equal(e.cause && e.cause.name, 'UnknownError');
+      return true;
+    });
+    assert.equal(fails, 0, '전제: 다시 읽기가 한 번 실패했다');
+    assert.equal(engine.cacheInfo().dirty, 1, '★ 표시가 남아 있다');
+  } finally {
+    proto.get = orig;
+  }
+  assert.deepEqual(pagesOf(await engine.searchDoc(D, 'newword')), [2], '★ 다음 검색이 다시 읽어 새 글자를 찾는다');
+  assert.deepEqual(pagesOf(await engine.searchDoc(D, 'oldword')), [1, 3, 4, 5], '옛 글자는 없다');
+  assert.equal(engine.cacheInfo().dirty, 0);
 });
 
 /* ══ S6 (Node 몫) versionchange ═══════════════════════ */
