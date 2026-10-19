@@ -289,14 +289,15 @@ test('S16b ★ tocOf — 개요가 있으면 그것, 개요가 [] 면 searchText
 
 /* ══ S17 보강 — headingToc ═══════════════════════════════════ */
 
-test('S17 ★ headingToc — 숫자만인 항목은 **같은 쪽** 바로 다음 heading 만 붙인다(쪽 끝이면 숫자 그대로)', () => {
+test('S17 ★ headingToc — 숫자만인 항목은 **같은 쪽** 바로 다음 heading 만 붙인다(쪽 끝이면 뺀다 — 8g-3b R9)', () => {
   const recs = [
     st('D', 1, [['4', 3.0]]),                                    // 쪽 끝 — 다음 heading 은 2쪽
     st('D', 2, [['Zorvat Next Page', 1.5], ['5', 3.0], ['Zorvat Same Page', 1.5]])
   ];
   const toc = headingToc(recs);
+  // `[8g-3b — 17-8-12 §11-1 U11 정정]` 쪽 끝 숫자 '4' 는 붙일 heading 이 같은 쪽에 없어 빠진다(R9 — 의도된 변경)
   assert.deepEqual(toc.map((e) => [e.t, e.p]), [
-    ['4', 1], ['Zorvat Next Page', 2], ['5 Zorvat Same Page', 2], ['Zorvat Same Page', 2]
+    ['Zorvat Next Page', 2], ['5 Zorvat Same Page', 2], ['Zorvat Same Page', 2]
   ]);
 });
 

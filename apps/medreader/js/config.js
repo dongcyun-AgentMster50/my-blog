@@ -718,6 +718,13 @@ export const SEARCH = Object.freeze({
   TOC_FALLBACK_MAX: 200,
   /* 같은 글자가 그 책에서 이만큼 이상 나오는 heading 은 일반 소제목 — 제목 묶음·폴백에서 뺀다(U8) */
   REPEAT_HEADING: 10,
+  /* `[8g-3b — 17-8-12 §11-3]` 폴백 후보 규칙(저장 글자 무관 — VERSION 그대로).
+     R1 이보다 작은 글자는 뺀다 · R8 이보다 작으면(본문 크기) 대소문자 있는 글은 대문자 제목만 ·
+     R5 이보다 긴 줄은 뺀다 · R10 짧은 책의 반복 문턱 하한(문턱 = min(REPEAT_HEADING, max(이것, ⌈쪽 수/2⌉))) */
+  TOC_MIN_R: 0.9,
+  TOC_WEAK_R: 1.15,
+  TOC_MAX_LEN: 80,
+  TOC_REPEAT_MIN: 3,
   /* 최근 검색어 칩(기기 안 settings `search.recent`) */
   RECENT_MAX: 5,
   /* 합성어 변형(U7) — KEEP_HYPHEN_PREFIXES 중 이 길이 이상만 붙이고 띄운다 */

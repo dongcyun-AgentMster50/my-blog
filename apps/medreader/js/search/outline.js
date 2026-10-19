@@ -24,6 +24,11 @@
      **저장하지 않고 목차를 열 때마다 만든다**(`tocOf`). 이유: 폴백은 `searchText.heads` 만 쓰는데
      그것은 추출·백필이 진행되며 늘어난다 — 저장하면 덜 된 목록이 굳는다. 또 pdf.js 를 못 받은
      오프라인 첫 열기에도 폴백은 된다(17-8-12 §3). 비용은 그 책 heading 줄만 남겨 읽는 커서 한 번.
+
+   ── 쓰레기 개요 (17-8-12 §11-2 · 8g-3b) ─────────────────────
+     스캐너가 쪽마다 붙인 파일 이름(`SAVE001.JPG`·`001.bmp`·`Untitled-3.jpg`)뿐인 개요는 목차가 아니다.
+     항목(모든 깊이) 중 파일 이름 꼴·빈 제목이 `JUNK_OUTLINE_RATIO` 이상이면 `tocOf` 가 폴백으로 간다
+     (`outlineIgnored:true`). 판정은 **읽을 때만** — 저장된 `outline` 은 그대로, `OUTLINE_V` 도 그대로.
    ============================================================ */
 
 import { SEARCH } from '../config.js';
@@ -43,6 +48,26 @@ export const OUTLINE_ERR = Object.freeze({
 });
 
 const DB_CODES = new Set(Object.values(db.ERR));
+
+/** 파일 이름 꼴 제목(앞뒤 공백을 뗀 뒤) — 기준 정의 `dev/measure-toc-8g3b.mjs` 와 글자 그대로. 빈 제목도 셈한다. */
+export const JUNK_TITLE_RE = /\.(jpe?g|jpe|jfif|png|bmp|tiff?|gif|webp|pdf)$|^untitled(?:[-_ ]?\d+)?$/i;
+
+/** 이 비율 이상이 파일 이름 꼴이면 쓰레기 개요(운영자 결정 E1 — 실측 비율은 0 아니면 0.997 이상). */
+export const JUNK_OUTLINE_RATIO = 0.8;
+
+/**
+ * 개요 전체가 스캐너 파일 이름인가(순수 — DB·pdf.js 를 부르지 않는다). 빈 개요는 false(쓰레기가 아니라 없음).
+ * @param {Array<{t:string}>} outline 저장된 개요(모든 깊이가 평평하게)
+ */
+export function isJunkOutline(outline) {
+  if (!Array.isArray(outline) || !outline.length) return false;
+  let n = 0;
+  for (const it of outline) {
+    const t = String((it && it.t) || '').trim();
+    if (!t || JUNK_TITLE_RE.test(t)) n++;
+  }
+  return n / outline.length >= JUNK_OUTLINE_RATIO;
+}
 
 /** 이 문서 레코드가 지금 판으로 개요를 이미 읽었는가. */
 export function isOutlineCurrent(doc) {
@@ -189,10 +214,12 @@ function slim(rec) {
 }
 
 /**
- * 목차 탭이 그릴 것. 개요를 읽었고 항목이 있으면 그것, 아니면 `searchText.heads` 로 만든 폴백(저장하지 않음).
+ * 목차 탭이 그릴 것. 개요를 읽었고 항목이 있고 쓰레기 개요가 아니면 그것, 아니면 `searchText.heads` 로 만든
+ * 폴백(저장하지 않음 — 쓰레기 개요도 저장본은 그대로 두고 여기서만 버린다).
  * @returns {Promise<null|{source:'outline'|'fallback', items:Array<{t:string,p:(number|null),d:number}>,
- *           pageLabels:(string[]|null), outlineRead:boolean}>}
+ *           pageLabels:(string[]|null), outlineRead:boolean, outlineIgnored?:boolean}>}
  *   `outlineRead:false` = PDF 개요를 아직 못 읽었다(오프라인 첫 열기 — 화면 `search.toc.unavailable`).
+ *   `outlineIgnored:true`(폴백일 때만 있다) = 개요는 있으나 파일 이름뿐이라 버렸다(17-8-12 §11-2).
  *   문서가 없으면 null. DB 읽기 실패는 거절(`db.ERR` 코드) — 화면이 일반 오류로.
  */
 export async function tocOf(docId) {
@@ -200,14 +227,15 @@ export async function tocOf(docId) {
   if (!doc) return null;
   const read = isOutlineCurrent(doc);
   const pageLabels = Array.isArray(doc.pageLabels) ? doc.pageLabels : null;
-  if (read && doc.outline.length) return { source: 'outline', items: doc.outline, pageLabels: pageLabels, outlineRead: true };
+  const junk = read && doc.outline.length > 0 && isJunkOutline(doc.outline);
+  if (read && doc.outline.length && !junk) return { source: 'outline', items: doc.outline, pageLabels: pageLabels, outlineRead: true };
   const recs = [];
   await db.iterate('searchText', { index: 'docId', query: docId }, (rec) => {
     const s = rec && rec.docId === docId ? slim(rec) : null;
     if (s) recs.push(s);
   });
-  const items = headingToc(recs).map((h) => ({ t: h.t, p: h.p, d: 1 }));
-  return { source: 'fallback', items: items, pageLabels: pageLabels, outlineRead: read };
+  const items = headingToc(recs, { pages: Number(doc.pageCount) }).map((h) => ({ t: h.t, p: h.p, d: 1 }));
+  return { source: 'fallback', items: items, pageLabels: pageLabels, outlineRead: read, outlineIgnored: junk };
 }
 
 /** 인쇄 쪽 라벨 — 있고 `String(p)` 와 다르면 그 글자, 아니면 null("p. {p}" 만). 화면 쪽 표시(17-8-12 §3). */

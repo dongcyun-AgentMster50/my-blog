@@ -342,34 +342,121 @@ export function rangesFor(joined, hits) {
 
 const DIGITS_ONLY = /^[\d\s.,–-]+$/;
 
+/* `[8g-3b — 17-8-12 §11-3]` 폴백 후보 규칙 R1–R8. 정규식은 기준 정의 `dev/measure-toc-8g3b.mjs` 와 **글자 그대로**
+   (S36 이 94권에서 항목 집합 차 0 을 본다 — 하나를 고치면 저쪽도 함께). */
+const ELLIPSIS_END = /(\.\.|…)\s*[.!?]?["”’']?$/u;
+const SENT_END = /(\p{L}+)([.!?])["”’']?$/u;
+const MULTI = /\p{Ll}{2,}[.!?]["”’']?\s+["“‘]?\p{Lu}/u;
+const DIALOG_START = /^(["“”„«»‘’'‹›]|[—–]\s)/u;
+const DIALOG_END = /["“”»’'‹›]$/u;
+const OCR_SYMBOL = /[{}®£¢§©_~^=<>\\@¤°]/;
+const countOf = (s, re) => (String(s).match(re) || []).length;
+/* 셈용 — 기준 정의의 count 인자와 같은 글자(부를 때마다 정규식 객체를 새로 만들지 않게 올려 둔다). g 깃발이지만
+   String.prototype.match 는 lastIndex 를 0 으로 되돌리고 시작하므로 함께 써도 상태가 남지 않는다. */
+const LETTER_G = /\p{L}/gu;
+const CASED_G = /[\p{Lu}\p{Ll}]/gu;
+const UPPER_G = /\p{Lu}/gu;
+const SENT_LAST = '.!?"”’\'';     // SENT_END 가 맞으려면 끝 글자가 이 중 하나여야 한다
+const HAS_STOP = /[.!?]/;          // MULTI 가 맞으려면 이 부호가 하나는 있어야 한다
+
 /**
- * (a) 같은 글자가 `REPEAT_HEADING` 번 이상인 제목을 빼고 (b) 글자 크기 비 `r` 의 상위 층부터 내려가며
- * 항목이 `TOC_FALLBACK_MAX` 를 넘기 직전까지만 남긴 평평한 목록. 숫자만인 항목(장 번호)은
- * **같은 쪽 바로 다음 heading** 을 제목으로 붙인다(U11). heads 에 rowhead 는 없다(구조로 0).
+ * 이 heading 을 폴백 목차 후보에서 빼는 까닭 — 코드 문자열 또는 null(남긴다). UI 문자열이 아니다(3-2).
+ *   'small'    R1 본문보다 뚜렷이 작은 글자(`r < TOC_MIN_R`)
+ *   'noise'    R6 숫자만이 아닌데 문자 3개 미만이거나 공백 뺀 글자 중 문자 비율 < 0.5
+ *   'sentence' R2 문장 끝(말줄임 뒤 부호·닫는 괄호 뒤 부호·3자 이하 낱말 + 마침표는 아님)
+ *   'multi'    R3 한 문단에 두 문장
+ *   'symbol'   R7 OCR 잡음 기호(세로 막대는 아님 — OCR 이 대문자 I 를 그렇게 읽는다)
+ *   'long'     R5 `TOC_MAX_LEN` 자 초과
+ *   'dialog'   R4 따옴표로 시작·끝, 줄표 + 공백으로 시작(붙임표 `-ing` 는 아님)
+ *   'weak'     R8 본문 크기(`r < TOC_WEAK_R`)인데 대소문자 있는 글이 '대문자 4자 이상·90% 이상'이 아니다
+ * 검사 순서는 집계용일 뿐 남기느냐 빼느냐에는 영향이 없다. R9·R10 은 책 전체를 봐야 해서 `headingToc` 안에 있다.
+ * @param {{t:string, r:number}} h
+ * @returns {null|'small'|'noise'|'sentence'|'multi'|'symbol'|'long'|'dialog'|'weak'}
+ */
+export function tocDropReason(h) {
+  const raw = String(h.t);
+  const t = raw.trim();
+  if (h.r < SEARCH.TOC_MIN_R) return 'small';
+  if (!DIGITS_ONLY.test(raw)) {
+    const L = countOf(raw, LETTER_G);
+    if (L < 3 || L / Math.max(1, raw.replace(/\s/g, '').length) < 0.5) return 'noise';
+  }
+  // 빠른 길(결과 같음): SENT_END 는 끝 글자가 부호·닫는 따옴표일 때만, MULTI 는 [.!?] 가 있을 때만 맞을 수 있다.
+  if (SENT_LAST.indexOf(t.charAt(t.length - 1)) >= 0 && !ELLIPSIS_END.test(t)) {
+    const m = SENT_END.exec(t);
+    if (m && !(m[2] === '.' && m[1].length <= 3)) return 'sentence';
+  }
+  if (HAS_STOP.test(t) && MULTI.test(t)) return 'multi';
+  if (OCR_SYMBOL.test(raw)) return 'symbol';
+  if (t.length > SEARCH.TOC_MAX_LEN) return 'long';
+  if (DIALOG_START.test(t) || DIALOG_END.test(t)) return 'dialog';
+  if (h.r < SEARCH.TOC_WEAK_R) {
+    const cased = countOf(raw, CASED_G);
+    if (cased >= 1 && !DIGITS_ONLY.test(raw) &&
+        !(cased >= 4 && countOf(raw, UPPER_G) / cased >= 0.9)) return 'weak';
+  }
+  return null;
+}
+
+/**
+ * (a) 같은 글자가 반복 문턱 이상인 제목과 `tocDropReason` 에 걸리는 제목을 후보에서 빼고(뺀 것은 상한을
+ * 차지하지 않는다) (b) 글자 크기 비 `r` 의 상위 층부터 내려가며 항목이 `TOC_FALLBACK_MAX` 를 넘기 직전까지만
+ * 남긴 평평한 목록. 숫자만인 항목(장 번호)은 **같은 쪽 바로 다음 heading** 을 제목으로 붙이고(U11), 붙일 것이
+ * 없으면 뺀다(R9). heads 에 rowhead 는 없다(구조로 0).
+ * 반복 문턱(R10) = `min(REPEAT_HEADING, max(TOC_REPEAT_MIN, ⌈pages/2⌉))` — `opts.pages` 가 없으면 `REPEAT_HEADING`.
+ * 층 고르기는 정렬 한 번 + 누적 수(층마다 후보 전체를 다시 거르지 않는다 — OCR 책은 층이 수백).
  * @param {Array} recs 검색 레코드(쪽 순서)
+ * @param {{max?:number, pages?:number}} [opts]
  * @returns {Array<{t:string, p:number, r:number}>}
  */
 export function headingToc(recs, opts) {
-  const max = (opts && opts.max) || SEARCH.TOC_FALLBACK_MAX;
+  const o = opts || {};
+  const max = o.max || SEARCH.TOC_FALLBACK_MAX;
+  const pages = Number(o.pages);
+  const rep = Number.isFinite(pages) && pages > 0
+    ? Math.min(SEARCH.REPEAT_HEADING, Math.max(SEARCH.TOC_REPEAT_MIN, Math.ceil(pages / 2)))
+    : SEARCH.REPEAT_HEADING;
   const all = [];
   const sorted = (recs || []).slice().sort((a, b) => a.pageNo - b.pageNo);
   for (const rec of sorted) for (const h of headsOf(rec)) all.push(h);
+  const keys = all.map((h) => headKey(h.t));
   const freq = new Map();
-  for (const h of all) { const k = headKey(h.t); if (k) freq.set(k, (freq.get(k) || 0) + 1); }
-  const cand = all.filter((h) => { const k = headKey(h.t); return k && freq.get(k) < SEARCH.REPEAT_HEADING; });
-  const tiers = [...new Set(cand.map((h) => h.r))].sort((a, b) => b - a);
-  let take = [];
-  for (const r of tiers) {
-    const nx = cand.filter((h) => h.r >= r);
-    if (nx.length > max) break;
-    take = nx;
+  for (const k of keys) if (k) freq.set(k, (freq.get(k) || 0) + 1);
+  // 반복 문턱을 넘은 heading 을 r 별로 묶는다(쪽 순서 그대로).
+  const byR = new Map();
+  for (let n = 0; n < all.length; n++) {
+    const k = keys[n];
+    if (!k || !(freq.get(k) < rep)) continue;
+    const g = byR.get(all[n].r);
+    if (g) g.push(n); else byR.set(all[n].r, [n]);
   }
-  return take.map((h) => {
+  // 층 고르기: r 을 내림차순으로 한 번 정렬하고 위 층부터 R1–R8 을 판정하며 남은 수를 누적한다 — 누적이 max 를
+  // 넘는 층에서 멈춘다(그 아래 층은 판정하지 않는다). 뺀 heading 은 누적에 들지 않는다(§11-3).
+  const keep = new Uint8Array(all.length);
+  const tiers = [...byR.keys()].sort((a, b) => b - a);
+  let floor = null;
+  let kept = 0;
+  for (const r of tiers) {
+    const g = byR.get(r);
+    let c = 0;
+    for (const n of g) if (!tocDropReason(all[n])) { keep[n] = 1; c++; }
+    if (kept + c > max) break;
+    kept += c;
+    floor = r;
+  }
+  const out = [];
+  if (floor === null) return out;
+  for (let n = 0; n < all.length; n++) {
+    if (!keep[n]) continue;
+    const h = all[n];
+    if (!(h.r >= floor)) continue;
     let t = h.t;
     if (DIGITS_ONLY.test(t)) {
-      const nx = all[all.indexOf(h) + 1];
+      const nx = all[n + 1];
       if (nx && nx.p === h.p) t = t + ' ' + nx.t;
+      if (DIGITS_ONLY.test(t)) continue;                     // R9 붙일 것 없는 숫자만 항목(쪽 번호 줄 등)
     }
-    return { t: t, p: h.p, r: h.r };
-  });
+    out.push({ t: t, p: h.p, r: h.r });
+  }
+  return out;
 }
