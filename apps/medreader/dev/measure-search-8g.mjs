@@ -10,6 +10,10 @@
                            pages 저장본만 흉내 IndexedDB(tests/fixtures/fake-idb.mjs)에 넣고 엔진 백필로 searchText 를
                            만든 뒤, 검색어마다 시제품 규칙과 적중·쪽·묶음을 맞대고 결과 쪽 다시 찾기를 앱 함수로 한다.
                            메모리가 크다 — `node --max-old-space-size=8192` 권장. `<pdf>` 를 맨 앞에 둔다.
+         [--toc]           `[8g-3 — S18]` 앱 목차(`js/search/outline.js` + `text/search.js` `headingToc`)와 비교 — 아래 8절.
+                           개요: 앱 `readOutline` = 1절 시제품(항목·쪽·깊이·제목), 흉내 IndexedDB 에서 `ensure` 저장·두 번째
+                           호출의 PDF 호출 0, 쪽 라벨. 폴백: 앱 `headingToc` = 6절 변형 C(항목 집합 차 0), 개요 대비 재현율,
+                           `tocOf`(heading 줄만 읽는 경로)가 같은 목록을 내는가.
 
    17-8-1 의 `measure-search.mjs`(2026-10-12)와 다른 점 — **지금 앱 경로를 그대로** 지난다:
    · algoVersion 12(8i 행 표 rowhead·ref·colhead, 8i-2 2열 표)인 `buildPageLayout`, 추출과 같은
@@ -510,6 +514,7 @@ for (const [cat, q] of QUERIES) {
   }
   R.tocFallbackC = { entries: takeC.length, merged: takeC.filter((h) => h.merged).length, stillDigitsOnly: takeC.filter((h) => /^[\d\s.,–-]+$/.test(h.t)).length,
     outlinePagesWithEntry: posC, outlineTitleMatched: titleC };
+  R._takeC = takeC;   // `[8g-3]` 8절 --toc 가 앱 headingToc 와 맞댄다
   const onOutlinePage = take.filter((h) => R._outlinePages.some((P) => P != null && h.p >= P && h.p <= P + 1)).length;
   // 전체 heading 의 글자 크기 층
   const tierHist = {};
@@ -684,7 +689,109 @@ if (argv.includes('--app')) {
   R.app = A;
 }
 
-delete R._outlinePages; delete R._outlineTitles;
+/* ── 8. --toc: 앱 목차와 비교 (spec 17-8-12 S18 · 8g-3) ──────────────
+   · 개요: 앱 `readOutline(doc)` 의 항목 = 1절 시제품(쪽·깊이·제목 — 제목은 앱이 앞뒤 공백을 다듬으므로 다듬어 비교)
+   · `ensure` 를 흉내 IndexedDB 로 — 저장 상태·항목·라벨 저장 여부, 두 번째 호출의 PDF 호출 수(0 이어야)
+   · 쪽 라벨: 저장된 라벨 수 · 개요 항목 중 인쇄 라벨이 PDF 쪽과 다른 것 · 숫자 라벨의 PDF−라벨 차 상위
+   · 폴백: 앱 `headingToc(검색 레코드)` = 6절 변형 C(항목 `쪽|제목` 집합 차 0), 개요 대비 쪽·제목 재현율(6절과 같은 일치 규칙),
+     행 표 쪽 항목, 남은 숫자만 항목, 같은 쪽에 붙인 제목이 따로 또 나오는 겹침 수
+   · `tocOf`(개요 [] 문서 — heading 줄만 남겨 읽는 경로)의 목록 = `headingToc` 목록 */
+if (argv.includes('--toc')) {
+  if (!globalThis.indexedDB) { const { installFakeIdb } = await import('../tests/fixtures/fake-idb.mjs'); installFakeIdb(); }
+  const adb = await import('../js/db.js');
+  const OL = await import('../js/search/outline.js');
+  const AS = await import('../js/text/search.js');
+  const T = {};
+  const msOf = (t) => +(performance.now() - t).toFixed(1);
+  // 개요 — 앱 readOutline 대 1절
+  let t = performance.now();
+  const got = await OL.readOutline(doc);
+  T.readOutlineMs = msOf(t);
+  const protoP = R._outlinePages, protoT = R._outlineTitles;
+  let pDiff = 0, tDiff = 0;
+  for (let k = 0; k < Math.max(protoP.length, got.outline.length); k++) {
+    const a = got.outline[k];
+    if (!a || a.p !== (protoP[k] == null ? null : protoP[k])) pDiff++;
+    if (!a || a.t !== String(protoT[k] || '').trim()) tDiff++;
+  }
+  const depthHist = {};
+  for (const x of got.outline) depthHist[x.d] = (depthHist[x.d] || 0) + 1;
+  T.outline = {
+    items: got.outline.length, protoItems: protoP.length, resolved: got.outline.filter((x) => x.p != null).length,
+    pageDiffVsProto: pDiff, titleDiffVsProto: tDiff, depthHist, depthMatchesProto: JSON.stringify(depthHist) === JSON.stringify(R.outline.byDepth),
+    outOfOrder: got.outline.reduce((s, x, i, a) => s + (i && x.p != null && a[i - 1].p != null && x.p < a[i - 1].p ? 1 : 0), 0)
+  };
+  // 쪽 라벨
+  const L = got.pageLabels;
+  const offs = new Map();
+  if (L) for (let i = 0; i < L.length; i++) if (/^\d+$/.test(L[i])) { const o = (i + 1) - Number(L[i]); offs.set(o, (offs.get(o) || 0) + 1); }
+  T.labels = {
+    stored: !!L, count: L ? L.length : 0,
+    outlineItemsWithPrintedLabel: L ? got.outline.filter((x) => x.p != null && OL.printedLabel(L, x.p) != null).length : 0,
+    pdfMinusLabelTop3: [...offs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+  };
+  // ensure — 흉내 IndexedDB
+  const TD = 'toc-bench';
+  await adb.put('documents', { id: TD, title: 'toc', fileHash: 'toc', pageCount: N, lastOpenedAt: 1 });
+  const calls = { n: 0 };
+  const counted = new Proxy(doc, { get(o, k) { const v = o[k]; if (typeof v !== 'function') return v; return (...a) => { calls.n++; return v.apply(o, a); }; } });
+  t = performance.now();
+  const e1 = await OL.ensure(TD, counted);
+  T.ensure = { first: e1, firstMs: msOf(t), pdfCallsFirst: calls.n };
+  calls.n = 0;
+  const e2 = await OL.ensure(TD, counted);
+  const saved = await adb.get('documents', TD);
+  T.ensure.second = e2.status;
+  T.ensure.pdfCallsSecond = calls.n;
+  T.ensure.storedEqualsRead = JSON.stringify(saved.outline) === JSON.stringify(got.outline) && JSON.stringify(saved.pageLabels || null) === JSON.stringify(L);
+  T.ensure.storedJsonBytes = { outline: JSON.stringify(saved.outline).length, pageLabels: saved.pageLabels ? JSON.stringify(saved.pageLabels).length : 0 };
+  // 폴백 — 앱 headingToc 대 6절 변형 C
+  const recs = pages.map((x) => Object.assign(v8.deserialize(x.stBuf), { pageNo: x.p }));
+  t = performance.now();
+  const toc = AS.headingToc(recs);
+  T.headingTocMs = msOf(t);
+  const keyOfEntry = (h) => h.p + '|' + h.t;
+  const protoC = R._takeC;
+  const cnt = new Map();
+  for (const h of protoC) cnt.set(keyOfEntry(h), (cnt.get(keyOfEntry(h)) || 0) + 1);
+  for (const h of toc) cnt.set(keyOfEntry(h), (cnt.get(keyOfEntry(h)) || 0) - 1);
+  let symDiff = 0; for (const v of cnt.values()) symDiff += Math.abs(v);
+  const key = (s) => foldText(s).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  let tried = 0, pos = 0, title = 0;
+  for (let k = 0; k < protoP.length; k++) {
+    const P = protoP[k]; if (P == null || P < FROM || P > TO) continue;
+    tried++;
+    const near = toc.filter((h) => h.p >= P && h.p <= P + 1);
+    if (near.length) pos++;
+    const tt = key(protoT[k]);
+    if (near.some((h) => { const hn = key(h.t.replace(/^[\d\s.,–-]+/, '')); return hn && (hn === tt || (hn.length >= 8 && (tt.includes(hn) || hn.includes(tt)))); })) title++;
+  }
+  const rtPagesSet = new Set(pages.filter((x) => x.hasRt).map((x) => x.p));
+  const DIG = /^[\d\s.,–-]+$/;
+  const tset = new Set(toc.map(keyOfEntry));
+  let dup = 0;
+  for (const h of toc) { const m = /^[\d\s.,–-]+\s(.+)$/.exec(h.t); if (m && tset.has(h.p + '|' + m[1])) dup++; }
+  T.fallback = {
+    entries: toc.length, protoCEntries: protoC.length, symDiffVsProtoC: symDiff,
+    outlineTried: tried, outlinePagesWithEntry: pos, outlineTitleMatched: title,
+    onRowtablePages: toc.filter((h) => rtPagesSet.has(h.p)).length, stillDigitsOnly: toc.filter((h) => DIG.test(h.t)).length,
+    mergedAlsoListedSeparately: dup, minRatio: toc.length ? Math.min(...toc.map((h) => h.r)) : null
+  };
+  // tocOf — 개요가 [] 인 문서로(폴백 경로) · heading 줄만 남겨 읽은 목록이 같은가
+  const FD = 'toc-fallback';
+  await adb.put('documents', { id: FD, title: 'fb', fileHash: 'fb', pageCount: N, lastOpenedAt: 1, outline: [], outlineV: OL.OUTLINE_V });
+  for (let i = 0; i < recs.length; i += 250) await adb.putAll('searchText', recs.slice(i, i + 250).map((r) => Object.assign({}, r, { docId: FD })));
+  t = performance.now();
+  const tf = await OL.tocOf(FD);
+  T.tocOfFallback = {
+    msFakeIdb: msOf(t), source: tf.source, outlineRead: tf.outlineRead, entries: tf.items.length,
+    sameAsHeadingToc: JSON.stringify(tf.items.map((h) => [h.t, h.p])) === JSON.stringify(toc.map((h) => [h.t, h.p]))
+  };
+  recs.length = 0;
+  R.toc = T;
+}
+
+delete R._outlinePages; delete R._outlineTitles; delete R._takeC;
 const s = JSON.stringify(R, null, 1);
 const j = opt('json', null);
 if (j) fs.writeFileSync(j, s);

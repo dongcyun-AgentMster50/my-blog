@@ -57,6 +57,8 @@ import * as original from './original.js';
 import { pickAnchorLine } from './original.js';
 // `[8i-1]` 지금 그린 저장본이 옛 판인가 — 추출기와 같은 전역 버전(4-1)을 본다.
 import { algoVersion as ALGO_VERSION } from '../text/layout.js';
+// `[8g-3]` PDF 개요·쪽 라벨을 한가할 때 한 번 documents 에(17-8-12 §3) — 화면 변화 없음.
+import { ensure as ensureOutline, isOutlineCurrent } from '../search/outline.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
@@ -1382,6 +1384,26 @@ async function wireExtractor(docId) {
   ex.setCurrentPage(state.page);
   // `[8i-1]` 배선 전에 지금 쪽 새 판이 이미 저장됐을 수 있다(이벤트를 놓쳤다).
   catchUpStale();
+  scheduleOutline(docId, ex);
+}
+
+/**
+ * `[8g-3]` 첫 그리기·추출기 배선 **뒤** 한가할 때 한 번 `outline.ensure` — 이미 읽은 책(`outlineV`)은 부르지 않는다.
+ * 실패·다른 책으로 감은 조용히 넘긴다(리더에 영향 0) — 다음에 이 책을 그릴 때 다시 시도한다.
+ */
+let outlineQueued = null;
+function scheduleOutline(docId, ex) {
+  if (isOutlineCurrent(state.doc) || outlineQueued === docId) return;
+  outlineQueued = docId;
+  const run = () => {
+    if (outlineQueued === docId) outlineQueued = null;
+    if (state.docId !== docId || !ex.pdfDoc) return;
+    ensureOutline(docId, ex.pdfDoc).catch(() => { /* 조용히 — 다음 기회에 */ });
+  };
+  try {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 5000 });
+    else setTimeout(run, 1500);
+  } catch (e) { outlineQueued = null; }
 }
 
 function unwire() {
