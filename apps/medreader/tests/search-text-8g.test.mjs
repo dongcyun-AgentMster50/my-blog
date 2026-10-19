@@ -290,6 +290,30 @@ test('S8 ★ 검색어 길이 — 1자 ERR_SEARCH_SHORT · 61자 ERR_SEARCH_LONG
   assert.deepEqual(words('a.b axb', 'a.b'), ['a.b']);
 });
 
+test('S8 ★ 경계값 — 접은 길이 3자까지 낱말 전체·4자부터 접두 · 대문자 약어는 2–5자 (8g-1 Review 보강 ②)', () => {
+  // 3자(경계 안): 낱말 전체 — the 는 there·other 를 안 찾는다
+  assert.equal(parseQuery('the').whole, true);
+  assert.deepEqual(words('the there other', 'the'), ['the']);
+  // 4자(경계 밖): 낱말 시작 접두 — ther 는 there 를 찾는다(other 는 앞이 낱말 글자)
+  assert.equal(parseQuery('ther').whole, false);
+  assert.deepEqual(words('the there other', 'ther'), ['ther']);
+  // 길이는 **접은** 글자로 센다 — 'a-b'(3자)는 'a b' 낱말 전체
+  assert.equal(parseQuery('a-b').whole, true);
+  assert.deepEqual(words('a b, a-bc', 'a-b'), ['a b']);
+  // 대문자 약어 상한 5(경계 안): COPD5 는 대소문자 구분 + 낱말 전체 — copd5·COPD5X 아님
+  const p5 = parseQuery('COPD5');
+  assert.equal(p5.cs, true);
+  assert.equal(p5.whole, true);
+  assert.deepEqual(words('copd5 COPD5 COPD5X', 'COPD5'), ['COPD5']);
+  // 6자(경계 밖): ABCDEF 는 약어 규칙 밖 — 대소문자 무시 + 접두
+  const p6 = parseQuery('ABCDEF');
+  assert.equal(p6.cs, false);
+  assert.equal(p6.whole, false);
+  assert.deepEqual(words('abcdefgh ABCDEF', 'ABCDEF'), ['abcdef', 'ABCDEF']);
+  // 하한 2: 'MI'(위) 는 약어, 숫자만인 '12' 는 약어가 아니다(대문자 하나 이상)
+  assert.equal(parseQuery('12').cs, false);
+});
+
 test('S8 그리스 문자 ↔ 이름 변형은 OR · limit 에서 자른다 · 중복 오프셋 없음', () => {
   const pq = parseQuery('alpha blockade');
   assert.ok(pq.variants.includes('α blockade'));

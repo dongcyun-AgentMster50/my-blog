@@ -44,6 +44,8 @@ import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
   collectSample, readyToGuess, docLangOf, langSourceOf
 } from '../text/lang.js';
+// `[8g-2]` 검색 엔진 캐시 배선만(화면 변화 없음) — 새로 쓰인 쪽은 다음 검색 전에 다시 읽고, 다시 추출·삭제면 버린다.
+import { notePage as searchNotePage, invalidate as searchInvalidate } from '../search/engine.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -435,6 +437,9 @@ async function attach(doc, pdfDoc) {
   // 사용자에게 알린다 — 새 문서에 "다시 추출합니다"는 거짓말이다.
   const hadPages = Number(doc.extraction && doc.extraction.pagesDone) > 0;
   ex.addEventListener('reextract', () => { if (hadPages) bannerKey('err.reextract'); });
+  // `[8g-2]` 검색 캐시 — 쪽이 새로 쓰이면 그 쪽만 다시 읽게, 되감기면(algoVersion·derivedHash) 버린다.
+  ex.addEventListener('page', (e) => { searchNotePage(doc.id, e && e.detail && e.detail.pageNo); });
+  ex.addEventListener('reextract', () => { searchInvalidate(doc.id); });
   // 'pageerror' 와 'page' 는 배너로 올리지 않는다 — 쪽 하나의 실패는
   // 9-4 가 failed[] 로 들고 재시도하며, 사용자를 부를 일이 아니다.
 
@@ -657,6 +662,7 @@ export function reextractDoc(docId) {
     progressByDoc.delete(docId);
     // ③ 한 트랜잭션 — 쪽·문항·색인·extraction. 그사이 문서가 지워졌으면 아무것도 하지 않는다.
     const res = await db.resetDerived(docId);
+    searchInvalidate(docId);   // `[8g-2]` 지운 검색 글자를 캐시가 들고 있지 않게
     if (!res.reset) return null;
     // ④ 새 추출기. 새 문서처럼 algoVersion 0 에서 시작하므로 "엔진이 갱신되어…" 배너는 뜨지 않는다
     //    (`attach` 는 이미 뽑아 둔 쪽이 있을 때만 그 배너를 낸다).
@@ -773,6 +779,7 @@ async function onListClick(ev) {
     progressByDoc.delete(docId);
     try {
       await db.deleteDocument(docId);
+      searchInvalidate(docId);   // `[8g-2]`
     } catch (e) {
       banner(e);
       return;

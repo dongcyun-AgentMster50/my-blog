@@ -6,6 +6,10 @@
          [--json <파일>]   결과 수치를 JSON 으로 저장
          [--from a --to b] 쪽 범위(기본 전권). 크기·시간은 전권에서만 의미가 있다
          [--refind k]      검색어마다 "결과 쪽에서 다시 찾기"(17-8-8 강조 경로)를 확인할 쪽 수 상한(기본 400)
+         [--app]           `[8g-2 — S14]` 앱 엔진(`js/search/engine.js` + `js/text/search.js`)과 비교 — 아래 7절.
+                           pages 저장본만 흉내 IndexedDB(tests/fixtures/fake-idb.mjs)에 넣고 엔진 백필로 searchText 를
+                           만든 뒤, 검색어마다 시제품 규칙과 적중·쪽·묶음을 맞대고 결과 쪽 다시 찾기를 앱 함수로 한다.
+                           메모리가 크다 — `node --max-old-space-size=8192` 권장. `<pdf>` 를 맨 앞에 둔다.
 
    17-8-1 의 `measure-search.mjs`(2026-10-12)와 다른 점 — **지금 앱 경로를 그대로** 지난다:
    · algoVersion 12(8i 행 표 rowhead·ref·colhead, 8i-2 2열 표)인 `buildPageLayout`, 추출과 같은
@@ -518,6 +522,166 @@ for (const [cat, q] of QUERIES) {
     outlineTried: tried, outlinePagesWithEntry: posHit, outlineTitleMatched: titleHit,
     entriesOnOutlinePages: onOutlinePage
   };
+}
+
+/* ── 7. --app: 앱 엔진과 비교 (spec 17-8-12 S14 · 8g-2) ──────────────
+   시제품(위 2–5절)은 그대로 두고, 같은 저장본에서 **앱 코드**가 내는 것을 맞댄다.
+   · 레코드: 엔진 백필(`engine.backfill`)이 만든 searchText 의 text·table·heads = 시제품 레코드
+   · 검색어마다(QUERIES): 상한(1,000)·끝까지 두 번, 적중 집합 `쪽:오프셋:묶음` 의 대칭 차 = 0
+     (시제품 묶음 head·headGeneric·rowhead·body·table → 앱 head·body·body·body·table), 검색어 변형·규칙 같음
+   · 결과 쪽 다시 찾기(17-8-8): 앱 결과 쪽(쪽 순서 앞 --refind 쪽, 본문 적중이 있는 쪽)을 `pages` 저장본에서
+     앱 함수(`describePage → flowParasOf → joinPieces → foldText → findIn`)로 다시 찾아 수가 같은가 · `rangesFor` 빈 구간 0
+   · 서재 범위(캐시 없음 — 읽고 버림)도 같은 적중
+   · 시간: 백필·캐시 채우기는 흉내 IndexedDB 를 지나므로 참고값, 검색 1회(캐시 위)는 순수 계산 */
+if (argv.includes('--app')) {
+  const { installFakeIdb } = await import('../tests/fixtures/fake-idb.mjs');
+  const idb = installFakeIdb();
+  const adb = await import('../js/db.js');
+  const engine = await import('../js/search/engine.js');
+  const AS = await import('../js/text/search.js');
+  const SC = await import('../js/text/screen.js');
+  const D = 'bench';
+  const A = {};
+  const ms = (t) => +(performance.now() - t).toFixed(1);
+
+  await adb.put('documents', { id: D, title: 'bench', fileHash: 'bench', pageCount: N, lastOpenedAt: 1 });
+  for (let i = 0; i < pages.length; i += 250) {
+    await adb.putAll('pages', pages.slice(i, i + 250).map((x) => v8.deserialize(x.pagesBuf)));
+    idb.log.length = 0;
+  }
+  let t = performance.now();
+  A.backfill = await engine.backfill(D);
+  A.backfill.msFakeIdb = ms(t);
+  idb.log.length = 0;
+  const stByPage = new Map(idb.dump('medreader', 'searchText').map((s) => [s.pageNo, s]));
+  let recDiff = 0, recMissing = 0, skBad = 0;
+  for (const x of pages) {
+    const proto = v8.deserialize(x.stBuf);
+    const app = stByPage.get(x.p);
+    if (!app) { recMissing++; continue; }
+    if (app.sk !== AS.SEARCH_KEY || app.docId !== D) skBad++;
+    if (app.text !== proto.text || app.table !== proto.table || JSON.stringify(app.heads) !== JSON.stringify(proto.heads)) recDiff++;
+  }
+  stByPage.clear();
+  A.records = { pages: pages.length, missing: recMissing, diffTextTableHeads: recDiff, keyOrSkBad: skBad };
+
+  t = performance.now();
+  const prep = await engine.prepareDoc(D);
+  A.cacheFill = { msFakeIdb: ms(t), pagesCovered: prep.pagesCovered };
+  idb.log.length = 0;
+
+  const pIndex = new Map(pages.map((x, i) => [x.p, i]));
+  const protoKind = (i, at) => (classify(i, at) === 'head' ? 'head' : 'body');
+  const protoKeys = (res) => {
+    const out = [];
+    for (const r of res.res) {
+      for (const at of r.hits) out.push(pages[r.i].p + ':' + at + ':' + protoKind(r.i, at));
+      for (const at of r.th) out.push(pages[r.i].p + ':' + at + ':table');
+    }
+    return out;
+  };
+  const appKeys = (r) => r.hits.map((h) => h.pageNo + ':' + h.at + ':' + h.kind);
+  const symDiff = (a, b) => {
+    const m = new Map();
+    for (const k of a) m.set(k, (m.get(k) || 0) + 1);
+    for (const k of b) m.set(k, (m.get(k) || 0) - 1);
+    let d = 0;
+    for (const v of m.values()) d += Math.abs(v);
+    return d;
+  };
+  const count = (keys, kind) => keys.filter((k) => k.endsWith(':' + kind)).length;
+  const pageSet = (keys) => new Set(keys.map((k) => k.slice(0, k.indexOf(':')))).size;
+
+  A.queries = [];
+  const agg = { diffLimited: 0, diffFull: 0, diffPages: 0, diffGroups: 0, ruleDiff: 0, truncatedDiff: 0, orderBad: 0, libraryDiff: 0 };
+  const rf = { pages: 0, pageCountMismatch: 0, hits: 0, crossLine: 0, emptyRange: 0, ms: 0 };
+  for (const [cat, q] of QUERIES) {
+    const pq = parseQuery(q);
+    const apq = AS.parseQuery(q);
+    if (!pq) { A.queries.push({ cat, invalid: true, appError: apq.error || null }); if (!apq.error) agg.ruleDiff++; continue; }
+    const sameRule = !apq.error && apq.cs === pq.cs && apq.whole === pq.whole && JSON.stringify(apq.variants) === JSON.stringify(pq.variants);
+    if (!sameRule) agg.ruleDiff++;
+    const lim = protoKeys(searchDoc(pq, MAX_HITS));
+    const fullProto = searchDoc(pq, Infinity);
+    const full = protoKeys(fullProto);
+    let bestL = Infinity, bestF = Infinity, a1 = null, aF = null;
+    for (let r = 0; r < 3; r++) { const t1 = performance.now(); a1 = await engine.searchDoc(D, q); bestL = Math.min(bestL, performance.now() - t1); }
+    for (let r = 0; r < 2; r++) { const t1 = performance.now(); aF = await engine.searchDoc(D, q, { maxHits: Infinity }); bestF = Math.min(bestF, performance.now() - t1); }
+    const kL = appKeys(a1), kF = appKeys(aF);
+    const dL = symDiff(lim, kL), dF = symDiff(full, kF);
+    const dP = Math.abs(pageSet(full) - pageSet(kF));
+    let dG = 0;
+    for (const kind of ['head', 'body', 'table']) dG += Math.abs(count(full, kind) - count(kF, kind));
+    const truncProto = fullProto.total > MAX_HITS;
+    if (a1.truncated !== truncProto) agg.truncatedDiff++;
+    for (let i = 1; i < a1.hits.length; i++) {
+      const x = a1.hits[i - 1], y = a1.hits[i];
+      const kx = engine.KIND_ORDER[x.kind], ky = engine.KIND_ORDER[y.kind];
+      if (!(kx < ky || (kx === ky && (x.pageNo < y.pageNo || (x.pageNo === y.pageNo && x.at < y.at))))) { agg.orderBad++; break; }
+    }
+    agg.diffLimited += dL; agg.diffFull += dF; agg.diffPages += dP; agg.diffGroups += dG;
+
+    // 결과 쪽 다시 찾기 — 앱 함수로(17-8-8 강조 경로)
+    const byPage = new Map();
+    for (const h of aF.hits) { if (!byPage.has(h.pageNo)) byPage.set(h.pageNo, 0); if (h.kind !== 'table') byPage.set(h.pageNo, byPage.get(h.pageNo) + 1); }
+    const plist = [...byPage.keys()].sort((a, b) => a - b).slice(0, REFIND_CAP);
+    for (const p of plist) {
+      const nText = byPage.get(p);
+      if (!nText) continue;
+      const t2 = performance.now();
+      const F = fromStored(v8.deserialize(pages[pIndex.get(p)].pagesBuf));
+      let n = 0;
+      for (const pa of SC.flowParasOf(SC.describePage(F))) {
+        const j = SC.joinPieces(pa.lines);
+        const hay = apq.cs ? j.text : AS.foldText(j.text);
+        const hs = AS.findIn(hay, apq);
+        n += hs.length;
+        const rs = AS.rangesFor(j, hs.map((at) => ({ at, len: AS.hitLength(hay, apq, at) })));
+        for (const r of rs) { if (r.length > 1) rf.crossLine++; if (!r.length || r.some((x) => x.end <= x.start)) rf.emptyRange++; }
+      }
+      rf.ms += performance.now() - t2;
+      rf.pages++; rf.hits += n;
+      if (n !== nText) rf.pageCountMismatch++;
+    }
+    A.queries.push({
+      cat, q: /[^\x00-\x7F]/.test(q) && cat === 'arabic' ? '(아랍 문자)' : q, sameRule,
+      protoLimited: lim.length, appLimited: kL.length, protoFull: full.length, appFull: kF.length,
+      diffLimited: dL, diffFull: dF, diffPages: dP, diffGroups: dG,
+      groupsFull: { head: count(kF, 'head'), body: count(kF, 'body'), table: count(kF, 'table') }, pagesFull: pageSet(kF),
+      truncated: a1.truncated, msLimited: +bestL.toFixed(1), msFull: +bestF.toFixed(1)
+    });
+  }
+  rf.msPerPage = +(rf.ms / Math.max(1, rf.pages)).toFixed(2);
+  delete rf.ms;
+  A.refind = rf;
+
+  // 서재 범위(캐시 없음 — 읽고 접고 찾고 버림)
+  const LQ = ['sarcoidosis', 'heart failure', 'MI', 'patients'];
+  A.library = [];
+  for (const q of LQ) {
+    const d1 = await engine.searchDoc(D, q);
+    engine.invalidate(D);
+    idb.log.length = 0;
+    const t3 = performance.now();
+    const L = await engine.searchLibrary(q);
+    const msL = ms(t3);
+    const d2 = L.docs.find((x) => x.docId === D);
+    const diff = d2 ? symDiff(appKeys(d1), appKeys(d2)) : -1;
+    if (diff !== 0) agg.libraryDiff++;
+    A.library.push({ q, msFakeIdb: msL, hits: d2 ? d2.hits.length : null, diffVsDoc: diff });
+    await engine.prepareDoc(D);
+  }
+  // 첫 검색(캐시 없음 → 채우기 → 검색) · 다음 검색
+  engine.invalidate(D);
+  idb.log.length = 0;
+  t = performance.now();
+  await engine.searchDoc(D, 'sarcoidosis');
+  A.firstSearchMsFakeIdb = ms(t);
+  t = performance.now();
+  await engine.searchDoc(D, 'sarcoidosis');
+  A.nextSearchMs = ms(t);
+  A.agg = agg;
+  R.app = A;
 }
 
 delete R._outlinePages; delete R._outlineTitles;
