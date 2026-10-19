@@ -3560,6 +3560,10 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 - 결과 조각: 화면에 그릴 줄(한 번에 30줄)만 그 쪽의 원문 레코드를 `get` 해 적중 앞뒤 **40자**(낱말 경계로 넓힘)를 자른다 — 원문을 메모리에 들고 있지 않는다.
 - **추출이 덜 끝난 책**: `pagesCovered < pageCount` 면 결과 머리에 "1,967쪽 중 812쪽에서 찾았습니다 — 텍스트 준비 중" + (열려 있지 않은 책이면) `[이 책 텍스트 준비 계속]`(= `library.openDoc` — 리더를 열지 않고 추출만 시작). 추출이 진행되면 새 쪽은 다음 검색부터 들어간다(캐시는 `Extractor` 의 `page` 이벤트로 그 쪽만 다시 읽는다).
 - 입력 중 갱신: 열린 책은 250ms 멈춤 뒤 자동 검색. 서재 전체는 [찾기]/Enter 로만.
+- `[정정 2026-10-19 — 8g-2 Review]` **API(8g-2 가 만든 그대로 — 위 블록보다 이것이 이긴다)**: `searchDoc(docId, query, {signal, onPartial, onProgress?, maxHits?})` · `searchLibrary(query, {signal, onPartial, onProgress?, maxHits?})` · `prepareDoc(docId, {onProgress?})`(검색 화면을 여는 순간 캐시 채우기 + 백필 — 세대를 올리지 않는다, 17-8-12 2-2) · `backfill(docId, {onProgress?})`·`backfillPlan(docId)` · `notePage(docId, pageNo)`(추출기 `page` 이벤트) · `invalidate(docId?)`(다시 추출·재추출·삭제 — 검색 도중에 오면 그 검색은 옛 캐시로 끝내지 않고 다시 채운다) · `cancel()`(화면을 떠날 때) · `cacheInfo()`(진단). 백필 진행은 `onProgress({docId, done, total})`. `maxHits` 는 측정용(화면은 늘 기본 1,000). `headLevel?` 은 만들지 않았다(쓰는 곳이 정해지면 heads 의 `r` 로).
+- `[정정 2026-10-19 — 8g-2 Review]` **결과 필드**: 위 모양 + `docId`·`query`(다듬은 검색어) · `error?` · `cancelled?`(앞 세대 또는 `signal` — 적중 0) · `partial?`·`preparing?:{done, total}`(백필 전에 이미 있는 쪽으로 찾아 `onPartial` 로 한 번 보내는 결과에만 — 최종 결과는 반환으로만). **`preparing.done` = 그 부분 결과를 보낼 때까지 그 책 백필이 한 쪽 수**(그 쪽들은 이미 `pagesCovered` 에 든다 — 앞서 `prepareDoc` 이 시작한 백필이면 0 이 아니다), `total` = 백필할 쪽 수. 진행을 계속 그리려면 `onProgress`. **`truncated` = 상한 1,000 을 넘는 적중이 하나라도 있다**(정확히 1,000 은 아님).
+- `[정정 2026-10-19 — 8g-2 Review · 운영자 결정 (가)]` **백필이 DB 오류로 실패할 때**(저장소 가득 참 `ERR_DB_QUOTA`, 다른 탭이 버전을 올려 연결이 닫힘 등 `ERR_DB_OPEN` — `db.ERR` 코드 그대로): 검색을 거절하지 않는다 — 이미 있는 쪽(+ 실패 전까지 커밋된 백필 묶음)으로 찾은 결과에 `error` 코드를 붙여 돌려준다(`pagesCovered < pageCount`). 검색어 오류(`ERR_SEARCH_*`)는 적중 0, DB 오류는 적중이 있을 수 있다. 다음 검색은 빠진 쪽만 **다시 시도**한다 — 공간이 생기거나 다시 불러오면 엔진이 모르게 풀리는 오류이고, 시도 비용은 키 비교 + 실패하는 묶음 하나이며, 부분 결과는 그 전에 나간다. 서재 범위도 책마다 같다(그 책 결과에 `error`).
+- `[정정 2026-10-19 — 8g-2 Review]` **서재 범위는 안 연 책도 백필한다**(책마다 한 번, 키 비교 뒤 빠진 쪽만) — 하지 않으면 8g-1 전에 추출된 책은 '이 책' 범위로 한 번 찾기 전까지 서재 결과에 안 나온다. 그래서 첫 서재 검색은 그런 책마다 백필 시간이 든다(폰 한 권 3.5–8초 `[Plan 추정]`) — **화면(8g-4)은 책별 `onProgress`(docId 포함)로 "검색 준비 중" 진행을 보여야 한다**. 서재 시간 기준(17-8-12 S15)은 백필이 끝난 뒤 값이다.
 
 #### 17-8-6. 목차 — PDF 개요 먼저, 없으면 heading 폴백 (`search/outline.js`, 서비스)
 
@@ -3853,9 +3857,9 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 | Build | 범위(파일) | 테스트 | 배포 |
 |---|---|---|---|
 | **8g-1 데이터** | `js/text/screen.js`(새 — 옮김만, `ui/reader.js`·`tts/text.js` 는 다시 export), `js/text/search.js`(새 — `searchRecordOf(F, desc?)`·`foldText`·`parseQuery`·`findIn`·`classifyHit`·`snippetAt`·`rangesFor`·`headingToc` — 엔진·화면이 쓸 순수 함수 전부를 여기서 먼저), `config.js` `SEARCH`, `db.js`(`DB_VERSION 3`·스키마 표 `searchText`·`MIGRATIONS[3]`·`CASCADE_STORES`·`DERIVED_STORES`), `pdf/extract.js`(`_buildAndStore` 가 `pages`+`searchText` 한 트랜잭션), `main.js` `versionchange` 배너 + `err.dbUpgraded` ×4, `settings.js` `search.recent`, `tests/fixtures/fake-idb.mjs` 보강(`getAll`·범위 키·인덱스 `getAllKeys(range)`) | S1–S7 | 단독 배포 가능(G1 가) |
-| **8g-2 엔진** | `js/search/engine.js`(새 — 백필·캐시·`searchDoc`·`searchLibrary`·세대 취소·`notePage`/`invalidate`), `dev/measure-search-8g.mjs` 의 시제품 규칙을 앱 함수로 바꿔 부르는 `--app` 비교(시제품 = 앱 결과 0 차이) | S8–S15 | 8g-4 와 함께(화면 없이는 보이지 않는다) |
+| **8g-2 엔진** | `js/search/engine.js`(새 — 백필·캐시·`searchDoc`·`searchLibrary`·세대 취소·`notePage`/`invalidate`), `dev/measure-search-8g.mjs` 의 시제품 규칙을 앱 함수로 바꿔 부르는 `--app` 비교(시제품 = 앱 결과 0 차이). `[정정 2026-10-19 — 8g-2 Review]` `ui/library.js` 배선 — 추출기 `page` → `engine.notePage`, `reextract` 이벤트·`reextractDoc`·삭제 뒤 `engine.invalidate`(화면 변화 없음, 캐시가 없으면 아무 일도 안 함) | S8–S15 | 8g-4 와 함께(화면 없이는 보이지 않는다) |
 | **8g-3 목차·쪽 라벨** | `js/search/outline.js`(새 — 개요 펼침·쪽 해석·라벨 → `db.patch`), `text/search.js` `headingToc`(U11), 리더가 한가할 때 `outline.ensure` 부르기 | S16–S19 | 8g-4 와 함께 |
-| **8g-4 화면·이동** | `js/ui/search.js`(새), `router.js`(`#/search`·`#/search/:docId`), `ui/reader.js`(🔍 입구·띠·`onPageRepaint`·`readingSpot()`·`revealLine`/`revealRegion`), `ui/controls.js`(`pauseForJump`·`cueAt`), `tts/speaker.js`(`cue`), `ui/library.js`([검색]·`reextractDoc` 뒤 `engine.invalidate`), `index.html`(상단바 [🔍]·띠 자리·서재 [검색] — **8i-2b 가 커밋된 뒤**), `css/*`(`::highlight(search-hit)`·`::highlight(search-cur)`·띠·결과 줄), `i18n/*` ×4 | S20–S30 | 8g-2·3 과 한 배포 |
+| **8g-4 화면·이동** | `js/ui/search.js`(새), `router.js`(`#/search`·`#/search/:docId`), `ui/reader.js`(🔍 입구·띠·`onPageRepaint`·`readingSpot()`·`revealLine`/`revealRegion`), `ui/controls.js`(`pauseForJump`·`cueAt`), `tts/speaker.js`(`cue`), `ui/library.js`([검색] — `[정정 2026-10-19 — 8g-2 Review]` `reextractDoc` 뒤 `engine.invalidate` 는 8g-2 행으로 옮김), `[정정 2026-10-19 — 8g-2 Review]` 서재 범위 결과의 책별 백필 진행 표시(`onProgress` docId — 17-8-5)·결과의 DB 오류 코드(`error`, 적중과 함께 올 수 있다) 안내, `index.html`(상단바 [🔍]·띠 자리·서재 [검색] — **8i-2b 가 커밋된 뒤**), `css/*`(`::highlight(search-hit)`·`::highlight(search-cur)`·띠·결과 줄), `i18n/*` ×4 | S20–S30 | 8g-2·3 과 한 배포 |
 
 각 Build 끝에 `node apps/medreader/dev/stamp-importmap.mjs` · `--check` 0 · 전체 `node --test` 2회(시간 상한). 8g-1 의 `text/screen.js` 옮김은 **다른 줄을 한 줄도 바꾸지 않는 커밋**으로 먼저(그 커밋만으로 테스트 전부 녹색 — 리뷰가 diff 를 "옮김"으로만 읽을 수 있게).
 
@@ -3874,11 +3878,11 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 - [ ] `[N]` S8 `parseQuery`·`findIn` 표 테스트: `MI` 는 mild·mi·`MIS` 를 안 찾고 `MI.`·`(MI)` 는 찾음 · `mi` 는 낱말 전체 · `metform` → metformin · `beta blocker` 세 꼴 · `pre-eclampsia` ↔ `preeclampsia` ↔ `pre eclampsia` · `pseudohypoparathyroidism` 이 "Pseudo-hypoparathyroidism"(이름표 픽스처)을 찾음 · `betablocker` 는 "beta-blocker" 를 안 찾음 · 1자 → `ERR_SEARCH_SHORT`, 61자 → `ERR_SEARCH_LONG` · 정규식 메타 문자 검색어(`(a+b)*[`)가 예외 없이 글자 그대로.
 - [ ] `[N]` S9 백필: `pages` 10쪽(지금 algoVersion) 중 6쪽만 `searchText` → `pages.get` 정확히 4회. `SEARCH.VERSION` 을 올리면 10쪽, `DERIVED_HASH` 가 바뀌면 10쪽 다시. 옛 algoVersion `pages` 는 백필하지 않는다(`pagesCovered` 에 안 든다).
 - [ ] `[N]` S10 부분 추출: 1,000쪽 중 300쪽만 → `pagesCovered 300`, 결과는 그 쪽들에서만.
-- [ ] `[N]` S11 상한 1,000 에서 `truncated`. 세대 취소: 첫 검색이 끝나기 전에 둘째를 시작하면 첫 결과는 `onPartial`·반환 모두 버려진다.
+- [ ] `[N]` S11 상한 1,000 을 **넘으면** `truncated`(정확히 1,000 은 아님 `[정정 2026-10-19 — 8g-2 Review]`). 세대 취소: 첫 검색이 끝나기 전에 둘째를 시작하면 첫 결과는 `onPartial`·반환 모두 버려진다.
 - [ ] `[N]` S12 묶음: heading 적중 = `head`, 같은 글자가 10번 이상인 heading 적중 = `body`, 표 = `table`, rowhead·인용 = `body`. 묶음 순서 head → body → table, 묶음 안은 쪽 순서.
 - [ ] `[N]` S13 캐시: 추출기 `page` 이벤트(`notePage`) 뒤 다음 검색이 그 쪽 새 글자를 찾고 옛 글자를 안 찾는다. `invalidate`(다시 추출) 뒤 캐시가 비고 다음 검색이 다시 채운다.
 - [ ] `[D]` S14 `node apps/medreader/dev/measure-search-8g.mjs <pdf> --app` 세 권: 시제품 규칙과 앱 함수의 적중·쪽·묶음 차이 0, 결과 쪽 다시 찾기 불일치 0(이 Plan 실측 7,015쪽 0 과 같아야).
-- [ ] `[D]` S15 실제 CMDT 2026 을 가져온 데스크톱 Chrome: 백필 ≤ 2초, 첫 검색(검색 화면을 열고 2초 뒤 입력) ≤ 300ms, 다음 검색 ≤ 50ms, 서재 전체(세 권) ≤ 1초.
+- [ ] `[D]` S15 실제 CMDT 2026 을 가져온 데스크톱 Chrome: 백필 ≤ 2초, 첫 검색(검색 화면을 열고 2초 뒤 입력) ≤ 300ms, 다음 검색 ≤ 50ms, 서재 전체(세 권) ≤ 1초 — `[정정 2026-10-19 — 8g-2 Review]` 서재 전체는 **백필이 끝난 뒤**(서재 범위는 안 연 책도 백필한다 — 첫 서재 검색의 백필 시간은 따로 기록).
 - [ ] `[M]` S15m Nour 기기(Realme GT7T): 검색 화면을 열자마자 "sarcoidosis" 를 붙여 넣어도 첫 결과 ≤ 1초, 다음 검색 ≤ 150ms. CMDT 2026 백필 시간·`navigator.storage.estimate()` 증가량을 기록(추정 +20MB 안팎).
 
 **8g-3 목차·쪽 라벨**

@@ -23,11 +23,18 @@
    · 상한: 책당 적중 `MAX_HITS_PER_DOC`(1,000) — 쪽 순서로 채우고(쪽 안은 본문 글자 → 표 글자),
      넘는 적중이 하나라도 있으면 `truncated`. 결과 순서는 묶음 head → body → table, 묶음 안은 쪽·오프셋 순.
    · 부분 추출: 있는 쪽만 찾는다 — `pagesCovered`(찾은 쪽 수)와 `pageCount`(documents)를 함께 준다.
+   · `[8g-2b]` **백필 실패**(할당량 `ERR_DB_QUOTA`, 닫힌 연결 등 → `ERR_DB_OPEN`): 검색을 거절하지 않는다 —
+     이미 있는 쪽(+ 실패 전까지 백필이 쓴 쪽)으로 찾은 결과에 `error` 코드를 붙인다(운영자 결정 (가)).
+     다음 검색은 **다시 시도**한다(빠진 쪽만 — 실패 전 묶음은 이미 커밋됐다): 공간이 비거나 다시 불러오면
+     엔진이 알 길 없이 풀리는 오류이고, 시도 비용은 키 비교 + 실패하는 묶음 하나이며, 부분 결과가 그 전에 나간다.
+   · `[8g-2b]` 검색 도중 `invalidate`(다시 추출·삭제)가 오면 옛 캐시로 결과를 내지 않고 다시 채운다(세 번까지).
 
    ── 결과 모양 (17-8-5) ───────────────────────────────────
      { docId, query, hits:[{pageNo, at, len, kind:'head'|'body'|'table'}], pagesCovered, pageCount, truncated,
-       error?, cancelled?, partial?, preparing? }
+       error?, cancelled?, partial?, preparing?:{done, total} }
      `at`·`len` 은 그 쪽 `text`(kind 'table' 이면 `table`) 안의 오프셋·길이 — 접기가 길이를 보존하므로 원문과 같다.
+     `error` — 검색어 코드(`ERR_SEARCH_*`, hits 0) 또는 백필 실패 DB 코드(`ERR_DB_*`, hits 는 있는 쪽 것).
+     `preparing.done` — 그 부분 결과를 보낼 때까지 백필한 쪽 수(이미 `pagesCovered` 에 든다).
    ============================================================ */
 
 import { SEARCH } from '../config.js';
@@ -44,6 +51,15 @@ export const KIND_ORDER = Object.freeze({ head: 0, body: 1, table: 2 });
 let gen = 0;            // 검색 세대 — 새 검색이 오르면 앞 검색의 결과를 버린다
 let cache = null;       // 열린 책 한 권: newCache()
 const bfJobs = new Map();   // docId → 백필 작업(같은 책은 하나를 함께 기다린다)
+
+const DB_CODES = new Set(Object.values(db.ERR));
+
+/** 백필 실패 → 오류 코드(`db.ERR` 그대로). `DbError` 면 그 코드, 할당량이면 QUOTA, 나머지(닫힌 연결의
+ *  `InvalidStateError` 등)는 OPEN — "DB 를 지금 쓸 수 없다". */
+function dbErrorCode(e) {
+  if (e && DB_CODES.has(e.code)) return e.code;
+  return db.isQuotaError(e) ? db.ERR.QUOTA : db.ERR.OPEN;
+}
 
 function reqP(r) {
   return new Promise((resolve, reject) => {
@@ -203,7 +219,9 @@ async function backfillBatch(docId, ns) {
  * 캐시에 바로 넣는다. `SEARCH.ENABLED = false`(되돌림 스위치)면 아무것도 쓰지 않는다.
  * @param {string} docId
  * @param {{onProgress?:function({docId,done,total}):void}} [opts]
- * @returns {Promise<{total:number, done:number, written:number, failed:number}>}
+ * `[8g-2b]` DB 오류(할당량·닫힌 연결)로 실패해도 **거절하지 않는다** — 실패 전 묶음은 커밋된 채 두고
+ * `error`(db.ERR 코드)를 붙여 돌려준다. 다음 부름은 남은 쪽을 다시 시도한다.
+ * @returns {Promise<{total:number, done:number, written:number, failed:number, error?:string}>}
  */
 export function backfill(docId, opts) {
   const o = opts || {};
@@ -212,31 +230,36 @@ export function backfill(docId, opts) {
     if (o.onProgress) cur.listeners.add(o.onProgress);
     return cur.promise;
   }
-  const job = { cancelled: false, listeners: new Set(o.onProgress ? [o.onProgress] : []), planned: null, promise: null };
+  const out = { total: 0, done: 0, written: 0, failed: 0 };
+  const job = { cancelled: false, listeners: new Set(o.onProgress ? [o.onProgress] : []), planned: null, promise: null, out: out };
   let planned;
   job.planned = new Promise((r) => { planned = r; });
-  const out = { total: 0, done: 0, written: 0, failed: 0 };
   const tell = () => {
     for (const fn of job.listeners) { try { fn({ docId: docId, done: out.done, total: out.total }); } catch (e) { /* 화면 쪽 예외가 백필을 막지 않는다 */ } }
   };
   bfJobs.set(docId, job);
   job.promise = (async () => {
     if (!SEARCH.ENABLED) { planned(0); return out; }
-    let missing = [];
-    try { missing = await backfillPlan(docId); } finally { planned(missing.length); }
-    out.total = missing.length;
-    if (!missing.length) return out;
-    tell();
-    for (let i = 0; i < missing.length && !job.cancelled; i += SEARCH.BACKFILL_BATCH) {
-      const ns = missing.slice(i, i + SEARCH.BACKFILL_BATCH);
-      const r = await backfillBatch(docId, ns);
-      out.done += ns.length;
-      out.written += r.made.length;
-      out.failed += r.failed;
-      if (cache && cache.docId === docId && !cache.stale && !job.cancelled) {
-        for (const st of r.made) { const e = entryOf(st); if (e) putEntry(cache, e); }
-      }
+    try {
+      let missing = [];
+      try { missing = await backfillPlan(docId); } finally { planned(missing.length); }
+      out.total = missing.length;
+      if (!missing.length) return out;
       tell();
+      for (let i = 0; i < missing.length && !job.cancelled; i += SEARCH.BACKFILL_BATCH) {
+        const ns = missing.slice(i, i + SEARCH.BACKFILL_BATCH);
+        const r = await backfillBatch(docId, ns);
+        out.done += ns.length;
+        out.written += r.made.length;
+        out.failed += r.failed;
+        if (cache && cache.docId === docId && !cache.stale && !job.cancelled) {
+          for (const st of r.made) { const e = entryOf(st); if (e) putEntry(cache, e); }
+        }
+        tell();
+      }
+    } catch (e) {
+      // [8g-2b — 운영자 결정 (가)] 그 묶음 트랜잭션은 abort 로 되돌려졌다. 검색은 있는 쪽으로 계속한다.
+      out.error = dbErrorCode(e);
     }
     return out;
   })().finally(() => { if (bfJobs.get(docId) === job) bfJobs.delete(docId); });
@@ -322,29 +345,40 @@ async function ensureLoaded(docId) {
 
 /**
  * 캐시 채우기 + 백필 + 표시된 쪽 다시 읽기. 검색 화면을 여는 순간 부른다(17-8-12 2-2) — 세대를 올리지 않는다.
- * `hook(c, total)` 은 백필할 쪽이 있을 때 백필을 기다리기 **전에** 한 번(그때까지의 쪽으로 먼저 찾게).
+ * `hook(c, {done, total})` 은 백필할 쪽이 있을 때 백필을 기다리기 **전에** 한 번(그때까지의 쪽으로 먼저 찾게).
+ * `done` 은 그때까지 이 책 백필이 한 쪽 수(앞서 `prepareDoc` 이 시작한 작업이면 0 이 아니다 — 8g2R-3 ④).
+ * `[8g-2b — 8g2R-3 ③]` 끝났을 때 그 캐시가 무효화돼 있으면(그사이 다시 추출·삭제) 다시 채운다 — 세 번 안에
+ * 못 끝내거나 `o.alive()` 가 거짓이면 null.
+ * @returns {Promise<{c:Object, error:(string|null)}|null>}
  */
 async function ready(docId, o, hook) {
-  const c = await ensureLoaded(docId);
-  if (!c.bfDone) {
-    const p = backfill(docId, { onProgress: o.onProgress });
-    const job = bfJobs.get(docId);
-    const total = job ? await job.planned : 0;
-    if (total > 0 && hook) hook(c, total);
-    const r = await p;
-    if (!c.stale && r.done === r.total) c.bfDone = true;
+  for (let tries = 0; tries < 3; tries++) {
+    if (o.alive && !o.alive()) return null;
+    const c = await ensureLoaded(docId);
+    let error = null;
+    if (!c.bfDone) {
+      const p = backfill(docId, { onProgress: o.onProgress });
+      const job = bfJobs.get(docId);
+      const total = job ? await job.planned : 0;
+      if (total > 0 && hook) hook(c, { done: job.out.done, total: total });
+      const r = await p;
+      if (r.error) error = r.error;
+      else if (!c.stale && r.done === r.total) c.bfDone = true;
+    }
+    await refreshDirty(c);
+    if (!c.stale) return { c: c, error: error };
   }
-  await refreshDirty(c);
-  return c;
+  return null;
 }
 
 /**
  * 검색 화면을 열 때 — 그 책 캐시를 미리 채운다(백필 포함). 진행 중 검색을 취소하지 않는다.
- * @returns {Promise<{docId:string, pagesCovered:number}>}
+ * @returns {Promise<{docId:string, pagesCovered:number, error?:string, cancelled?:boolean}>}
  */
 export async function prepareDoc(docId, opts) {
-  const c = await ready(docId, opts || {}, null);
-  return { docId: docId, pagesCovered: c.map.size };
+  const r = await ready(docId, { onProgress: (opts || {}).onProgress }, null);
+  if (!r) return { docId: docId, pagesCovered: 0, cancelled: true };
+  return Object.assign({ docId: docId, pagesCovered: r.c.map.size }, r.error ? { error: r.error } : {});
 }
 
 async function searchDocAt(docId, query, o, my, docRec) {
@@ -356,13 +390,14 @@ async function searchDocAt(docId, query, o, my, docRec) {
   if (!alive()) return cancelled(base);
   base.pageCount = Number(doc && doc.pageCount) || 0;
   const onProgress = o.onProgress ? (p) => { if (alive()) o.onProgress(p); } : null;
-  const c = await ready(docId, { onProgress: onProgress }, (cc, total) => {
+  const rd = await ready(docId, { onProgress: onProgress, alive: alive }, (cc, prep) => {
     // 백필 중에도 이미 있는 쪽은 찾는다 — 먼저 그 결과를 보낸다
     if (!alive() || !o.onPartial || !cc.map.size) return;
-    o.onPartial(Object.assign({}, base, scanCache(cc, pq, o.maxHits), { partial: true, preparing: { done: 0, total: total } }));
+    o.onPartial(Object.assign({}, base, scanCache(cc, pq, o.maxHits), { partial: true, preparing: prep }));
   });
-  if (!alive()) return cancelled(base);
-  return Object.assign(base, scanCache(c, pq, o.maxHits));
+  if (!rd || !alive()) return cancelled(base);
+  // 백필이 실패했으면(8g-2b) 있는 쪽으로 찾은 결과 + 그 코드
+  return Object.assign(base, scanCache(rd.c, pq, o.maxHits), rd.error ? { error: rd.error } : {});
 }
 
 /**
@@ -379,8 +414,9 @@ export function searchDoc(docId, query, opts) {
 /** 캐시하지 않는 책 — 읽고 접고 찾고 버린다. 묶음은 빈도표가 다 모인 뒤 정한다(U8). */
 async function streamDoc(d, pq, o, alive) {
   const base = { docId: d.id, query: pq.q, hits: [], pagesCovered: 0, pageCount: Number(d.pageCount) || 0, truncated: false };
-  await backfill(d.id, { onProgress: o.onProgress ? (p) => { if (alive()) o.onProgress(p); } : undefined });
+  const bf = await backfill(d.id, { onProgress: o.onProgress ? (p) => { if (alive()) o.onProgress(p); } : undefined });
   if (!alive()) return cancelled(base);
+  if (bf.error) base.error = bf.error;   // 8g-2b — 있는 쪽으로 찾고 코드를 붙인다
   const st = newScan(o.maxHits);
   const freq = new Map();
   let covered = 0;

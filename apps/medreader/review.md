@@ -4905,3 +4905,178 @@ Build 의 V8·V9·V15·E1–E10·W1–W2·R2·R5·R7·R9 와 겹치지 않는 �
 3. **[권장] 테스트 보강**: M7(필수 권장)·M9·M1, 그리고 문안 3 을 승인하면 M20. 8g-4 Build 에 함께 넣거나 작은 별도 작업으로. 같은 때 8g2R-3 의 3(`ready` 뒤 `stale` 확인 한 줄)·4(`preparing.done`)를 함께 고칠지 정해 주세요.
 4. **[선택] 상한에 걸린 검색의 제목 묶음**(8g2R-3 의 5): 지금처럼 앞쪽 1,000 적중 안의 제목만 · 또는 제목 적중은 상한과 따로 끝까지 모은다(제목은 책당 수백 개 이하). 8g-4 화면 설계 때 정해도 된다.
 5. **Build 문안 4건 반영 승인**(8g2R-8 — 2·3·4 는 보충 문구 포함).
+
+# 8g-2b Review — 검색 엔진 보강 (백필 실패 처리 · ③④ · 테스트 · spec 문안) (2026-10-19)
+
+> 지침 `.claude/tasks/medreader-review-8g-2b.md`. Build 와 분리된 검증. 시작 상태 HEAD `c35ebbf` + 작업 트리(engine.js · tests/search-db-8g.test.mjs · spec.md 17-8-5·17-8-12 · index.html stamp). 시작 sha256 이 Build 보고 7절과 같다(engine `0f4a2278…` · 테스트 `93f604de…` · spec `550313f6…` · index `0b6e5bd9…`). 스크래치 `r8g2b/` 만 썼다. 앱 코드·테스트·spec 은 고치지 않았다(변이는 되돌렸다 — 끝에 8개 파일 sha256 모두 시작과 같음). 커밋하지 않았다. 브라우저는 쓰지 않았다.
+
+## 8g2bR-1. 결론 — **통과**(8g-4 배포 전 조건 2개)
+
+- 운영자 결정 (가)가 엔진 세 길(`searchDoc` · `prepareDoc` · 서재 범위의 열린 책/안 연 책)에 모두 들어갔다. 백필이 실패해도 거절하지 않고, 있는 쪽으로 찾은 결과에 `db.ERR` 코드를 붙인다. 다음 검색은 빠진 쪽만 다시 시도한다.
+- ③(검색 도중 `invalidate` → 다시 채움)과 ④(`preparing.done` = 실제 진행)는 맞게 고쳐졌다. 탐침 P1·P2·P3·P8 이 Build 보고와 같은 값을 냈다.
+- 테스트의 힘: Review 변이 M1·M7·M9·M20 은 모두 빨강이다. 이번 수정 자리에 건 내 변이 8개 중 7개가 빨강이고, 살아남은 1개는 같은 동작이다. M16·M17 "같은 동작" 판단도 맞다.
+- CMDT 2026 `--app`: 차이 0. 시간 칸을 뺀 `app` JSON 이 8g-2 판(`r8g2/build-app-c26.json`)·Build 판과 항목 전부 같다.
+- 전체 테스트 1126/1126 × 3회(변이 전 1 + 끝 2), `stamp --check` 0.
+- 8g-4 배포 전 조건 두 가지(지금 커밋을 막지는 않는다):
+  1. **Build 남은 문제 1 을 엔진에서 고친다**(8g2bR-3 의 1). 읽기가 한 번 실패하면 같은 책 검색이 계속 거절되고, **서재 전체 검색도 함께 거절된다**. 한 줄 수정 + 테스트 1개.
+  2. **8g-4 화면은 `searchDoc`·`searchLibrary` 의 reject 를 잡아야 한다**(8g2bR-3 의 2). 실제 `versionchange` 뒤에는 (가)를 타지 않고 `DbError(ERR_DB_OPEN)` 로 거절된다.
+
+## 8g2bR-2. 결정 (가) 확인
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| reject 대신 부분 결과 + `error` | ○ | `backfill()` 본문을 `try/catch` 로 감쌌다. 실패한 묶음은 abort, 그 앞 묶음은 커밋된 채 남는다(S9b `stCount 70`). 탐침 P2: 20적중 + `ERR_DB_QUOTA`(8g-2 때는 reject). |
+| 코드 = `db.ERR` 그대로, 새 코드 없음 | ○ | `withTx` 가 할당량을 `DbError(QUOTA)` 로 바꾸므로 `e.code` 를 먼저 본다. 나머지는 `OPEN` 이다. 변이 R3(전부 QUOTA)은 빨강, Build N4(전부 OPEN)도 빨강. |
+| 범위 — `searchDoc` | ○ | 최종 결과에만 `error` 가 붙는다. 부분 결과는 백필 전이라 코드가 없다(S9b 단언). |
+| 범위 — `prepareDoc` | ○ | `{docId, pagesCovered, error}` 를 돌려준다. 변이 R5(코드 버림)는 빨강. |
+| 범위 — 서재: 열린 책 | ○ | `searchDocAt` 를 거치므로 같다. 서재 `onPartial` 에 부분 결과가 섞이지 않는다(M13 빨강 — Build). |
+| 범위 — 서재: 안 연 책 | ○ | `streamDoc` 이 코드를 붙인 뒤 **있는 쪽을 그대로 찾는다**. 변이 R6(오류면 찾지 않고 코드만)은 빨강. |
+| 다음 검색은 빠진 쪽만 다시 시도 | ○ — 타당 | S9b 둘째 검색의 `pages.get` 이 **정확히 10회**다. R2(오류여도 `bfDone` 을 세움)와 Build N2 는 빨강. 이유 넷(커밋된 묶음은 남음 · 풀림을 알 신호 없음 · 비용 작음 · 부분 결과가 먼저 나감)에 동의한다. 다만 저장소가 찬 동안에는 **입력 검색마다**(250ms 멈춤) 키 비교 + 실패하는 묶음 하나(≤ 50쪽 읽기)를 되풀이한다. 폰에서는 최종 결과가 수백 ms 늦을 수 있다. 부분 결과가 먼저 나가므로 보이는 문제는 작다(8g-4 Review S15m 에서 볼 것). |
+| 검색어 오류와 DB 오류의 구분 | ○(접두어로) | `error` 한 칸에 두 종류가 들어간다: `ERR_SEARCH_*`(적중 0) · `ERR_DB_*`(적중이 있을 수 있음). 머리 주석과 spec 17-8-5 에 적혀 있다. 화면은 접두어로 가르면 된다. 서재 범위에서는 맨 위 `error` = 검색어 오류만, DB 코드는 `docs[i].error` 다(탐침 P12). **세 번째 통로 reject 가 남는다**(8g2bR-3 의 1·2) — 8g-4 는 셋 다 처리해야 한다. |
+
+## 8g2bR-3. 찾은 문제
+
+1. **[낮음–중간] Build 남은 문제 1 재현 — 읽기 실패가 붙는다. 서재 전체 검색까지 막힌다**(탐침 P9)
+   - 재현: 캐시 채우기의 `searchText.getAll` 을 **딱 한 번** 비동기 `UnknownError` 로 실패시켰다.
+   - 결과: 첫 검색이 reject. 오류를 걷어 낸 뒤에도 같은 책의 2·3번째 검색·`prepareDoc` 이 모두 같은 오류로 reject.
+   - **서재 전체 검색도 통째로 reject 했다.** 그 책이 캐시 책이라 맨 앞에서 `searchDocAt` 을 타기 때문이다.
+   - 풀리는 길은 `invalidate(그 책)` 이나 다른 책 검색(캐시가 바뀜)뿐이다. 둘 다 확인했다.
+   - 오류도 `db.ERR` 코드가 아니라 날것(`UnknownError`)이다. `withTx` 는 할당량만 코드로 바꾼다.
+   - 원인: `ensureLoaded` 의 `c.loading` 에 거절된 프라미스가 남는다.
+   - 같은 계열(새로 찾음, 탐침 P10): `rereadDirty` 는 `c.dirty.clear()` 를 **읽기 전에** 한다. 그래서 다시 읽기가 실패하면 `notePage` 표시가 사라진다. 다음 검색은 성공하지만 그 쪽은 옛 글자로 남는다(`newword` → `[]`). 8g-2 부터 있던 동작이다.
+   - 심각도: 실제 IndexedDB 의 읽기 실패는 드물다(백엔드 I/O `UnknownError`, 닫힌 연결 — 뒤의 경우는 어차피 다시 불러오기). 그래도 한 번이면 그 탭의 검색 화면이 서재 범위까지 굳는다.
+   - **판정: 8g-4 몫으로 미루지 말고, 8g-4 배포 전에 엔진에서 고친다.** 8g-4 Build 지침의 첫 항목(엔진 두 줄 + 테스트 1–2개)으로 넣거나 작은 8g-2c 로 하면 된다. 엔진은 8g-4 와 함께 배포되므로 지금 사용자 영향은 없다.
+     - ⓐ `c.loading = loadCache(c).catch((e) => { if (cache === c) cache = null; throw e; })`
+     - ⓑ `rereadDirty` 실패 시 `ns` 를 `c.dirty` 에 되돌린다.
+     - 테스트는 S9b 와 같은 프로토타입 감싸기로 된다.
+   - 고쳐도 첫 실패는 reject 다. 화면이 reject 를 잡는 일(조건 2)은 그대로 필요하다.
+2. **[낮음 — 문서 정확성 · 8g-4 지침] 실제 `versionchange` 뒤에는 (가)를 타지 않는다**(탐침 P13)
+   - fake-idb 에서 다른 "탭"이 `DB_VERSION + 1` 로 열자 db.js 가 연결을 닫았다. 그 뒤:
+     - `searchDoc` 은 캐시가 있어도 **reject `DbError(ERR_DB_OPEN)`(cause `VersionError`)**. 첫 줄 `db.get('documents')` 가 먼저 실패한다.
+     - `searchLibrary` 도 reject(`documents.getAll`).
+     - `prepareDoc` 만 `{pagesCovered:10, error:'ERR_DB_OPEN'}` 이다.
+   - 그러니 (가)의 "닫힌 연결" 갈래는 **검색 도중에 닫힐 때**와 `prepareDoc` 에만 맞다.
+   - S9b 닫힌 연결 테스트는 `pages` 를 범위에 둔 트랜잭션만 막는다(Build 가 주석에 적은 대로 좁은 흉내). 지금 코드에 대한 테스트로는 맞지만, 실제 닫힌 연결의 꼴은 아니다.
+   - spec 17-8-5 새 줄 "(…연결이 닫힘 등 `ERR_DB_OPEN`): 검색을 거절하지 않는다"는 지나친 약속이다.
+   - 해는 작다: `main.js` 가 `versionchange` 에 [다시 불러오기] 배너를 이미 띄운다.
+   - 권장:
+     - (a) 다음 spec 정리 때 17-8-5 문구를 "백필 도중의 DB 오류는 … 이미 닫힌 연결에서는 `documents` 읽기가 `ERR_DB_OPEN` 으로 거절된다(배너가 다시 불러오기를 안내)"로 고친다.
+     - (b) 8g-4 지침: reject 의 `e.code`(`ERR_DB_*` 또는 날것)를 잡아 일반 오류 안내를 낸다.
+3. [정보] **채우는 중 `invalidate` 가 세 번이면 조용한 0 적중**(탐침 P11)
+   - `ensureLoaded` 가 세 번 다 무효화되면 끝에 `newCache(docId)` 를 돌려준다. 이 캐시는 전역에 없고 채우지도 않았다.
+   - `ready` 는 그것을 정상으로 받는다 → 적중 0 · `pagesCovered 0` · `cancelled` 없음 · `error` 없음(`pageCount 30`). `prepareDoc` 도 `{pagesCovered:0}` 이다.
+   - 두 번이면 정상(30)이다. 다음 검색도 정상(30)이다.
+   - 머리 주석의 "세 번 안에 못 끝내면 `cancelled`"는 `ready` 고리 쪽만 맞다.
+   - 한 검색 동안 같은 책을 세 번 다시 추출·삭제할 일은 사실상 없다. 고친다면 ⓐ 와 함께, `ensureLoaded` 의 끝 갈래가 `null` 을 돌려 `ready` 가 `null`(→ `cancelled`)로 끝나게 한다.
+4. [정보] **`onPartial` 이 한 검색에 두 번 올 수 있다**(탐침 P1b)
+   - 부분 결과 안에서 `invalidate` 하면 다시 채운 고리에서 부분 결과가 한 번 더 온다: 20적중 `{done:0,total:140}` → 70적중 `{done:0,total:90}` → 최종 160.
+   - spec 17-8-5 새 줄 "…`onPartial` 로 한 번 보내는 결과"와 어긋난다(무효화가 없을 때는 한 번).
+   - 세대가 같으므로 화면은 **덧붙이지 말고 바꿔야** 한다 → 8g-4 지침에 한 줄. Build 관찰 3(먼저 나간 부분 결과는 최종의 부분집합이 아닐 수 있다)과 같은 뿌리다.
+5. [정보] `dbErrorCode` 는 `db.ERR` 코드도 할당량도 아닌 **모든** 예외를 `ERR_DB_OPEN` 으로 바꾼다.
+   - 백필 안의 프로그램 오류(예: `TypeError`)도 "DB 를 지금 쓸 수 없다"로 보인다. 쪽 하나의 레코드 만들기 오류는 이미 `failed` 로 따로 센다.
+   - 남는 것은 계획·트랜잭션 쪽뿐이라 작다. 8g-4 에서 개발 빌드 `console.warn` 정도를 고려할 만하다.
+
+## 8g2bR-4. ③④ 확인
+
+- **③ 경계**
+  - `ready()` 는 최대 3회 돈다. 매회 머리에서 `alive()` 를 보고, 캐시 채우기 → 백필 → 표시된 쪽 다시 읽기를 마친 뒤 `!c.stale` 이면 끝낸다.
+  - 안쪽 `ensureLoaded` 도 3회다 → 최악 9번 채우기에서 멈춘다. **무한 고리 없음**.
+  - 무효화된 백필 작업은 `job.cancelled` 로 멈춘다. 다음 회차는 `bfJobs` 에서 새 작업을 만든다(옛 작업의 `finally` 는 `bfJobs.get(docId) === job` 일 때만 지우므로 새 작업을 지우지 않는다).
+  - **세대 취소와의 상호작용**:
+    - 새 검색이 오르면 다음 회차 머리에서 `null` 이 된다. 마지막 회차 뒤라면 `searchDocAt` 의 `!alive()` 가 `cancelled` 를 낸다.
+    - 변이 R7(회차 머리의 `alive` 검사 뺌)은 살아남았다. 바깥 검사가 같은 일을 하므로 같은 동작이다(헛일만 한 번 더).
+    - `prepareDoc` 은 `alive` 가 없어 무효화로만 끝난다(3회 넘으면 `cancelled:true`, 3의 예외 하나).
+  - 변이 R1(다시 채우지 않고 바로 `cancelled`)은 S13b 에서 빨강 — Build 의 "다시 채우는 쪽" 선택이 테스트로 고정됐다.
+  - 탐침 P1(검색 중 삭제): 0적중 · `cancelled:false` · `pagesCovered 0` — Build 와 같다. 지운 책의 빈 캐시(0쪽)가 남는 것도 같다(Build 관찰 2, 해 없음).
+- **④ `preparing.done`**
+  - 값은 백필 작업 객체의 `out.done` 이다 = **그 부분 결과를 보낼 때까지 그 책 백필이 한 쪽 수**. 그 쪽들은 이미 `pagesCovered` 에 든다.
+  - 확인: 백필 묶음은 `cache.docId === docId && !stale` 일 때 캐시에 바로 넣는다. `prepareDoc`·서재 `streamDoc` 이 먼저 시작한 작업에 합류해도 캐시는 DB 에서 커밋된 묶음을 읽고, 채우는 동안 끝난 묶음도 넣는다.
+  - 탐침 P3: `{done:100, total:380}` · 덮은 쪽 120(= 20 + 100) — Build 와 같다.
+  - 변이 R4(`done = total`)와 Build N6(`done = 0`) 모두 S9c 에서 빨강. 새로 시작한 검색은 0 이다(S9 기존 단언 그대로).
+
+## 8g2bR-5. 테스트의 힘 (`r8g2b/mut.mjs` · 로그 `mut.log`·`mut-out/` · 백업 `bak/`)
+
+변이마다 레포 파일 한 곳 → 전체 테스트(`--test-timeout=60000`, 상한 300초) → finally 복원 → 바이트 비교. 16개 모두 **복원 같음**. 끝에 대상 8파일 sha256 이 시작 기록(`start-sha.txt`)과 같다. 엔진 변이의 fail 수에는 import map 해시 테스트 3개(파일을 바꾸면 늘 빨강)가 들어 있다. 아래 "빨강"은 그것을 뺀 것이다.
+
+| # | 변이 | 결과 |
+|---|---|---|
+| **M1** | 상한 뒤 "더 있나"에서 표 글자를 안 봄 | 빨강 1 — S11b |
+| **M7** | 채우는 중 `notePage` 를 버림 | 빨강 1 — S13c |
+| **M9** | 서재 빈도표를 상한에서 멈춤 | 빨강 1 — S12b |
+| **M20** | 서재 범위가 안 연 책을 백필 안 함(자리 새로: `const bf = {}`) | 빨강 2 — S12c · S9b 할당량 |
+| M16 | `ensureLoaded` 가 무효화된 캐시를 돌려줌 | 살아남음 — **같은 동작 판단에 동의**. 바깥 `ready` 고리가 `stale` 을 보고 다시 채운다. 차이는 옛 캐시로 만든 부분 결과가 한 번 더 나갈 수 있는 것과 3회 한도를 하나 먼저 쓰는 것뿐이다. 최종 결과는 같다. |
+| M17 | `invalidate` 가 백필을 안 멈춤 | 살아남음 — **동의**. 끝까지 도는 백필을 기다릴 뿐 최종은 같다(지운 책이면 읽을 `pages` 가 없고, 무효화된 캐시에는 `!cache.stale` 검사로 안 넣는다). |
+| R1 | ③ 다시 채우지 않고 `stale` 이면 바로 `cancelled` | 빨강 1 — S13b |
+| R2 | `ready` 가 백필 오류여도 `bfDone`(다시 시도 안 함) | 빨강 2 — S9b 둘 |
+| R3 | `dbErrorCode` 를 늘 QUOTA | 빨강 1 — S9b 닫힌 연결 |
+| R4 | `preparing.done` 을 `total` 로 | 빨강 2 — S9 · S9c |
+| R5 | `prepareDoc` 이 코드를 버림 | 빨강 1 — S9b 닫힌 연결 |
+| R6 | 서재 안 연 책이 오류면 찾지 않고 코드만 | 빨강 1 — S9b 할당량 |
+| R7 | `ready` 회차 머리 `alive` 검사 뺌 | 살아남음 — 같은 동작(4절) |
+| R8 | 백필 묶음을 캐시에 넣지 않음 | 빨강 7 |
+| LK1 | (누수 검출력) S9b 닫힌 연결이 `finally` 에서 `transaction` 을 안 되돌림 | 빨강 8 — 그 테스트 + 뒤 테스트 7개(S9c·S13b·S13c·S13d·S11b·S12b·S12c). 누수가 생기면 드러난다. |
+| LK2 | (누수 검출력) S9b 할당량이 `put` 을 안 되돌림 | 빨강 1(그 테스트의 "풀리면" 단언). 감싸기가 `docId === 'F9'` 로 좁혀져 있어 새어도 다른 테스트에 닿지 않는다. |
+
+- **실패 주입이 새지 않는지**
+  - 감싸기 셋(할당량 `put` · 닫힌 연결 `transaction` · M7 `getAll`)과 `delayReadonlyComplete` 모두 `finally` 로 되돌린다.
+  - 테스트 파일 단독 5회 반복: 33/33 × 5.
+  - 동시에 두 프로세스 + 검색 테스트 두 파일 한 번: 33·33·54 모두 녹색.
+  - `--test-isolation=none`(파일들이 한 프로세스 — 프로토타입을 함께 씀)으로 검색 테스트 두 파일: 54/54.
+  - 전체 실행은 파일마다 프로세스가 따로라 다른 파일에는 닿을 수 없다.
+
+## 8g2bR-6. 탐침 다시 (`r8g2b/probe.mjs` — `r8g2/probe.mjs` 도우미 + P1·P2·P3·P8 + 새 P1b·P9–P13, 출력 `probe.out`)
+
+| 탐침 | 8g-2 Review | Build 8g-2b 보고 | 지금(내 재실행) |
+|---|---|---|---|
+| P1 검색 중 invalidate + 삭제 | `cancelled:false` · 20적중 | 0적중 · `pagesCovered 0` | **같음** — 0적중 · 0 · `cancelled:false` · `onPartial` 1회 |
+| P2 백필 쓰기 할당량(모든 `searchText.put`) | 첫·둘째 reject `ERR_DB_QUOTA` | 20적중 + `ERR_DB_QUOTA`, 부분 20, 둘째 같음, 풀면 80/80 | **같음** |
+| P3 prepareDoc 중 searchDoc | `{done:0,total:380}` · 120 | `{done:100,total:380}` · 120 | **같음** |
+| P8 채우는 중 notePage | `[5]` | `[5]` | **같음**(200쪽 들었을 때 씀) |
+| P1b invalidate 만 | — | — | 부분 결과 2회(20 → 70), 최종 160 — 8g2bR-3 의 4 |
+| P9 채우기 읽기 1회 실패 | — | (문제 1 서술) | 같은 책 검색·`prepareDoc`·**서재 전체** 모두 reject. `invalidate`·다른 책 검색으로 풀림 — 3 의 1 |
+| P10 다시 읽기 1회 실패 | — | — | 표시가 사라져 다음 검색이 새 글자를 못 찾음 — 3 의 1 |
+| P11 채우는 중 invalidate 3회 | — | — | 0적중 · `cancelled` 없음 · `error` 없음 — 3 의 3 |
+| P12 검색어 오류 모양 | — | — | `{error:'ERR_SEARCH_SHORT', hits:[]}` · 서재 `{docs:[], error}` |
+| P13 실제 versionchange 뒤 | — | — | `searchDoc`·`searchLibrary` reject `ERR_DB_OPEN`(VersionError), `prepareDoc` 은 `error` — 3 의 2 |
+
+## 8g2bR-7. spec 반영 확인 (17-8-5 · 17-8-12 안에서만)
+
+- 바뀐 자리 `git diff -U0`:
+  - 17-8-5(3543–3567)에 새 줄 4개(3563–3566).
+  - 17-8-12(3636–3931) §6 표 두 행(3860·3862)과 §7 S11·S15 두 줄(3881·3885).
+  - **다른 절은 0 줄**이다. 표시 `[정정 2026-10-19 — 8g-2 Review]` 9개 — 8g-4 행에 둘 — 8줄 모두에 있다.
+- 8g2R-8 판정과 맞는가:
+
+| 문안 | 8g2R-8 요구 | 반영 | 판정 |
+|---|---|---|---|
+| ① library 배선 | 8g-2 행에, 8g-4 행에서 `reextractDoc` 뒤 invalidate 빼기, 삭제 뒤 invalidate | 8g-2 행에 배선 셋, 8g-4 행은 "8g-2 행으로 옮김" | ○ |
+| ② API | `headLevel` 안 만듦 · (a) `preparing.done` 뜻 · (b) DB 오류 동작 | 셋 다 있음. `preparing.done` 은 고친 값의 뜻으로 적혔다. 오류 줄에 (가) 표시 | ○ — 다만 닫힌 연결 문구가 지나침(3 의 2), "`onPartial` 로 한 번"이 무효화 때 두 번(3 의 4). 다음 spec 정리 때 두 군데 |
+| ③ 서재 백필 | 결정 고정(M20) · S15 "백필이 끝난 뒤" · 화면이 책별 진행을 보여야 · Nour 비용은 배포 뒤 양에 달림 | 17-8-5 새 줄 + §6 8g-4 행(책별 진행·DB 오류 안내) + S15. M20 은 S12c 로 묶임 | ○ — 17-8-2 "서재 전체 ≤ 3초"는 범위 밖이라 그대로(Build 관찰 5에 동의, 다음 spec 정리) |
+| ④ S11 | "1,000 을 넘으면(정확히 1,000 은 아님)" | 그대로 | ○ |
+
+## 8g2bR-8. 측정 · 전체 테스트 · 정리
+
+- **CMDT 2026 `--app`** — `node --max-old-space-size=8192 apps/medreader/dev/measure-search-8g.mjs "<CMDT 2026>" --pdfjs <5.6.205> --json r8g2b/app-c26.json --app`, 종료 0.
+  - 백필 1,967/1,967(written 1,967 · failed 0 · `error` 없음) · 레코드 차이 0 · 키/`sk` 이상 0.
+  - `agg` 8칸 모두 0 · 서재 4개 차 0 · 다시 찾기 2,433쪽 불일치 0 · 두 줄 적중 140.
+  - `r8g2b/cmp-app.mjs`(ms·time·heap 칸을 뺀 `app` 비교)로 **8g-2 판 `r8g2/build-app-c26.json` 과도, Build 8g-2b 판 `b8g2b/app-c26.json` 과도 같다**. 검색 결과 불변.
+  - 시간(참고, OCR 일괄 작업과 CPU 를 나눔): 다음 검색 7ms, 첫 검색(fake-idb) 163ms, 백필(fake-idb) 2.07초.
+- 전체 `node --test --test-timeout=120000 apps/medreader/tests/*.test.mjs`(상한 600초):
+  - 변이 전 1회 + 끝 2회 — **1126/1126**, fail 0, cancelled 0(8.9·8.8·8.7초). 로그 `full-pre.log`·`full-1.log`·`full-2.log`.
+  - `stamp-importmap.mjs --check` → "그대로다 (모듈 56개 · CSS 4개)", 종료 0.
+- 레포에서 바꾼 것은 이 절뿐이다.
+- 남은 프로세스: 내가 띄운 node 는 모두 끝났다. 끝 `tasklist` 의 node 43840 은 이전 보고들이 적은 것(Adobe)으로 내 것이 아니다. 브라우저·python 은 쓰지 않았다.
+- 권한·훅에 막힌 명령은 없다. 커밋·checkout/restore/stash·`rm -rf`·npm·다운로드는 하지 않았다. PDF 는 CMDT 2026 한 경로만 읽었다. 출력은 수치뿐이다(원서 글자 저장·인용 없음).
+
+## 8g2bR-9. 운영자 결정 필요 사항
+
+1. **커밋**: 8g-2b 작업 트리는 커밋해도 된다(화면 변화 0, 배포는 8g-4 와 함께).
+2. **[8g-4 배포 전 — 권장: 엔진에서 고침] 읽기 실패가 붙는 문제**(3 의 1). 한 번이면 그 책과 서재 전체 검색이 굳는다.
+   - 고칠 것: ⓐ `ensureLoaded` 실패 때 캐시 비우기(한 줄) · ⓑ `rereadDirty` 실패 때 표시 되돌리기(한 줄) · (선택) 3 의 3 의 끝 갈래 `null`.
+   - 방법: **8g-4 Build 지침의 첫 항목**으로 넣을지, 작은 8g-2c 로 따로 할지 정해 주세요. Review 권장은 8g-2c — 8g-4 Review 가 화면에 집중하게.
+3. **[8g-4 지침에 넣을 것]**
+   - (a) `searchDoc`·`searchLibrary` 의 **reject** 를 잡아 일반 오류 안내(실제 `versionchange` 뒤에는 `ERR_DB_OPEN` 으로 거절된다 — 3 의 2).
+   - (b) 결과 `error` 를 접두어로 가르기: `ERR_SEARCH_*` 는 검색어 안내, `ERR_DB_*` 는 결과와 함께 띠/배너.
+   - (c) 같은 세대의 `onPartial` 이 두 번 올 수 있으니 바꾸기로 그리기(3 의 4).
+   - (d) 서재 결과의 책별 백필 진행(이미 §6 에 있음).
+4. **[다음 spec 정리 때] 17-8-5 문구 둘**(닫힌 연결 · "`onPartial` 한 번")과 17-8-2 "서재 전체 ≤ 3초"에 "백필이 끝난 뒤".

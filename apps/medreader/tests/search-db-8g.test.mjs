@@ -680,6 +680,256 @@ test('엔진 계층(3-2) — search/engine.js 는 DOM·window 를 모르고 conf
   assert.match(html, /"\.\/js\/search\/engine\.js": "\.\/js\/search\/engine\.js\?v=[0-9a-f]{10}"/);
 });
 
+/* ══ 8g-2b — 백필 실패 · 8g2R-3 ③④ · Review 변이 M1·M6·M7·M9·M13·M20 ═══════════ */
+
+async function seedZorvat(D, N, haveN, word) {
+  await seedDoc(D, N);
+  const recs = [];
+  for (let n = 1; n <= N; n++) recs.push(epage(D, n, [{ text: (word || 'Zorvat') + ' page ' + n }]));
+  await db.putAll('pages', recs);
+  if (haveN) await db.putAll('searchText', recs.slice(0, haveN).map(stOf));
+  return recs;
+}
+const stCount = (D) => all('searchText').filter((s) => s.docId === D).length;
+
+test('S9b ★ 백필 실패(할당량) — 거절하지 않고 있는 쪽 + 실패 전까지 백필한 쪽으로 찾은 결과에 ERR_DB_QUOTA · 다음 검색은 빠진 쪽만 다시 시도 · 서재 범위(열린 책·안 연 책)도 · 풀리면 전부 (운영자 결정 (가))', async () => {
+  const D = 'F9';
+  await seedZorvat(D, 80, 20);   // 빠진 쪽 21–80 = 묶음 [21–70] [71–80]
+  // 실제 IndexedDB 의 저장소 가득 참 흉내 — 이 책 71쪽 이후 searchText 쓰기가 비동기 QuotaExceededError
+  const proto = await txStoreProto();
+  const orig = proto.put;
+  proto.put = function (value, key) {
+    if (this.name === 'searchText' && value && value.docId === D && value.pageNo > 70) {
+      return this.tx._request(() => { const e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; });
+    }
+    return orig.call(this, value, key);
+  };
+  try {
+    const parts = [];
+    const r1 = await engine.searchDoc(D, 'zorvat', { onPartial: (x) => parts.push(x) });
+    assert.equal(r1.error, db.ERR.QUOTA, '★ 오류 코드를 붙여 돌려준다(reject 아님)');
+    assert.equal(r1.cancelled, undefined);
+    assert.equal(r1.hits.length, 70, '있던 20쪽 + 첫 묶음 50쪽');
+    assert.equal(r1.pagesCovered, 70);
+    assert.equal(r1.pageCount, 80);
+    assert.equal(parts.length, 1, '부분 결과는 백필 전에 한 번');
+    assert.equal(parts[0].hits.length, 20);
+    assert.equal(parts[0].error, undefined);
+    assert.equal(stCount(D), 70, '실패한 묶음은 되돌려졌다(abort) · 앞 묶음은 남는다');
+    assert.equal(engine.cacheInfo().backfilled, false, '백필이 끝난 것으로 치지 않는다');
+
+    // 다음 검색 — 같은 오류여도 건너뛰지 않고 빠진 쪽만 다시 시도한다
+    const from = idb.log.length;
+    const r2 = await engine.searchDoc(D, 'page');
+    assert.equal(pagesGetsSince(from), 10, '★ 다시 시도 — 빠진 10쪽만 pages.get');
+    assert.equal(r2.error, db.ERR.QUOTA);
+    assert.equal(r2.hits.length, 70);
+
+    // 서재 범위 — 열린 책(캐시) 결과에 코드 · 서재 onPartial 에는 책별 최종 결과만(백필 전 부분 결과가 새지 않는다 — M13)
+    const libParts = [];
+    const L = await engine.searchLibrary('zorvat', { onPartial: (x) => libParts.push(x) });
+    assert.equal(L.docs[0].docId, D, '열린 책 먼저');
+    assert.equal(L.docs[0].error, db.ERR.QUOTA);
+    assert.equal(L.docs[0].hits.length, 70);
+    assert.equal(libParts.length, L.docs.length);
+    assert.ok(libParts.every((x) => !('partial' in x)), '★ 서재 onPartial 에 부분 결과가 섞이지 않는다');
+    // 안 연 책(캐시하지 않는 길)도 같다
+    engine.invalidate(D);
+    const L2 = await engine.searchLibrary('zorvat');
+    const d2 = L2.docs.find((x) => x.docId === D);
+    assert.equal(d2.error, db.ERR.QUOTA, '★ 서재 범위의 안 연 책도 코드');
+    assert.equal(d2.hits.length, 70);
+    assert.equal(engine.cacheInfo(), null);
+    assert.equal(L2.docs.filter((x) => x.error).length, 1, '다른 책에는 코드가 없다');
+  } finally {
+    proto.put = orig;
+  }
+  // 풀리면(공간이 생기면) 다음 검색이 마저 만든다
+  const r3 = await engine.searchDoc(D, 'zorvat');
+  assert.equal(r3.error, undefined);
+  assert.equal(r3.hits.length, 80);
+  assert.equal(engine.cacheInfo().backfilled, true);
+});
+
+test('S9b ★ 백필 실패(닫힌 연결) — transaction() 이 InvalidStateError 를 던져도 있는 쪽으로 찾고 ERR_DB_OPEN · prepareDoc 도 거절하지 않는다', async () => {
+  const D = 'F9c';
+  await seedZorvat(D, 30, 10);
+  // 다른 탭이 버전을 올려 연결이 닫힌 뒤의 꼴 — pages 를 범위에 둔 트랜잭션(백필 계획·묶음)이 바로 던진다.
+  // (캐시 채우기는 searchText 만 읽으므로 이미 열린 화면에서 캐시가 있던 상태와 같다)
+  const hproto = Object.getPrototypeOf(await db.openDb());
+  const orig = hproto.transaction;
+  hproto.transaction = function (names, mode) {
+    const list = Array.isArray(names) ? names : [names];
+    if (list.includes('pages')) throw new DOMException('The database connection is closing.', 'InvalidStateError');
+    return orig.call(this, names, mode);
+  };
+  try {
+    const parts = [];
+    const r = await engine.searchDoc(D, 'zorvat', { onPartial: (x) => parts.push(x) });
+    assert.equal(r.error, db.ERR.OPEN, '★ 닫힌 연결 → ERR_DB_OPEN(db.ERR 그대로)');
+    assert.equal(r.hits.length, 10);
+    assert.equal(r.pagesCovered, 10);
+    assert.equal(parts.length, 0, '계획부터 실패 — 백필할 쪽 수를 모르니 부분 결과도 없다');
+    const p = await engine.prepareDoc(D);
+    assert.deepEqual(p, { docId: D, pagesCovered: 10, error: db.ERR.OPEN });
+  } finally {
+    hproto.transaction = orig;
+  }
+  const r2 = await engine.searchDoc(D, 'zorvat');
+  assert.equal(r2.error, undefined);
+  assert.equal(r2.hits.length, 30);
+});
+
+test('S9c ★ preparing.done — prepareDoc 이 백필하는 중에 연 검색의 부분 결과는 그때까지의 진행을 싣는다(늘 0 이 아니다, 8g2R-3 ④)', async () => {
+  const D = 'R9';
+  await seedZorvat(D, 400, 20);
+  let s = null;
+  const parts = [];
+  const prep = engine.prepareDoc(D, {
+    onProgress: (p) => {
+      if (!s && p.done >= SEARCH.BACKFILL_BATCH * 2) s = engine.searchDoc(D, 'zorvat', { onPartial: (x) => parts.push(x) });
+    }
+  });
+  await prep;
+  assert.ok(s, '전제: 백필 중에 검색을 열었다');
+  const r = await s;
+  assert.equal(parts.length, 1);
+  const pr = parts[0].preparing;
+  assert.equal(pr.total, 380);
+  assert.ok(pr.done >= SEARCH.BACKFILL_BATCH * 2, '★ done=' + pr.done);
+  assert.equal(parts[0].pagesCovered, 20 + pr.done, '★ 덮은 쪽 = 있던 쪽 + 백필한 쪽');
+  assert.equal(parts[0].hits.length, 20 + pr.done);
+  assert.equal(r.hits.length, 400);
+});
+
+test('S13b ★ 검색 도중 invalidate — 옛 캐시로 결과를 내지 않는다: 그대로 다시 채워 끝까지 · 삭제였으면 지운 책의 적중 0 (8g2R-3 ③)', async () => {
+  // invalidate 만(다시 추출 직후와 같은 신호) — 다시 채운 캐시로 끝까지 찾는다
+  const D = 'I13';
+  await seedZorvat(D, 160, 20);
+  let once = false;
+  const parts = [];
+  const r = await engine.searchDoc(D, 'zorvat', { onPartial: (x) => { parts.push(x); if (!once) { once = true; engine.invalidate(D); } } });
+  assert.equal(r.cancelled, undefined);
+  assert.equal(r.hits.length, 160, '★ 무효화된 캐시(백필이 멈춘 것)로 끝내지 않았다');
+  assert.equal(r.pagesCovered, 160);
+  assert.equal(engine.cacheInfo().docId, D);
+  assert.equal(engine.cacheInfo().pages, 160);
+
+  // 삭제 — 탐침 P1 그대로
+  const E = 'J13';
+  await seedZorvat(E, 160, 20);
+  let del = null;
+  const r2 = await engine.searchDoc(E, 'zorvat', { onPartial: () => { if (!del) { engine.invalidate(E); del = db.deleteDocument(E); } } });
+  await del;
+  assert.equal(stCount(E), 0, '전제: 지웠다');
+  assert.equal(r2.cancelled, undefined);
+  assert.deepEqual(r2.hits, [], '★ 지운 책의 적중을 내지 않는다');
+  assert.equal(r2.pagesCovered, 0);
+  engine.invalidate(E);
+});
+
+test('S13c ★ 캐시를 채우는 중에 이미 읽은 묶음의 쪽이 새로 쓰이고 notePage — 다음 검색이 그 쪽 새 글자를 찾는다 (8g2R M7 · 탐침 P8)', async () => {
+  const D = 'L13';
+  const N = SEARCH.READ_BATCH * 3 + 10;
+  await seedZorvat(D, N, N, 'Oldword');
+  engine.invalidate();
+  const proto = await txStoreProto();
+  const orig = proto.getAll;
+  let calls = 0;
+  let at = null;
+  let write = null;
+  proto.getAll = function (q, n) {
+    // 둘째 묶음을 읽으러 올 때 = 첫 묶음(1–200쪽)이 캐시에 든 뒤, 채우기는 아직 안 끝남
+    if (this.name === 'searchText' && ++calls === 2 && !write) {
+      at = engine.cacheInfo();
+      write = writePageAndSearch(D, 5, epage(D, 5, [{ text: 'Newword page 5' }]));
+      engine.notePage(D, 5);
+    }
+    return orig.call(this, q, n);
+  };
+  let r0;
+  try {
+    r0 = await engine.searchDoc(D, 'oldword');
+  } finally {
+    proto.getAll = orig;
+  }
+  await write;
+  assert.ok(at && at.docId === D, '전제: 이 책 캐시');
+  assert.equal(at.pages, SEARCH.READ_BATCH, '전제: 첫 묶음만 들었다');
+  assert.equal(at.loaded, false, '전제: 채우는 중');
+  assert.equal(r0.pagesCovered, N);
+  const r = await engine.searchDoc(D, 'newword');
+  assert.deepEqual(pagesOf(r), [5], '★ 채우는 중에 받은 notePage 도 다음 검색 전에 다시 읽는다');
+  assert.equal((await engine.searchDoc(D, 'oldword')).hits.length, N - 1);
+});
+
+test('S13d 두 검색이 겹쳐도(prepareDoc + searchDoc) notePage 로 표시된 쪽의 다시 읽기가 끝난 뒤 찾는다 (8g2R M6)', async () => {
+  const D = 'W13';
+  await seedZorvat(D, 3, 3, 'Oldword');
+  assert.equal((await engine.searchDoc(D, 'oldword')).hits.length, 3, '전제: 캐시');
+  await writePageAndSearch(D, 2, epage(D, 2, [{ text: 'Newword page 2' }]));
+  engine.notePage(D, 2);
+  idb.delayReadonlyComplete('searchText', 30);   // 다시 읽기가 끝나기 전에 둘째가 오도록
+  let a, b;
+  try {
+    a = engine.prepareDoc(D);        // 다시 읽기를 시작한다(세대를 올리지 않는다)
+    b = engine.searchDoc(D, 'newword');
+    await a;
+  } finally {
+    idb.delayReadonlyComplete('searchText', 0);
+  }
+  assert.deepEqual(pagesOf(await b), [2], '★ 도는 다시 읽기를 기다렸다');
+});
+
+test('S11b ★ 상한이 쪽 끝에서 정확히 찬 뒤 뒤쪽 쪽에 표 적중만 있어도 truncated (8g2R M1)', async () => {
+  const words = (k, w) => Array(k).fill(w).join(' ');
+  const D = 'M11';
+  await seedDoc(D, 3);
+  await seedPages([
+    epage(D, 1, [{ text: words(500, 'plon') }]),
+    epage(D, 2, [{ text: words(500, 'plon') }]),
+    epage(D, 3, [{ text: 'Table only here.' }], { table: ['plon 5 mg'] })
+  ], true);
+  const r = await engine.searchDoc(D, 'plon');
+  assert.equal(r.hits.length, SEARCH.MAX_HITS_PER_DOC);
+  assert.equal(r.truncated, true, '★ 3쪽 표 글자를 "하나 더"로 본다');
+  assert.equal((await engine.searchDoc(D, 'plon', { maxHits: Infinity })).hits.length, 1001, '전제: 넘는 것은 표 하나');
+});
+
+test('S12b ★ 서재 범위 — 상한에 걸린 뒤 다음 읽기 묶음의 반복 heading 까지 빈도표에 센다(책 범위와 같은 묶음, 8g2R M9)', async () => {
+  const words = (k, w) => Array(k).fill(w).join(' ');
+  const D = 'H12';
+  const B = SEARCH.READ_BATCH;
+  await seedDoc(D, B + 9);
+  const recs = [epage(D, 1, [{ kind: 'heading', text: 'Plon Treatment', fs: 13 }, { text: words(1000, 'plon') }])];
+  for (let n = 2; n <= B; n++) recs.push(epage(D, n, [{ text: 'Filler page ' + n }]));
+  for (let n = B + 1; n <= B + 9; n++) recs.push(epage(D, n, [{ kind: 'heading', text: 'Plon Treatment', fs: 13 }]));
+  await seedPages(recs, true);
+  const r = await engine.searchDoc(D, 'plon');
+  assert.equal(r.truncated, true, '전제: 첫 읽기 묶음 안에서 상한');
+  assert.equal(r.hits.length, SEARCH.MAX_HITS_PER_DOC);
+  assert.equal(r.hits.filter((h) => h.kind === 'head').length, 0, '전제: 10번 나오는 heading — 1쪽 것도 body');
+  engine.invalidate(D);
+  const L = await engine.searchLibrary('plon');
+  const d = L.docs.find((x) => x.docId === D);
+  assert.deepEqual(d.hits, r.hits, '★ 서재 범위도 같은 묶음(빈도표를 끝까지 모았다)');
+  assert.equal(d.truncated, true);
+});
+
+test('S12c ★ 서재 범위는 안 연 책도 백필한다 — 그 책 결과가 나오고 searchText 가 생긴다 (Build 8g-2 문안 3 · 8g2R M20)', async () => {
+  const D = 'N20';
+  await seedDoc(D, 5);
+  await db.putAll('pages', [1, 2, 3, 4, 5].map((n) => epage(D, n, [{ text: 'Quorbit unopened ' + n }])));
+  engine.invalidate();
+  assert.equal(stCount(D), 0, '전제: 검색 글자 없음(8g-1 전에 추출된 책)');
+  const L = await engine.searchLibrary('quorbit');
+  const d = L.docs.find((x) => x.docId === D);
+  assert.equal(d.hits.length, 5, '★ 서재 결과에 나온다');
+  assert.equal(d.pagesCovered, 5);
+  assert.equal(stCount(D), 5, '★ 백필이 썼다');
+  assert.equal(engine.cacheInfo(), null, '캐시는 하지 않는다');
+});
+
 /* ══ S6 (Node 몫) versionchange ═══════════════════════ */
 
 test('S6 ★ 다른 탭이 버전을 올리면 db.js 가 versionchange 를 내고 연결을 닫는다 — 새 판은 막히지 않는다, 이 탭의 다음 열기는 실패', async () => {
