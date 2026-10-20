@@ -815,3 +815,11 @@ Galaxy · Chrome 154(UA 축소로 "Android 10; K" — 기종을 UA 로 알 수 �
 - **Nour 2026-10-18**: "앱 성능이 눈에 띄게 좋아졌다, 번역이 제대로 나온다". 같은 날 Nour 가 자기 Claude 로 원하는 기능의 별도 앱(Artifact)을 만들어 봄 — 그 앱의 버그는 MedReader 와 무관. 요청은 spec **19-1-1**(승인 E1–E7): 8j 홈 화면 · 8k 휴대폰 설정 목소리 따름 + 고르기 · 11b 요약 저장 + 11c 개념도(11a 앞으로) · 17단계(TOEFL) 빼고 언어 시험 도우미는 별도 앱 후보 · 사진 판독·UpToDate 연동·책 내려받기·그림 화살표 읽기는 넣지 않음. Nour 기기 **Realme GT 7**(점검표 19-1-1).
 - **운영자 영어 공부용 PDF**: Cambridge Advanced Grammar in Use(스캔본, 글자 0, Tagged PDF). 운영자 PC 에서 OCRmyPDF 로 우회 — **`--skip-text` 필수**(Tagged PDF 거절 회피). 40–45쪽 시험: 쪽당 2,590–3,311자, 이상한 낱말 ~2%(글머리·✓✗ 기호 오인식). 전체 변환 결과 `…[OCR].pdf`. 앱 쪽 요청 O1(스캔본 감지·안내)·O2(영한 혼합 문장별 목소리)·O3(목소리 억양·성별 고르기 → 8k)는 Plan 진행 중.
 - **사고 기록**: 10-18 밤 이 세션의 포크가 8g-1 Build·Nour Plan 복사본을 약 5분 동시에 재개 → 스크래치 파일 덮어씀. 마무리 Build 가 작업 트리 점검으로 섞임 0 확인. 교훈: **포크는 서브에이전트 맥락까지 복사한다 — 같은 저장소에서 작업 트리를 쓰는 세션은 하나만.** v8 직렬화 바이트는 같은 값도 갈릴 수 있다 → 추출 결과 비교는 **값(JSON) 비교**로.
+
+## 2026-10-19~20 — 8g 검색 전부 배포 (`e9e21ec`), 운영자 어학 자료 OCR
+- **8g 배포 완료**: 8g-2·2b·2c(엔진 `js/search/engine.js`) · 8g-3·3b(목차 `js/search/outline.js`, 폴백 R1–R10, 쓰레기 개요 판정) · 8g-4a(검색 화면 `js/ui/search.js`)·4a-fix(F1 숨은 리더 이동) · 8g-4b(목차 탭·작은 문제)·4b-R1(탭 키보드). 테스트 1234. 실측(데스크톱): 백필 0.4–1.55초, 첫 검색 17–21ms, 다음 16–22ms, 서재 세 권 0.5–0.6초.
+- **다음 단계 묶음 후보**(review.md "8g-4b Review"·"8g-4b-R1 Review"): R2 목차 이동 뒤 뷰 전환 시 옛 적중 복귀(`doTop` 이 `S.lastJump` 안 지움) · 띠 없으면 멈춤 안내 안 보임 · 접기 단추 이름 중복 · 살아남은 변이 M3·M4·M9 · 412px(Nour) 퀴즈 보일 때 제목 좁음(문턱 420?) · speaker `reload` 시작점 밀림 · 목차 탭 이동 시 초점 탭이 화면 밖 · `pipeline-8a` M7 흔들리는 테스트(고정 5ms 대기) · spec §4-6 표 두 줄 · Build 4b 7절 제안 (a)(b)(c).
+- **실기기 확인(운영자·Nour)**: 할당량 실패 화면 · Gboard 음성 입력 · 쪽 넘김 대기 중 결과 누름 · Nour 412px 목차 탭만으로 장 이동·낭독 중 목차 이동 → [▶] · Essential Grammar 2판·Harry Potter 2 목차 첫 15줄 · 360px 폰 퀴즈 보일 때 제목·[⧉].
+- **19-1 순서상 다음**: 8j 홈 화면 설치 + 8k-0 목소리 진단(E2: 8g-1 이 Nour 기기에서 문제없음 확인 뒤) → 8k(+O3 억양) → 8l(스캔본·깨짐·매핑 없음 — `.claude/tasks/medreader-8l-carryover.md`) → 8m(영한 혼합, 견본 = 해커스).
+- **운영자 PC OCR(10-19)**: `D:\OCR\01_English\…\* [OCR].pdf` 92권(영어 23권 가벼운 판 705MB · 영+한·깨짐·매핑 없음 69 309MB, 실패 0) + Advanced Grammar 고품질 판(G:). 한국어 데이터 `D:\OCR\tessdata`(kor tessdata_fast + eng·osd + configs). 조사 보고 `.claude/tasks/medreader-survey-language-library-report.md`.
+- **NVIDIA Corporation 빈 폴더**: 프로세스가 그 폴더를 작업 폴더로 시작할 때 그래픽 드라이버가 만드는 빈 로그 폴더 — 무해, 지워도 됨.
