@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- MedReader — 펼친 책 + 소리 물결. dev/make-icons.mjs 가 만든다(손으로 고치지 않는다). -->
+  <rect width="512" height="512" rx="96" fill="#0b5c8a"/>
+  <path d="M104 276 L248 300 L248 380 L104 356Z" fill="#ffffff"/>
+  <path d="M408 276 L264 300 L264 380 L408 356Z" fill="#ffffff"/>
+  <path d="M290.18 171.22 A46 46 0 0 1 290.18 232.78" fill="none" stroke="#ffef9e" stroke-width="22" stroke-linecap="round"/>
+  <path d="M324.37 140.44 A92 92 0 0 1 324.37 263.56" fill="none" stroke="#ffef9e" stroke-width="22" stroke-linecap="round"/>
+  <path d="M221.82 232.78 A46 46 0 0 1 221.82 171.22" fill="none" stroke="#ffef9e" stroke-width="22" stroke-linecap="round"/>
+  <path d="M187.63 263.56 A92 92 0 0 1 187.63 140.44" fill="none" stroke="#ffef9e" stroke-width="22" stroke-linecap="round"/>
+</svg>

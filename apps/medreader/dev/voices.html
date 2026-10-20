@@ -4,95 +4,363 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MedReader 음성 진단</title>
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<!--
+  ============================================================
+  MedReader 음성 진단 — 개발 페이지 (8b-1 진단 · `[8k-0]` spec 19-1-1 3절 · 19-1-2 3절 6 · 2-3)
+
+  앱 본체와 무관하다. 앱 파일을 바꾸지 않고, 앱 DB·설정·저장소를 읽거나 쓰지 않는다.
+  외부 자원 0 · 네트워크 요청 0(같은 폴더의 `../js/tts/voices.js` 를 **읽기만** 한다).
+
+  ★ 무엇을 보나 (점검표 2 — Nour 가 결과를 복사해 보낸다)
+    · 이 기기 브라우저가 음성 목록을 언제·무엇을 주는가 (1분 기록)
+    · 언어(ar·en·fr·ko)마다 세 가지 소리:
+        [앱이 고른 음성]  = 지금 앱 규칙(`pickVoice`, 선호 URI 없음 — 앱 설정의 `tts.voice.*` 는 늘 빈 값이다)
+                            그대로 `utt.voice` 를 박는다. 목록에 없으면 앱처럼 voice 없이 태그만.
+        [voice 없이 xx]    = 지역 없는 언어 태그만 → 엔진(= 휴대폰 TTS 설정)이 목소리를 고른다
+        [voice 없이 xx-YY] = 지역 태그만 (ar-SA·en-US·fr-FR·ko-KR, 영어는 en-GB 도 — O3 억양 사전 확인)
+      → 휴대폰 설정 목소리와 같은 것이 어느 단추인가 (8k 기본값 E1 · 기본 태그 A/B)
+    · [en → ko → en 이어 말하기] — 앱처럼 앞 발화의 `onend` 에서 다음을 `speak` 하고,
+      `onend` → 다음 `onstart` 간격(ms)을 잰다 (8m M7: 1초를 넘으면 문단 묶음 재검토).
+      [en → en → en 기준] 은 언어를 바꾸지 않을 때의 같은 간격 — 둘의 차이가 언어 전환 비용이다.
+
+  `[앱이 고른 음성]` 은 규칙을 베끼지 않고 앱 모듈의 `pickVoice`·`utteranceLang`·`speechLang` 을 그대로 부른다
+  (동적 import). 모듈을 못 받으면 그 단추만 안 되고 나머지는 된다.
+  아랍어는 앱에서 **번역문** 경로(`speechLang` → ar-SA), 나머지는 **원문** 경로(`utteranceLang`)로 태그를 정한다.
+  ============================================================
+-->
 <style>
-  /* 진단 도구 — 앱 본체와 무관. 이 기기 브라우저가 낭독 음성을 언제·무엇을 주는지 본다. */
-  :root { color-scheme: light dark; --bg: #faf7f0; --fg: #222; --line: #d8d2c4; --ok: #1f7a4d; --no: #a32d2d; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --line: #333; --ok: #6cc89a; --no: #ef8b8b; } }
+  :root { color-scheme: light dark; --bg: #faf7f0; --fg: #222; --dim: #666; --line: #d8d2c4; --ok: #1f7a4d; --no: #a32d2d; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --dim: #aaa; --line: #333; --ok: #6cc89a; --no: #ef8b8b; } }
   body { background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; }
   h1 { font-size: 20px; margin: 0 0 8px; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 10px; }
-  button { font: inherit; min-height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; }
+  h2 { font-size: 17px; margin: 20px 0 4px; }
+  .dim { color: var(--dim); font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 8px; }
+  button { font: inherit; min-height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; touch-action: manipulation; }
+  button[data-say="app"] { font-weight: 600; }
   .ok { color: var(--ok); font-weight: 700; } .no { color: var(--no); font-weight: 700; }
+  .out { min-height: 1.5em; margin: 6px 0; font-weight: 600; }
   pre { white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 13px; }
+  .scroll { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  td, th { border-block-end: 1px solid var(--line); padding: 4px 6px; text-align: start; }
+  td, th { border-block-end: 1px solid var(--line); padding: 4px 6px; text-align: start; vertical-align: top; }
+  td.uri { word-break: break-all; font-size: 12px; color: var(--dim); }
 </style>
 </head>
 <body>
-<h1>MedReader 음성 진단</h1>
-<p>Chrome으로 열어 주세요. 약 8초 동안 이 기기가 주는 음성 목록을 기록합니다.</p>
+<h1>MedReader 음성 진단 <span class="dim">· Voice check</span></h1>
+<p>Chrome으로 열어 주세요. 약 1분 동안 이 기기가 주는 음성 목록을 기록합니다. 단추를 눌러 소리를 들어 본 뒤 [결과 복사]로 보내 주세요.<br>
+<span class="dim">Open in Chrome. Wait 1 minute, try the buttons, then press [Copy results] and send.</span></p>
 
+<div class="scroll">
 <table>
-  <thead><tr><th>언어</th><th>앱이 쓰는 기준(lang)</th><th>찾은 음성</th></tr></thead>
+  <thead><tr><th>언어</th><th>목록의 음성</th><th>앱이 고를 음성 (pickVoice)</th><th>앱이 쓸 lang</th></tr></thead>
   <tbody id="summary"></tbody>
 </table>
+</div>
+
+<h2 lang="ar" dir="rtl">العربية · ar</h2>
+<div class="row">
+  <button type="button" data-say="app" data-lang="ar">앱이 고른 음성 · App</button>
+  <button type="button" data-say="tag" data-lang="ar" data-tag="ar">voice 없이 ar</button>
+  <button type="button" data-say="tag" data-lang="ar" data-tag="ar-SA">voice 없이 ar-SA</button>
+</div>
+
+<h2>English · en</h2>
+<div class="row">
+  <button type="button" data-say="app" data-lang="en">앱이 고른 음성 · App</button>
+  <button type="button" data-say="tag" data-lang="en" data-tag="en">voice 없이 en</button>
+  <button type="button" data-say="tag" data-lang="en" data-tag="en-US">voice 없이 en-US</button>
+  <button type="button" data-say="tag" data-lang="en" data-tag="en-GB">voice 없이 en-GB</button>
+</div>
+
+<h2>Français · fr</h2>
+<div class="row">
+  <button type="button" data-say="app" data-lang="fr">앱이 고른 음성 · App</button>
+  <button type="button" data-say="tag" data-lang="fr" data-tag="fr">voice 없이 fr</button>
+  <button type="button" data-say="tag" data-lang="fr" data-tag="fr-FR">voice 없이 fr-FR</button>
+</div>
+
+<h2>한국어 · ko</h2>
+<div class="row">
+  <button type="button" data-say="app" data-lang="ko">앱이 고른 음성 · App</button>
+  <button type="button" data-say="tag" data-lang="ko" data-tag="ko">voice 없이 ko</button>
+  <button type="button" data-say="tag" data-lang="ko" data-tag="ko-KR">voice 없이 ko-KR</button>
+</div>
+
+<p class="out" id="sayResult" aria-live="polite"></p>
+
+<h2>언어 전환 간격 · Switch delay</h2>
+<p class="dim">voice 없이 en-US → ko-KR → en-US. 앞 문장이 끝난(onend) 뒤 다음 문장이 시작(onstart)할 때까지의 시간(ms).</p>
+<div class="row">
+  <button type="button" data-chain="en-ko-en">en → ko → en 이어 말하기</button>
+  <button type="button" data-chain="en-en-en">en → en → en 기준</button>
+</div>
+<p class="out" id="gapResult" aria-live="polite"></p>
 
 <div class="row">
-  <button type="button" data-say="en">영어로 읽기</button>
-  <button type="button" data-say="ar">아랍어로 읽기</button>
-  <button type="button" data-say="ko">한국어로 읽기</button>
-  <button type="button" id="copy">결과 복사</button>
+  <button type="button" id="copy">결과 복사 · Copy results</button>
 </div>
-<p id="sayResult"></p>
+
+<h2>음성 목록 · Voices <span class="dim" id="voiceCount"></span></h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>#</th><th>name</th><th>lang</th><th>localService</th><th>default</th><th>voiceURI</th></tr></thead>
+  <tbody id="voiceTable"></tbody>
+</table>
+</div>
+
+<h2>기록 · Log</h2>
 <pre id="log">기록 중…</pre>
 
 <script>
 (function () {
-  var LANGS = { en: 'en-US', ar: 'ar-SA', ko: 'ko-KR' };
-  var SAMPLE = { en: 'This is a test of the English voice.', ar: 'هذا اختبار للصوت العربي.', ko: '한국어 음성 시험입니다.' };
-  var t0 = Date.now(), lines = [], last = null;
+  'use strict';
+  var LANGS = ['ar', 'en', 'fr', 'ko'];
+  var NAMES = { ar: 'العربية', en: 'English', fr: 'Français', ko: '한국어' };
+  var SAMPLE = {
+    ar: 'هذا اختبار للصوت العربي.',
+    en: 'This is a test of the English voice.',
+    fr: 'Ceci est un test de la voix française.',
+    ko: '한국어 음성 시험입니다.'
+  };
+  var CHAINS = {
+    'en-ko-en': [
+      { tag: 'en-US', text: 'First, an English sentence.' },
+      { tag: 'ko-KR', text: '다음은 한국어 문장입니다.' },
+      { tag: 'en-US', text: 'And back to English.' }
+    ],
+    'en-en-en': [
+      { tag: 'en-US', text: 'First, an English sentence.' },
+      { tag: 'en-US', text: 'Then another English sentence.' },
+      { tag: 'en-US', text: 'And a third one.' }
+    ]
+  };
+  var START_TIMEOUT_MS = 10000;
+
+  var t0 = Date.now(), lines = [], lastSig = null;
   var synth = window.speechSynthesis;
+  var app = null;          // ../js/tts/voices.js (읽기만)
+  var current = null;      // 지금 말하는 발화 — 참조를 잡아 두어 onend 가 GC 로 사라지지 않게(6-4)
+  var run = 0;             // 단추를 새로 누르면 앞 실행의 늦은 이벤트를 버린다
+
+  function $(id) { return document.getElementById(id); }
+  function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
   function norm(l) { return String(l || '').replace(/_/g, '-').toLowerCase(); }
-  function log(s) { lines.push('+' + (Date.now() - t0) + 'ms ' + s); document.getElementById('log').textContent = lines.join('\n'); }
-  if (!synth) { log('speechSynthesis 없음 — 이 브라우저는 낭독을 지원하지 않는다(메신저 안 브라우저일 수 있음)'); return; }
+  function matches(v, k) { var n = norm(v && v.lang); return n === k || n.indexOf(k + '-') === 0; }
+  function log(s) { lines.push('+' + (Date.now() - t0) + 'ms ' + s); $('log').textContent = lines.join('\n'); }
+  function voices() { try { return synth.getVoices() || []; } catch (e) { log('getVoices 예외: ' + e.message); return []; } }
+
+  if (!synth || typeof window.SpeechSynthesisUtterance !== 'function') {
+    log('speechSynthesis 없음 — 이 브라우저는 낭독을 지원하지 않는다(메신저 안 브라우저일 수 있음)');
+    return;
+  }
   log('UA: ' + navigator.userAgent);
-  function snapshot(why) {
-    var v = [];
-    try { v = synth.getVoices() || []; } catch (e) { log('getVoices 예외: ' + e.message); }
-    var sig = v.map(function (x) { return x.lang + '|' + x.name; }).join(';');
-    if (sig === last && why.indexOf('timer') === 0) return v;
-    last = sig;
-    log(why + ' → 음성 ' + v.length + '개');
-    v.forEach(function (x) { log('   ' + x.lang + ' · ' + x.name + (x.localService ? ' · 기기' : ' · 네트워크') + (x.default ? ' · 기본' : '')); });
-    var tb = document.getElementById('summary'); tb.textContent = '';
-    Object.keys(LANGS).forEach(function (k) {
-      var hit = v.filter(function (x) { var n = norm(x.lang); return n === k || n.indexOf(k + '-') === 0; });
+  log('주소: ' + location.href.replace(/[?#].*$/, ''));
+
+  /* 앱 규칙 — 앱 모듈을 그대로 부른다. */
+  function appChoice(k, list) {
+    if (!app) return null;
+    var v = app.pickVoice(k, list, '');
+    var tag = k === 'ar' ? app.speechLang(k, v) : app.utteranceLang(k, v);
+    return { voice: v, tag: tag, path: k === 'ar' ? '번역문 경로' : '원문 경로' };
+  }
+
+  function renderSummary(list) {
+    var tb = $('summary'); tb.textContent = '';
+    LANGS.forEach(function (k) {
+      var hit = list.filter(function (x) { return matches(x, k); });
+      var c = appChoice(k, list);
+      var cells = [
+        NAMES[k] + ' (' + k + ')',
+        hit.length ? hit.length + '개' : '없음',
+        !app ? '(앱 모듈 대기)' : c.voice ? c.voice.name + ' · ' + c.voice.lang : '없음 → voice 없이',
+        !app ? '-' : c.tag + ' (' + c.path + ')'
+      ];
       var tr = document.createElement('tr');
-      [k, LANGS[k], hit.length ? hit.length + '개 (' + hit[0].name + ')' : '없음'].forEach(function (c, i) {
-        var td = document.createElement('td'); td.textContent = c;
-        if (i === 2) td.className = hit.length ? 'ok' : 'no';
+      cells.forEach(function (txt, i) {
+        var td = document.createElement('td'); td.textContent = txt;
+        if (i === 1) td.className = hit.length ? 'ok' : 'no';
         tr.appendChild(td);
       });
       tb.appendChild(tr);
     });
+  }
+
+  function renderVoices(list) {
+    var tb = $('voiceTable'); tb.textContent = '';
+    $('voiceCount').textContent = '(' + list.length + ')';
+    list.forEach(function (x, i) {
+      var tr = document.createElement('tr');
+      [String(i + 1), x.name, x.lang, String(!!x.localService), x['default'] ? 'true' : 'false', x.voiceURI].forEach(function (txt, j) {
+        var td = document.createElement('td'); td.textContent = txt;
+        if (j === 5) td.className = 'uri';
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+  }
+
+  function snapshot(why) {
+    var v = voices();
+    var sig = v.map(function (x) { return x.lang + '|' + x.name + '|' + x.localService + '|' + x['default']; }).join(';');
+    renderSummary(v);
+    renderVoices(v);
+    if (sig === lastSig && why.indexOf('timer') === 0) return v;
+    lastSig = sig;
+    log(why + ' → 음성 ' + v.length + '개');
+    v.forEach(function (x) { log('   ' + x.lang + ' · ' + x.name + (x.localService ? ' · 기기' : ' · 네트워크') + (x['default'] ? ' · 기본(default)' : '')); });
     return v;
   }
+
   snapshot('처음 getVoices()');
-  synth.addEventListener('voiceschanged', function () { snapshot('voiceschanged 이벤트'); });
-  [500, 1500, 3000, 5000, 8000].forEach(function (ms) { setTimeout(function () { snapshot('timer ' + ms + 'ms'); }, ms); });
+  if (synth.addEventListener) synth.addEventListener('voiceschanged', function () { snapshot('voiceschanged 이벤트'); });
+  [500, 1500, 3000, 5000, 8000, 15000, 30000, 60000].forEach(function (ms) {
+    setTimeout(function () { snapshot('timer ' + ms + 'ms'); if (ms === 60000) log('1분 기록 끝 — [결과 복사]를 눌러 주세요'); }, ms);
+  });
+
+  import('../js/tts/voices.js').then(function (m) {
+    app = m;
+    log('앱 모듈 voices.js 읽음 — [앱이 고른 음성] = 앱의 pickVoice 그대로');
+    snapshot('앱 모듈 읽은 뒤');
+  }, function (e) {
+    log('앱 모듈 voices.js 를 못 불러옴: ' + (e && e.message) + ' — [앱이 고른 음성] 단추만 안 된다');
+  });
+
+  /* ── 한 문장 말하기 ─────────────────────────────── */
+
+  function stopAll() {
+    run++;
+    try { if (synth.speaking || synth.pending) synth.cancel(); } catch (e) { /* 무시 */ }
+  }
+
+  /**
+   * 발화 하나. 사용자 탭 안에서 **동기로** speak 한다(첫 speak 는 제스처 안이어야 소리가 난다 — 6-4).
+   * @param {{label:string, text:string, tag:string, voice:?SpeechSynthesisVoice, onstart?:Function, onend?:Function, onfail?:Function}} o
+   */
+  function say(o, myRun) {
+    var u = new SpeechSynthesisUtterance(o.text);
+    u.lang = o.tag;
+    if (o.voice) u.voice = o.voice;
+    current = u;
+    var started = false, finished = false;
+    var tCall = now();
+    u.onstart = function () {
+      if (myRun !== run) return;
+      started = true;
+      log('  시작 ' + o.label + ' (speak 뒤 ' + Math.round(now() - tCall) + 'ms)');
+      if (o.onstart) o.onstart(now());
+    };
+    u.onend = function () {
+      if (myRun !== run) return;
+      finished = true;
+      log('  끝 ' + o.label);
+      if (o.onend) o.onend(now());
+    };
+    u.onerror = function (e) {
+      if (myRun !== run) return;
+      finished = true;
+      log('  오류 ' + o.label + ': ' + (e && e.error));
+      if (o.onfail) o.onfail(e && e.error);
+    };
+    setTimeout(function () {
+      if (myRun === run && !started && !finished) { log('  ' + (START_TIMEOUT_MS / 1000) + '초 안에 시작하지 않음 ' + o.label); if (o.onfail) o.onfail('no-start'); }
+    }, START_TIMEOUT_MS);
+    synth.speak(u);
+    return u;
+  }
+
+  function onSay(b) {
+    var k = b.getAttribute('data-lang');
+    var kind = b.getAttribute('data-say');
+    var voice = null, tag, label;
+    if (kind === 'app') {
+      var c = appChoice(k, voices());
+      if (!c) { $('sayResult').textContent = '앱 모듈을 아직 못 불러왔다 — 잠시 뒤 다시'; log('[앱이 고른 음성 ' + k + '] 앱 모듈 없음'); return; }
+      voice = c.voice; tag = c.tag;
+      label = '[앱이 고른 음성 ' + k + '] voice=' + (voice ? voice.name + ' (' + voice.lang + (voice.localService ? ', 기기' : ', 네트워크') + ')' : '없음') + ' lang=' + tag;
+    } else {
+      tag = b.getAttribute('data-tag');
+      label = '[voice 없이 ' + tag + ']';
+    }
+    stopAll();
+    var myRun = run;
+    var out = $('sayResult');
+    out.textContent = label + ' 읽는 중…';
+    log('누름 ' + label);
+    say({
+      label: label, text: SAMPLE[k], tag: tag, voice: voice,
+      onend: function () { out.textContent = label + ' 끝 — 소리가 들렸나요? 휴대폰 설정 목소리와 같나요?'; },
+      onfail: function (err) { out.textContent = label + ' 오류: ' + err; }
+    }, myRun);
+  }
+
+  /* ── 이어 말하기: onend → 다음 speak, 간격 = 다음 onstart − 앞 onend ── */
+
+  function onChain(b) {
+    var name = b.getAttribute('data-chain');
+    var seq = CHAINS[name];
+    stopAll();
+    var myRun = run;
+    var out = $('gapResult');
+    var gaps = [];
+    var prevEnd = null;
+    out.textContent = name + ' 읽는 중…';
+    log('누름 [' + name + '] ' + seq.map(function (s) { return s.tag; }).join(' → ') + ' (voice 없이)');
+    function step(i) {
+      var s = seq[i];
+      say({
+        label: '[' + name + ' ' + (i + 1) + '/' + seq.length + ' ' + s.tag + ']', text: s.text, tag: s.tag, voice: null,
+        onstart: function (t) {
+          if (prevEnd !== null) gaps.push({ from: seq[i - 1].tag, to: s.tag, ms: Math.round(t - prevEnd) });
+        },
+        onend: function (t) {
+          prevEnd = t;
+          if (i + 1 < seq.length) { step(i + 1); return; }
+          var txt = gaps.map(function (g) { return g.from + '→' + g.to + ' ' + g.ms + 'ms'; }).join(' · ');
+          out.textContent = name + ' 간격: ' + txt;
+          log('간격 [' + name + '] ' + txt);
+        },
+        onfail: function (err) { out.textContent = name + ' ' + (i + 1) + '번째에서 멈춤: ' + err; log('멈춤 [' + name + '] ' + (i + 1) + '번째 ' + err); }
+      }, myRun);
+    }
+    step(0);
+  }
 
   document.addEventListener('click', function (ev) {
-    var b = ev.target.closest('button[data-say]');
+    var b = ev.target.closest && ev.target.closest('button');
     if (!b) return;
-    var k = b.getAttribute('data-say');
-    synth.cancel();
-    var u = new SpeechSynthesisUtterance(SAMPLE[k]);
-    u.lang = LANGS[k];
-    var v = (synth.getVoices() || []).filter(function (x) { var n = norm(x.lang); return n === k || n.indexOf(k + '-') === 0; });
-    if (v.length) u.voice = v[0];
-    var out = document.getElementById('sayResult');
-    out.textContent = k + ' 읽는 중… (voice ' + (v.length ? '지정' : '없이 lang 만') + ')';
-    u.onstart = function () { log('발화 시작 ' + k + ' voice=' + (u.voice ? u.voice.name : '-')); };
-    u.onend = function () { out.textContent = k + ' 끝 — 소리가 들렸나요?'; log('발화 끝 ' + k); };
-    u.onerror = function (e) { out.textContent = k + ' 오류: ' + e.error; log('발화 오류 ' + k + ': ' + e.error); };
-    synth.speak(u);
+    if (b.hasAttribute('data-say')) onSay(b);
+    else if (b.hasAttribute('data-chain')) onChain(b);
   });
-  document.getElementById('copy').addEventListener('click', function () {
-    var text = lines.join('\n');
+
+  /* ── 결과 복사 ───────────────────────────────── */
+
+  function report() {
+    var v = voices();
+    var out = ['MedReader 음성 진단 — ' + new Date().toISOString()];
+    LANGS.forEach(function (k) {
+      var c = appChoice(k, v);
+      var n = v.filter(function (x) { return matches(x, k); }).length;
+      out.push(k + ': 목록 ' + n + '개 · 앱이 고를 음성 ' + (!c ? '(앱 모듈 없음)' : c.voice ? c.voice.name + ' (' + c.voice.lang + ')' : '없음') + (c ? ' · lang ' + c.tag : ''));
+    });
+    if ($('gapResult').textContent) out.push($('gapResult').textContent);
+    out.push('--- 기록 ---');
+    return out.concat(lines).join('\n');
+  }
+
+  $('copy').addEventListener('click', function () {
+    var text = report();
     var b = this;
-    function shown() { b.textContent = '복사됨'; setTimeout(function () { b.textContent = '결과 복사'; }, 1500); }
-    try { navigator.clipboard.writeText(text).then(shown, function () { selectLog(); }); } catch (e) { selectLog(); }
-    function selectLog() { var r = document.createRange(); r.selectNodeContents(document.getElementById('log')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = '선택됨 — 길게 눌러 복사'; }
+    function shown() { b.textContent = '복사됨 · Copied'; setTimeout(function () { b.textContent = '결과 복사 · Copy results'; }, 1500); }
+    function selectLog() {
+      $('log').textContent = text;
+      var r = document.createRange(); r.selectNodeContents($('log'));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      b.textContent = '선택됨 — 길게 눌러 복사 · Selected, long-press to copy';
+    }
+    try { navigator.clipboard.writeText(text).then(shown, selectLog); } catch (e) { selectLog(); }
   });
 })();
 </script>

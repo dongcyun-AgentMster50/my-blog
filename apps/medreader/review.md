@@ -5891,3 +5891,192 @@ CURRENT 2026 쪽 120 → [🔍] → 검색 화면(이 책 범위).
 1. **배포해도 된다.** `origin/main`(`21ede92`) 위 로컬 커밋 15개(`757b46f` 8g-2 … `2ce489e` 8g-4b)에 이번 R1 변경을 커밋해 얹고 한 번에 푸시하면 된다. 15개의 앱 밖 변경은 `.claude/tasks/*` 뿐이고, 지운 파일은 없다. `.nojekyll` 은 그대로다.
 2. 커밋할 것: `apps/medreader/js/ui/search.js`, `apps/medreader/index.html`, 새 `apps/medreader/tests/search-tabs-8g4br1.test.mjs`, 그리고 관례대로 `.claude/tasks/medreader-*-8g-4b-r1*.md` 와 이 review.md. **`.codex/`·`AGENTS.md` 는 넣지 않는다**(이번 작업 아님 — `git add -A` 금지).
 3. 다음 단계 묶음에 더할 것: 남은 문제 1(초점 탭이 화면 밖 · Tab 이 첫 항목으로 가서 지금 항목 맞춤을 잃음), 탭 목록 `aria-label`, 흔들리는 `pipeline-8a` M7(이번까지 세 번 관측 — 고정 5ms 대기를 M6 처럼 바꾸기). 8g4bR-12 의 3–5 는 그대로다.
+
+# 8j Review — 홈 화면 설치(manifest·아이콘) + 8k-0 목소리 진단 페이지 · 배포 판정 (2026-10-20)
+
+> 지침: `.claude/tasks/medreader-review-8j.md`. Build 보고는 참고만 하고 **내 스크립트로 다시 쟀다**. 커밋하지 않았다. 앱 코드·테스트·spec 은 고치지 않았다(변이는 백업을 읽어서 쓰기로 되돌리고 `cmp` 로 확인). 작업 폴더는 스크래치패드 `r8j/`(`decode.mjs` 내 PNG 디코더 · `run.mjs`·`run2.mjs`·`run3.mjs` headless · `mut.mjs` 변이, 결과 `run*.json`·`mut.json`·`copied.txt`·`full-*.tap`, 백업 `bak/`). 브라우저는 Edge headless · **새 프로필 1개**(`r8j/p1`) · 합성 PDF zorvat6(6쪽) · 흉내 음성 · 가짜 키(진짜 아님).
+
+## 8jR-1. 결론 — **통과** · 배포 판정 — **배포해도 된다**
+
+- 막는 문제는 없다. 단, **Build 가 제안한 `"id": "./"` 는 넣으면 안 된다**(8jR-3 — 기본값과 같지 않고 출처 뿌리가 된다).
+- 남은 것은 모두 낮음이다. theme-color 와 앱 안 테마의 어긋남, 이어 말하기를 중간에 끊으면 "읽는 중…"이 남는 문구, 생성기 주석의 옛 테스트 이름이다.
+
+## 8jR-2. 범위
+
+- `git diff --stat -- apps/medreader/js` **비어 있음**. 블로그 본체(`/index.html`·`post.html`·`css/`·`js/`·`vendor/`·`posts/`) diff 0. `.nojekyll` 있음(0 B).
+- 바뀐 것은 지침 범위뿐이다: `apps/medreader/index.html`(`<head>` 12줄, stamp 구간 **밖**), `dev/voices.html`, 새 `manifest.webmanifest`·`icons/`(5개)·`dev/make-icons.mjs`·`tests/manifest-8j.test.mjs`. `.codex/`·`AGENTS.md` 는 이번 작업이 아니다.
+- npm 의존 0: `package.json`·`node_modules` 없음. 생성기 import 는 `node:zlib`·`node:fs`·`node:path`·`node:url` 뿐이다. 새 텍스트 파일 모두 LF, 줄 끝 공백 0.
+
+## 8jR-3. manifest · 아이콘
+
+**필드**: `name`·`short_name` "MedReader", `start_url`·`scope` "./", `display` "standalone", `background_color` #fdfcfa(= 라이트 `--c-bg`), `theme_color` #ffffff(= 라이트 `--c-surface`, 상단 바 `base.css:51`), 아이콘 5개(svg any · 192/512 any · 192/512 maskable). **`orientation` 없음**, 서비스 워커 없음. spec 8j 줄과 같다.
+
+**PNG 를 내가 직접 디코드**(`decode.mjs` — 생성기 코드를 쓰지 않고 줄 필터 0–4 를 모두 푸는 디코더. 청크는 IHDR·IDAT·IEND, 8bit RGBA):
+
+| 파일 | 크기 | 모서리 알파 | 그림 픽셀(파랑 아닌 것)의 중심에서 가장 먼 거리 | 판정 |
+|---|---|---|---|---|
+| icon-192 (any) | 192² | 0 (투명) | 68.5 px = 0.357×크기 | 둥근 사각(rx 96/512), 그림이 바탕 안 |
+| icon-512 (any) | 512² | 0 (투명) | 182.5 px = 0.356×크기 | 〃 |
+| icon-maskable-192 | 192² | 255 (전부 불투명, 부분 알파 0) | 54.9 px = **0.286×크기** | 안전 반지름 76.8 px 밖 **0 픽셀** |
+| icon-maskable-512 | 512² | 255 (〃) | 145.9 px = **0.285×크기** | 안전 반지름 204.8 px 밖 **0 픽셀** |
+
+- 거리는 픽셀의 **가장 먼 모서리**로 쟀다(보수적).
+- maskable 은 칸 전체가 불투명하다. 따라서 원·물방울·둥근 사각 어느 마스크로 잘려도 투명 구멍이 생기지 않는다.
+- any 아이콘의 투명 모서리는 데스크톱 런처의 보통 꼴이다. Android 는 maskable 이 있으면 maskable 을 쓰므로 흰 원 위 작은 아이콘이 되는 일도 없다.
+- 의견(비차단): maskable 그림이 지름의 약 57% 로 다소 작다. 실기기에서 작아 보이면 `MASKABLE_SCALE` 0.8 → 1.0 으로 올릴 수 있다(가장 먼 점 0.356 — 안전 0.4 안).
+
+**SVG ↔ PNG 도안 일치**(`run.mjs`·`run2.mjs`): 브라우저가 `icon.svg` 를 래스터한 것과 PNG 를 픽셀로 맞대 봤다. maskable 은 SVG 본문을 0.8배로 줄이고 꽉 찬 바탕을 깔았다.
+- 512 any 에서 차이가 64 를 넘는 픽셀은 33/262144 개다. 모두 둥근 모서리 바깥 가장자리의 거의 투명한 픽셀(알파 2–16)이다.
+- maskable 은 1 픽셀(물결 끝 안티앨리어싱)이다. 같은 도안이다.
+- `make-icons.mjs --check` 0("그대로다 (5개)").
+
+**`id` 의견 — 넣지 않는다(지금 그대로).** `run3.mjs` 가 manifest 응답만 가로채 `id` 를 바꿔 보고, CDP `Page.getAppId` 로 Chrome 이 계산한 앱 id 를 읽었다(파일은 손대지 않음).
+
+| manifest `id` | Chrome appId (로컬 8000) |
+|---|---|
+| 없음(지금) | `http://127.0.0.1:8000/apps/medreader/` (= start_url) |
+| `"./"` (Build 7절 제안) | `http://127.0.0.1:8000/` ← **출처 뿌리** |
+| `"/apps/medreader/"` | `…/apps/medreader/` (단 배포는 `/my-blog/…` 라 로컬·배포 값이 달라진다) |
+
+- `id` 는 manifest 주소가 아니라 **start_url 의 출처**를 기준으로 풀린다. 그래서 Build 가 "기본값과 같은 결과"라고 한 `"./"` 는 사실이 아니다. 넣으면 `https://dongcyun-agentmster50.github.io/` 가 앱 id 가 된다. 같은 출처의 다른 앱과 겹칠 수 있다.
+- 지금처럼 id 를 비우면 appId = start_url 이다. start_url 은 manifest 기준 상대값이라 로컬과 배포 모두에서 앱 폴더로 맞게 풀린다. DevTools 의 "id 없음" 표시는 안내이고 경고나 설치 장애가 아니다(`getInstallabilityErrors` []).
+- 주의: Nour 가 설치한 **뒤에** id 나 start_url 을 바꾸면 다른 앱이 된다(다시 설치해야 함). spec 8j 줄에 "start_url 은 바꾸지 않는다(바꾸면 설치 앱이 갈린다)" 한 줄을 권한다.
+
+**theme-color 두 개와 앱 테마(Build 남은 문제 1) — 낮음 · 다음 작은 항목**
+- `<meta name="theme-color">` 는 OS 라이트·다크만 따른다(headless 에서 라이트 meta 만 `matches`).
+- 어긋나는 경우는 셋이다.
+  - OS 라이트 + 앱 다크: 흰 상태 바 아래 #1e2227 상단 바 — 눈에 띈다.
+  - OS 라이트 + 앱 세피아: #ffffff 와 #fbf4e4 — 거의 안 보인다.
+  - 고대비: 흰색 또는 #1e2227 위에 검정 — 눈에 띈다.
+- 기능과 데이터에는 영향이 없고 색만 다르다. 세피아(운영자 취향)는 차이가 작다.
+- 고치려면 테마를 바꿀 때 meta `content` 를 갈아 끼우는 JS 몇 줄이 필요하다. 8j 의 "JS 0줄" 밖이라 Build 판단(4단계 테마나 8k 이후 작은 항목)에 동의한다.
+- 같은 묶음에서 `background_color`(시작 화면)가 라이트 고정이라 다크 사용자는 열 때 잠깐 밝은 화면을 본다. 이것도 함께 기록한다.
+
+## 8jR-4. 서재 공유 · API 키 (점검표 7)
+
+**경로**
+- 배포 주소는 `https://dongcyun-agentmster50.github.io/my-blog/apps/medreader/` 다. `start_url`·`scope` "./" 는 manifest 주소 기준으로 풀려 이 앱 폴더가 된다. MF3 이 Pages 꼴 주소로 확인하고, headless `Page.getAppManifest` 의 scope 도 `http://127.0.0.1:8000/apps/medreader/` 였다.
+- 앱 코드의 주소 사용을 grep 했다. `location.hash`(router·reader·search), `location.reload()`(main.js 69), `history.replaceState(null,'',hash)`, `new URL(ev.oldURL).hash` 뿐이다. `location.pathname`·`location.href`·`location.origin`·`new Worker` 는 0건이다. **경로에 의존하는 곳은 없다.**
+
+**행동으로 확인**(`run.mjs`)
+- 탭 A 에서 책 1권을 가져오고 가짜 키를 저장했다(기본 `privacy.rememberKey` 끔). 키는 `sessionStorage` 의 `medreader.key.gemini` 에 들어가고 localStorage 에는 0개다.
+- 그 뒤 **새 최상위 창**(= 홈 화면 아이콘으로 연 창 흉내)을 열었다.
+  - 서재: documents 1, 카드 1 — **그대로**.
+  - 키: sessionStorage 0, localStorage 0 → 설정 > AI 에 "저장된 키가 없습니다."
+- 코드도 같다. `privacy/keys.js` 는 기본 `sessionStorage`(탭마다 따로, 탭을 닫으면 소멸)이고, "이 기기에 기억"이 켜졌을 때만 `localStorage` 를 쓴다.
+
+**판정 — 사실이다. 버그는 아니지만 사용자가 겪는다.**
+- 설치한 앱은 브라우저 탭과 다른 창이라, 브라우저에서 넣은 키가 따라오지 않는다.
+- 설치 앱을 완전히 닫았다 열 때마다(새 판을 받을 때 포함) 키를 다시 넣어야 한다. 지금 탭을 닫았다 열 때와 같다.
+- 번역(점검표 3)을 쓰는 Nour 는 설치 앱을 처음 열면 "번역에는 API 키가 필요합니다"를 본다. 미리 알리지 않으면 "설치하니 번역이 고장 났다"로 보고될 수 있다.
+
+**점검표 7 에 더할 문구(제안)**:
+> 설치한 앱은 Chrome 탭과 따로 열리는 창이라, **API 키는 따라오지 않습니다**(책·진도는 그대로여야 합니다). 번역을 쓰려면 앱의 설정 > AI 에서 키를 한 번 더 넣어 주세요. 앱을 완전히 닫으면 키도 지워집니다. 매번 넣기 번거로우면 "이 기기에 기억"을 켜세요(혼자 쓰는 휴대폰일 때만). **서재가 비어 있는 것**은 다른 일이니 그때는 멈추고 알려 주세요.
+
+## 8jR-5. headless Edge (새 프로필 `r8j/p1` · 8000번 python 사용)
+
+**앱** `/apps/medreader/`(= start_url)
+- 부팅 ok, 콘솔 오류·경고 0, 4xx·실패 요청 0, `data-boot-fail` 없음.
+
+**CDP 를 내가 다시 부름**
+- `Page.getAppManifest`: url `…/manifest.webmanifest`, **errors []**. 이 판의 `parsed` 는 `scope` 만 준다. Build 보고 6절의 `icons: 0` 은 CDP 가 주지 않는 칸을 읽은 것이라 의미가 없다.
+- `Page.getInstallabilityErrors`: **[]**.
+- `Page.getManifestIcons`: primaryIcon 있음.
+- `Page.getAppId`: 위 8jR-3 표.
+
+**요청과 콘솔**
+- manifest `200 application/manifest+json`, 아이콘 5개 200(`image/svg+xml`·`image/png`).
+- **루트 `/favicon.ico` 요청 0**(favicon 은 `icons/icon.svg` 로 간다).
+- 대조군으로 아이콘 링크가 없는 `dev/tashkeel-ab.html` 을 열면 `404 /favicon.ico` 가 난다. 앱의 favicon 404 가 사라진 것이 맞다.
+- 바깥 요청은 pdf.js CDN 2건뿐이다(기존 동작).
+
+**기본 동작**: zorvat6 가져오기 → 추출 끝 → 리더 3쪽 표시 → 이 책 검색 "plonitis" **12항목**. 새 창으로 열어도 서재 그대로, 오류 0.
+
+**설치 메뉴와 standalone 열림** 자체는 headless 로 판정할 수 없다 → 실기기 몫(`[D]`·`[M]`).
+
+## 8jR-6. 8k-0 진단 페이지 `dev/voices.html`
+
+**읽기만 하는가**
+- 코드:
+  - 동적 import 는 `../js/tts/voices.js` 하나이고, 부르는 것은 `pickVoice`·`speechLang`·`utteranceLang` 뿐이다(모두 순수).
+  - voices.js 가 끌어오는 `config.js`·`i18n/index.js`·`text/lang.js` 에는 최상위 부작용이 없다(`setLang` 은 부를 때만 DOM 을 만진다).
+  - 페이지 안에 `fetch`·`indexedDB`·`localStorage`·`sessionStorage`·`sendBeacon`·`WebSocket` 0.
+- 행동:
+  - 앱 코드가 돌지 않는 같은 출처 페이지(manifest JSON)에서 저장소 전체를 찍었다. 대상은 localStorage 전부, IndexedDB `medreader@v3` 14개 스토어(건수·내용 지문)다.
+  - 찍은 시점은 진단 페이지를 열어 단추 16개를 모두 누르고 복사를 두 번 하기 **전과 뒤**다.
+  - 결과는 **완전히 같다**(`S.same: true`). 진단 페이지 탭의 localStorage·sessionStorage 도 0개다.
+
+**단추**: 흉내 음성은 내 것을 썼다. Build 와 다르게 아랍어는 네트워크 음성만 있고, 영어는 Google(네트워크·default)이 먼저, 기기 `en_GB` 가 뒤에 있다. 언어가 바뀌면 시작이 700 ms, 같으면 50 ms 늦다.
+- 단추 16개, 360px 가로 스크롤 0(360/360), 콘솔 오류 0, **바깥 요청 0**.
+- [앱이 고른 음성 en] → **English UK(기기, en_GB)** · lang en-GB. 네트워크 Google 보다 기기 음성이 먼저라는 앱 규칙 그대로다.
+- [앱이 고른 음성 ar] → Arabic Net · ar-SA(번역문 경로). [앱이 고른 음성 fr] → 목록에 없음 → voice 없이 fr-FR.
+- [voice 없이 …] 9개는 모두 `voice=null`, `lang` = 단추 태그 그대로다(ar·ar-SA·en·en-US·en-GB·fr·fr-FR·ko·ko-KR).
+
+**간격 측정 정확도**: en→ko→en "en-US→ko-KR **712 ms** · ko-KR→en-US **708 ms**"(흉내 700). 기준 en→en→en "64 ms · 52 ms"(흉내 50). 오차는 타이머 떨림 수준이라 M7(1초 문턱) 판정에 충분하다.
+
+**복사 문안**(`copied.txt`, 80줄)
+- 들어 있는 것은 다음과 같다. 개인 정보는 없다.
+  - 시각
+  - 언어별 목록 수·앱이 고를 음성·lang
+  - 마지막 간격 줄
+  - 기록: UA, 주소, 음성 목록(lang·name·기기/네트워크·default)과 누른 단추·간격
+- UA 에는 기기 모델과 브라우저 판이 들어간다. 점검표 1 이 어차피 묻는 정보다.
+- 주소는 질의·해시를 잘라 낸다. `?r8j=1#x` 로 열었는데 복사본에 없었다.
+- 클립보드가 거절되면 "선택됨 — 길게 눌러 복사"로 기록 전체를 선택한다(확인함).
+
+**작은 것(낮음)**: 이어 말하기 도중 다른 단추를 누르면 `#gapResult` 가 "en-ko-en 읽는 중…"에 멈춘다. 복사본 머리에도 그 줄이 들어간다. 앞서 잰 간격은 기록에 "간격 […]" 줄로 남으므로 정보 손실은 없다. 다음에 이 페이지를 만질 때 끊긴 실행이면 "끊김"으로 바꾸면 된다.
+
+## 8jR-7. 테스트의 힘 (내 변이 — `mut.json`)
+
+Build 의 X1–X6 과 겹치지 않게 골랐다. 백업 `r8j/bak/` → 변이 → `manifest-8j` 실행 → 백업을 읽어서 쓰기 → 바이트 비교 + 셸 `cmp` 4파일 모두 같음.
+
+| # | 변이 | 빨강 |
+|---|---|---|
+| R1 | manifest `display` → "browser" | MF1 |
+| R2 | maskable-512 자리에 any-512 를 씀(모서리 투명) | MF6·MF7 |
+| R3 | 진단 페이지가 `localStorage.setItem` | MF10 |
+| R4 | 생성기 `MASKABLE_SCALE` 1.3(파일은 그대로) | MF6·MF7 |
+| R5 | `theme_color` 를 다크 값으로 | MF4 |
+
+→ 5/5 빨강, 복원 5/5, 복원 뒤 10/10 초록이다.
+
+참고:
+- MF6·MF7 은 "파일 = 생성기 결과"를 본다. 생성기와 파일을 **함께** 바꾸면 MF7(생성기의 `colorAt` 으로 잼)도 같이 움직인다. 그래서 안전 영역은 8jR-3 에서 PNG 를 직접 디코드해 따로 확인했다.
+- 생성기 주석 두 곳(36행 "테스트 IC4", 273행 "IC3")은 실제 이름 MF7·MF6 과 다르다(사소).
+- `--check` 는 PNG 를 크기만 보고, 픽셀 비교는 MF6 몫이다(주석대로).
+
+## 8jR-8. 전체 테스트 · stamp · 정리
+
+- `node --test apps/medreader/tests/*.test.mjs` 2회 모두 **1244/1244**(fail 0 · 약 8.3초). 흔들리는 `pipeline-8a` M7 은 이번엔 나오지 않았다.
+- `stamp-importmap --check` "그대로다(모듈 58개 · CSS 4개)" 종료 0, `make-icons --check` 0, `git diff --check` 깨끗.
+- msedge 프로세스 수는 실행 전 3 → 매 실행 뒤 3이다(스크립트마다 `browser.close()`). **8000번 python(PID 15088) 켜 둠.** 8123·8124·8125번 node(PID 19520·9980·21516)는 건드리지 않았다. 프로필 `r8j/p1`(21 MB)은 `rm -rf` 금지라 남겼다.
+
+## 8jR-9. Build 남은 문제 판정 · spec 문안
+
+1. theme-color 와 앱 테마 → **낮음, 다음 작은 항목**(8jR-3). 배포를 막지 않는다.
+2. spec 2-1 트리 문안 → **동의**. 제안 문안: "`icons/` — icon.svg + PNG 192·512(any·maskable 각 2). `dev/make-icons.mjs` 가 같은 도안으로 만든다(npm 0, `--check`)". `dev/` 줄에 `make-icons.mjs` 를 더한다. 함께 고칠 곳:
+   - 3절 8j 줄 "(+ PNG 여부는 결정 E3)" → "E3 (가) 승인 — SVG + PNG 192·512 any·maskable"
+   - 8j 줄 끝에 "`id` 는 넣지 않는다 — start_url 의 출처 기준으로 풀려 `"./"` 는 출처 뿌리가 된다. 설치 뒤 start_url·id 를 바꾸면 다른 앱이 된다"
+3. 점검표 7 API 키 → **동의**. 문구는 8jR-4.
+4. [앱이 고른 음성]과 8k `resolveSpeech` → **동의**. 8k Plan 에서 정한다. 8k 가 기본을 "voice 없이"로 바꾸면 이 단추의 뜻도 바뀌므로 그때 이름까지 맞춘다.
+5. 진단 페이지가 판 번호 없는 `voices.js` 를 받는 것 → **낮음**. 개발 페이지이고, Pages 캐시는 최대 10분이다. 점검표 2 는 배포 10분 뒤에 부탁하면 된다.
+
+## 8jR-10. 배포 판정 · 운영자 몫
+
+1. **배포해도 된다.** `origin/main` = `d2cf748`(앞선 로컬 커밋 0개). 이번 변경을 한 커밋으로 얹어 푸시하면 된다. **manifest 에 `"id": "./"` 를 더하지 말 것.**
+2. 커밋할 것:
+   - `apps/medreader/index.html`
+   - 새 `apps/medreader/manifest.webmanifest`·`apps/medreader/icons/`(5개)·`apps/medreader/dev/make-icons.mjs`·`apps/medreader/tests/manifest-8j.test.mjs`
+   - `apps/medreader/dev/voices.html`
+   - 이 review.md, 관례대로 `.claude/tasks/medreader-*-8j*.md`
+
+   **`.codex/`·`AGENTS.md` 는 넣지 않는다**(`git add -A` 금지). `.nojekyll` 그대로.
+3. 배포 뒤 실기기:
+   - `[D]` 데스크톱 Chrome > Application > Manifest — 경고 0, "id 없음" 안내는 무시해도 된다.
+   - `[M]` 점검표 7 — 위 키 문구를 더해서. 아이콘이 잘리지 않는가, 상태 바 색, 가로 회전.
+   - 점검표 2 — 진단 페이지는 배포 10분 뒤에.
+4. 다음 묶음 후보:
+   - 테마별 theme-color(JS 몇 줄)
+   - 진단 페이지의 끊긴 이어 말하기 문구
+   - 생성기 주석 테스트 이름
+   - maskable 그림 크기(실기기에서 작아 보이면)
