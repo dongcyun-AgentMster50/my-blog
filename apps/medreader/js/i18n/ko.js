@@ -71,6 +71,9 @@ export default {
   'library.card.pages.other': '{n} pages',
   'library.card.lastRead': 'Last read: page {page}',
   'library.card.neverRead': 'Not opened yet',
+  /* `[8l]` 17-5-1 3 · 19-1-3 §3-3 — 스캔본·깨짐 배지(아랍어·프랑스어 [검토 — Nour·운영자]) */
+  'library.card.scan': '스캔본 — 글자 없음',
+  'library.card.garbled': '글자 깨짐 — OCR 필요',
   'library.card.extracting': 'Preparing text {done}/{total}',
   'library.card.extractDone': 'Text ready',
   'library.card.extractPaused': 'Paused {done}/{total}',
@@ -120,6 +123,13 @@ export default {
   'reader.page.input': 'Page number',
   'reader.page.of': 'of {total}',
   'reader.page.empty': 'No text was found on this page.',
+  /* `[8l]` 빈 쪽 안내(모든 문서)·스캔본·깨짐 안내 — `reader.page.empty` 는 남겨 두고 쓰지 않는다(10단계 정리) */
+  'reader.page.noText': '이 쪽에는 읽을 글자가 없습니다 — 그림이나 스캔한 쪽일 수 있습니다.',
+  'reader.scan.notice': '이 PDF 는 대부분 쪽이 스캔한 이미지라 글자를 읽을 수 없습니다. [원본]으로 볼 수는 있지만 낭독·번역·검색은 되지 않습니다. 컴퓨터에서 글자 인식(OCR)을 거친 PDF 를 다시 가져오면 됩니다.',
+  'reader.scan.noRead': '이 쪽에는 읽어 줄 글자가 없습니다.',
+  'reader.scan.noSearch': '이 책은 글자가 없어 검색할 수 없습니다.',
+  'reader.scan.garbled': '이 PDF 는 글자 정보가 깨져 있어 낭독·번역·검색에 엉뚱한 글자가 나옵니다. [원본]으로 볼 수는 있습니다. 컴퓨터에서 글자 인식(OCR)을 다시 거친 PDF 를 가져오면 됩니다.',
+  'reader.scan.garbledSearch': '이 책은 글자가 깨져 있어 검색 결과가 맞지 않을 수 있습니다.',
   'reader.page.broken': 'This page could not be read. It will be prepared again.',
   'reader.preparing': 'Preparing text {done}/{total}',
   'reader.preparing.unknown': 'Preparing text…',

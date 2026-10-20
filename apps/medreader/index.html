@@ -53,8 +53,8 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=a82917db4d">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=f147795194">
-<link rel="stylesheet" href="css/reader.css?v=e256d80c0d">
+<link rel="stylesheet" href="css/screens.css?v=d3176b6d99">
+<link rel="stylesheet" href="css/reader.css?v=66e77095f1">
 <script type="importmap">
 {
   "imports": {
@@ -67,14 +67,14 @@
     "./js/ai/provider.js": "./js/ai/provider.js?v=48d1929564",
     "./js/ai/readalong.js": "./js/ai/readalong.js?v=6bf46b2af8",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
-    "./js/config.js": "./js/config.js?v=b57775c5a6",
+    "./js/config.js": "./js/config.js?v=7611555c1d",
     "./js/db.js": "./js/db.js?v=726d46e5c0",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=84706c319d",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=71e8c5a5b3",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=3324f01496",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=8f49fdd365",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=7bc28807e7",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=f1e6d8f5ff",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=c001f15976",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=f4cb3a1a0e",
     "./js/main.js": "./js/main.js?v=b9706d4835",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -96,23 +96,24 @@
     "./js/text/layout.js": "./js/text/layout.js?v=4f04936974",
     "./js/text/lines.js": "./js/text/lines.js?v=8a5f9e1f9b",
     "./js/text/rowtable.js": "./js/text/rowtable.js?v=76a7ee780f",
+    "./js/text/scan.js": "./js/text/scan.js?v=4b8d4ca314",
     "./js/text/screen.js": "./js/text/screen.js?v=5c78d755dd",
     "./js/text/search.js": "./js/text/search.js?v=0c59056516",
     "./js/text/segment.js": "./js/text/segment.js?v=09707527bd",
     "./js/text/store.js": "./js/text/store.js?v=0e6752a027",
-    "./js/tts/speaker.js": "./js/tts/speaker.js?v=b3831a758f",
+    "./js/tts/speaker.js": "./js/tts/speaker.js?v=5239cfa97d",
     "./js/tts/text.js": "./js/tts/text.js?v=1e07c9c45e",
     "./js/tts/voices.js": "./js/tts/voices.js?v=2cfb48af51",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=34eadee5e0",
-    "./js/ui/library.js": "./js/ui/library.js?v=266f7992aa",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=389ac5d979",
+    "./js/ui/library.js": "./js/ui/library.js?v=3982f04e8c",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=a9b1f7c3f5",
     "./js/ui/quiz.js": "./js/ui/quiz.js?v=63bb06c544",
-    "./js/ui/reader.js": "./js/ui/reader.js?v=800c61ffca",
-    "./js/ui/search.js": "./js/ui/search.js?v=b108d26af2",
+    "./js/ui/reader.js": "./js/ui/reader.js?v=4618661690",
+    "./js/ui/search.js": "./js/ui/search.js?v=4a50cc7230",
     "./js/ui/settings.js": "./js/ui/settings.js?v=38e8cefc6c",
     "./js/ui/trband.js": "./js/ui/trband.js?v=2574e1bf06",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=9df6aeb8cd"
@@ -365,6 +366,14 @@
     <div class="reader-progress" id="readerProgress" role="status" aria-live="polite" hidden>
       <span class="progress-label" id="readerProgressLabel"></span>
       <div class="progress-track"><div class="progress-fill" id="readerProgressFill"></div></div>
+    </div>
+
+    <!-- `[8l]` 스캔본·글자 깨짐 안내 띠 (17-5-1 3 · 19-1-3 §3-3) — 그 문서를 열 때 **문서당 한 번**. 14절 배너와 같은 모양
+         (`.banner`). [원본 보기] = 원본 뷰로, [닫기] — 둘 다 `documents.scan.noticed` 를 남긴다. `js/ui/reader.js` 가 채운다. -->
+    <div class="banner scan-notice" id="scanNotice" data-tone="warn" role="note" hidden>
+      <p class="banner-text" id="scanNoticeText"></p>
+      <button type="button" class="banner-action" id="scanNoticeOriginal" data-i18n="reader.view.original"></button>
+      <button type="button" class="banner-close" id="scanNoticeClose" data-i18n="common.close"></button>
     </div>
 
     <!-- 5-4 · 5-5 제안 칩 자리 — [이 섹션 퀴즈 풀기]. `js/ui/quiz.js` 가

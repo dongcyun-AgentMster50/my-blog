@@ -659,10 +659,10 @@ export function createSpeaker(deps) {
    * `[8h-1]` 큐를 만드는 **한 곳**. 설정이 꺼져 있으면 인용(`Unit.cite`) 단위를 뺀다.
    * 인용은 `seg` 가 없으므로 `sentencesOf` 결과(번역 흐름)는 거르기 전과 같다(RA-C1).
    */
-  function queueOf(paras) {
+  function queueOf(paras, peek) {
     const all = buildUnits(paras || [], unit, unitOpts());
     const q = citationsOn() ? all : all.filter(function (x) { return !x.cite; });
-    citeOnlyQueue = all.length > 0 && q.length === 0;
+    if (!peek) citeOnlyQueue = all.length > 0 && q.length === 0;   // `[8l]` peek — 읽기만(`isQueueEmptyHere`)
     return q;
   }
 
@@ -1108,6 +1108,14 @@ export function createSpeaker(deps) {
     getDocLang: function () { return docLang; },
     getIndex: function () { return index; },
     getTotal: function () { return units.length; },
+    /**
+     * `[8l — spec 17-5-1 3]` 지금 쪽에서 [▶] 를 누르면 큐가 비는가 — **읽기만**(큐·상태를 바꾸지 않는다).
+     * `play()` 가 만들 큐와 같은 규칙(인용 거르기 포함). 스캔본 문서의 ▶ 갈래(`ui/controls.js`)가 쓴다 —
+     * 빈 쪽 넘기기 규칙(`MAX_EMPTY_PAGES`) 자체는 그대로다.
+     */
+    isQueueEmptyHere: function () {
+      try { return queueOf((view && view.paras && view.paras()) || [], true).length === 0; } catch (e) { return true; }
+    },
     getCurrent: function () { return units[index] || null; },
     /** `[8b-1]` 지금 발화 단계 `'src'|'tr-wait'|'tr'`. */
     getPhase: function () { return phase; },

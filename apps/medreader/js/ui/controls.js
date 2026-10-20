@@ -25,8 +25,11 @@ import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
   onLineTap, onPageRender, sourceLang, loadFlowParas, flowLineIds,
   // `[8i-1]` 판 바뀜 재추출 중 지금 쪽을 새 판으로(spec 4-13-9)
-  setSpeechState, currentPageReady, whenCurrentPageReady, remapLineId, setCurrentLines
+  setSpeechState, currentPageReady, whenCurrentPageReady, remapLineId, setCurrentLines,
+  // `[8l]` 스캔본 문서의 ▶ 갈래(spec 17-5-1 3)
+  docScanVerdict
 } from './reader.js';
+import { blocksPlay } from '../text/scan.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
 import { renderReadalongRow } from './settings.js';
 // `[8b-1]` 유효 모드 계산에 쓰는 값 읽기 — 설정 AI 탭과 같은 함수.
@@ -132,6 +135,7 @@ export function initControls() {
   els.play.addEventListener('click', () => {
     const s = speaker.getState();
     if (s === 'speaking') speaker.pause();
+    else if (scanPlayBlocked(speaker, docScanVerdict())) noReadNotice();   // `[8l]` 스캔본 — 넘기지 않고 안내, idle 그대로
     else { syncReadalong(); speaker.play(); }     // 8b-1 — 설정값을 동기적으로 다시 읽고(await 없음) 곧장 재생
   });
   els.prev.addEventListener('click', () => speaker.prev());
@@ -326,6 +330,22 @@ export function speechState() { return speaker ? speaker.getState() : 'idle'; }
 /** `[8g-4a]` 낭독 상태가 바뀔 때마다 `fn(state)`. 해제 함수를 돌려준다. */
 const speechListeners = new Set();
 export function onSpeechChange(fn) { speechListeners.add(fn); return () => speechListeners.delete(fn); }
+
+/**
+ * `[8l — spec 17-5-1 3]` ▶ 갈래 — **재생 시작 지점에서만.** 스캔본·글자 없음(`scan`·`notext`) 문서에서 지금 쪽의 큐가
+ * 비면 `play()` 를 부르지 않는다(쪽을 넘기지 않는다). 깨짐(`garbled`)·텍스트 문서는 그대로(L-D10). **순수**(speaker 를 받는다 —
+ * tests/scan-8l.test.mjs 가 실제 `createSpeaker` 로 잰다).
+ */
+export function scanPlayBlocked(sp, verdict) {
+  if (!sp) return false;
+  if (!blocksPlay(verdict, { state: sp.getState(), empty: true })) return false;   // 갈래가 아니면 큐를 보지도 않는다
+  return blocksPlay(verdict, { state: sp.getState(), empty: typeof sp.isQueueEmptyHere === 'function' && sp.isQueueEmptyHere() });
+}
+
+/** `reader.scan.noRead` 한 번 — 누를 때마다(닫은 뒤 다시 누르면 다시). 세션당 1회 규칙(`notice`)을 타지 않는다. */
+function noReadNotice() {
+  document.dispatchEvent(new CustomEvent('medreader:banner', { detail: { key: 'reader.scan.noRead', tone: 'warn' } }));
+}
 
 /** 리더를 떠날 때 — 소리를 멈춘다. 서재에서 낭독이 계속되면 안 된다. */
 export function leaveControls() {

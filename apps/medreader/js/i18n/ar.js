@@ -67,6 +67,9 @@ export default {
   'library.card.pages.other': '{n} صفحة',
   'library.card.lastRead': 'آخر قراءة: صفحة {page}',
   'library.card.neverRead': 'لم يُفتح بعد',
+  /* `[8l]` 17-5-1 3 · 19-1-3 §3-3 — 스캔본·깨짐 배지(아랍어·프랑스어 [검토 — Nour·운영자]) */
+  'library.card.scan': 'ممسوح ضوئيًا — بلا نص',
+  'library.card.garbled': 'نص تالف — يحتاج إلى OCR',
   'library.card.extracting': 'تجهيز النص {done}/{total}',
   'library.card.extractDone': 'النص جاهز',
   'library.card.extractPaused': 'متوقف مؤقتًا {done}/{total}',
@@ -115,6 +118,13 @@ export default {
   'reader.page.input': 'رقم الصفحة',
   'reader.page.of': 'من {total}',
   'reader.page.empty': 'لا يوجد نص في هذه الصفحة.',
+  /* `[8l]` 빈 쪽 안내(모든 문서)·스캔본·깨짐 안내 — `reader.page.empty` 는 남겨 두고 쓰지 않는다(10단계 정리) */
+  'reader.page.noText': 'لا يوجد نص للقراءة في هذه الصفحة — قد تكون صورة أو صفحة ممسوحة ضوئيًا.',
+  'reader.scan.notice': 'معظم صفحات هذا الملف صور ممسوحة ضوئيًا، لذلك لا يمكن قراءة نصّه. يمكنك عرضه في «الأصل»، لكن القراءة الصوتية والترجمة والبحث لن تعمل. استورد نسخة مرّت بالتعرّف الضوئي على الحروف (OCR) على حاسوب.',
+  'reader.scan.noRead': 'لا يوجد في هذه الصفحة نص لقراءته بصوت عالٍ.',
+  'reader.scan.noSearch': 'لا يحتوي هذا الكتاب على نص، لذلك لا يمكن البحث فيه.',
+  'reader.scan.garbled': 'طبقة النص في هذا الملف تالفة، لذلك ستُنتج القراءة الصوتية والترجمة والبحث أحرفًا خاطئة. لا يزال بإمكانك عرضه في «الأصل». استورد نسخة أُعيد تمريرها بالتعرّف الضوئي على الحروف (OCR) على حاسوب.',
+  'reader.scan.garbledSearch': 'نص هذا الكتاب تالف، لذلك قد تكون نتائج البحث خاطئة.',
   'reader.page.broken': 'تعذّرت قراءة هذه الصفحة. سيُعاد تجهيزها.',
   'reader.preparing': 'جارٍ تجهيز النص {done}/{total}',
   'reader.preparing.unknown': 'جارٍ تجهيز النص…',

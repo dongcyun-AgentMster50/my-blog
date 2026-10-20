@@ -3259,6 +3259,8 @@ scanVerdict(samples) → { verdict, textless, probed, img }
 - **추출 결과로 판정하지 않는 이유**: 추출은 1쪽부터 차례로 가므로 표본이 앞붙이에 몰린다(위 CMDT 2021). 표본을 따로 고르면 문서 크기와 무관하게 12쪽이다.
 - **저장**: `documents.scan = { v, verdict, probed, textless, img, at }` — `db.patch` 로 **자기 필드만**(`[P1 경합]` 7c `LANG_FIELDS` 와 같은 꼴, `SCAN_FIELDS = ['scan']`). `documents` 는 스키마 없는 레코드라 **DB 버전 무관**, `algoVersion`·`derivedHash` 무관(PDF 에서 온 사실이라 `derivedDocReset` 에 넣지 않는다 — [텍스트 다시 추출]이 지우지 않는다). 9c 백업에 저절로 들어간다.
 - 판정이 틀려도 막는 것은 없다 — 안내만 하고 원본 보기·추출·낭독 시도는 그대로다. OCR 한 PDF 는 파일이 달라 **새 문서**로 들어오고 새로 판정된다.
+- `[정정 2026-10-20 — 8l Build]` **세 번째 꼴 "그리기 명령은 있는데 추출 글자 0"**(carryover — Harry Potter 2, Acrobat Distiller 5.0.5): 실물로 확인했다 — 표본 12/12 글자 0, 확인 2쪽(45·68쪽) 이미지 연산 0 · **텍스트 연산 84·66** → 위 규칙대로 `notext`. 판정 셋과 앱 문구는 그대로 두고(새 키 없음 — `notext` 는 스캔본과 같은 안내), 이미지를 확인한 경우(`scan`·`notext`)에만 확인 쪽의 텍스트 연산 합을 `documents.scan.textOps` 로 함께 저장한다(`showText`·`showSpacedText`·`nextLineShowText`·`nextLineSetSpacingShowText`). **`notext` + `textOps > 0` = 글꼴에 글자 매핑이 없는 PDF** — 운영자 가이드가 `--skip-text`(건너뜀) 대신 `--force-ocr` 를 안내할 근거다. 진짜 빈 쪽·글자를 선으로 그린 PDF 는 `textOps = 0`. 실물 판정 표(앱 `scanPdf` + pdf.js 5.6.205): 의학책 세 권 text(Σbad 0) · Advanced Grammar 원본·`test-OCR.pdf`(표본 41쪽이 OCR 한 쪽이라 11/12)·롱맨 2권 scan · 스피쿠스 unit1·10 garbled · Harry Potter 2 notext(textOps 150) · OCR 결과 7권 text, 조사 원자료 323개 전부 조사 판정과 같음(어긋남 0).
+- `[정정 2026-10-20 — 8l Build]` 시작 시점: "추출을 시작한 뒤" 를 **추출기가 첫 쪽(지금 쪽)을 낸 뒤, 또는 `SCAN.START_AFTER_MS`(1.5초 — 이미 다 뽑힌 문서) 뒤** 로 정했다. 표본 쪽 하나라도 못 읽으면 저장하지 않는다(다음에 열 때 다시).
 
 ##### 3. 안내 — 세 자리
 
@@ -3270,6 +3272,7 @@ scanVerdict(samples) → { verdict, textless, probed, img }
 
 - **▶ 를 눌렀을 때**: 지금은 큐가 빈 쪽이면 다음 쪽으로 최대 20쪽(`MAX_EMPTY_PAGES`)을 **말없이 넘긴 뒤** 멈춘다 — 스캔본에서는 화면이 20쪽 앞으로 달아난다. `verdict ∈ {scan, notext}` 인 문서에서 지금 쪽의 큐가 비면 **넘기지 않고** `reader.scan.noRead` 를 한 번 보이고 `idle` 로 남는다(`ui/controls.js` — 재생 시작 지점에서만. speaker 의 빈 쪽 넘기기 규칙은 텍스트 문서에 그대로).
 - 8g 검색: 그 문서의 찾기 화면에 결과 0 대신 `reader.scan.noSearch`(8g-3 화면이 생긴 뒤 — 8l 이 8g-4 뒤인 이유 중 하나).
+- `[정정 2026-10-20 — 8l Build]` ▶ 의 "지금" 서술: 실제 코드(`speaker.play`)는 **재생을 시작한 쪽의 큐가 비면 넘기지 않고 조용히 `idle`** 이다(테스트 S22). 20쪽(`MAX_EMPTY_PAGES`) 넘김은 글자가 있는 쪽 **끝에서** 다음 빈 쪽들로 넘어갈 때 일어난다. 8l 은 위대로 재생 시작 지점만 바꿨다(조용히 → `reader.scan.noRead` 배너, 누를 때마다) — 스캔본 안의 OCR 된 쪽을 읽다가 뒤의 빈 쪽들로 넘어가는 20쪽 넘김은 그대로다. 큐가 비었는지는 `speaker.isQueueEmptyHere()`(읽기만 — `play` 와 같은 `queueOf`, 인용 거르기 포함). 띠의 [원본 보기]도 [닫기]처럼 `noticed` 를 남긴다(누른 것이 곧 본 것).
 
 문안(네 언어 — `fr`·`ko` 파일은 아직 대부분 영어 값이지만(19절 3번) 새 키는 처음부터 네 언어로 둔다. 원본 보기 이름은 기존 `reader.view.original` 과 맞춘다):
 
@@ -4533,6 +4536,7 @@ scanVerdict(samples)                        # samples = [{ pageNo, chars, bad, i
 - 문턱 5% 는 정상 최대(0.075%)의 약 67배, 깨짐 최저(19.1%)의 약 1/4 — 실측 사이 넓은 틈의 가운데쯤이다. 책 이름·언어별 문턱 없음.
 - **저장**: `documents.scan = { v, verdict, probed, textless, img, chars, bad, at }` — `chars`·`bad` 는 진단용(표본 합). 나머지는 17-5-1 2 그대로(`db.patch`·`SCAN_FIELDS`·DB 무관·`algoVersion` 무관).
 - 판정 순서: 글자 0 판정이 먼저다(스캔본이면 `bad` 를 보지 않는다).
+- `[정정 2026-10-20 — 8l Build]` 저장 필드에 `textOps`(이미지를 확인한 `scan`·`notext` 만 — 17-5-1 2 정정 줄). 앱 값은 표본 쪽 **전체** 글자로 센다 — 위 3-1 조사 원값은 쪽당 6,000자에서 잘라 센 합이라 숫자가 조금 다르다(스피쿠스 unit1 앱 5,599 / 1,209 = 21.6%, unit10 8,286 / 2,058 = 24.8%). 판정은 조사 323개 모두 같다(garbled 60 — 앱 최저 19.1% · text 216 — 앱 최대 0.075%). 세 책 회귀(3-4): Harrison·CMDT 2026·CMDT 2021·`test-OCR.pdf` 의 표본 Σbad = **0**(5% 의 1/10 미만 충족). 3-4 의 "`dev/measure-scan-o1.mjs` 에 `bad` 열을 더해" 대신 8l 범위 안에서 스크래치 판정 스크립트로 앱 `scanPdf` 를 직접 불러 쟀다(`dev/` 는 8l 수정 범위 밖).
 
 ##### 3-3. 안내 — 앱 문구엔 `--force-ocr` 를 넣지 않는다
 

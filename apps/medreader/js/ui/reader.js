@@ -44,7 +44,9 @@ import { t, applyTranslations, formatNumber, onLangChange } from '../i18n/index.
 import { fromStored } from '../text/store.js';
 import { FOLD_ROLES, REF_ROLE, describePage, flowParasOf } from '../text/screen.js';
 import { go, replace, readerHash, libraryHash, quizHash, parseRoute } from '../router.js';
-import { openDoc, extractorFor } from './library.js';
+import { openDoc, extractorFor, markScanNoticed } from './library.js';
+// `[8l]` 스캔본·글자 깨짐 안내 띠(17-5-1 3 · 19-1-3 §3-3) — 판정·키는 순수 `text/scan.js`.
+import { bandKey } from '../text/scan.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
 import { initControls, leaveControls, speechState } from './controls.js';
 // 5-4 · 5-5 제안 칩 — 퀴즈 화면은 스스로 배선된다(이 import 가 그것을 읽힌다).
@@ -540,7 +542,12 @@ export function initReader() {
     backToLine: root.querySelector('#backToLine'),
     viewToggle: root.querySelector('#viewToggle'),
     quizChip: root.querySelector('#quizChipSlot'),
-    quizBtn: root.querySelector('#readerQuizBtn')
+    quizBtn: root.querySelector('#readerQuizBtn'),
+    // `[8l]` 스캔본·깨짐 안내 띠(문서당 한 번)
+    scanNotice: root.querySelector('#scanNotice'),
+    scanNoticeText: root.querySelector('#scanNoticeText'),
+    scanNoticeOriginal: root.querySelector('#scanNoticeOriginal'),
+    scanNoticeClose: root.querySelector('#scanNoticeClose')
   };
 
   /* ── 6b 원본 뷰 (12-5) ─────────────────────────────
@@ -610,6 +617,50 @@ export function initReader() {
 
   // 7c — 열린 문서의 **원문** 언어가 바뀌었다(서재 [⋯] 또는 자동 추정).
   document.addEventListener('medreader:doclang', (ev) => onDocLang(ev.detail || {}));
+
+  // `[8l]` 스캔본·깨짐 판정이 막 저장됐다(가져온 직후 — 리더가 이미 열려 있다) · 띠의 두 단추.
+  document.addEventListener('medreader:docscan', (ev) => onDocScan(ev.detail || {}));
+  if (els.scanNoticeClose) els.scanNoticeClose.addEventListener('click', () => dismissScanNotice(false));
+  if (els.scanNoticeOriginal) els.scanNoticeOriginal.addEventListener('click', () => dismissScanNotice(true));
+}
+
+/* ── `[8l]` 스캔본·글자 깨짐 안내 띠 (spec 17-5-1 3 · 19-1-3 §3-3) ──────────────
+   그 문서를 열 때 **문서당 한 번** — [닫기]·[원본 보기] 를 누르면 `documents.scan.noticed = true`(자기 필드만,
+   `library.markScanNoticed`). 판정은 막는 것이 없다 — 안내만 하고 원본 보기·추출·낭독 시도는 그대로다. */
+
+/** 지금 열린 문서의 판정(`documents.scan.verdict`) — 없으면 null. `ui/controls.js` 의 ▶ 갈래가 읽는다. */
+export function docScanVerdict() {
+  const s = state.doc && state.doc.scan;
+  return s && typeof s.verdict === 'string' ? s.verdict : null;
+}
+
+function onDocScan(d) {
+  if (!d || d.docId == null || String(d.docId) !== String(state.docId) || !state.doc) return;
+  state.doc = Object.assign({}, state.doc, { scan: d.scan || null });
+  paintScanNotice();
+}
+
+/** 띠를 지금 문서 상태대로 그린다(키가 없으면 숨김). 글자는 전부 i18n 키 → textContent. */
+function paintScanNotice() {
+  if (!els || !els.scanNotice) return;
+  const key = els.root.hidden ? null : bandKey(state.doc);
+  els.scanNotice.hidden = !key;
+  if (!key) return;
+  els.scanNotice.setAttribute('data-kind', state.doc.scan.verdict === 'garbled' ? 'garbled' : 'scan');
+  if (els.scanNoticeText) {
+    els.scanNoticeText.setAttribute('data-i18n', key);
+    els.scanNoticeText.textContent = t(key);
+  }
+  if (els.scanNoticeOriginal) els.scanNoticeOriginal.disabled = original.originalUnavailable();
+}
+
+/** [닫기]·[원본 보기] — 띠를 닫고 `noticed` 를 저장한다. 저장 실패는 조용히(다음에 다시 뜰 뿐). */
+function dismissScanNotice(toOriginal) {
+  const docId = state.docId;
+  if (state.doc && state.doc.scan) state.doc = Object.assign({}, state.doc, { scan: Object.assign({}, state.doc.scan, { noticed: true }) });
+  if (els && els.scanNotice) els.scanNotice.hidden = true;
+  if (docId != null) markScanNoticed(docId).catch(() => { /* 다음에 열 때 다시 뜬다 */ });
+  if (toOriginal && !original.originalUnavailable()) setView('original', { persist: true });
 }
 
 /**
@@ -716,6 +767,7 @@ export async function showReader(params) {
   els.title.textContent = doc.title || doc.fileName || '';
   paintPager();
   paintProgressBar();
+  paintScanNotice();          // `[8l]`
 
   await renderPage();
   await saveLastPage();
@@ -760,6 +812,7 @@ function reshowReader(doc) {
   els.title.textContent = (state.doc && (state.doc.title || state.doc.fileName)) || '';
   paintPager();
   paintProgressBar();
+  paintScanNotice();          // `[8l]` 숨은 동안 판정이 왔을 수 있다
   const y = state.hiddenRender ? 0 : state.softScrollY;
   state.hiddenRender = false;
   state.programScrollAt = Date.now();
@@ -801,6 +854,7 @@ function leaveReaderNow() {
   leaveControls();
   if (els && els.mount) clear(els.mount);
   if (els && els.quizChip) els.quizChip.hidden = true;
+  if (els && els.scanNotice) els.scanNotice.hidden = true;   // `[8l]`
   original.leaveOriginal();
   state.desc = null;
   state.layout = null;
@@ -1297,7 +1351,9 @@ function renderDescription(desc) {
     else if (b.type === 'folded') section.appendChild(foldedEl(b));
   }
 
-  if (!blocks.length) section.appendChild(noticeBlock('reader.page.empty'));
+  // `[8l — 17-5-1 3]` 블록이 0개인 쪽 — **문서 판정과 무관하게** 안내 + [원본 보기](CMDT 2021 앞붙이에도 쓸모 있다).
+  // 옛 키 `reader.page.empty` 는 남겨 두고 쓰지 않는다(10단계 i18n 정리 때 지운다).
+  if (!blocks.length) section.appendChild(noTextNotice());
 
   article.appendChild(section);
   return article;
@@ -1436,6 +1492,20 @@ function liveProgress() {
     pageCount: Number(doc.pageCount) || 0,
     done: !!ex.done
   };
+}
+
+/** `[8l]` 빈 쪽 안내 — 문구 + [원본 보기]. 원본 보기를 못 쓰면 단추를 끈다. */
+function noTextNotice() {
+  const box = el('div', 'page-notext');
+  box.appendChild(noticeBlock('reader.page.noText'));
+  const b = el('button', 'page-notext-original');
+  b.type = 'button';
+  b.setAttribute('data-i18n', 'reader.view.original');
+  b.textContent = t('reader.view.original');
+  b.disabled = original.originalUnavailable();
+  b.addEventListener('click', () => { if (!original.originalUnavailable()) setView('original', { persist: true }); });
+  box.appendChild(b);
+  return box;
 }
 
 function noticeBlock(key) {
@@ -2048,6 +2118,7 @@ function relabelReader() {
   paintPager();
   paintProgressBar();
   paintViewToggle();
+  paintScanNotice();          // `[8l]`
   // 원본 뷰는 canvas 라 글자가 언어를 타지 않는다. 줌 표시·대체 텍스트만 고친다.
   if (state.view === 'original') { original.relabelOriginal(); return; }
   // 쪽 라벨·자리표시자 문장이 언어를 타므로 그린 것을 다시 그린다.

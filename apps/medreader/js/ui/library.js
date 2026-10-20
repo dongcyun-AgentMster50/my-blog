@@ -35,7 +35,7 @@
 import * as db from '../db.js';
 import * as settings from '../settings.js';
 import { fileIdentityHash } from '../hash.js';
-import { openDocument } from '../pdf/loader.js';
+import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
 import { go, readerHash } from '../router.js';
@@ -47,7 +47,12 @@ import {
 // `[8g-2]` 검색 엔진 캐시 배선만(화면 변화 없음) — 새로 쓰인 쪽은 다음 검색 전에 다시 읽고, 다시 추출·삭제면 버린다.
 import { notePage as searchNotePage, invalidate as searchInvalidate } from '../search/engine.js';
 // `[8g-4a]` 서재 [검색](서재 전체 범위) — 되돌림 스위치(17-8-12 §9)가 끄면 숨긴다.
-import { SEARCH } from '../config.js';
+import { SEARCH, SCAN, PDF_TEXT_CONTENT_OPTIONS } from '../config.js';
+// `[8l]` 스캔본·글자 깨짐 판정(spec 17-5-1 2 · 19-1-3 §3) — 판정은 순수 `text/scan.js`, 표본 읽기·저장은 여기.
+import {
+  probePages, countItems, imageCheckPages, scanVerdict, scanRecord, needsScan, badgeKey,
+  imageOpIds, textOpIds, countOps, SCAN_FIELDS
+} from '../text/scan.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -169,6 +174,9 @@ function docCard(doc) {
   title.textContent = doc.title || doc.fileName || doc.id;
   card.appendChild(title);
 
+  // `[8l]` 스캔본·깨짐 배지(17-5-1 3 · 19-1-3 §3-3). 추출 진행 줄은 그대로 둔다.
+  card.appendChild(scanBadge(doc));
+
   const meta = el('div', 'doc-meta');
   meta.appendChild(el('span', null, t('library.card.pages', { n: Number(doc.pageCount) || 0 })));
   meta.appendChild(el('span', null, formatBytes(Number(doc.size) || 0)));
@@ -204,6 +212,35 @@ function docCard(doc) {
   card.appendChild(langPanel(doc, panelId));
 
   return card;
+}
+
+/** `[8l]` 카드 배지 — 판정이 없거나 `text` 면 숨긴 채로 자리만 둔다(판정이 나중에 오면 `paintScanBadge`). */
+function scanBadge(doc) {
+  const b = el('p', 'doc-badge');
+  paintBadgeInto(b, doc);
+  return b;
+}
+
+function paintBadgeInto(b, doc) {
+  const key = badgeKey(doc);
+  b.hidden = !key;
+  if (key) {
+    b.setAttribute('data-i18n', key);
+    b.setAttribute('data-kind', doc.scan.verdict === 'garbled' ? 'garbled' : 'scan');
+    b.textContent = t(key);
+  } else {
+    b.removeAttribute('data-i18n');
+    b.removeAttribute('data-kind');
+    b.textContent = '';
+  }
+}
+
+/** 판정이 막 저장됐다 — 서재가 그려져 있으면 그 카드의 배지만 고친다. */
+function paintScanBadge(doc) {
+  if (!els || !els.list || !doc) return;
+  const card = els.list.querySelector('[data-doc-id="' + cssEscape(doc.id) + '"]');
+  const b = card && card.querySelector('.doc-badge');
+  if (b) paintBadgeInto(b, doc);
 }
 
 /* ── 7c 원문 언어 ─────────────────────────────────────── */
@@ -454,7 +491,129 @@ async function attach(doc, pdfDoc) {
   // 7c — 이미 뽑아 둔 쪽으로 곧바로 한 번, 모자라면 쪽이 생길 때마다 다시 본다.
   watchLangGuess(doc.id, ex);
   await ex.start();
+  // `[8l]` 스캔본·깨짐 판정 — 문서마다 한 번(`scan.v` 경첩). 추출을 시작한 **뒤**, 첫 쪽이 나오면(또는 잠시 뒤) 돈다.
+  if (needsScan(doc)) scheduleScan(doc.id, pdfDoc, ex);
   return ex;
+}
+
+/* ────────────────────────────────────────────────────────
+   5-0. `[8l]` 스캔본·글자 깨짐 판정 (spec 17-5-1 2 · 19-1-3 §3)
+   표본 12쪽 `getTextContent`(글자만 센다 — 레이아웃 없음) → 75% 이상 글자 0 이면 최대 2쪽만
+   `getOperatorList`(이미지 연산 — 이미지를 푼다). 추출기와 **같은 `pdfDoc`** 을 쓴다(워커 큐가 순서를 맞춘다).
+   판정은 순수 `text/scan.js`. 저장은 `db.patch` 로 **자기 필드(`scan`)만**. 실패는 조용히 — 다음에 열 때 다시.
+   ──────────────────────────────────────────────────────── */
+
+/** 판정이 도는 문서(한 문서에 한 번에 하나). */
+const scanBusy = new Set();
+
+function scheduleScan(docId, pdfDoc, ex) {
+  let fired = false;
+  let timer = null;
+  const start = () => {
+    if (fired) return;
+    fired = true;
+    if (timer) clearTimeout(timer);
+    ex.removeEventListener('page', start);
+    runScan(docId, pdfDoc);
+  };
+  // 첫 쪽 표시를 막지 않게 — 추출기가 첫 쪽(지금 쪽)을 내면, 이미 다 뽑힌 문서면 잠시 뒤에.
+  ex.addEventListener('page', start);
+  timer = setTimeout(start, SCAN.START_AFTER_MS);
+}
+
+/**
+ * 표본 쪽을 읽어 판정한다 — **pdf.js 호출은 여기만**(판정은 순수 `scanVerdict`). 쪽 하나라도 못 읽으면 던진다.
+ * `dev`·실물 판정 스크립트도 이 함수를 쓴다(앱과 같은 길).
+ * @param {Object} pdfDoc PDFDocumentProxy
+ * @param {Object} OPS    pdf.js `OPS` 표
+ * @returns {Promise<Object>} `scanVerdict` 결과
+ */
+export async function scanPdf(pdfDoc, OPS) {
+  const samples = [];
+  for (const n of probePages(pdfDoc.numPages)) {
+    const page = await pdfDoc.getPage(n);
+    const tc = await page.getTextContent(PDF_TEXT_CONTENT_OPTIONS);
+    const c = countItems(tc && tc.items);
+    samples.push({ pageNo: n, chars: c.chars, bad: c.bad });
+  }
+  const check = imageCheckPages(samples);
+  if (check.length) {
+    const imgIds = imageOpIds(OPS);
+    const txtIds = textOpIds(OPS);
+    for (const n of check) {
+      const page = await pdfDoc.getPage(n);
+      const ol = await page.getOperatorList();
+      const s = samples.find((x) => x.pageNo === n);
+      s.imgs = countOps(ol && ol.fnArray, imgIds);
+      s.textOps = countOps(ol && ol.fnArray, txtIds);
+      // 풀어 둔 이미지를 들고 있지 않는다(그리는 중이면 pdf.js 가 스스로 미룬다).
+      try { page.cleanup(); } catch (e) { /* 정리 실패는 판정과 무관 */ }
+    }
+  }
+  return scanVerdict(samples);
+}
+
+/**
+ * 판정 한 번 — 이미 지금 판으로 판정했으면 아무것도 하지 않는다. 어떤 실패도 밖으로 내지 않는다.
+ * @param {string} docId
+ * @param {Object} pdfDoc
+ * @param {Object} [OPS] 없으면 pdf.js 모듈에서(이미 열린 문서라 캐시된 모듈이다)
+ * @returns {Promise<Object|null>} 저장한 `scan` 레코드(안 했으면 null)
+ */
+export async function runScan(docId, pdfDoc, OPS) {
+  if (scanBusy.has(docId)) return null;
+  scanBusy.add(docId);
+  try {
+    const doc = await db.get('documents', docId);
+    if (!doc || !needsScan(doc)) return null;
+    const ops = OPS || (await loadPdfjs()).OPS;
+    const res = await scanPdf(pdfDoc, ops);
+    const out = await writeScan(docId, res);
+    if (!out.wrote || !out.rec) return null;
+    announceScan(out.rec);
+    return out.rec.scan;
+  } catch (e) {
+    return null;   // 조용히 — 앱에 영향 0, 다음에 열 때 다시(`scan` 이 없으니 `needsScan`)
+  } finally {
+    scanBusy.delete(docId);
+  }
+}
+
+/**
+ * `[P1 경합]` 판정 저장 — **자기 필드(`scan`)만**. 그사이 다른 곳이 지금 판으로 이미 적었으면 쓰지 않는다.
+ * @returns {Promise<{wrote:boolean, rec:Object|null}>}
+ */
+export function writeScan(docId, res, now) {
+  return db.patch('documents', docId, (cur) => {
+    if (!needsScan(cur)) return null;
+    return pickScanFields({ scan: scanRecord(res, cur.scan || null, now) });
+  });
+}
+
+/**
+ * 리더 띠를 닫았다(17-5-1 3 — 문서당 한 번). **자기 필드(`scan`)만** — 판정 값은 그대로, `noticed` 만 더한다.
+ * @returns {Promise<{wrote:boolean, rec:Object|null}>}
+ */
+export function markScanNoticed(docId) {
+  return db.patch('documents', docId, (cur) => {
+    const s = cur.scan;
+    if (!s || typeof s !== 'object' || s.noticed === true) return null;
+    return pickScanFields({ scan: Object.assign({}, s, { noticed: true }) });
+  });
+}
+
+function pickScanFields(obj) {
+  const part = {};
+  for (const f of SCAN_FIELDS) if (f in obj) part[f] = obj[f];
+  return part;
+}
+
+/** 카드를 고치고, 열린 리더·검색에 알린다(`ui/reader.js` 가 듣는다). */
+function announceScan(rec) {
+  if (!rec) return;
+  paintScanBadge(rec);
+  if (typeof document === 'undefined') return;
+  document.dispatchEvent(new CustomEvent('medreader:docscan', { detail: { docId: rec.id, scan: rec.scan } }));
 }
 
 /* ────────────────────────────────────────────────────────

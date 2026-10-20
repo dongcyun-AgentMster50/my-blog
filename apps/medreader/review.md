@@ -6080,3 +6080,188 @@ Build 의 X1–X6 과 겹치지 않게 골랐다. 백업 `r8j/bak/` → 변이 �
    - 진단 페이지의 끊긴 이어 말하기 문구
    - 생성기 주석 테스트 이름
    - maskable 그림 크기(실기기에서 작아 보이면)
+
+# 8l Review — 스캔본·글자 깨짐 감지와 안내 · 배포 판정 (2026-10-20)
+
+> 지침: `.claude/tasks/medreader-review-8l.md`. Build 보고는 참고만 하고 **내 스크립트로 다시 쟀다**. 커밋하지 않았다. 앱 코드·테스트·spec 은 고치지 않았다(변이는 백업을 읽어서 쓰기로 되돌리고 `cmp`·`git hash-object` 로 확인). 작업 폴더는 스크래치패드 `r8l/`(`judge-r.mjs` 실물 판정 · `setup.mjs`·`rv8l.mjs`·`partial2.mjs`·`arreg.mjs` 8l headless · `rv.mjs`·`lib.mjs` 회귀(r8g4b 것을 문서 id 만 고쳐 씀) · `mut.mjs` 변이, 결과 `out*.jsonl`·`*.json`·`full*.txt`·`shots/`, 백업 `bak/`). 브라우저는 Edge headless · **새 프로필 1개**(`r8l/p1`) · 흉내 음성 · 흉내 번역 응답(가짜 키). `G:`·`D:/OCR` 는 읽기만 했다.
+
+## 8lR-1. 결론 — **통과** · 배포 판정 — **배포해도 된다**
+
+- 막는 문제는 없다. 판정 규칙은 spec 과 줄 단위로 같고, 실물 19개가 모두 기대대로 나왔다. 앱 함수와 내 독립 재구현의 숫자도 한 글자까지 같다.
+- 안내 세 자리, ▶ 갈래, 빈 쪽 안내가 ko·ar 에서 spec 대로 동작한다. 회귀(8i-3·8i-1 B·F1·목차·번역 띠·검색)는 없고 콘솔 오류는 0이다.
+- 남은 것은 모두 낮음이다. Build 남은 문제 1(부분 OCR 문서의 20쪽 넘김)은 실물로 재현했다. spec 대로이고 배포를 막지 않지만, 운영자가 정할 일이다(8lR-8).
+- 테스트에는 빈틈이 넷 있다(8lR-9). 띠 [원본 보기]의 `noticed`, 판정 시작 시점, 검색 `final`, ▶ 큐의 인용 거르기다. 모두 headless 로는 맞게 동작함을 확인했다. 다음 묶음에서 테스트만 보태면 된다.
+
+## 8lR-2. 범위
+
+- 바뀐 것은 지침 범위뿐이다: `js/text/scan.js`(새)·`config.js`(`SCAN`)·`ui/library.js`·`ui/reader.js`·`ui/controls.js`·`tts/speaker.js`·`ui/search.js`·`i18n/*` 4개·`index.html`(띠 자리 + stamp)·`css/reader.css`·`css/screens.css`·`tests/scan-8l.test.mjs`(새)·`spec.md`.
+- spec 은 정정 줄 4개뿐이다(17-5-1 2 에 2줄, 3 에 1줄, 19-1-3 §3-2 에 1줄). 표·문안은 그대로다.
+- DB 버전 3·`algoVersion`·`derivedDocReset` 은 무변이다. 블로그 본체는 diff 0 이다. `.nojekyll` 있음(0 B). `.codex/`·`AGENTS.md` 는 이번 작업이 아니다.
+
+## 8lR-3. 판정 규칙 대조 (`scan.js` 줄 단위)
+
+| spec | 코드 | 판정 |
+|---|---|---|
+| 표본: N ≤ 12 면 1..N, 아니면 [0.10N, 0.90N] 을 12칸으로 나눈 칸 가운데, 중복 제거·오름차순 | `probePages` 40–48행: `round(a + (b−a)(k+0.5)/12)`, 1..N 자름, `Set` → 정렬 | 같다 |
+| 글자 0 판정이 먼저, 75% 문턱 | `scanVerdict` 131행이 먼저 보고 140행에서 반환한다. `textless·4 ≥ probed·3`(97행), `EMPTY_CHARS 0` | 같다(경계 9/12 후보 · 8/12 text) |
+| 이미지 확인은 글자 0 표본 중 앞 2쪽만 | `imageCheckPages` 107–112행, `scanPdf` 는 그 쪽만 `getOperatorList` | 같다 |
+| `garbled`: Σchars ≥ 500 이고 Σbad·20 ≥ Σchars | 142행 | 같다 |
+| 깨진 글자 = FFFD + PUA(E000–F8FF · F0000–10FFFD) + 제어(0000–001F · 007F–009F 중 `\s` 아님), 코드 포인트 단위 | `garbleCount` 61–74행: `for…of` 로 서로게이트 쌍은 한 글자, `\s` 는 먼저 뺀다 | 같다. JS `\s` 에는 U+001C–001F·U+0085 가 없어 bad 로 센다. spec 정의("`\s` 가 아닌 것")와 같다 |
+| `textOps`: 이미지를 확인한 경우만 | 138행 `checked.length ? ops : null`, `scanRecord` 는 유한수일 때만 넣는다 | 같다(carryover 정정 줄) |
+| 순수 | `scan.js` 의 import 는 `config.js` 하나뿐이다. pdf.js·DOM·db 는 0이고, 연산 번호는 `OPS` 를 인자로 받는다 | 순수하다 |
+
+## 8lR-4. 실물 판정 (`judge-r.mjs` — 앱 `ui/library.js scanPdf` + **scan.js 를 쓰지 않는 내 독립 재구현**, pdf.js 5.6.205 Node)
+
+Build 와 겹치지 않게 스캔본 원본 5개·스피쿠스 unit 2개·OCR 결과 6개를 새로 골랐다. **19/19 기대와 같다.** 두 구현은 판정·`textless`·Σchars·Σbad·`textOps` 가 모두 같다.
+
+| 파일 | 쪽 | 기대 | 앱 | 내 구현 | 글자0/표본 | img | textOps | Σbad/Σchars |
+|---|---|---|---|---|---|---|---|---|
+| Harrison 2021 | 729 | text | text | text | 0/12 | — | — | 0/39,879 |
+| CMDT 2026 | 1,967 | text | text | text | 0/12 | — | — | 0/51,283 |
+| CMDT 2021 | 5,051 | text | text | text | 0/12 | — | — | 0/22,117 |
+| Advanced Grammar 원본 | 307 | scan | scan | scan | 12/12 | 2 | 0 | 0 |
+| Essential Grammar in Use 원본(FM라디오) | 299 | scan | scan | scan | 12/12 | 2 | 0 | 0 |
+| Explotring English_2 원본 | 160 | scan | scan | scan | 12/12 | 2 | 0 | 0 |
+| Grammar Reference 원본 — **12쪽 경계** | 12 | scan | scan | scan | 12/12 | 2 | 0 | 0 |
+| Restless 1 answer 원본 — 9쪽 | 9 | scan | scan | scan | 9/9 | 2 | 0 | 0 |
+| `test-OCR.pdf` | 307 | scan | scan | scan | 11/12 | 2 | 0 | 0/2,742 |
+| 스피쿠스 unit2 | 6 | garbled | garbled | garbled | 0/6 | — | — | 1,219/6,083 (20.0%) |
+| 스피쿠스 unit15 | 8 | garbled | garbled | garbled | 0/8 | — | — | 2,079/8,262 (25.2%) |
+| Harry Potter 2 원본 | 341 | notext | notext | notext | 12/12 | 0 | **150** | 0 |
+| OCR: SpeakEnglishLAA | 175 | text | text | text | 2/12 | — | — | 0/6,319 |
+| OCR: Essential Grammar in Use | 299 | text | text | text | 0/12 | — | — | 0/14,452 |
+| OCR: Explotring English_2 | 160 | text | text | text | 0/12 | — | — | 0/7,121 |
+| OCR: Grammar Reference(12쪽) | 12 | text | text | text | 0/12 | — | — | 0/12,895 |
+| OCR: 스피쿠스 unit2 | 6 | text | text | text | 0/6 | — | — | 0/4,933 |
+| OCR: Longman Professional English | 57 | text | text | text | 0/12 | — | — | 0/8,993 |
+| OCR: Basic Grammar 답안 | 26 | text | text | text | 0/12 | — | — | 0/29,903 |
+
+- 의학책 세 권의 Σbad 는 0이다(19-1-3 §3-4 "5% 의 1/10 미만" 충족). 데스크톱 판정 시간은 12–991 ms 다.
+- **앱 안(pdf.js CDN 5.4.149)에서도 같다.** headless 로 7권을 가져왔더니 저장된 `documents.scan` 이 위 표와 같았다(`setup.json`). 결과는 Harrison·CMDT 두 권 text, Explotring·`test-OCR` scan, unit2 garbled 1,219/6,083, Harry Potter notext `textOps 150` 이다.
+
+## 8lR-5. 저장·경첩
+
+- `db.patch` 로 `scan` 만 쓴다(`pickScanFields` + `SCAN_FIELDS`). headless 에서 띠 [원본 보기]를 누른 뒤 레코드를 비교했다. 바뀐 필드는 `scan`(= 이전 값 + `noticed:true`, 판정 값 그대로)과 리더를 연 데 따른 `lastPage`·`lastOpenedAt`·`lastLineId` 뿐이다. `outline`·`pageLabels`·`lang` 등은 그대로다. `documents` 를 통째로 `put` 하는 곳은 새 문서 만들기와 `touchDuplicate` 의 폴백뿐이다. 판정과 경합할 수 없다.
+- 경첩: `needsScan` = `scan` 이 없거나 `v < VERSION` 일 때다. `writeScan` 은 트랜잭션 안에서 다시 확인한다. 같은 판이면 돌지 않는다. headless 에서 다시 연 문서는 `scan.at` 이 그대로였고, 판정을 지운 경우에만 다시 돌았다.
+- 표본 실패: `scanPdf` 가 던지면 `runScan` 이 null 을 내고 아무것도 쓰지 않는다(SC11). 내 변이 R6(실패를 글자 0 으로 삼키기)도 SC11 이 잡는다.
+- **시작 시점이 첫 화면을 늦추지 않는다**(`rv8l-timing.json`, CPU 4배 느림, 새로고침으로 리더 직행 × 3회씩, 판정 있음/지움 번갈아).
+
+| 문서 | 첫 쪽 표시 — 판정 안 돎 | 판정 돎 | 판정 저장 시각 |
+|---|---|---|---|
+| CMDT 2026 700쪽 | 1,159·1,088·1,074 ms | 1,122·1,090·1,074 ms | 약 4.3 초 |
+| Explotring(스캔본) 60쪽 | 1,120·1,014·1,001 ms | 994·1,004·972 ms | 약 3.0 초 |
+| CMDT 2021 2000쪽 | 1,045·1,040·1,040 ms | 1,022·1,002·1,051 ms | 약 3.6 초 |
+
+  → 차이는 잡음 수준이다. 판정은 첫 쪽이 뜬 **뒤** 2–3 초 지나서 끝난다(다 뽑힌 문서라 1.5초 타이머). 새로 가져올 때도 첫 쪽 뒤에 끝났다(Harrison 546→587 ms, CMDT 2026 758→1,558 ms). 휴대폰 실측은 여전히 `[M]` 이다.
+
+## 8lR-6. 안내 세 자리 · ▶ · 빈 쪽 안내 (headless 412×915 · ko·ar)
+
+| 항목 | ko | ar |
+|---|---|---|
+| 서재 배지 | Explotring·test-OCR·Harry Potter "스캔본 — 글자 없음", unit2 "글자 깨짐 — OCR 필요", 의학책 3권 없음 | 아랍어 문구 · `direction: rtl` · 의학책 없음 |
+| 리더 띠 문구 | scan·garbled 모두 키 문안과 글자 단위 같음 | Harry Potter(notext) → `reader.scan.notice` 아랍어 같음 |
+| 띠 단추 | 48px · 412 에서 [원본]은 글 옆, [닫기]는 둘째 줄(띠 높이 235px) · 360 에서는 둘 다 아래 줄(210px) | 같음(الأصل·إغلاق 48px) |
+| 문서당 한 번 | [원본 보기] → 원본 뷰 · 띠 닫힘 · `noticed:true` → 서재로 갔다 다시 열면 띠 없음 | 같음 |
+| ▶ (scan·notext, 빈 쪽) | 50쪽 그대로 · `idle` · 발화 0 · `reader.scan.noRead` 배너(문구 같음), 닫고 다시 누르면 다시 | 100쪽 그대로 · 아랍어 배너 같음 |
+| ▶ (garbled) | **막지 않음** — speaking · 발화 8 · noRead 없음 | 발화 8 |
+| ▶ (scan 문서의 OCR 된 쪽 — test-OCR 41쪽) | 막지 않음 — speaking · 발화 3 | — |
+| 검색 | 스캔본 "grammar" → 결과 0 자리에 `noSearch`("찾지 못했습니다" 없음) · unit2 → 맨 위 `garbledSearch` | 스캔본 `noSearch` · unit2 결과 1개 **그대로** + 맨 위 한 줄 · 의학책(Harrison 112·CMDT 67 결과)에는 안내 0 |
+| 가로 스크롤 | 서재·리더 412/360 모두 0 | 0 |
+
+**빈 쪽 안내 `reader.page.noText` 가 의학책에서 거슬리는가 — 거슬리지 않는다**(`rv8l-medempty.json`, `shots/med-*`)
+- 실제 빈 쪽 9개에서 확인했다: CMDT 2026 1·2·3·9·17쪽, CMDT 2021 2·3·10·27쪽. 모두 같은 모양이다. "p. N" 아래에 회색 작은 한 줄과 [원본] 단추(55px)가 붙고, 띠는 없다.
+- 예전에도 같은 자리에 `reader.page.empty`(ko 파일 값 "No text was found on this page.")가 떴다. 그러니 **새로 생긴 것은 단추 하나**다. 글자 있는 쪽(61쪽, 줄 119개)에는 안 나온다.
+- CMDT 2021 3쪽은 표지 이미지다. [원본]을 누르면 바로 표지가 보인다. 문구 "그림이나 스캔한 쪽일 수 있습니다"가 실제와 맞는다.
+- 텍스트 책의 낭독 흐름은 그대로다.
+  - 빈 쪽(CMDT 2026 2쪽)에서 ▶: 예전대로 조용히 `idle` 이고 배너는 없다.
+  - 8쪽 끝에서 읽기: 빈 9쪽을 넘겨 10쪽을 계속 읽는다(발화 쪽 8 → 10).
+- ar 에서도 문구가 같고 가로 스크롤은 0이다.
+- 작은 것(낮음): 스캔본 화면에는 "원본"이 셋 보인다(상단 보기 전환 · 띠 · 빈 쪽 단추). 띠는 한 번만 뜨므로 그대로 둬도 된다. ko 의 14절 배너 닫기는 "Dismiss"(ko 파일의 기존 영어 값)이고 띠는 "닫기"다. 10단계 ko 정리 몫이다.
+
+## 8lR-7. 회귀 (r8g4b 스크립트 그대로 · 새 프로필 · 콘솔 오류 0)
+
+| 항목 | 결과 |
+|---|---|
+| 8i-3 쪽 넘김 낭독(CMDT 2026 30→36쪽, 리플로우) | 발화 168 · 쪽 7개 · 중복 0 · 끊김 1 → OK |
+| 8i-1 B(310쪽 옛 판으로 열자마자 ▶) | 143 ms `waiting-page`, 발화 0 → 649 ms speaking · 쪽 DOM 새로 · algoVersion 돌아옴 → OK |
+| 8g-4a F1(61쪽 끝 낭독 → 숨은 리더 62쪽 → 61쪽 결과) | 해시·쪽 61 · cur · paused · 가운데 · ▶ 61쪽부터 → OK |
+| 목차·낭독·번역(Harrison 120쪽, tocplay) | 7/7 OK — 번역 호출 0(이동만), ▶ 첫 줄부터 |
+| 번역 띠(basic) | 흉내 응답 2회 · 띠 보임 · readalong speak · 설정 화면 정상 |
+| ar 의학책 | Harrison·CMDT 2026 리더 RTL · 띠 없음 · ▶ speaking · 검색 112·67 결과, 안내 줄 0 |
+
+## 8lR-8. speaker.js 변경 범위 · Build 남은 문제 판정
+
+**speaker.js**: 바뀐 것은 둘뿐이다.
+- `queueOf(paras, peek)` 에 `peek` 인자가 생겼다. peek 이면 `citeOnlyQueue` 를 건드리지 않는다. 기존 호출 5곳은 인자가 없어 동작이 같다.
+- 읽기 전용 `isQueueEmptyHere()` 를 더했다. `play` 와 같은 `queueOf` 를 쓰고(인용 거르기 포함) `units`·`index`·`state` 를 바꾸지 않는다(SC14 `getTotal` 0 확인). `MAX_EMPTY_PAGES`·`advancePage` 는 무변이다.
+- 참고: `citeOnlyQueue` 는 `play()` 가 막 다시 만든 큐 바로 뒤(760행)에서만 읽힌다. 그래서 peek 플래그는 방어용이다.
+
+**Build 남은 문제**
+1. **부분 OCR 문서의 20쪽 넘김 — 실물 재현. 낮음–중간, 배포를 막지 않는다. 운영자 결정이 필요하다.**
+   - `partial2.mjs`: test-OCR 45쪽(OCR 한 마지막 쪽)에서 ▶ 를 눌렀다. 28문장을 읽은 뒤 `waiting-page` 로 52 → 63 → 65쪽까지 가서 `idle` 이 됐다. **화면이 말없이 20쪽 앞으로 가고 안내도 없다.**
+   - 거기서 다시 ▶ 하면 이번엔 시작 지점이라 noRead 가 뜬다.
+   - spec("재생 시작 지점에서만")대로이고, 텍스트 책에서도 예전부터 같다. CMDT 2021 1쪽 끝 → 앞붙이 빈 쪽 26개가 그렇다.
+   - 운영자 OCR 결과는 전 쪽 OCR 이라 실제로 만날 일은 드물다.
+   - 고친다면 선택지는 둘이다: (가) `scan`·`notext` 문서에서는 쪽 끝 빈 쪽 넘기기를 0쪽으로 하고 noRead 를 띄운다 (나) 모든 문서에서 빈 쪽을 넘긴 뒤 멈추면 "n쪽을 건너뛰었습니다"를 알린다. 어느 쪽이든 speaker 규칙이 바뀌므로 별도 Plan 이 필요하다.
+2. 판정이 검색 화면을 연 뒤에 오면 그 검색에서는 안내 줄이 없다 → **낮음**. 가져온 직후 1–3초 안에 바로 검색할 때만 생긴다.
+3. ▶ 안내가 14절 배너(맨 위)인 것, 412px 띠의 [닫기]가 둘째 줄인 것 → **낮음**. 48px·가로 스크롤 0 은 지킨다. 띠가 235px(화면의 약 1/4)이지만 문서당 한 번이다. 다듬는다면 단추 둘을 한 줄로 묶는 CSS 몇 줄이다.
+4. Galaxy `[M]` → CPU 4배 흉내에서 첫 화면 차이는 0이다(8lR-5). 실기기 확인은 남는다.
+5. 표본 쪽이 늘 실패하는 PDF 는 열 때마다 다시 시도한다 → **낮음**. 조용하고, 첫 쪽 뒤에 돈다.
+6. 가이드의 `notext + textOps > 0 → --force-ocr` → **동의**, 운영자 가이드(앱 밖) 몫이다. 값은 저장된다(Harry Potter 150).
+
+## 8lR-9. 테스트의 힘 (내 변이 — `mut.json`, Build M1–M10 과 겹치지 않게)
+
+백업 `r8l/bak/` → 변이 → 전체 테스트 → 백업을 읽어서 쓰기 → 바이트 비교 + `cmp` 5파일 같음 + `git hash-object` 5파일이 변이 전과 같음.
+
+**주의**: 앱 파일이 바뀌면 무엇이든 stamp 테스트(IM2·IM6·IM7b)가 빨개진다. 그래서 아래 "의미 빨강"은 그 셋을 뺀 것이다.
+
+| # | 변이 | 의미 빨강 |
+|---|---|---|
+| R1 | 판정을 첫 쪽·1.5초를 기다리지 않고 곧바로 시작(`scheduleScan`) | **없음** — SC15 는 `attach` 안 순서만 본다 |
+| R2 | 띠 [원본 보기]가 `noticed` 를 남기지 않음 | **없음** — SC15 는 `markScanNoticed(docId)` 글자만 본다 |
+| R3 | 검색 안내가 `final` 을 무시(찾는 중에도 noSearch) | **없음** — `searchNotice` 순수 테스트만 있다 |
+| R4 | `isQueueEmptyHere` 가 인용 거르기를 뺌 | **없음**(grep 테스트 하나가 우연히 빨강 — 의미 아님) |
+| R5 | 표본을 칸 가운데 대신 칸 끝으로 | SC1·SC9 |
+| R6 | 표본 쪽 실패를 글자 0 으로 삼키고 저장 | SC11 |
+| R7 | 이미지 확인 쪽을 표본 앞 2쪽에서(글자 0 쪽이 아니라) | SC3·SC5 |
+
+→ 판정·저장 핵심(R5–R7)은 모두 잡는다. Build 의 M1–M10 도 같다.
+- 빈틈은 UI 배선 넷(R1–R4)이다. 넷 다 headless 에서 맞게 동작함을 확인했다: [원본 보기] → `noticed:true`, 첫 쪽 뒤 시작, 결과 0 이 끝난 뒤에만 noSearch, ▶ 갈래.
+- 그래서 배포를 막지 않는다. 다음 묶음에서 테스트를 보탤 것을 권한다.
+  - `dismissScanNotice(true)` 가 `markScanNoticed` 를 부르는지(배선 정규식 한 줄)
+  - `scheduleScan` 이 `page` 이벤트나 타이머 전에는 `runScan` 을 부르지 않는지(가짜 추출기)
+  - search.js 가 `final: !!m.final` 을 넘기는지
+  - 인용만 있는 쪽에서 `isQueueEmptyHere` 가 true 인지
+
+## 8lR-10. 전체 테스트 · stamp · 정리
+
+- `node --test apps/medreader/tests/*.test.mjs` 를 3회 돌렸다(변이 전 1회, 복원 뒤 2회). 모두 **1260/1260**(1244 + 16), fail 0 이다.
+- `stamp-importmap --check` "그대로다(모듈 59개 · CSS 4개)" 종료 0 · `git diff --check` 깨끗 · `.nojekyll` 있음.
+- 프로세스:
+  - msedge 는 실행 전 3개 → 끝난 뒤 3개다(스크립트마다 `browser.close()`).
+  - **8000번 python(PID 15088)은 켜 두었다.** 8123·8124·8125번 node(PID 19520·9980·21516)는 건드리지 않았다.
+  - 내가 띄운 node 는 남아 있지 않다.
+- 프로필 `r8l/p1` 은 `rm -rf` 금지라 남겼다(앱 DB 에 7권).
+
+## 8lR-11. 배포 판정 · 운영자 몫
+
+1. **배포해도 된다.** `origin/main` = `a4c8cfe`. 이번 변경을 한 커밋으로 얹으면 된다.
+2. 커밋할 것:
+   - 위 8lR-2 의 앱 파일
+   - 새 `js/text/scan.js`·`tests/scan-8l.test.mjs`
+   - `spec.md`(정정 줄 4)
+   - 이 review.md
+   - 관례대로 `.claude/tasks/medreader-*-8l*.md`
+   **`.codex/`·`AGENTS.md` 는 넣지 않는다**(`git add -A` 금지). `.nojekyll` 그대로.
+3. 운영자 결정:
+   - (a) 부분 OCR 문서의 쪽 끝 20쪽 넘김(8lR-8 1 — 가/나/그대로)
+   - (b) 운영자 가이드에 "배지가 '스캔본'인데 원본이 글자처럼 보이면(`notext` + `textOps > 0`) `--force-ocr`" 넣기
+   - (c) ar·fr 문안 `[검토 — Nour·운영자]` 는 그대로 남아 있다
+4. 배포 뒤 실기기 `[M]`:
+   - Galaxy 에서 스캔본을 넣었을 때 첫 화면 지연이 없는지, 띠 높이가 어떤지
+   - 스피쿠스 unit 하나로 배지·띠
+5. 다음 묶음 후보:
+   - 8lR-9 테스트 넷
+   - 띠 단추 한 줄 CSS
+   - 검색 화면에 `medreader:docscan` 듣기(남은 문제 2)
+   - ko 배너 "Dismiss"

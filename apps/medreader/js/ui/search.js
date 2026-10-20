@@ -37,6 +37,8 @@ import { flowParasOf } from '../text/screen.js';
 // 17-8-10 3-2 — `joinPieces` 는 UI 가 tts/text.js 에서 가져와 순수 `rangesFor` 에 넘긴다(검색이 tts 를 import 하지 않게).
 import { joinPieces } from '../tts/text.js';
 import { docLangOf } from '../text/lang.js';
+// `[8l]` 스캔본·깨짐 문서의 검색 안내 한 줄(17-5-1 3 · 19-1-3 §3-3) — 판정은 순수 `text/scan.js`.
+import { searchNotice } from '../text/scan.js';
 import * as charhl from './charhl.js';
 import {
   onPageRender, onPageRepaint, onReaderLeave, readingSpot, currentScreen, lineElement,
@@ -901,11 +903,17 @@ function paintModelStatus() {
     if (!r) { paintStatus(lines); return; }
     const oc = outcomeOf(r);
     if (oc.type === 'query') { lines.push({ text: t(oc.key) }); paintStatus(lines); return; }
+    // `[8l]` 스캔본·글자 없음: 결과 0 이면 "찾지 못했습니다" 대신 한 줄 · 깨짐: 결과 위에 한 줄
+    const sd = S.docRecs.get(S.docId) || S.doc;
+    const sn = searchNotice(sd && sd.scan && sd.scan.verdict, { final: !!m.final, hits: r.hits.length });
+    if (sn && !sn.replace) lines.push({ text: t(sn.key) });
     if (oc.type === 'db') lines.push({ text: t(oc.key), tone: 'error' });
     if (r.pageCount > 0 && r.pagesCovered < r.pageCount) {
       lines.push({ text: t('search.partial', { done: formatNumber(r.pagesCovered), total: formatNumber(r.pageCount) }) });
     }
-    if (m.final && !r.hits.length) {
+    if (sn && sn.replace) {
+      lines.push({ text: t(sn.key) });
+    } else if (m.final && !r.hits.length) {
       lines.push({ node: isolated('search.empty', m.query) });
       if (scriptMismatch(m.query, docLang(S.docId))) lines.push({ text: t('search.scriptHint', { lang: langName(docLang(S.docId)) }) });
     }

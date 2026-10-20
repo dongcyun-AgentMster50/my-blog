@@ -72,6 +72,9 @@ export default {
   'library.card.pages.other': '{n} pages',
   'library.card.lastRead': 'Last read: page {page}',
   'library.card.neverRead': 'Not opened yet',
+  /* `[8l]` 17-5-1 3 · 19-1-3 §3-3 — 스캔본·깨짐 배지(아랍어·프랑스어 [검토 — Nour·운영자]) */
+  'library.card.scan': 'Scanned — no text',
+  'library.card.garbled': 'Garbled text — needs OCR',
   'library.card.extracting': 'Preparing text {done}/{total}',
   'library.card.extractDone': 'Text ready',
   'library.card.extractPaused': 'Paused {done}/{total}',
@@ -121,6 +124,13 @@ export default {
   'reader.page.input': 'Page number',
   'reader.page.of': 'of {total}',
   'reader.page.empty': 'No text was found on this page.',
+  /* `[8l]` 빈 쪽 안내(모든 문서)·스캔본·깨짐 안내 — `reader.page.empty` 는 남겨 두고 쓰지 않는다(10단계 정리) */
+  'reader.page.noText': 'There is no text to read on this page — it may be a picture or a scanned page.',
+  'reader.scan.notice': "Most pages of this PDF are scanned images, so its text can't be read. You can view it in Original, but read-aloud, translation and search won't work. Import a copy that has been through text recognition (OCR) on a computer.",
+  'reader.scan.noRead': 'There is no text on this page to read aloud.',
+  'reader.scan.noSearch': "This book has no text, so it can't be searched.",
+  'reader.scan.garbled': 'The text layer of this PDF is garbled, so read-aloud, translation and search will produce the wrong characters. You can still view it in Original. Import a copy that has been through text recognition (OCR) again on a computer.',
+  'reader.scan.garbledSearch': "This book's text is garbled, so search results may be wrong.",
   'reader.page.broken': 'This page could not be read. It will be prepared again.',
   'reader.preparing': 'Preparing text {done}/{total}',
   'reader.preparing.unknown': 'Preparing text…',

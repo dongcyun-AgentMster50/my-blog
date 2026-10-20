@@ -730,3 +730,28 @@ export const SEARCH = Object.freeze({
   /* 합성어 변형(U7) — KEEP_HYPHEN_PREFIXES 중 이 길이 이상만 붙이고 띄운다 */
   COMPOUND_MIN_PREFIX: 3
 });
+
+/* ────────────────────────────────────────────────────────
+   `[8l — spec 17-5-1 2 · 19-1-3 §3-2]` 스캔본·글자 깨짐 감지. 판정은 순수 `text/scan.js`, 저장·안내는 UI.
+   `documents.scan` 은 스키마 없는 필드라 DB 버전·`algoVersion` 무관. 규칙이 바뀌면 VERSION 을 올린다 —
+   옛 판정(`scan.v` < VERSION)은 그 문서를 다음에 열 때 한 번 다시 돈다.
+   ──────────────────────────────────────────────────────── */
+export const SCAN = Object.freeze({
+  VERSION: 1,
+  /* 표본: 문서의 FROM–TO 구간을 PROBE 등분한 쪽(PROBE 쪽 이하 문서는 전부) */
+  PROBE: 12,
+  FROM: 0.10,
+  TO: 0.90,
+  /* 표본의 NUM/DEN(75%) 이상이 글자 0 이면 스캔본 후보 → 그중 IMG_CONFIRM 쪽만 이미지 연산을 센다 */
+  MIN_TEXTLESS_NUM: 3,
+  MIN_TEXTLESS_DEN: 4,
+  IMG_CONFIRM: 2,
+  /* 공백 아닌 글자가 이 수 이하인 쪽 = 글자 0 */
+  EMPTY_CHARS: 0,
+  /* 19-1-3 §3-2 — 표본 합에서 FFFD·PUA·제어 문자가 NUM/DEN(5%) 이상이면 'garbled'. 표본 합 MIN_CHARS 미만이면 판단하지 않음 */
+  GARBLE_NUM: 1,
+  GARBLE_DEN: 20,
+  GARBLE_MIN_CHARS: 500,
+  /* `[8l Build — spec 밖 작은 값]` 첫 쪽 표시를 막지 않게: 추출기가 첫 쪽을 내거나 이만큼 지나면 판정을 시작한다 */
+  START_AFTER_MS: 1500
+});

@@ -71,6 +71,9 @@ export default {
   'library.card.pages.other': '{n} pages',
   'library.card.lastRead': 'Last read: page {page}',
   'library.card.neverRead': 'Not opened yet',
+  /* `[8l]` 17-5-1 3 · 19-1-3 §3-3 — 스캔본·깨짐 배지(아랍어·프랑스어 [검토 — Nour·운영자]) */
+  'library.card.scan': 'Numérisé — sans texte',
+  'library.card.garbled': 'Texte corrompu — OCR nécessaire',
   'library.card.extracting': 'Preparing text {done}/{total}',
   'library.card.extractDone': 'Text ready',
   'library.card.extractPaused': 'Paused {done}/{total}',
@@ -120,6 +123,13 @@ export default {
   'reader.page.input': 'Page number',
   'reader.page.of': 'of {total}',
   'reader.page.empty': 'No text was found on this page.',
+  /* `[8l]` 빈 쪽 안내(모든 문서)·스캔본·깨짐 안내 — `reader.page.empty` 는 남겨 두고 쓰지 않는다(10단계 정리) */
+  'reader.page.noText': 'Il n’y a pas de texte à lire sur cette page : c’est peut-être une image ou une page numérisée.',
+  'reader.scan.notice': 'La plupart des pages de ce PDF sont des images numérisées : le texte ne peut pas être lu. Vous pouvez l’afficher en « Original », mais la lecture à voix haute, la traduction et la recherche ne fonctionneront pas. Importez une copie passée par une reconnaissance de texte (OCR) sur un ordinateur.',
+  'reader.scan.noRead': 'Cette page ne contient pas de texte à lire à voix haute.',
+  'reader.scan.noSearch': 'Ce livre ne contient pas de texte : la recherche est impossible.',
+  'reader.scan.garbled': 'La couche de texte de ce PDF est corrompue : la lecture à voix haute, la traduction et la recherche donneront des caractères erronés. Vous pouvez toujours l’afficher en « Original ». Importez une copie repassée par une reconnaissance de texte (OCR) sur un ordinateur.',
+  'reader.scan.garbledSearch': 'Le texte de ce livre est corrompu : les résultats de recherche peuvent être faux.',
   'reader.page.broken': 'This page could not be read. It will be prepared again.',
   'reader.preparing': 'Preparing text {done}/{total}',
   'reader.preparing.unknown': 'Preparing text…',
