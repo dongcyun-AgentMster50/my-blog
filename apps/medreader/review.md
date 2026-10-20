@@ -5819,3 +5819,75 @@ F1 은 고쳐졌다. "뒤로 돌아옴"(낭독이 간 쪽으로 replace)은 그�
 3. 다음 단계 묶음: R2(목차 이동 뒤 뷰 전환이 적중으로 되돌아감) · R3/② 멈춤 안내 · R4 접기 단추 이름 · R5 테스트 3개 · ① speaker `reload` · ⑤ 412px 문턱(실기기 9절 6번 뒤).
 4. spec: Build 7절 제안 (a)(b)(c)를 넣을지(권장), §4-6 표 두 줄 정리.
 5. 실기기 확인 목록(Build 9절 1–6)은 배포 뒤 운영자 몫으로 그대로 둔다.
+
+
+# 8g-4b-R1 Review — 검색 화면 탭 키보드 · 배포 판정 (2026-10-20)
+
+> 지침: `.claude/tasks/medreader-review-8g-4b-r1.md`. Build 보고는 참고만 하고 **내 스크립트로 다시 쟀다**. 커밋하지 않았다. 앱 코드·테스트·spec 은 고치지 않았다(변이는 읽어서 쓰기로 되돌리고 `cmp` 로 확인, 끝에 4개 파일 sha256 이 시작과 같음). 작업 폴더는 스크래치패드 `r8g4br1/`(`lib.mjs`·`setup.mjs`·`run.mjs`·`mut.mjs`, 결과 `run-*.json`·`mut.json`·`full-*.tap`, 백업 `bak/`). 브라우저는 Edge headless · **새 프로필 1개**(`r8g4br1/p1`, CURRENT 2026 하나 · 추출 49초 1967/1967) · 412×915 · 흉내 음성 · 진짜 키 없음.
+
+## 8g4bR1-1. 결론 — **통과** · 배포 판정 — **배포해도 된다**
+
+- R1(키보드로 목차 탭에 갈 수 없음)은 고쳐졌다. ko·ar 모두 Tab → 찾기 탭 → 화살표 → 목차 → 다시 찾기가 된다. 입력 칸과 목차 항목의 화살표·Home/End 는 그대로 먹는다. 터치·클릭과 8i-3 쪽 넘김 낭독도 그대로다.
+- **배포를 막는 문제는 없다.** Build 남은 문제 1은 낮음이고 다음 단계로 둔다(8g4bR1-4).
+
+## 8g4bR1-2. 변경 범위 · ARIA 대조
+
+- `git diff --stat`: `search.js` +41, `index.html` 1줄(stamp `b108d26af2`), 새 `tests/search-tabs-8g4br1.test.mjs`(6개). 지침 범위 그대로다. `.codex/`·`AGENTS.md` 는 8월 27일 것이라 이번 작업이 아니다.
+- `tabKeyTarget` 을 WAI-ARIA APG tabs 와 맞춰 봤다. ←/→ 는 시각 방향이고, RTL 은 탭 목록의 **계산된 `direction`** 으로 뒤집는다(실패하면 `getDir()`). Home 은 처음, End 는 마지막이다. 끝에서는 넘어간다(APG 권장). Alt·Ctrl·Meta 를 누른 채면 -1 이고 Shift 는 통과한다. 탭 키가 아니면 -1 이다. 선택은 자동이고, 고른 탭만 `tabindex=0` 이다. 마크업(`tablist`·`tab`·`aria-selected`·`aria-controls`·`tabpanel`+`aria-labelledby`)도 맞다.
+- `onTabsKey` 는 `tocAllowed()` 가 아니면(서재 범위 등) 아무것도 안 한다. `ev.target` 이 두 탭 중 하나가 아니면 그냥 돌아간다. `preventDefault` 는 `j >= 0` 일 때만 건다. keydown 은 `#searchTabs` 에만 붙어 있어서 입력 칸·목차 판은 구조상 닿지 않는다. 아래 headless 에서 직접 확인했다.
+- (기록 · 낮음) 탭 목록에 접근 가능한 이름(`aria-label`)이 없다(APG 권장). 찾기 탭의 이름이 바로 앞 `searchGo` 단추와 같은 "찾기"다. 막는 문제는 아니다.
+
+## 8g4bR1-3. headless (내 `run.mjs` — `run-kbd-ko.json`·`run-kbd-ar.json`·`run-touch.json`·`run-turn.json`)
+
+CURRENT 2026 쪽 120 → [🔍] → 검색 화면(이 책 범위).
+
+| 확인 | ko | ar |
+|---|---|---|
+| 입력 칸에서 Tab: `searchClear → searchGo → searchTabFind`. 목차 탭은 Tab 순서에 없음 | ✔ | ✔ |
+| 화살표(ko →, ar ←)로 목차: 초점 · `aria-selected` · tabindex −1/0 · 목차 61항목 보임 · 결과 숨김 | ✔ | ✔ |
+| 그 상태에서 Tab → 목차 항목(`toc-row`) | ✔ | ✔ |
+| **목차 항목에서 ↓ · → · ← · End · Home** — 5번 모두 `defaultPrevented=false`(window 거품 단계에서 기록). End 로 scrollY 0 → 3439(ar 3395), Home 으로 0. 탭은 목차 그대로 | ✔ | ✔ |
+| 반대 화살표로 찾기 · End → 목차 · Home → 찾기 · 넘어감 두 번 | ✔ | ✔ |
+| 진짜 Ctrl+→, 합성 Alt+←: 선택 그대로 · `defaultPrevented=false` | ✔ | ✔ |
+| **입력 칸 커서**("heart", 커서 3): Home 0 · End 5 · ← 4 · ← 3 · → 4. 다섯 번 모두 `defaultPrevented=false`. 찾기 탭일 때와 목차 탭일 때 **둘 다 탭이 바뀌지 않음**, 값 그대로 | ✔ | ✔ |
+| 서재 범위: 탭 숨김. 숨은 찾기 탭에 합성 →·End 를 보내도 `defaultPrevented=false` · 선택·목차 그대로 | ✔ | ✔ |
+| 방향: ko `ltr` 목차 x=210 > 찾기 x=16 · ar 탭 목록 `rtl`, **목차 x=16 < 찾기 x=210**(시각적 왼쪽) | ✔ | ✔ |
+
+- 터치·클릭: `tap` 목차 → 찾기, `click` 목차 → 찾기 4번 모두 선택·판·tabindex 가 맞다. 목차 항목을 누르면 그 쪽으로 간다(`#/reader/…/1`).
+- 8i-3 회귀(리플로우 쪽 30 → 36, 빠른 흉내 음성): 168 발화 · 쪽 30–36 · **같은 문장 연달아 0** · 끊김 1(마지막 ⏸). Build 수치와 같다.
+- 콘솔 오류는 매번 기존 404 하나다. 바깥 요청은 pdf.js CDN 둘(기존)뿐이다.
+- 탭이 둘이라 ar 에서 → 도 넘어가서 목차로 간다. 그래서 RTL 뒤집힘은 headless 로 구분되지 않는다. 계산된 방향이 `rtl` 인 것은 확인했고, 뒤집힘 자체는 K2 표와 내 변이 V3 으로 묶여 있다.
+
+## 8g4bR1-4. Build 남은 문제 1 판정 — **낮음 · 다음 단계**(배포 막지 않음)
+
+- 다시 쟀다. 맨 위(scrollY 0)에서 키로 목차 탭에 가면 "지금 항목으로 굴림" 때문에 scrollY 가 424 가 된다. 초점이 간 목차 탭은 top −285 로 화면 밖이고, 지금 항목은 top 426 으로 보인다. 키·클릭 값이 같아서 **8g-4b 동작이지 이번 변경의 회귀가 아니다**. 반대 화살표를 누르면 찾기 탭이 top 139 로 다시 보이고, Tab 한 번이면 목차 항목으로 가므로 막히지 않는다.
+- 덧붙임: 목차 탭에서 Tab 을 누르면 **첫** 목차 항목으로 가면서 scrollY 0 이 된다. 그래서 키보드 사용자는 "지금 항목" 가운데 맞춤을 바로 잃는다.
+- 판정: 키보드 사용자만 겪고, 잠깐 초점이 안 보이는 정도다. 모바일 터치 주 사용에는 영향이 없다. **다음 단계**에서 둘을 함께 본다(탭 목록 sticky, 또는 굴림을 `block:'nearest'`/탭 아래 기준으로, 또는 지금 항목에 `tabindex` 를 줘 Tab 이 그리로 가게).
+
+## 8g4bR1-5. 테스트의 힘 (내 변이 — `mut.json`)
+
+정확히 1회 일치할 때만 바꿨다. 새 테스트 파일을 돌린 뒤 읽어 둔 원본을 다시 써서 복원했다. 끝에 `bak/` 사본과 `cmp` 해서 두 파일 모두 일치했다.
+
+| # | 변이 | 빨강(실패 수) |
+|---|---|---|
+| V1 | 서재 범위 가드 없앰(`!tocAllowed()` 빼기) | K4 (1) |
+| V2 | Ctrl 무시 안 함 | K3 (1) |
+| V3 | 계산된 방향 대신 UI 언어만 | K4 (1) |
+| V4 | ← 가 끝에서 멈춤(넘어가지 않음) | K1·K2 (3) |
+| V5 | 선택 먼저, 초점 나중 | K4 (1) |
+| V6 | 그 밖 키도 제자리 순번(= preventDefault) | K1 (1) |
+| V7 | 목차 탭 `tabindex="-1"` 없앰(마크업) | K5 (1) |
+
+→ 7/7 빨강이고 복원 7/7 이다. 복원 뒤 새 테스트는 초록이다. V1·V3·V5 는 소스 고정(정규식)으로만 잡힌다. V1 은 탭이 숨어 있어 행동 영향이 없는 가드다.
+
+## 8g4bR1-6. 전체 테스트 · stamp · 정리
+
+- `node --test apps/medreader/tests/*.test.mjs`: 1회차 **1234/1234**, 2회차 1233/1234, 3회차 **1234/1234**. 2회차의 1개는 `pipeline-8a.test.mjs` M7(같은 캐시 키 동시 요청, 2 !== 1)이다. 이 review.md 에 이미 두 번 기록된 흔들리는 테스트이고(X1 기록 · X4 표), 이번 변경과 무관한 파일이다. 그 파일만 5번 더 돌려서 5/5 초록이었다.
+- `stamp-importmap --check` 결과는 "그대로다(모듈 58개 · CSS 4개)", 종료 0. `git diff --check` 깨끗. `.nojekyll` 있음.
+- 띄운 Edge 는 매 스크립트에서 닫았다. node 8개(같은 PID — 8123·8124·8125 포함, 건드리지 않음)와 **8000번 python(PID 15088)은 켜 둠**. msedge 는 46716(시작 전부터 있던 것) 말고 32632·14988 두 개가 목록에 남았다. 내 kbd 실행이 닫힌 시각에 생긴 것이고, 핸들 0 · 176 KB · 명령줄 없음이라 46716 과 같은 이미 끝난 껍데기로 본다. 새 프로필 `r8g4br1/p1`(155 MB)은 `rm -rf` 금지라 남겼다.
+
+## 8g4bR1-7. 배포 판정 · 운영자 몫
+
+1. **배포해도 된다.** `origin/main`(`21ede92`) 위 로컬 커밋 15개(`757b46f` 8g-2 … `2ce489e` 8g-4b)에 이번 R1 변경을 커밋해 얹고 한 번에 푸시하면 된다. 15개의 앱 밖 변경은 `.claude/tasks/*` 뿐이고, 지운 파일은 없다. `.nojekyll` 은 그대로다.
+2. 커밋할 것: `apps/medreader/js/ui/search.js`, `apps/medreader/index.html`, 새 `apps/medreader/tests/search-tabs-8g4br1.test.mjs`, 그리고 관례대로 `.claude/tasks/medreader-*-8g-4b-r1*.md` 와 이 review.md. **`.codex/`·`AGENTS.md` 는 넣지 않는다**(이번 작업 아님 — `git add -A` 금지).
+3. 다음 단계 묶음에 더할 것: 남은 문제 1(초점 탭이 화면 밖 · Tab 이 첫 항목으로 가서 지금 항목 맞춤을 잃음), 탭 목록 `aria-label`, 흔들리는 `pipeline-8a` M7(이번까지 세 번 관측 — 고정 5ms 대기를 M6 처럼 바꾸기). 8g4bR-12 의 3–5 는 그대로다.

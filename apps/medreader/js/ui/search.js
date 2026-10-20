@@ -408,6 +408,30 @@ export function tocRows(items, page, open) {
 }
 
 /**
+ * `[8g-4b-R1]` 탭 목록 키보드(WAI-ARIA tabs · 자동 선택) — 이 키로 갈 탭 순번, 이 키가 아니면 `-1`(기본 동작 그대로).
+ * ←/→ 는 **시각적** 방향이다: RTL(아랍어)에서는 탭이 오른쪽부터 놓이므로 ← 가 다음(+1), → 가 앞(−1). 끝에서는 **넘어간다**
+ * (마지막 → 처음, 처음 → 마지막). Home 처음 · End 마지막. Alt·Ctrl·Meta 를 누른 채면 손대지 않는다(브라우저 뒤로 등). 순수.
+ * @param {{key:string, altKey?:boolean, ctrlKey?:boolean, metaKey?:boolean}} ev
+ * @param {number} i      지금 초점 탭 순번
+ * @param {number} n      탭 수
+ * @param {boolean} rtl   탭 목록이 RTL 인가
+ * @returns {number}
+ */
+export function tabKeyTarget(ev, i, n, rtl) {
+  if (!ev || ev.altKey || ev.ctrlKey || ev.metaKey) return -1;
+  const cnt = Math.floor(Number(n)) || 0;
+  if (cnt < 1) return -1;
+  const at = Math.min(cnt - 1, Math.max(0, Math.floor(Number(i)) || 0));
+  switch (ev.key) {
+    case 'ArrowRight': return (at + (rtl ? -1 : 1) + cnt) % cnt;
+    case 'ArrowLeft': return (at + (rtl ? 1 : -1) + cnt) % cnt;
+    case 'Home': return 0;
+    case 'End': return cnt - 1;
+    default: return -1;
+  }
+}
+
+/**
  * `[8g-4b — 8g-4a Review F2]` 이 그리기 뒤 고른 적중으로 **다시 cue** 하는가 — 마지막으로 간 적중이 이 쪽이고
  * (가) 새 판으로 다시 그렸다(`refreshed` — 8g-4a 그대로) 또는 (나) **같은 쪽을 다른 뷰로** 다시 그렸고 다음 [▶] 시작점이 아직
  * 검색이 정한 것이다(`owned` — ▶ 하면 풀린다). (나)가 없으면 멈춘 채 원본 ↔ 리플로우를 오가는 동안 speaker 의 "첫 줄 기준" 되살리기가
@@ -546,6 +570,7 @@ export function initSearch() {
       const b = ev.target.closest('button[role="tab"]');
       if (b) setTab(b === els.tabToc ? 'toc' : 'find');
     });
+    els.tabs.addEventListener('keydown', onTabsKey);
     els.toc.addEventListener('click', onTocClick);
   }
 
@@ -732,6 +757,22 @@ function setTab(tab) {
   paintRecent();
   paintModel();
   restoreScroll();
+}
+
+/** `[8g-4b-R1]` 탭 목록 ←/→/Home/End — 초점을 옮기며 그 탭을 고른다(자동 선택). RTL 은 탭 목록의 계산된 방향으로 본다. */
+function onTabsKey(ev) {
+  if (!els || !tocAllowed()) return;
+  const order = [els.tabFind, els.tabToc];
+  const i = order.indexOf(ev.target);
+  if (i < 0) return;
+  let rtl = getDir() === 'rtl';
+  try { rtl = getComputedStyle(els.tabs).direction === 'rtl'; } catch (e) { /* 계산 실패면 UI 언어 방향 */ }
+  const j = tabKeyTarget(ev, i, order.length, rtl);
+  if (j < 0) return;
+  ev.preventDefault();
+  // 초점 먼저, 그다음 선택 — 누름과 같은 순서(누름도 초점이 먼저 간다). 목차 탭이 "지금 항목으로 굴림"을 해도 초점이 되돌리지 않는다.
+  try { order[j].focus(); } catch (e) { /* 초점 실패는 무해 */ }
+  setTab(order[j] === els.tabToc ? 'toc' : 'find');
 }
 
 function onInput() {
