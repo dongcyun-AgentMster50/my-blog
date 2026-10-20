@@ -305,8 +305,19 @@ export function pauseSpeakerForJump(sp) {
  * @returns {boolean}
  */
 export function cueAt(lineId, start) {
-  if (!speaker || typeof speaker.cue !== 'function') return false;
-  return speaker.cue(lineId, start);
+  return cueSpeakerAt(speaker, lineId, start, paintProgress);
+}
+
+/**
+ * `cueAt` 의 몸통 — **순수**(speaker·그리기를 받는다 · tests/search-toc-8g4b.test.mjs).
+ * `[8g-4b — 8g-4a Review ③]` `speaker.cue` 는 `linechange` 를 내지 않는다(낭독 동반 번역 커서를 건드리지 않으려고) — 그래서
+ * 컨트롤 바의 "n번째 줄"이 [▶] 전까지 이동 전 값이었다. 시작점을 정했으면 **진행 칸만** 새 자리로 다시 그린다(번역 커서·큐 이벤트 없음).
+ */
+export function cueSpeakerAt(sp, lineId, start, paint) {
+  if (!sp || typeof sp.cue !== 'function') return false;
+  const ok = !!sp.cue(lineId, start);
+  if (ok && typeof paint === 'function') paint(sp.getIndex(), sp.getTotal());
+  return ok;
 }
 
 /** 지금 낭독 상태(`idle`·`speaking`·`paused`·`waiting-page`·`error`). speaker 가 없으면 `'idle'`. */

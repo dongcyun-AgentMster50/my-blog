@@ -545,7 +545,9 @@ test('U10 ★ 리더 배선 — initSearch 는 initControls 뒤(onPageRender 구
   const c = noComments(read('../js/ui/controls.js'));
   assert.match(c, /export function pauseForJump\(\) \{ return pauseSpeakerForJump\(speaker\); \}/);
   assert.match(c, /export function cueAt\(lineId, start\)/);
-  assert.match(c, /return speaker\.cue\(lineId, start\);/);
+  // `[8g-4b — 8g-4a Review ③]` 몸통은 순수 cueSpeakerAt(시작점을 정하면 진행 칸만 다시 그린다 — tests/search-toc-8g4b T6)
+  assert.match(c, /return cueSpeakerAt\(speaker, lineId, start, paintProgress\);/);
+  assert.match(c, /const ok = !!sp\.cue\(lineId, start\);/);
 });
 
 test('U10 ★ 되돌림(§9) SEARCH.ENABLED=false — [🔍]·[검색]·띠는 처음부터 숨김이고 스위치가 켜야 보인다 · 라우트는 서재로', () => {
@@ -576,13 +578,13 @@ test('U10 ★ 13절 — search.js 는 innerHTML·console 을 쓰지 않는다 ·
   assert.ok(!/from '\.\.\/pdf\//.test(s));
 });
 
-test('U10 ★ i18n — 검색 키 34개가 네 언어에 같고(ar 먼저, 영어 복사 아님) · 자리표시자 같음 · 목차 탭 키(search.toc.*)는 8g-4b', () => {
+test('U10 ★ i18n — 검색 키 38개(8g-4a 34 + 8g-4b 목차 4)가 네 언어에 같고(ar 먼저, 영어 복사 아님) · 자리표시자 같음', () => {
   const keys = (l) => Object.keys(BUNDLES[l]).filter((k) => k.startsWith('search.')).sort();
   const en = keys('en');
-  assert.equal(en.length, 34);
+  assert.equal(en.length, 38);
   for (const l of ['ar', 'fr', 'ko']) assert.deepEqual(keys(l), en, l);
   for (const k of en) assert.notEqual(BUNDLES.ar[k], BUNDLES.en[k], k);
-  assert.ok(!en.some((k) => k.startsWith('search.toc.')));
+  assert.deepEqual(en.filter((k) => k.startsWith('search.toc.')), ['search.toc.empty', 'search.toc.fallback', 'search.toc.here', 'search.toc.unavailable'], '`[8g-4b]` 목차 탭 키 4개(spec 4-6)');
   const ph = (v) => (v.match(/\{\w+\}/g) || []).sort().join(',');
   for (const k of en) for (const l of ['ar', 'fr', 'ko']) assert.equal(ph(BUNDLES[l][k]), ph(BUNDLES.en[k]), l + ' ' + k);
   assert.match(BUNDLES.ko['search.empty'], /\{q\}/);

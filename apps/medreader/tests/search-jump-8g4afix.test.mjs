@@ -142,9 +142,10 @@ test('FX3 ★ 검색 배선 — JUMP_ENV.mark = noteSearchJump · beginJump 가 
   assert.match(s, /const JUMP_ENV = Object\.freeze\(\{[^\n]*\bmark: \(\) => noteSearchJump\(\),[^\n]*\}\);/, '★ 진짜 env 의 mark 가 리더에 알린다');
   const bj = s.slice(s.indexOf('export function beginJump('), s.indexOf('export function newModel('));
   assert.match(bj, /env\.mark\(\);\s*if \(fromBand && scr && scr\.visible\) env\.replace\(hash\); else env\.go\(hash\);/);
-  // jumpTo · backToSpot 둘 다 beginJump(JUMP_ENV, …) 로만 해시를 바꾼다
-  assert.equal((s.match(/beginJump\(JUMP_ENV, /g) || []).length, 2);
-  // X1 — 기다리던 이동은 **그 쪽**이 그려졌을 때만 처리한다(다른 쪽에 칠하지 않는다 — F1 때 62쪽에 칠할 뻔한 길)
+  // jumpTo · backToSpot · `[8g-4b]` tocJump(목차 항목) 셋 다 beginJump(JUMP_ENV, …) 로만 해시를 바꾼다
+  assert.equal((s.match(/beginJump\(JUMP_ENV, /g) || []).length, 3);
+  // X1 — 기다리던 이동은 **그 쪽**이 그려졌을 때만 처리한다(다른 쪽에 칠하지 않는다 — F1 때 62쪽에 칠할 뻔한 길).
+  // `[8g-4b — carryover 25]` 판정은 순수 `pendingDue` — 행동은 tests/search-toc-8g4b.test.mjs 표가 본다.
   const rp = s.slice(s.indexOf('function onReaderPage('), s.indexOf('function locate('));
-  assert.match(rp, /if \(pend && pend\.docId === scr\.docId && pend\.pageNo === scr\.page && scr\.ready\) \{/);
+  assert.match(rp, /if \(pendingDue\(pend, scr\)\) \{/);
 });

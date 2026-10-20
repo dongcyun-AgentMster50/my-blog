@@ -334,6 +334,33 @@ test('S34b ★ 층 멈춤 경계 — 남는 수의 누적이 max 와 **정확히
   assert.equal(headingToc(recs, { max: 5 }).length, 5);
 });
 
+/* ══ 8g-4b — R2 약어 예외는 대소문자가 있는 글자에만 (8g-3b Review 관찰 · carryover 16) ═══════════ */
+
+test('S33c ★ R2 약어 예외는 대소문자 있는 글자로만 된 낱말에만 — 한글·아랍 문장 끝은 문장 · 라틴 약어는 그대로 · 기준 정의와 같다', async () => {
+  // 한글은 음절 하나가 문자 하나라 "…이야." 의 끝 낱말이 3자 이하 — 예전에는 약어로 통과했다(94권 150항목)
+  for (const t of ['나는 학생이야.', '내일 다시 보세요.', '그건 알아.', '학습목표를 알아.']) assert.equal(why(t), 'sentence', t);
+  assert.equal(why('ذهب إلى هنا.'), 'sentence', '아랍 글자도 대소문자가 없다');
+  assert.equal(why('Zorvat TV는.'), 'sentence', '대소문자 없는 글자가 섞인 낱말은 약어가 아니다');
+  // 라틴(대소문자 있음)은 예전 그대로 — 약어 예외
+  for (const t of ['(remember/regret etc.)', 'Pass the pan.', 'Zorvat vs.', 'Grammar Ch.']) assert.equal(why(t), null, t);
+  assert.equal(why('Zorvat αβγ.'), null, '그리스 글자도 대소문자가 있다');
+  // 한글 제목(부호 없음)·물음표 문장은 예전 그대로
+  assert.equal(why('학습목표'), null);
+  assert.equal(why('1:1 대화연습'), null);
+  assert.equal(why('너는 누구니?'), 'sentence');
+  // 기준 정의(dev/measure-toc-8g3b.mjs `dropReason`)와 글자 그대로 — 같은 꼴에서 같은 이유
+  const proto = await import('../dev/measure-toc-8g3b.mjs');
+  for (const t of ['나는 학생이야.', 'ذهب إلى هنا.', 'Zorvat TV는.', 'Pass the pan.', 'Zorvat αβγ.', 'home.', '(remember/regret etc.)', '학습목표']) {
+    for (const r of [0.95, 1.3]) assert.equal(proto.dropReason({ t, r }), tocDropReason({ t, r }), t + ' r=' + r);
+  }
+  const app = read('../js/text/search.js');
+  const ref = read('../dev/measure-toc-8g3b.mjs');
+  const re = /const CASED_WORD = (\/[^\n]*\/u);/;
+  assert.equal(app.match(re)[1], ref.match(re)[1], '정규식 글자 그대로');
+  assert.match(app, /m\[1\]\.length <= 3 && CASED_WORD\.test\(m\[1\]\)/);
+  assert.match(ref, /m\[1\]\.length <= 3 && CASED_WORD\.test\(m\[1\]\)/);
+});
+
 test('S35 ★ text/search.js 는 document·window·indexedDB 를 쓰지 않는다 · isJunkOutline 은 DB 를 부르지 않는다', () => {
   const src = read('../js/text/search.js');
   const banned = /\b(document|window|indexedDB|fetch)\b/;

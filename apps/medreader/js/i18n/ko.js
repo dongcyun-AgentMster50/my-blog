@@ -398,6 +398,10 @@ export default {
   'search.notOnPage': '이 쪽에서 정확한 위치를 찾지 못했습니다',
   'search.inTable': '표 안에서 찾았습니다',
   'search.paused': '낭독을 멈췄습니다 — ▶ 를 누르면 이 문장부터 읽습니다',
+  'search.toc.fallback': 'PDF 에 쓸 만한 목차가 없어 큰 제목으로 만든 목록입니다 — 빠지거나 틀린 항목이 있을 수 있습니다',
+  'search.toc.unavailable': '목차를 아직 읽지 못했습니다',
+  'search.toc.empty': '이 책에서 목차를 만들지 못했습니다',
+  'search.toc.here': '지금 읽는 곳',
 
   'storage.persisted': 'Storage is protected from automatic cleanup.',
   'storage.notPersisted': 'The browser may clear stored text if space runs low.'

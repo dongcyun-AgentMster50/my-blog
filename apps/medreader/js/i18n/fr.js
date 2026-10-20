@@ -398,6 +398,10 @@ export default {
   'search.notOnPage': 'Emplacement exact introuvable sur cette page',
   'search.inTable': 'Trouvé dans un tableau',
   'search.paused': 'Lecture en pause — appuyez sur ▶ pour lire à partir de cette phrase',
+  'search.toc.fallback': 'Ce PDF n’a pas de sommaire exploitable : cette liste est tirée des grands titres — des entrées peuvent manquer ou être erronées',
+  'search.toc.unavailable': 'Le sommaire du livre n’a pas encore été lu',
+  'search.toc.empty': 'Impossible de construire un sommaire pour ce livre',
+  'search.toc.here': 'Votre position de lecture',
 
   'storage.persisted': 'Storage is protected from automatic cleanup.',
   'storage.notPersisted': 'The browser may clear stored text if space runs low.'

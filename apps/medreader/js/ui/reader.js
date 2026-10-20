@@ -692,6 +692,9 @@ export async function showReader(params) {
     reshowReader(doc);
     return;
   }
+  // `[8g-4b — 8g-4a Review F3 · spec 17-8-12 §4-5]` 숨은 리더에서 **다른 책**으로(서재 범위 결과) — 숨기기만 했던 리더를 정말로
+  // 떠난 것처럼 정리한다(낭독 멈춤·번역 띠·원본 보기·다시 그리기 문지기). 안 하면 빈 번역 띠가 남았다.
+  if (state.soft && state.docId !== docId) leaveReaderNow();
   state.soft = false;
   state.hiddenTurn = false;
   state.hiddenRender = false;
@@ -782,6 +785,11 @@ export function leaveReader() {
     closeTypeset();
     return;
   }
+  leaveReaderNow();
+}
+
+/** 리더를 정말로 떠난다 — `leaveReader`(검색 화면이 아닐 때)와 `[8g-4b F3]` 숨은 리더에서 다른 책으로 갈 때. */
+function leaveReaderNow() {
   state.soft = false;
   state.softEntry = 'back';
   state.hiddenTurn = false;
@@ -1049,9 +1057,31 @@ async function setView(view, opts) {
   landOn(o.anchor);
 }
 
+/** `[8g-4b — F2]` 뷰 전환 기준 줄의 힌트(검색 — 지금 칠해 둔 고른 적중 줄 id 또는 null). 리더는 search 를 import 하지 않는다. */
+let viewAnchorHint = null;
+export function setViewAnchorHint(fn) { viewAnchorHint = typeof fn === 'function' ? fn : null; }
+
+/**
+ * `[8g-4b — F2]` 힌트 줄을 기준 줄로 쓸 수 있는가 — 이 쪽 흐름 줄이고 **지금 보인다**(사용자가 다른 곳으로 굴렸으면 그 자리를 지킨다).
+ * **순수**(tests/search-toc-8g4b.test.mjs). 아니면 null(평소 규칙 `pickAnchorLine`).
+ */
+export function hintedAnchor(hint, visible, flowIds) {
+  if (hint == null) return null;
+  const id = String(hint);
+  if (!id || !Array.isArray(visible) || visible.indexOf(id) < 0) return null;
+  if (!Array.isArray(flowIds) || flowIds.indexOf(id) < 0) return null;
+  return id;
+}
+
 /** 뷰를 바꾸기 **직전**에 지금 화면이 아는 사실을 모아 기준 줄을 고른다. */
 function resolveAnchor() {
   const seen = visibleNow();
+  // `[8g-4b — 8g-4a Review F2]` 검색이 칠해 둔 적중 줄이 지금 보이면 그 줄을 지킨다(원본 보기는 쪽 전체가 한 화면이라
+  // 가운데 줄이 적중이 아니었다 — 리플로우로 돌아오면 적중이 화면 밖이었다).
+  let hinted = null;
+  try { hinted = viewAnchorHint ? viewAnchorHint() : null; } catch (e) { hinted = null; }
+  const hit = hintedAnchor(hinted, seen.visible, flowLineIds());
+  if (hit) return hit;
   const ctx = {
     speaking: state.currentLineIds.length > 0,
     currentLineId: state.currentLineId,
@@ -1513,20 +1543,45 @@ async function wireExtractor(docId) {
  * `[8g-3]` 첫 그리기·추출기 배선 **뒤** 한가할 때 한 번 `outline.ensure` — 이미 읽은 책(`outlineV`)은 부르지 않는다.
  * 실패·다른 책으로 감은 조용히 넘긴다(리더에 영향 0) — 다음에 이 책을 그릴 때 다시 시도한다.
  */
-let outlineQueued = null;
-function scheduleOutline(docId, ex) {
-  if (isOutlineCurrent(state.doc) || outlineQueued === docId) return;
-  outlineQueued = docId;
-  const run = () => {
-    if (outlineQueued === docId) outlineQueued = null;
-    if (state.docId !== docId || !ex.pdfDoc) return;
-    ensureOutline(docId, ex.pdfDoc).catch(() => { /* 조용히 — 다음 기회에 */ });
+function scheduleOutline(docId, ex) { outlineScheduler.schedule(docId, ex); }
+
+/**
+ * `[8g-4b — 8g-3 Review 5절 · carryover 13]` 개요 읽기 예약의 몸통 — **순수 공장**(주입: 이미 읽었나 · 지금 책 · 읽기 · 한가할 때).
+ * 테스트가 가짜 `requestIdleCallback` 으로 행동을 본다(예전 테스트는 소스 정규식이라 R8·R9 변이가 살아남았다).
+ *   - 이미 읽은 책·같은 책이 이미 예약됨 → 예약하지 않는다(false)
+ *   - 한가할 때 돈다 — 그때 **예약 표시를 풀고**(실패한 책은 다음 그리기에서 다시 시도), 다른 책으로 갔거나 pdf 문서가 없으면 읽지 않는다
+ *   - 읽기 실패는 조용히(리더에 영향 0) · 예약 자체가 던지면 표시를 푼다
+ */
+export function createOutlineScheduler(deps) {
+  let queued = null;
+  return {
+    schedule(docId, ex) {
+      if (deps.isCurrent() || queued === docId) return false;
+      queued = docId;
+      const run = () => {
+        if (queued === docId) queued = null;
+        if (deps.docId() !== docId || !ex || !ex.pdfDoc) return;
+        Promise.resolve().then(() => deps.ensure(docId, ex.pdfDoc)).catch(() => { /* 조용히 — 다음 기회에 */ });
+      };
+      try { deps.idle(run); } catch (e) { queued = null; }
+      return true;
+    },
+    queued() { return queued; }
   };
-  try {
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 5000 });
-    else setTimeout(run, 1500);
-  } catch (e) { outlineQueued = null; }
 }
+
+/** 한가할 때 한 번(`requestIdleCallback` 상한 5초, 없으면 1.5초 뒤). 테스트가 가짜 전역으로 부른다. */
+export function outlineIdle(fn) {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 5000 });
+  else setTimeout(fn, 1500);
+}
+
+const outlineScheduler = createOutlineScheduler({
+  isCurrent: () => isOutlineCurrent(state.doc),
+  docId: () => state.docId,
+  ensure: (docId, pdfDoc) => ensureOutline(docId, pdfDoc),
+  idle: outlineIdle
+});
 
 function unwire() {
   const offs = state.wired.off || [];

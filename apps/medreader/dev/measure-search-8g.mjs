@@ -14,6 +14,9 @@
                            개요: 앱 `readOutline` = 1절 시제품(항목·쪽·깊이·제목), 흉내 IndexedDB 에서 `ensure` 저장·두 번째
                            호출의 PDF 호출 0, 쪽 라벨. 폴백: 앱 `headingToc` = 6절 변형 C(항목 집합 차 0), 개요 대비 재현율,
                            `tocOf`(heading 줄만 읽는 경로)가 같은 목록을 내는가.
+                           `[8g-4b 안내 — 8g-3b Review · carryover 18]` 8g-3b 뒤로 앱 `headingToc` 는 §11 규칙(R1–R10)을 쓰므로
+                           이 옵션의 `symDiffVsProtoC`(옛 변형 C 와의 차)는 **이제 0 이 아니다**(의도된 차이). S18·S36 판정은
+                           `dev/measure-toc-8g3b.mjs`(새 규칙의 기준 정의 — 앱과 차 0)로 본다. 이 옵션은 개요·쪽 라벨 확인용으로 남긴다.
 
    17-8-1 의 `measure-search.mjs`(2026-10-12)와 다른 점 — **지금 앱 경로를 그대로** 지난다:
    · algoVersion 12(8i 행 표 rowhead·ref·colhead, 8i-2 2열 표)인 `buildPageLayout`, 추출과 같은
@@ -772,6 +775,8 @@ if (argv.includes('--toc')) {
   let dup = 0;
   for (const h of toc) { const m = /^[\d\s.,–-]+\s(.+)$/.exec(h.t); if (m && tset.has(h.p + '|' + m[1])) dup++; }
   T.fallback = {
+    // `[8g-4b 안내]` 옛 변형 C 와의 차 — 8g-3b 뒤로는 0 이 아니다(의도). S18 은 measure-toc-8g3b.mjs 로.
+    note: 'symDiffVsProtoC 는 8g-3b 전 규칙(변형 C)과의 차 — S18·S36 은 dev/measure-toc-8g3b.mjs 로',
     entries: toc.length, protoCEntries: protoC.length, symDiffVsProtoC: symDiff,
     outlineTried: tried, outlinePagesWithEntry: pos, outlineTitleMatched: title,
     onRowtablePages: toc.filter((h) => rtPagesSet.has(h.p)).length, stillDigitsOnly: toc.filter((h) => DIG.test(h.t)).length,

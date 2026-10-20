@@ -904,3 +904,122 @@
 .search-prep { margin-block: var(--sp-1) var(--sp-2); }
 
 .search-more { margin-block: var(--sp-3); }
+
+/* ── `[8g-4b]` 탭 [찾기] [목차] · 목차 목록 (spec 17-8-6 · 17-8-12 §4-1·§4-2·§4-4 · S19) ──────────
+   논리 속성만(16-H). 탭·항목 높이 ≥ 48(16-G). 목차 제목은 원서 글자(dir=ltr — JS 가 단다), 쪽 표시·"지금 읽는 곳"은 UI 방향.
+   깊이는 `--toc-indent`(0·1·2)만큼 들인다 — 깊이 3 이상은 접고(JS) 한 칸만 더 들인다. */
+.search-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-block-end: var(--sp-3);
+  border-block-end: 1px solid var(--c-border);
+}
+
+.search-tabs button[role="tab"] {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  min-block-size: var(--tap);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--c-text-dim);
+  border-block-end: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.search-tabs button[role="tab"][aria-selected="true"] {
+  color: var(--c-text);
+  font-weight: 600;
+  border-block-end-color: var(--c-accent);
+}
+
+.search-toc .search-note.is-toc {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+}
+
+.toc-list {
+  list-style: none;
+  margin: var(--sp-2) 0 var(--sp-4);
+  padding: 0;
+}
+
+.toc-item {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-1);
+  margin-block-end: var(--sp-1);
+  padding-inline-start: calc(var(--toc-indent, 0) * var(--sp-4));
+}
+
+.toc-item[hidden] { display: none; }
+
+.toc-row {
+  display: flex;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: var(--sp-3);
+  min-block-size: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: start;
+  color: var(--c-text);
+  background: var(--c-surface);
+}
+
+.toc-item[data-d="1"] .toc-row { font-weight: 600; }
+
+.toc-title {
+  flex: 1 1 12em;
+  min-inline-size: 0;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.toc-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 쪽을 못 정한 항목(p:null) — 흐리게, 누를 수 없다(disabled) */
+.toc-row.is-nopage,
+.toc-row[disabled] { opacity: 0.5; cursor: default; }
+
+/* 지금 읽는 곳 — 테두리와 글자 표시(색만으로 알리지 않는다) */
+.toc-item.is-here .toc-row {
+  box-shadow: inset 0 0 0 2px var(--c-accent);
+}
+
+.toc-here {
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.toc-fold {
+  flex: 0 0 auto;
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  padding-inline: 0;
+}
+
+.toc-fold-glyph {
+  display: inline-block;
+  font-size: var(--fs-lg);
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+.toc-fold[aria-expanded="true"] .toc-fold-glyph { transform: rotate(90deg); }
+/* RTL — 닫힌 글리프는 inline-start 쪽을 가리킨다(띠의 ‹ › 와 같은 규칙) */
+:root[dir="rtl"] .toc-fold[aria-expanded="false"] .toc-fold-glyph { transform: scaleX(-1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .toc-fold-glyph { transition: none; }
+}

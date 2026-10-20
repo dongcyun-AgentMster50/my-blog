@@ -675,6 +675,24 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
 
 .topbar .view-toggle[disabled] { opacity: 0.45; }
 
+/* `[8g-4b — 8g-4a Review ① · S20]` 좁은 폰(≤ 400px)에서 퀴즈 버튼까지 보이면 책 제목 폭이 0 이 됐다(en·fr). 그때만 [⧉] 를
+   글자 대신 글리프로(12-3 의 이름 그대로) — 버튼은 48×48 그대로, 이름(aria-label = 갈 곳)·aria-pressed 도 그대로다.
+   `:has()` 를 모르는 브라우저는 예전 모양(글자) 그대로다. */
+@media (max-width: 400px) {
+  /* 사이 간격·글자 버튼 안쪽 여백을 한 단계 줄인다(버튼 최소 48 은 그대로 — 줄어드는 것은 글자 버튼의 여백뿐) */
+  .topbar:has(.quiz-btn:not([hidden])) { gap: var(--sp-1); }
+  .topbar:has(.quiz-btn:not([hidden])) button { padding-inline: var(--sp-2); }
+  .topbar:has(.quiz-btn:not([hidden])) .view-toggle {
+    font-size: 0;
+    padding-inline: 0;
+  }
+  .topbar:has(.quiz-btn:not([hidden])) .view-toggle::before {
+    content: '⧉';
+    font-size: var(--fs-lg);
+    line-height: 1;
+  }
+}
+
 .original {
   display: flex;
   flex-direction: column;

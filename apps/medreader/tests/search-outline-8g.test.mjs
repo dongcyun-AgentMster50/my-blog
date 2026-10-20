@@ -328,11 +328,15 @@ test('배선 ★ 리더 — 추출기 배선(첫 그리기 뒤) 끝에 scheduleO
   assert.ok(show.indexOf('await renderPage()') >= 0 && show.indexOf('await renderPage()') < show.indexOf('wireExtractor(docId)'), '첫 그리기 뒤 배선');
   const wire = src.slice(src.indexOf('async function wireExtractor('), src.indexOf('function unwire('));
   assert.ok(wire.indexOf('catchUpStale();') >= 0 && wire.indexOf('catchUpStale();') < wire.indexOf('scheduleOutline(docId, ex);'));
+  // `[8g-4b — carryover 13]` 몸통은 순수 공장 `createOutlineScheduler`(행동은 tests/search-toc-8g4b.test.mjs 가 가짜 requestIdleCallback 으로 본다).
+  // 여기서는 진짜 배선만 — 주입이 리더 상태·`ensureOutline`·`outlineIdle` 이다.
   const sch = src.slice(src.indexOf('function scheduleOutline('), src.indexOf('function unwire('));
-  assert.match(sch, /if \(isOutlineCurrent\(state\.doc\) \|\| outlineQueued === docId\) return;/);
-  assert.match(sch, /requestIdleCallback\(run, \{ timeout: \d+ \}\)/);
-  assert.match(sch, /if \(state\.docId !== docId \|\| !ex\.pdfDoc\) return;/);
-  assert.match(sch, /ensureOutline\(docId, ex\.pdfDoc\)\.catch\(\(\) => \{\s*\}\)/);
+  assert.match(sch, /function scheduleOutline\(docId, ex\) \{ outlineScheduler\.schedule\(docId, ex\); \}/);
+  assert.match(sch, /isCurrent: \(\) => isOutlineCurrent\(state\.doc\),/);
+  assert.match(sch, /docId: \(\) => state\.docId,/);
+  assert.match(sch, /ensure: \(docId, pdfDoc\) => ensureOutline\(docId, pdfDoc\),/);
+  assert.match(sch, /idle: outlineIdle\s*\}\);/);
+  assert.match(sch, /requestIdleCallback\(fn, \{ timeout: \d+ \}\)/);
   // 다른 곳에서 부르지 않는다(최소 배선)
   assert.equal((src.match(/ensureOutline\(/g) || []).length, 1);
   assert.equal((src.match(/scheduleOutline\(/g) || []).length, 2);

@@ -53,7 +53,9 @@ const MULTI = /\p{Ll}{2,}[.!?]["”’']?\s+["“‘]?\p{Lu}/u;
 const DIALOG_START = /^(["“”„«»‘’'‹›]|[—–]\s)/u;
 const DIALOG_END = /["“”»’'‹›]$/u;
 const OCR_SYMBOL = /[{}®£¢§©_~^=<>\\@¤°]/;
-const count = (s, re) => (String(s).match(re) || []).length;
+/* `[8g-4b — carryover 16]` R2 약어 예외는 대소문자가 있는 글자로만 된 낱말에만(한글 문장 끝 "…이야." 는 문장) — 앱과 글자 그대로. */
+const CASED_WORD = /^[\p{Lu}\p{Ll}]+$/u;
+const count =(s, re) => (String(s).match(re) || []).length;
 
 /** 이 heading 을 폴백 후보에서 빼는 까닭(없으면 null). 순서는 집계용일 뿐 결과에 영향 없다. */
 export function dropReason(h) {
@@ -66,7 +68,7 @@ export function dropReason(h) {
   }
   if (!ELLIPSIS_END.test(t)) {                                           // ② 문장 끝(말줄임 끝은 제목일 수 있다)
     const m = SENT_END.exec(t);
-    if (m && !(m[2] === '.' && m[1].length <= 3)) return 'sentence';     //    'etc.' 같은 짧은 낱말 + 마침표는 아님
+    if (m && !(m[2] === '.' && m[1].length <= 3 && CASED_WORD.test(m[1]))) return 'sentence';     //    'etc.' 같은 짧은 낱말 + 마침표는 아님(대소문자 있는 글자만)
   }
   if (MULTI.test(t)) return 'multi';                                     // ② 한 문단에 두 문장
   if (OCR_SYMBOL.test(raw)) return 'symbol';                             // ④ OCR 잡음 기호

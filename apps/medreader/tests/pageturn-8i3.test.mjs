@@ -532,7 +532,11 @@ test('PT9 ★ 리더 소스 — 쪽 넘김·새 판 대기는 폴링 없이 rend
   assert.ok(drop > 0);
   assert.ok(!/renderDone/.test(body.slice(drop, body.indexOf('\n', drop))));
 
-  const lv = exportedFn(READER, 'leaveReader');
+  // `[8g-4b — 8g-4a Review F3]` 정말 떠나는 몸통은 `leaveReaderNow`(숨은 리더에서 다른 책으로 갈 때도 같은 길)
+  assert.ok(exportedFn(READER, 'leaveReader').includes('leaveReaderNow();'));
+  const lvi = READER.indexOf('function leaveReaderNow(');
+  assert.ok(lvi > 0);
+  const lv = READER.slice(lvi, READER.indexOf('\n}\n', lvi));
   assert.ok(lv.indexOf('state.refreshing = 0;') < lv.indexOf('renderDone.settled('), '떠날 때 상태를 비운 뒤 알려야 한다');
 });
 

@@ -1,6 +1,8 @@
 /* ============================================================
    MedReader — 검색 화면 · 결과 · 결과로 이동 · 검색 띠 (spec 17-8-7 · 17-8-8 · 17-8-12 §4 — 8g-4a)
 
+   `[8g-4b]` 목차 탭(이 책 범위 — 개요, 없거나 쓰레기 개요면 heading 폴백 + 머리 문구)도 여기 있다(5b절).
+
    UI 계층이다. 엔진(`search/engine.js`)은 결과·오류 **코드**만 낸다 — 문구는 여기서 i18n 으로 만든다(3-2).
    문서 글자는 전부 `textContent` 다(13절 — `innerHTML` 을 쓰지 않는다). 조각의 `<mark>` 도 글자 조각이다.
 
@@ -29,7 +31,7 @@ import { SEARCH } from '../config.js';
 import { t, formatNumber, onLangChange, applyTranslations, errorKey, getDir } from '../i18n/index.js';
 import { parseRoute, go, replace, readerHash, searchHash, libraryHash } from '../router.js';
 import * as engine from '../search/engine.js';
-import { printedLabel } from '../search/outline.js';
+import { printedLabel, tocOf } from '../search/outline.js';
 import { foldText, parseQuery, findIn, hitLength, snippetAt, rangesFor, SEARCH_ERR } from '../text/search.js';
 import { flowParasOf } from '../text/screen.js';
 // 17-8-10 3-2 — `joinPieces` 는 UI 가 tts/text.js 에서 가져와 순수 `rangesFor` 에 넘긴다(검색이 tts 를 import 하지 않게).
@@ -38,7 +40,7 @@ import { docLangOf } from '../text/lang.js';
 import * as charhl from './charhl.js';
 import {
   onPageRender, onPageRepaint, onReaderLeave, readingSpot, currentScreen, lineElement,
-  revealLine, revealRegion, revealTop, noteSearchJump
+  revealLine, revealRegion, revealTop, noteSearchJump, setViewAnchorHint
 } from './reader.js';
 import { pauseForJump, cueAt, speechState, onSpeechChange } from './controls.js';
 import { openDoc, extractorFor } from './library.js';
@@ -315,6 +317,108 @@ export function beginJump(env, target, fromBand) {
   return { paused: paused, same: same };
 }
 
+/**
+ * `[8g-4b — carryover 25 · 8g-4a Review X1]` 기다리던 이동(`S.pending`)을 지금 그린 쪽에서 처리할 때인가 — 같은 책 ·
+ * **같은 쪽** · 글자가 있는 쪽(자리표시자·깨진 쪽은 기다린다). 쪽 번호를 보지 않으면 숨은 리더가 넘긴 다른 쪽에 칠한다(F1 때의 길).
+ * **순수**(tests/search-toc-8g4b.test.mjs).
+ */
+export function pendingDue(pend, scr) {
+  return !!(pend && scr && pend.docId === scr.docId && pend.pageNo === scr.page && scr.ready);
+}
+
+/* ── 목차 탭 (17-8-6 · 17-8-12 §3·§4-2·§11-4 · 8g-4b) — 순수 부분 ─────────────── */
+
+/**
+ * 쪽 표시 키 — 인쇄 쪽 라벨이 있고 PDF 쪽과 다르면 "p. {인쇄} (PDF {쪽})", 아니면 "p. {쪽}"(17-8-12 §3). 숫자 꼴은 부르는 쪽이
+ * `formatNumber` 로. 순수.
+ * @returns {{key:'search.page'|'search.pageLabeled', page:number, label?:string}}
+ */
+export function pageKeyOf(pageLabels, p) {
+  const lab = printedLabel(pageLabels, p);
+  return lab ? { key: 'search.pageLabeled', page: p, label: lab } : { key: 'search.page', page: p };
+}
+
+/**
+ * 목차 머리 안내 키(위에서부터). `tocOf` 결과를 받는다.
+ *   개요를 아직 못 읽음(`outlineRead:false` — 오프라인 첫 열기) → `search.toc.unavailable`
+ *   항목 0(개요·폴백 모두) → `search.toc.empty`
+ *   폴백 → `search.toc.fallback` — **늘 보인다**(품질이 책마다 다르다). 쓰레기 개요를 버린 책(`outlineIgnored`)도 같은 문구(E5).
+ * 문서가 없으면(null) `search.toc.empty`. 순수.
+ */
+export function tocNoteKeys(toc) {
+  if (!toc) return ['search.toc.empty'];
+  const keys = [];
+  if (!toc.outlineRead) keys.push('search.toc.unavailable');
+  const n = Array.isArray(toc.items) ? toc.items.length : 0;
+  if (!n) keys.push('search.toc.empty');
+  else if (toc.source === 'fallback') keys.push('search.toc.fallback');
+  return keys;
+}
+
+/**
+ * 지금 읽는 쪽이 든 항목 — 쪽이 `page` 이하인 항목 중 쪽이 가장 큰 것(같은 쪽이면 뒤 — 더 깊은 항목). `p:null` 은 셈하지 않는다.
+ * 없으면 -1. 순수.
+ */
+export function tocCurrentIndex(items, page) {
+  const pg = Number(page);
+  if (!Array.isArray(items) || !Number.isFinite(pg)) return -1;
+  let best = -1;
+  let bp = -Infinity;
+  for (let i = 0; i < items.length; i++) {
+    const p = items[i] && items[i].p;
+    if (Number.isInteger(p) && p <= pg && p >= bp) { best = i; bp = p; }
+  }
+  return best;
+}
+
+/**
+ * 목차 줄 모형 — 깊이대로 들여 쓰고(깊이 3 이상은 한 칸 더 들이지 않는다) **깊이 3 이상은 접는다**(17-8-6): 그 위 깊이 2 항목(접기 단위)이
+ * 펼쳐져 있을 때만 보인다. 펼침은 사용자가 고른 값(`open` Map — 접기 단위 순번 → 참/거짓)이 이기고, 고르지 않았으면 **지금 항목이 든
+ * 가지만** 펼친다. `p:null`(쪽을 못 정한 항목)은 `disabled`(흐리게·못 누름). 순수 — 입력을 바꾸지 않는다.
+ * @param {Array<{t:string, p:(number|null), d:number}>} items
+ * @param {number|null} page 지금 읽는 쪽
+ * @param {Map<number, boolean>} [open]
+ * @returns {Array<{i:number, t:string, p:(number|null), d:number, indent:number, disabled:boolean, current:boolean,
+ *           fold:number, kids:number, open:boolean, hidden:boolean}>}
+ */
+export function tocRows(items, page, open) {
+  const list = Array.isArray(items) ? items : [];
+  const chosen = open instanceof Map ? open : new Map();
+  const cur = tocCurrentIndex(list, page);
+  const rows = [];
+  let unit = -1;
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i] || {};
+    const d = Math.max(1, Math.floor(Number(it.d)) || 1);
+    if (d <= 2) unit = d === 2 ? i : -1;
+    const p = Number.isInteger(it.p) && it.p >= 1 ? it.p : null;
+    rows.push({
+      i: i, t: String(it.t == null ? '' : it.t), p: p, d: d, indent: Math.min(d, 3) - 1,
+      disabled: p == null, current: i === cur, fold: d >= 3 ? unit : -1, kids: 0, open: false, hidden: false
+    });
+  }
+  const curUnit = cur >= 0 ? rows[cur].fold : -1;
+  for (const r of rows) if (r.fold >= 0) rows[r.fold].kids++;
+  const isOpen = (u) => (chosen.has(u) ? !!chosen.get(u) : u === curUnit);
+  for (const r of rows) {
+    if (r.kids > 0) r.open = isOpen(r.i);
+    if (r.fold >= 0) r.hidden = !isOpen(r.fold);
+  }
+  return rows;
+}
+
+/**
+ * `[8g-4b — 8g-4a Review F2]` 이 그리기 뒤 고른 적중으로 **다시 cue** 하는가 — 마지막으로 간 적중이 이 쪽이고
+ * (가) 새 판으로 다시 그렸다(`refreshed` — 8g-4a 그대로) 또는 (나) **같은 쪽을 다른 뷰로** 다시 그렸고 다음 [▶] 시작점이 아직
+ * 검색이 정한 것이다(`owned` — ▶ 하면 풀린다). (나)가 없으면 멈춘 채 원본 ↔ 리플로우를 오가는 동안 speaker 의 "첫 줄 기준" 되살리기가
+ * 적중 문장 앞 문장으로 한 칸씩 물러났다. 순수.
+ */
+export function shouldRecue(info, scr, lj, prev, owned) {
+  if (!scr || !lj || lj.docId !== scr.docId || lj.pageNo !== scr.page) return false;
+  if (info && info.refreshed) return true;
+  return !!owned && !!prev && prev.docId === scr.docId && prev.page === scr.page && prev.view !== scr.view;
+}
+
 /** 결과 모형 — 이벤트를 받아 **바꿔** 쓴다(덧붙이지 않는다). */
 export function newModel(scope, query) {
   return { scope: scope, query: query, result: null, docs: new Map(), progress: new Map(), error: null, final: false, partial: false };
@@ -358,7 +462,16 @@ const S = {
   lastJump: null,          // 마지막으로 간 적중 {docId, pageNo, i} — 다시 그리기(새 판·뷰·언어) 뒤 다시 칠하고 다시 cue
   docRecs: new Map(),      // docId → documents 레코드(서재 범위 제목)
   snips: new Map(),        // `${docId}|${pageNo}|${kind}` → snippetAt 결과(작다 — 쪽 글자는 들고 있지 않는다)
-  debounce: null
+  debounce: null,
+  /* `[8g-4b]` 목차 탭 — 이 책 범위에서만(서재 범위엔 없다). 탭·스크롤·펼침은 모듈 메모리(뒤로 = 그 탭 그대로). */
+  tab: 'find',             // 'find' | 'toc'
+  toc: null,               // {docId, data(tocOf 결과), error, prep:{done,total}|null, prepError}
+  tocScrollY: 0,
+  tocOpen: new Map(),      // 접기 단위 순번 → 펼침(사용자가 고른 것만)
+  tocToken: 0,
+  curLine: null,           // `[8g-4b F2]` 지금 칠해 둔 고른 적중 줄 {docId, page, id} — 뷰 전환 기준 줄 힌트
+  lastView: null,          // `[8g-4b F2]` 마지막으로 처리한 그리기 {docId, page, view} — 뷰 전환을 알아본다
+  cueOwned: false          // `[8g-4b F2]` 다음 [▶] 시작점을 검색이 정했다(▶ 하면 풀린다)
 };
 let run = null;
 let io = null;
@@ -386,6 +499,10 @@ export function initSearch() {
     chips: root.querySelector('#searchChips'),
     status: root.querySelector('#searchStatus'),
     results: root.querySelector('#searchResults'),
+    tabs: root.querySelector('#searchTabs'),
+    tabFind: root.querySelector('#searchTabFind'),
+    tabToc: root.querySelector('#searchTabToc'),
+    toc: root.querySelector('#searchToc'),
     band: readerRoot ? readerRoot.querySelector('#searchBand') : null,
     bandQ: readerRoot ? readerRoot.querySelector('#searchBandQ') : null,
     bandPrev: readerRoot ? readerRoot.querySelector('#searchBandPrev') : null,
@@ -424,6 +541,13 @@ export function initSearch() {
     submitNow();
   });
   els.results.addEventListener('click', onResultsClick);
+  if (els.tabs && els.toc) {
+    els.tabs.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button[role="tab"]');
+      if (b) setTab(b === els.tabToc ? 'toc' : 'find');
+    });
+    els.toc.addEventListener('click', onTocClick);
+  }
 
   if (els.band) {
     els.bandPrev.addEventListener('click', () => stepBand(-1));
@@ -436,10 +560,19 @@ export function initSearch() {
   onPageRender(onReaderPage);
   onPageRepaint(onReaderPage);
   onReaderLeave(() => { clearPaint(); });
+  // `[8g-4b — 8g-4a Review F2]` 뷰를 바꿀 때 리더가 이 줄(보이면)을 기준으로 삼는다 — 원본 ↔ 리플로우 뒤에도 적중이 화면 안
+  setViewAnchorHint(() => {
+    const c = S.curLine;
+    const scr = currentScreen();
+    return c && scr && c.docId === scr.docId && c.page === scr.page ? c.id : null;
+  });
   // 낭독을 [▶] 하면 띠는 남고 강조는 지운다(읽는 문장 하이라이트와 겹치지 않게 — 17-8-8)
-  onSpeechChange((st) => { if (st === 'speaking') clearPaint(); });
+  onSpeechChange((st) => { if (st === 'speaking') { clearPaint(); S.cueOwned = false; } });
 
-  window.addEventListener('scroll', () => { if (S.shown && root && !root.hidden) S.scrollY = window.scrollY || 0; }, { passive: true });
+  window.addEventListener('scroll', () => {
+    if (!S.shown || !root || root.hidden) return;
+    if (S.tab === 'toc') S.tocScrollY = window.scrollY || 0; else S.scrollY = window.scrollY || 0;
+  }, { passive: true });
   onLangChange(relabel);
   watchRoute();
 }
@@ -494,12 +627,20 @@ async function showSearch(params) {
     S.doc = null;
     S.model = null;
     S.scrollY = 0;
+    // `[8g-4b]` 다른 책 — 목차 탭도 처음부터(찾기 탭)
+    S.tab = 'find';
+    S.toc = null;
+    S.tocScrollY = 0;
+    S.tocOpen = new Map();
+    S.tocToken++;
   }
   if (!docId) S.scope = 'library';
   paintScope();
   els.input.value = S.query;
   paintRecent();
   paintModel();
+  // `[8g-4b]` 목차 탭이었으면(뒤로 돌아옴) 그 탭 그대로 — 가진 목록을 먼저 그리고 지금 쪽 표시만 새로
+  if (S.tab === 'toc') showToc(true);
   // 스크롤은 **먼저** 되돌린다(뒤로 = 결과 목록·스크롤 그대로 — S28). 아래 기다림 동안 리더의 스크롤이 보이지 않게.
   restoreScroll();
   if (docId) {
@@ -508,6 +649,7 @@ async function showSearch(params) {
     if (!S.shown || S.docId !== docId) return;
     if (S.doc) S.docRecs.set(docId, S.doc);
     paintScope();
+    if (S.tab === 'toc' && S.toc && S.toc.data) paintToc();
     // 처음 연 책 — 쪽 라벨(인쇄 쪽 번호)을 알게 됐으니 결과 줄을 다시 그린다
     if (!had && S.doc && S.model) { paintModel(); restoreScroll(); }
     // 17-8-12 2-2 — 화면을 여는 순간 캐시 채우기 + 백필(세대를 올리지 않는다). 실패는 검색이 안내한다.
@@ -521,12 +663,13 @@ async function showSearch(params) {
 
 function leaveSearch() {
   if (S.debounce) { clearTimeout(S.debounce); S.debounce = null; }
+  S.tocToken++;
   if (run) run.cancel();
   engine.cancel();
 }
 
 function restoreScroll() {
-  const y = S.scrollY || 0;
+  const y = (S.tab === 'toc' ? S.tocScrollY : S.scrollY) || 0;
   const apply = () => { try { window.scrollTo({ top: y, behavior: 'instant' }); } catch (e) { window.scrollTo(0, y); } };
   apply();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(apply);
@@ -556,10 +699,45 @@ function paintScope() {
     b.setAttribute('aria-pressed', sc === S.scope ? 'true' : 'false');
   }
   els.scope.hidden = !S.docId;
+  paintTabs();
+}
+
+/* ── `[8g-4b]` 탭 [찾기] [목차] — 목차는 이 책 범위에서만(17-8-7 · 17-8-12 §4-1) ── */
+
+function tocAllowed() { return S.scope === 'doc' && !!S.docId && !!els && !!els.tabs && !!els.toc; }
+
+function paintTabs() {
+  if (!els || !els.tabs || !els.toc) return;
+  const allow = tocAllowed();
+  if (!allow) S.tab = 'find';
+  els.tabs.hidden = !allow;
+  const toc = S.tab === 'toc';
+  els.tabFind.setAttribute('aria-selected', toc ? 'false' : 'true');
+  els.tabToc.setAttribute('aria-selected', toc ? 'true' : 'false');
+  els.tabFind.tabIndex = toc ? -1 : 0;
+  els.tabToc.tabIndex = toc ? 0 : -1;
+  els.results.hidden = toc;
+  els.status.hidden = toc;
+  els.toc.hidden = !toc;
+  if (toc) els.recent.hidden = true;
+}
+
+function setTab(tab) {
+  const next = tab === 'toc' && tocAllowed() ? 'toc' : 'find';
+  if (next === S.tab) return;
+  if (S.tab === 'toc') S.tocScrollY = window.scrollY || 0; else S.scrollY = window.scrollY || 0;
+  S.tab = next;
+  paintTabs();
+  if (next === 'toc') { showToc(false); return; }
+  paintRecent();
+  paintModel();
+  restoreScroll();
 }
 
 function onInput() {
   const q = els.input.value;
+  // 목차 탭에서 검색어를 치기 시작하면 찾기 탭으로
+  if (S.tab === 'toc' && q.trim()) setTab('find');
   paintRecent();
   if (S.debounce) { clearTimeout(S.debounce); S.debounce = null; }
   if (!q.trim()) { S.query = ''; S.model = null; if (run) run.cancel(); engine.cancel(); paintModel(); return; }
@@ -570,6 +748,7 @@ function onInput() {
 
 function submitNow() {
   if (S.debounce) { clearTimeout(S.debounce); S.debounce = null; }
+  if (S.tab === 'toc') setTab('find');
   S.query = els.input.value;
   remember(S.query);
   runSearch(true);
@@ -614,7 +793,7 @@ async function ensureDocRec(docId) {
 
 function paintRecent() {
   const list = Array.isArray(settings.get('search.recent')) ? settings.get('search.recent') : [];
-  const show = !els.input.value.trim() && list.length > 0;
+  const show = S.tab !== 'toc' && !els.input.value.trim() && list.length > 0;
   els.recent.hidden = !show;
   clear(els.chips);
   if (!show) return;
@@ -754,8 +933,12 @@ function paintGroups(host, docId, r) {
 
 function pageText(docId, p) {
   const d = S.docRecs.get(docId) || (docId === S.docId ? S.doc : null);
-  const lab = printedLabel(d && d.pageLabels, p);
-  return lab ? t('search.pageLabeled', { label: lab, page: formatNumber(p) }) : t('search.page', { page: formatNumber(p) });
+  return pageTextOf(d && d.pageLabels, p);
+}
+
+function pageTextOf(pageLabels, p) {
+  const k = pageKeyOf(pageLabels, p);
+  return t(k.key, { label: k.label, page: formatNumber(k.page) });
 }
 
 function rowEl(docId, row) {
@@ -1041,15 +1224,17 @@ function onReaderPage(info) {
   if (!scr) return;
   paintBand();
   const pend = S.pending;
-  if (pend && pend.docId === scr.docId && pend.pageNo === scr.page && scr.ready) {
+  if (pendingDue(pend, scr)) {
     S.pending = null;
+    S.lastView = { docId: scr.docId, page: scr.page, view: scr.view };
     if (pend.kind === 'spot') { doSpot(scr, pend); return; }
+    if (pend.kind === 'top') { doTop(scr, pend); return; }
     doHit(scr, pend);
     return;
   }
-  const lj = S.lastJump;
-  const again = !!(info && info.refreshed) && lj && lj.docId === scr.docId && lj.pageNo === scr.page;
-  repaint(scr, again);
+  const prev = S.lastView;
+  S.lastView = { docId: scr.docId, page: scr.page, view: scr.view };
+  repaint(scr, shouldRecue(info, scr, S.lastJump, prev, S.cueOwned));
 }
 
 /** 이 쪽 적중 전부(+ 고른 것)를 화면 글자에서 다시 찾는다. */
@@ -1113,10 +1298,20 @@ function doSpot(scr, pend) {
   bandNote(pend.paused ? ['search.paused'] : []);
 }
 
+/** `[8g-4b]` 목차 항목으로 왔다 — 그 쪽 맨 위, 멈춤·처음이면 다음 [▶] 도 그 쪽 첫 줄부터. 띠가 이 책이면 이 쪽 적중은 다시 칠한다. */
+function doTop(scr, pend) {
+  repaint(scr, false);
+  revealTop();
+  const paras = scr.desc ? flowParasOf(scr.desc) : [];
+  const first = paras.length && paras[0].lines && paras[0].lines.length ? paras[0].lines[0].id : null;
+  if (first != null) cueHere(String(first), 0);
+  bandNote(pend.paused ? ['search.paused'] : []);
+}
+
 /** 멈춤·처음이면 다음 [▶] 의 시작점을 그 문장으로(낭독 중이면 건드리지 않는다). */
 function cueHere(lineId, start) {
   const st = speechState();
-  if (st === 'paused' || st === 'idle') cueAt(lineId, start);
+  if ((st === 'paused' || st === 'idle') && cueAt(lineId, start)) S.cueOwned = true;
 }
 
 /** 크롭 그림이 늦게 붙어 적중이 밀리면 한 번 더 가운데로(그사이 사용자가 굴렸으면 그대로). */
@@ -1152,6 +1347,10 @@ function paint(loc) {
   const okCur = loc.cur ? charhl.paintCharRanges(HL_CUR, loc.cur, lineElement) : false;
   if (!okAll) for (const r of all) { const n = lineElement(r.id); if (n) n.classList.add('search-hit-line'); }
   if (loc.cur && !okCur) for (const r of loc.cur) { const n = lineElement(r.id); if (n) n.classList.add('search-cur-line'); }
+  if (loc.cur && loc.cur.length) {
+    const scr = currentScreen();
+    if (scr) S.curLine = { docId: scr.docId, page: scr.page, id: String(loc.cur[0].id) };
+  }
   if (loc.table && loc.regionId != null) {
     const fig = document.querySelector('[data-screen="reader"] figure[data-region-id="' + cssEscape(loc.regionId) + '"]');
     if (fig) fig.classList.add('search-cur-fig');
@@ -1159,11 +1358,205 @@ function paint(loc) {
 }
 
 function clearPaint() {
+  S.curLine = null;
   charhl.clearCharRanges(HL_HIT);
   charhl.clearCharRanges(HL_CUR);
   if (typeof document === 'undefined') return;
   const ns = document.querySelectorAll('.search-hit-line, .search-cur-line, .search-cur-fig');
   for (const n of ns) n.classList.remove('search-hit-line', 'search-cur-line', 'search-cur-fig');
+}
+
+/* ════════════════════════════════════════════════════════
+   5b. `[8g-4b]` 목차 탭 (17-8-6 · 17-8-12 §3·§4-2·§11-4 · S19)
+   개요(`documents.outline`)가 있으면 그것, 없거나 쓰레기 개요면 heading 폴백(`tocOf` — 저장하지 않음). 타이핑 0 으로 장을 옮긴다.
+   폴백은 그 책 `searchText.heads` 로 만들므로 **먼저 백필**(`engine.prepareDoc` — 검색 화면이 연 순간 이미 시작한 것을 함께
+   기다린다, carryover 12). 항목 누름 → 그 쪽 맨 위(결과로 가는 길과 같이: 낭독 중이면 멈추고 → 쪽 이동).
+   ════════════════════════════════════════════════════════ */
+
+/** 지금 읽는 쪽 — 리더가 이 책이면(숨어 있어도) 그 쪽, 아니면 마지막으로 읽은 쪽. */
+function tocPage() {
+  const scr = currentScreen();
+  if (scr && scr.docId === S.docId && scr.page) return scr.page;
+  const d = S.doc;
+  const p = d && Number(d.lastPage);
+  return p > 0 ? p : null;
+}
+
+/** 목차 탭을 보인다. `back` = 뒤로 돌아옴(스크롤은 restoreScroll 이 되돌린다) — 아니면 지금 항목으로 굴린다. */
+function showToc(back) {
+  if (!S.docId) return;
+  const have = !!(S.toc && S.toc.docId === S.docId && S.toc.data);
+  if (have) {
+    paintToc();
+    if (!back) scrollTocToCurrent();
+  }
+  loadToc(S.docId, !have && !back);
+}
+
+async function loadToc(docId, scrollCur) {
+  const my = ++S.tocToken;
+  const alive = () => my === S.tocToken && S.shown && S.docId === docId;
+  if (!S.toc || S.toc.docId !== docId) S.toc = { docId: docId, data: null, error: null, prep: null, prepError: null };
+  const T = S.toc;
+  if (!T.data) paintToc();
+  let data;
+  try {
+    data = await tocOf(docId);
+    if (!alive()) return;
+    if (data && data.source === 'fallback') {
+      // 지금 있는 heads 로 먼저 보이고, 백필이 끝나면 다시 만든다(목록이 늘 수 있다)
+      if (!T.data) { T.data = data; T.error = null; if (S.tab === 'toc') { paintToc(); if (scrollCur) scrollTocToCurrent(); } }
+      const pr = await engine.prepareDoc(docId, {
+        onProgress: (p) => { if (alive() && S.toc === T) { T.prep = p; paintTocPrep(); } }
+      });
+      if (!alive()) return;
+      T.prepError = pr && pr.error ? pr.error : null;
+      data = await tocOf(docId);
+      if (!alive()) return;
+    }
+  } catch (e) {
+    if (!alive() || S.toc !== T) return;
+    T.error = e;
+    T.prep = null;
+    if (S.tab === 'toc') paintToc();
+    return;
+  }
+  if (S.toc !== T) return;
+  const changed = !T.data || tocKey(T.data) !== tocKey(data);
+  const first = !T.data;
+  T.data = data;
+  T.error = null;
+  T.prep = null;
+  if (S.tab !== 'toc') return;
+  if (changed || T.prepError) paintToc(); else paintTocPrep();
+  if (first && scrollCur) scrollTocToCurrent();
+}
+
+/** 목록이 바뀌었는가 — 다시 그리면 스크롤·펼침이 흔들리므로 같으면 그리지 않는다. */
+function tocKey(d) {
+  if (!d) return '';
+  return [d.source, d.outlineRead, d.outlineIgnored, (d.items || []).length].concat((d.items || []).map((x) => x.p + ':' + x.d + ':' + x.t)).join('\u0001');
+}
+
+function paintTocPrep() {
+  if (!els || !els.toc) return;
+  const T = S.toc;
+  let n = els.toc.querySelector('.toc-prep');
+  const on = !!(T && T.prep && T.prep.total > 0 && T.prep.done < T.prep.total);
+  if (!on) { if (n) n.remove(); return; }
+  if (!n) {
+    n = el('p', 'search-note toc-prep');
+    els.toc.insertBefore(n, els.toc.firstChild);
+  }
+  n.textContent = t('search.preparing', { done: formatNumber(T.prep.done), total: formatNumber(T.prep.total) });
+}
+
+function paintToc() {
+  if (!els || !els.toc) return;
+  const host = els.toc;
+  clear(host);
+  const T = S.toc;
+  if (!T) return;
+  host.setAttribute('aria-busy', T.data || T.error ? 'false' : 'true');
+  paintTocPrep();
+  if (T.error) { appendNote(host, t(rejectKey(T.error)), 'error'); return; }
+  if (!T.data) return;      // 아직 읽는 중
+  if (T.prepError) appendNote(host, t(errorKey(T.prepError)), 'error');
+  for (const k of tocNoteKeys(T.data)) appendNote(host, t(k), k === 'search.toc.empty' ? null : 'toc');
+  const items = T.data.items || [];
+  if (!items.length) return;
+  const labels = Array.isArray(T.data.pageLabels) ? T.data.pageLabels : (S.doc && S.doc.pageLabels);
+  const lang = docLang(S.docId);
+  const ol = el('ol', 'toc-list');
+  for (const r of tocRows(items, tocPage(), S.tocOpen)) ol.appendChild(tocRowEl(r, labels, lang));
+  host.appendChild(ol);
+}
+
+function tocRowEl(r, labels, lang) {
+  const li = el('li', 'toc-item' + (r.current ? ' is-here' : ''));
+  li.setAttribute('data-d', String(r.d));
+  li.style.setProperty('--toc-indent', String(r.indent));
+  if (r.hidden) li.hidden = true;
+  const b = el('button', 'toc-row');
+  b.type = 'button';
+  b.setAttribute('data-toc', String(r.i));
+  if (r.disabled) {
+    // 쪽을 못 정한 항목(17-8-6) — 흐리게, 누를 수 없다
+    b.disabled = true;
+    b.classList.add('is-nopage');
+  } else {
+    b.setAttribute('data-page', String(r.p));
+  }
+  if (r.current) b.setAttribute('aria-current', 'true');
+  const tt = el('span', 'toc-title');
+  tt.id = 'tocT' + r.i;
+  // 개요 제목·heading 은 원서 글자 — UI 가 아랍어여도 LTR, lang = 문서 언어(17-8-7 · 17-8-12 §4-4)
+  tt.setAttribute('dir', 'ltr');
+  tt.setAttribute('lang', lang);
+  tt.textContent = r.t;
+  b.appendChild(tt);
+  const meta = el('span', 'toc-meta');
+  if (r.p != null) {
+    const pg = el('span', 'toc-page');
+    pg.textContent = pageTextOf(labels, r.p);
+    meta.appendChild(pg);
+  }
+  if (r.current) {
+    const here = el('span', 'toc-here');
+    here.textContent = t('search.toc.here');
+    meta.appendChild(here);
+  }
+  if (meta.firstChild) b.appendChild(meta);
+  li.appendChild(b);
+  if (r.kids > 0) {
+    // 깊이 3 이상을 접고 펴는 단추 — 이름은 그 항목 제목(새 문구 없음)
+    const f = el('button', 'toc-fold');
+    f.type = 'button';
+    f.setAttribute('data-fold', String(r.i));
+    f.setAttribute('aria-expanded', r.open ? 'true' : 'false');
+    f.setAttribute('aria-labelledby', tt.id);
+    const g = el('span', 'toc-fold-glyph');
+    g.setAttribute('aria-hidden', 'true');
+    g.textContent = '›';
+    f.appendChild(g);
+    li.appendChild(f);
+  }
+  return li;
+}
+
+function scrollTocToCurrent() {
+  if (!els || !els.toc) return;
+  const cur = els.toc.querySelector('.toc-row[aria-current="true"]');
+  if (!cur || cur.closest('[hidden]')) { try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) { window.scrollTo(0, 0); } return; }
+  try { cur.scrollIntoView({ block: 'center', behavior: 'instant' }); } catch (e) { cur.scrollIntoView(); }
+  S.tocScrollY = window.scrollY || 0;
+}
+
+function onTocClick(ev) {
+  const f = ev.target.closest('button[data-fold]');
+  if (f) {
+    const i = Number(f.getAttribute('data-fold'));
+    S.tocOpen.set(i, f.getAttribute('aria-expanded') !== 'true');
+    const y = window.scrollY || 0;
+    paintToc();
+    try { window.scrollTo({ top: y, behavior: 'instant' }); } catch (e) { window.scrollTo(0, y); }
+    return;
+  }
+  const b = ev.target.closest('button.toc-row');
+  if (!b || b.disabled) return;
+  const p = Number(b.getAttribute('data-page'));
+  if (!Number.isInteger(p) || p < 1 || !S.docId) return;
+  tocJump(p);
+}
+
+/** 목차 항목 → 그 쪽 맨 위. 결과로 가는 길과 같다(`beginJump` — 낭독 중이면 멈춤 → 숨은 리더에 "이동" 표시 → 쌓는 이동). */
+function tocJump(p) {
+  S.tocScrollY = window.scrollY || 0;
+  S.pending = { kind: 'top', docId: S.docId, pageNo: p, paused: false };
+  const pend = S.pending;
+  const r = beginJump(JUMP_ENV, { docId: S.docId, pageNo: p }, false);
+  pend.paused = r.paused;
+  if (r.same && S.pending === pend) onReaderPage({ docId: S.docId, page: p });
 }
 
 /* ════════════════════════════════════════════════════════
@@ -1175,7 +1568,7 @@ function relabel() {
   applyTranslations(root);
   if (els && els.band) applyTranslations(els.band);
   paintBand();
-  if (S.shown) { paintRecent(); paintModel(); }
+  if (S.shown) { paintRecent(); paintModel(); if (S.tab === 'toc') paintToc(); }
 }
 
 function el(tag, cls) {

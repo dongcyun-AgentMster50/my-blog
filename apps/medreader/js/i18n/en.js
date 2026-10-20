@@ -400,6 +400,10 @@ export default {
   'search.notOnPage': 'Could not find the exact spot on this page',
   'search.inTable': 'Found inside a table',
   'search.paused': 'Reading paused — press ▶ to read from this sentence',
+  'search.toc.fallback': 'This PDF has no usable table of contents, so this list was built from large headings — some entries may be missing or wrong',
+  'search.toc.unavailable': 'The book’s table of contents has not been read yet',
+  'search.toc.empty': 'Could not build a table of contents for this book',
+  'search.toc.here': 'Where you are reading',
 
   'storage.persisted': 'Storage is protected from automatic cleanup.',
   'storage.notPersisted': 'The browser may clear stored text if space runs low.'

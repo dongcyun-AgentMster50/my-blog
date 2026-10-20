@@ -350,6 +350,9 @@ const MULTI = /\p{Ll}{2,}[.!?]["”’']?\s+["“‘]?\p{Lu}/u;
 const DIALOG_START = /^(["“”„«»‘’'‹›]|[—–]\s)/u;
 const DIALOG_END = /["“”»’'‹›]$/u;
 const OCR_SYMBOL = /[{}®£¢§©_~^=<>\\@¤°]/;
+/* `[8g-4b — 8g-3b Review 관찰 · carryover 16]` R2 약어 예외('etc.')는 **대소문자가 있는 글자로만 된 낱말**에만 —
+   한글·아랍 글자는 음절·글자 하나가 낱말 길이를 짧게 만들어 "…이야." 같은 문장 끝이 약어로 통과했다. */
+const CASED_WORD = /^[\p{Lu}\p{Ll}]+$/u;
 const countOf = (s, re) => (String(s).match(re) || []).length;
 /* 셈용 — 기준 정의의 count 인자와 같은 글자(부를 때마다 정규식 객체를 새로 만들지 않게 올려 둔다). g 깃발이지만
    String.prototype.match 는 lastIndex 를 0 으로 되돌리고 시작하므로 함께 써도 상태가 남지 않는다. */
@@ -363,7 +366,7 @@ const HAS_STOP = /[.!?]/;          // MULTI 가 맞으려면 이 부호가 하�
  * 이 heading 을 폴백 목차 후보에서 빼는 까닭 — 코드 문자열 또는 null(남긴다). UI 문자열이 아니다(3-2).
  *   'small'    R1 본문보다 뚜렷이 작은 글자(`r < TOC_MIN_R`)
  *   'noise'    R6 숫자만이 아닌데 문자 3개 미만이거나 공백 뺀 글자 중 문자 비율 < 0.5
- *   'sentence' R2 문장 끝(말줄임 뒤 부호·닫는 괄호 뒤 부호·3자 이하 낱말 + 마침표는 아님)
+ *   'sentence' R2 문장 끝(말줄임 뒤 부호·닫는 괄호 뒤 부호·대소문자 있는 글자 3자 이하 낱말 + 마침표는 아님)
  *   'multi'    R3 한 문단에 두 문장
  *   'symbol'   R7 OCR 잡음 기호(세로 막대는 아님 — OCR 이 대문자 I 를 그렇게 읽는다)
  *   'long'     R5 `TOC_MAX_LEN` 자 초과
@@ -384,7 +387,7 @@ export function tocDropReason(h) {
   // 빠른 길(결과 같음): SENT_END 는 끝 글자가 부호·닫는 따옴표일 때만, MULTI 는 [.!?] 가 있을 때만 맞을 수 있다.
   if (SENT_LAST.indexOf(t.charAt(t.length - 1)) >= 0 && !ELLIPSIS_END.test(t)) {
     const m = SENT_END.exec(t);
-    if (m && !(m[2] === '.' && m[1].length <= 3)) return 'sentence';
+    if (m && !(m[2] === '.' && m[1].length <= 3 && CASED_WORD.test(m[1]))) return 'sentence';
   }
   if (HAS_STOP.test(t) && MULTI.test(t)) return 'multi';
   if (OCR_SYMBOL.test(raw)) return 'symbol';
