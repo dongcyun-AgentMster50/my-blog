@@ -1014,6 +1014,85 @@ test('S13f ★ notePage 로 표시된 쪽의 다시 읽기가 한 번 실패하�
   assert.equal(engine.cacheInfo().dirty, 0);
 });
 
+/* ══ 8g-4a 보강 — 8g-2c Review 의 변이 RC·RD 를 잡는다 (carryover 6·7) ══════════ */
+
+test('S13g ★ 다른 책 캐시는 늦은 채우기 실패로 지워지지 않는다 — A 채우기가 걸린 채 B 를 다 채워 쉬게 한 뒤 A 실패 (8g2cR-3 RC · 탐침 R1d · carryover 6)', async () => {
+  const A = 'R1dA';
+  const B = 'R1dB';
+  await seedZorvat(A, 20, 20);
+  await seedZorvat(B, 20, 20);
+  engine.invalidate();
+  const proto = await txStoreProto();
+  const orig = proto.getAll;
+  let release = false;
+  let held = false;
+  proto.getAll = function (q, n) {
+    if (!held && this.name === 'searchText' && q && typeof q._inc === 'function' && q._inc([A, 1])) {
+      held = true;
+      // A 의 채우기 요청 — 풀 때까지 빈 요청으로 트랜잭션을 늘였다가(readonly 라 B 의 읽기는 막지 않는다) 실패시킨다
+      const store = this;
+      const outer = { result: undefined, error: null, onsuccess: null, onerror: null };
+      const spin = () => {
+        if (release) {
+          const r = asyncFail(store, 'UnknownError');
+          r.onerror = () => { outer.error = r.error; if (outer.onerror) outer.onerror({ target: outer }); };
+          return;
+        }
+        store.tx._request(() => undefined).onsuccess = spin;
+      };
+      spin();
+      return outer;
+    }
+    return orig.call(this, q, n);
+  };
+  try {
+    const pa = engine.searchDoc(A, 'zorvat').then(() => null, (e) => e);
+    for (let k = 0; k < 50 && !held; k++) await sleep(1);
+    assert.ok(held, '전제: A 채우기 요청이 걸렸다');
+    const rb = await engine.searchDoc(B, 'zorvat');
+    assert.equal(rb.hits.length, 20);
+    assert.deepEqual(engine.cacheInfo(), { docId: B, pages: 20, dirty: 0, loaded: true, backfilled: true }, '전제: B 가 다 채워져 쉰다');
+    release = true;
+    const ea = await pa;
+    assert.equal(ea && ea.code, db.ERR.OPEN, 'A(앞 세대)는 거절로 끝난다 — 화면은 이것을 무시한다(carryover 2)');
+    assert.deepEqual(engine.cacheInfo(), { docId: B, pages: 20, dirty: 0, loaded: true, backfilled: true }, '★ B 캐시가 그대로(cache === c 검사)');
+    const L = await engine.searchLibrary('zorvat');
+    assert.equal(L.docs[0].docId, B, '★ 서재 전체가 열린 책 B 를 먼저');
+  } finally {
+    proto.getAll = orig;
+  }
+});
+
+test('S13h ★ 다시 읽기가 실패하는 동안 들어온 다른 쪽 표시를 지우지 않는다 — 되돌림은 더하기(덮어쓰기 아님) (8g2cR-3 RD · 탐침 R4 · carryover 7)', async () => {
+  const D = 'R4D';
+  await seedZorvat(D, 5, 5, 'Oldword');
+  assert.equal((await engine.searchDoc(D, 'oldword')).hits.length, 5, '전제: 캐시');
+  await writePageAndSearch(D, 2, epage(D, 2, [{ text: 'Newword page 2' }]));
+  await writePageAndSearch(D, 3, epage(D, 3, [{ text: 'Newword page 3' }]));
+  engine.notePage(D, 2);
+  const proto = await txStoreProto();
+  const orig = proto.get;
+  let fails = 1;
+  proto.get = function (q) {
+    if (this.name === 'searchText' && this.tx.mode === 'readonly' && fails > 0) {
+      fails--;
+      engine.notePage(D, 3);   // ★ 실패할 다시 읽기가 걸린 순간 다른 쪽이 새로 쓰였다(추출기 page 이벤트)
+      return asyncFail(this, 'UnknownError');
+    }
+    return orig.call(this, q);
+  };
+  try {
+    await assert.rejects(engine.searchDoc(D, 'newword'), (e) => e.code === db.ERR.OPEN);
+    assert.equal(fails, 0, '전제: 한 번 실패했다');
+    assert.equal(engine.cacheInfo().dirty, 2, '★ 되돌린 표시(2) + 실패 중에 들어온 표시(3)');
+  } finally {
+    proto.get = orig;
+  }
+  assert.deepEqual(pagesOf(await engine.searchDoc(D, 'newword')), [2, 3], '★ 다음 검색이 두 쪽 모두 새 글자로 — 옛 글자로 남는 쪽이 없다');
+  assert.deepEqual(pagesOf(await engine.searchDoc(D, 'oldword')), [1, 4, 5]);
+  assert.equal(engine.cacheInfo().dirty, 0);
+});
+
 /* ══ S6 (Node 몫) versionchange ═══════════════════════ */
 
 test('S6 ★ 다른 탭이 버전을 올리면 db.js 가 versionchange 를 내고 연결을 닫는다 — 새 판은 막히지 않는다, 이 탭의 다음 열기는 실패', async () => {

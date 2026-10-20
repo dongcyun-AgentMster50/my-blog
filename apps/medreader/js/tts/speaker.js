@@ -192,6 +192,9 @@ export function createSpeaker(deps) {
   let freshGen = -1;             // 지금 쪽 새 판을 기다리기 시작한 세대(`'waiting-page'` 의 한 갈래 — 상태는 늘리지 않는다)
   let rebuildNext = false;       // 기다림이 끝난 `play()` 는 큐를 새로 만든다
 
+  /* ── `[8g-4a]` 검색 결과로 이동한 뒤의 시작점 (spec 17-8-12 §4-5) ─────── */
+  let cuedPastEnd = false;       // `cue` 가 고른 줄 뒤에 이 쪽 발화가 없다 — 다음 `play()` 는 다음 쪽부터
+
   /* ── 반복 재생 (5b) ───────────────────────────────────
      ★ 반복은 **큐 위의 인덱스 계산**일 뿐이다. `speechSynthesis.pause()` 는
        물론이고 새로운 재생 경로도 만들지 않는다 — `onend` 체이닝·워치독·
@@ -760,6 +763,9 @@ export function createSpeaker(deps) {
 
     let i = index;
     let pastEnd = false;
+    // `[8g-4a]` `cue` 가 "이 쪽에는 그 뒤 발화가 없다"고 정했으면 다음 쪽부터(줄을 탭하면 그 줄이 이긴다).
+    if (fromLineId == null && cuedPastEnd) pastEnd = true;
+    cuedPastEnd = false;
     if (fromLineId != null) {
       // `[8h-1]` 걸러진 인용 줄을 탭했으면 화면 순서로 그 뒤의 첫 발화. 그 뒤에 발화가 없으면 다음 쪽.
       const found = indexAtOrAfterLine(units, fromLineId, lineOrder());
@@ -833,6 +839,7 @@ export function createSpeaker(deps) {
     releaseWakeLock();
     index = 0;
     units = [];
+    cuedPastEnd = false;
     lastLineId = null;
     retriedAt = -1;
     phase = 'src';
@@ -857,6 +864,7 @@ export function createSpeaker(deps) {
     }
     const i = Math.max(0, target);
     index = i;
+    cuedPastEnd = false;
     phase = 'src';                // 6-1 — 건너뛰면 단계는 src 로
     audibleIdx = -1;
     if (state === 'speaking') restart(i);
@@ -964,6 +972,7 @@ export function createSpeaker(deps) {
       if (mapped !== anchorId) found = indexOfLine(units, mapped);
     }
     index = found >= 0 ? found : 0;
+    if (found < 0) cuedPastEnd = false;     // `[8g-4a]` 다른 쪽 큐 — 앞 쪽에서 정한 "쪽 끝 뒤" 시작점은 무효
     const same = !!before && !!units[index] && before.src === units[index].src && before.seg === units[index].seg;
     if (!same || fromLineId != null) { phase = 'src'; audibleIdx = -1; }
     emitQueue(index);
@@ -983,6 +992,48 @@ export function createSpeaker(deps) {
   function reshow() {
     if (state !== 'paused' || !units[index] || !view || typeof view.highlight !== 'function') return false;
     try { return !!view.highlight(units[index]); } catch (e) { return false; }
+  }
+
+  /**
+   * `[8g-4a — spec 17-8-12 §4-5 · S24]` 검색 결과로 이동한 뒤 — 다음 [▶] 의 시작점을 그 글자(줄 `lineId`, 줄 안 오프셋
+   * `start`)가 든 발화로 둔다. **재생하지 않는다**(낭독 중·쪽 넘김 대기 중이면 아무것도 하지 않는다 — 화면이 먼저 `pause()`).
+   *   ① 단위의 `ranges`(10a)가 그 글자를 품은 단위 ② 없으면(300자 분할 — `ranges` 없음 · `start` 모름) 그 줄을 품은 첫 단위
+   *   ③ 그 줄이 큐에 없으면(인용 거름 — `tts.readCitations` 끔) 화면 순서로 그 뒤 첫 발화(8h 탭 규칙 `indexAtOrAfterLine`),
+   *      이 쪽에 그 뒤 발화가 없으면 다음 [▶] 가 다음 쪽부터(지금까지의 쪽 끝 경로).
+   * 큐가 없거나 처음 상태면 지금 쪽으로 만든다. 멈춤이면 그 단위를 다시 칠한다(`view.highlight` — 스크롤 없음).
+   * 번역 요청을 만들지 않는다 — 큐 이벤트를 내지 않고 상태를 바꾸지 않는다(멈춤이면 `readalong` 은 이미 쉰다).
+   * @returns {boolean} 시작점을 정했는가
+   */
+  function cue(lineId, start) {
+    if (lineId == null || state === 'speaking' || state === 'waiting-page') return false;
+    if (!units.length || state === 'idle') {
+      units = queueOf((view && view.paras && view.paras()) || []);
+      queueRebuilt();
+    }
+    if (!units.length) return false;
+    const id = String(lineId);
+    const s = Number(start);
+    let i = -1;
+    if (Number.isFinite(s)) {
+      for (let k = 0; k < units.length && i < 0; k++) {
+        const rs = units[k].ranges;
+        if (!Array.isArray(rs)) continue;
+        for (let j = 0; j < rs.length; j++) {
+          const r = rs[j];
+          if (r && String(r.id) === id && s >= r.start && s < r.end) { i = k; break; }
+        }
+      }
+    }
+    if (i < 0) i = indexAtOrAfterLine(units, id, lineOrder());
+    if (i < 0) return false;
+    cuedPastEnd = i >= units.length;
+    index = cuedPastEnd ? units.length - 1 : i;
+    phase = 'src';
+    trPart = 0;
+    audibleIdx = -1;
+    retriedAt = -1;
+    if (!cuedPastEnd) reshow();
+    return true;
   }
 
   /** `[8b-1]` 큐를 새로 만들었다 — 낭독 동반 번역이 그 쪽 문장을 흐름에 넣는다(7-8-3 onQueue). */
@@ -1039,6 +1090,7 @@ export function createSpeaker(deps) {
     setReadCitations: setReadCitations,
     reload: reload,
     reshow: reshow,
+    cue: cue,
     setReadalong: setReadalong,
     setTrVoice: setTrVoice,
     setNoticeVoice: setNoticeVoice,

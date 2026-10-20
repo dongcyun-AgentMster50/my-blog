@@ -921,3 +921,114 @@ body[data-reader-view="original"] .original-scroll {
   min-block-size: var(--tap);
   min-inline-size: var(--tap);
 }
+
+/* ── `[8g-4a]` 검색 — 상단바 [🔍] · 검색 띠 · 적중 강조 (spec 17-8-7 · 17-8-8 · 17-8-12 §4) ─────
+   논리 속성만(16-H). 색은 테마 토큰에서 섞는다 — 세피아·어두운·대비 테마가 저절로 따라간다. */
+.topbar .search-open {
+  flex: 0 0 auto;
+  /* 16-G 48×48 — 360px·fr·퀴즈 버튼이 보여도 줄지 않는다. 줄어드는 것은 제목뿐(S20). */
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  padding-inline: 0;
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+/* 띠는 상단바 바로 아래에 붙는다(상단바 sticky 0 + 띠 sticky --bar-top). ‹ › 로 결과를 넘기는 동안 늘 보인다.
+   리더 화면의 좌우 여백(--sp-3)만큼 바깥으로 넓혀 화면 폭을 다 쓴다. 본문 영역 위 경계는 reader.js `bodyArea` 가
+   이 띠의 아래변으로 잰다(자동 스크롤·결과 가운데 맞추기). */
+.search-band {
+  position: sticky;
+  inset-block-start: var(--bar-top);
+  z-index: 19;
+  margin-inline: calc(-1 * var(--sp-3));
+  padding-inline: var(--sp-2);
+  background: var(--c-surface-2);
+  border-block-end: 1px solid var(--c-border);
+}
+
+.search-band[hidden] { display: none; }
+
+.search-band-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-block-size: var(--tap);
+}
+
+.search-band-q {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.search-band button {
+  flex: 0 0 auto;
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-2);
+  white-space: nowrap;
+}
+
+/* [읽던 곳으로] — 긴 언어(fr)에서도 띠가 한 줄에 들도록 글자만 말줄임(버튼은 48 이상 그대로). */
+.search-band .search-band-back {
+  flex: 0 1 auto;
+  max-inline-size: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-band .search-band-back[hidden] { display: none; }
+
+.search-band-pos {
+  flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-band-step .search-glyph { font-size: var(--fs-lg); line-height: 1; }
+
+/* ‹ › 는 논리 방향이다(‹ = 이전 = inline-start). 오른쪽→왼쪽 화면에서는 그 자리가 오른쪽이므로 글리프를 거울로.
+   글리프는 `dir="ltr"` 로 격리돼 있다 — 그러지 않으면 ‹ › 가 bidi 거울 글자라 브라우저가 이미 뒤집고, 여기서 또 뒤집으면 제자리다. */
+:root[dir="rtl"] .search-band-step .search-glyph {
+  display: inline-block;
+  transform: scaleX(-1);
+}
+
+.search-band-note {
+  margin: 0;
+  padding-block-end: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+.search-band-note[hidden] { display: none; }
+
+/* 적중 강조 — CSS Custom Highlight 이름 둘(낭독 `medreader-current` 와 레지스트리가 달라 서로 지우지 않는다).
+   이 쪽의 모든 적중은 옅은 바탕 + 밑줄, 고른 적중은 진한 바탕 + 굵은 밑줄. 낭독 하이라이트와 겹쳐도 밑줄이 남는다. */
+.reflow ::highlight(search-hit) {
+  background-color: color-mix(in srgb, var(--c-accent) 16%, transparent);
+  text-decoration: underline 2px var(--c-accent);
+}
+
+.reflow ::highlight(search-cur) {
+  background-color: color-mix(in srgb, var(--c-accent) 36%, transparent);
+  color: var(--c-text);
+  text-decoration: underline 3px var(--c-accent);
+}
+
+/* Highlight API 가 없으면 줄 단위로 물러선다(charhl 규칙 그대로 — 넓게 칠할 뿐 기능 손실은 없다). */
+.reflow .line.search-hit-line { text-decoration: underline 2px var(--c-accent); }
+.reflow .line.search-cur-line {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+/* 표 적중 — 그 표 크롭에 테두리(리플로우에는 표 글자가 없다 — 17-8-8). */
+.reflow figure.search-cur-fig {
+  outline: 3px solid var(--c-accent);
+  outline-offset: 2px;
+}

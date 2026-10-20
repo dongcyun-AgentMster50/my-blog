@@ -11,7 +11,7 @@
 
 /** 화면 이름 — `index.html` 의 `data-screen` 값과 1:1 이다. */
 export const SCREENS = Object.freeze([
-  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about'
+  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search'
 ]);
 
 /** 알 수 없는 해시가 떨어지는 곳(12-1). */
@@ -23,6 +23,8 @@ export const DEFAULT_ROUTE = 'library';
  *   `#/library`                      → {name:'library', params:{}}
  *   `#/reader/:docId/:page`          → {name:'reader', params:{docId, page:Number}}
  *   `#/quiz/:docId/:sectionId`       → {name:'quiz',   params:{docId, sectionId}}
+ *   `#/search`                       → {name:'search', params:{}}          ← `[8g-4a]` 서재 전체 범위
+ *   `#/search/:docId`                → {name:'search', params:{docId}}     ← 이 책 범위. **검색어는 URL 에 없다**(S28)
  *   `#/settings` `#/usage` `#/about` `#/onboarding`
  *   빈 해시                          → {name:'', params:{}}  ← 호출자가 온보딩 여부로 정한다
  *   그 밖                            → {name:'library', params:{}}
@@ -65,6 +67,10 @@ export function parseRoute(hash) {
       return { name: 'quiz', params: { docId: parts[1], sectionId: parts[2] }, raw: raw };
     }
 
+    case 'search':
+      // `[8g-4a — spec 17-8-7 · 17-8-12 §4-3]` 검색어·결과·스크롤은 모듈 메모리에 둔다 — 해시에는 범위(책)만.
+      return { name: 'search', params: parts[1] ? { docId: parts[1] } : {}, raw: raw };
+
     case 'settings':
       // `#/settings/ai` 처럼 탭이 붙을 수 있다(7단계). 지금은 담아만 둔다.
       return { name: 'settings', params: parts[1] ? { tab: parts[1] } : {}, raw: raw };
@@ -98,6 +104,10 @@ export function libraryHash() { return '#/library'; }
 export function onboardingHash() { return '#/onboarding'; }
 export function readerHash(docId, page) {
   return '#/reader/' + encodeURIComponent(docId) + '/' + (Number(page) >= 1 ? Math.floor(Number(page)) : 1);
+}
+/** `[8g-4a]` 검색 화면 — docId 가 있으면 그 책 범위, 없으면 서재 전체. 검색어는 넣지 않는다(S28). */
+export function searchHash(docId) {
+  return docId == null || docId === '' ? '#/search' : '#/search/' + encodeURIComponent(docId);
 }
 export function quizHash(docId, sectionId) {
   return '#/quiz/' + encodeURIComponent(docId) + '/' + encodeURIComponent(sectionId);

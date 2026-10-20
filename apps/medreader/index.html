@@ -41,8 +41,8 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=a82917db4d">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=8e9bb54047">
-<link rel="stylesheet" href="css/reader.css?v=4b23492c7f">
+<link rel="stylesheet" href="css/screens.css?v=d89c52d608">
+<link rel="stylesheet" href="css/reader.css?v=8cab7b1731">
 <script type="importmap">
 {
   "imports": {
@@ -58,11 +58,11 @@
     "./js/config.js": "./js/config.js?v=b57775c5a6",
     "./js/db.js": "./js/db.js?v=726d46e5c0",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=a40655aac2",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=5e090b415d",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=6e37b953c7",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=f363d0283f",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=1f9e23f552",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=c68d91fff1",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=3cb482176b",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=73fd1d472f",
     "./js/main.js": "./js/main.js?v=b9706d4835",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -71,7 +71,7 @@
     "./js/privacy/redact.js": "./js/privacy/redact.js?v=10e447456b",
     "./js/quiz/engine.js": "./js/quiz/engine.js?v=8408641fcc",
     "./js/quiz/parser.js": "./js/quiz/parser.js?v=c2403f9857",
-    "./js/router.js": "./js/router.js?v=d67cb6abc7",
+    "./js/router.js": "./js/router.js?v=936e01879d",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
     "./js/settings.js": "./js/settings.js?v=5dfc747cd4",
@@ -88,18 +88,19 @@
     "./js/text/search.js": "./js/text/search.js?v=d39859d3b0",
     "./js/text/segment.js": "./js/text/segment.js?v=09707527bd",
     "./js/text/store.js": "./js/text/store.js?v=0e6752a027",
-    "./js/tts/speaker.js": "./js/tts/speaker.js?v=b1931f6249",
+    "./js/tts/speaker.js": "./js/tts/speaker.js?v=b3831a758f",
     "./js/tts/text.js": "./js/tts/text.js?v=1e07c9c45e",
     "./js/tts/voices.js": "./js/tts/voices.js?v=2cfb48af51",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=5193395ae6",
-    "./js/ui/library.js": "./js/ui/library.js?v=d5ea9678cb",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=c800b349fe",
+    "./js/ui/library.js": "./js/ui/library.js?v=266f7992aa",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=a9b1f7c3f5",
     "./js/ui/quiz.js": "./js/ui/quiz.js?v=63bb06c544",
-    "./js/ui/reader.js": "./js/ui/reader.js?v=77f1134d04",
+    "./js/ui/reader.js": "./js/ui/reader.js?v=2f434a0020",
+    "./js/ui/search.js": "./js/ui/search.js?v=7abb59bbac",
     "./js/ui/settings.js": "./js/ui/settings.js?v=38e8cefc6c",
     "./js/ui/trband.js": "./js/ui/trband.js?v=2574e1bf06",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=9df6aeb8cd"
@@ -283,6 +284,8 @@
       <!-- 7b ⑤ 입구 — 설정 AI 탭. 동작은 `data-nav` 전역 위임 하나뿐이다. -->
       <button type="button" data-i18n="nav.settings" data-nav="#/settings/ai"></button>
       <button type="button" data-i18n="nav.about" data-nav="#/about"></button>
+      <!-- `[8g-4a]` 17-8-7 — 서재 전체 검색 입구. 이동은 `data-nav` 전역 위임. 되돌림 스위치(§9)가 끄면 숨는다(ui/library.js). -->
+      <button type="button" id="librarySearchBtn" data-i18n="search.open" data-nav="#/search" hidden></button>
     </div>
 
     <button type="button" class="primary big" id="libraryImport" data-i18n="library.import"></button>
@@ -341,6 +344,9 @@
       <button type="button" class="aa" id="typesetBtn" aria-expanded="false"
               aria-controls="typesetPanel" data-i18n="reader.typeset.aa"
               data-i18n-aria="reader.typeset.open"></button>
+      <!-- `[8g-4a]` 17-8-7 · 17-8-12 §4-1 — 이 책에서 찾기 [🔍] 48×48. 돋보기는 방향이 없는 글리프다(16-H).
+           `js/ui/search.js` 가 되돌림 스위치(SEARCH.ENABLED)를 보고 보인다. -->
+      <button type="button" class="search-open" id="readerSearchBtn" data-i18n-aria="search.open" hidden><span aria-hidden="true">🔍</span></button>
     </div>
 
     <!-- 추출 진행 띠 — 아직 준비 중인 쪽이 있을 때만 보인다(12-3). -->
@@ -352,6 +358,20 @@
     <!-- 5-4 · 5-5 제안 칩 자리 — [이 섹션 퀴즈 풀기]. `js/ui/quiz.js` 가
          자격 있는 섹션(verified ≥ 60%, ≥ 5문항)에서만 채운다. 닫을 수 있다. -->
     <div class="quiz-chip" id="quizChipSlot" hidden></div>
+
+    <!-- `[8g-4a]` 검색 띠 (17-8-8 · 17-8-12 §4-1) — 상단바 아래에 붙는다(48px). ‹ › 는 **논리 방향**(‹ = 이전 = inline-start —
+         아랍어에서 오른쪽, 글리프는 CSS 가 뒤집는다). 검색어는 `<bdi dir=auto>`, 문구는 전부 i18n. `js/ui/search.js` 가 채운다. -->
+    <div class="search-band" id="searchBand" role="region" data-i18n-aria="search.band.label" hidden>
+      <div class="search-band-row">
+        <span class="search-band-q" id="searchBandQ" dir="auto"></span>
+        <button type="button" class="search-band-step" id="searchBandPrev" data-i18n-aria="search.band.prev"><span class="search-glyph" dir="ltr" aria-hidden="true">‹</span></button>
+        <span class="search-band-pos" id="searchBandPos"></span>
+        <button type="button" class="search-band-step" id="searchBandNext" data-i18n-aria="search.band.next"><span class="search-glyph" dir="ltr" aria-hidden="true">›</span></button>
+        <button type="button" class="search-band-back" id="searchBandBack" data-i18n="search.band.back" hidden></button>
+        <button type="button" class="search-band-close" id="searchBandClose" data-i18n-aria="search.band.close"><span aria-hidden="true">✕</span></button>
+      </div>
+      <p class="search-band-note" id="searchBandNote" role="status" aria-live="polite" hidden></p>
+    </div>
 
     <!-- Aa 팝오버 (12-3 · 16-F). 값은 9-3 의 키에 그대로 저장된다. -->
     <div class="typeset-panel" id="typesetPanel" role="dialog" aria-modal="false"
@@ -518,6 +538,41 @@
       <span class="page-total" id="pageTotal"></span>
       <button type="button" id="pageNext" data-i18n="reader.page.next" data-i18n-aria="reader.page.next"></button>
     </nav>
+  </section>
+
+  <!-- ════ 검색 (17-8-7 · 17-8-12 §4) — 8g-4a ══════════════
+       `#/search`(서재 전체) · `#/search/:docId`(이 책). 검색어·결과·스크롤은 `js/ui/search.js` 의 메모리에 있다 —
+       URL 에 넣지 않는다(S28). 이 화면은 라우터의 `hidden` 토글을 **스스로 보고** 그린다(`main.js` 는 범위 밖).
+       결과 조각은 원서 글자라 `dir="ltr" lang={문서 언어}`, 적중은 `<mark>` — 전부 textContent(13절).
+       ★ 목차 탭(`#searchTabs`·`#searchToc`)은 8g-4b 가 붙인다 — 자리만 둔다(숨김). -->
+  <section class="screen search-screen" data-screen="search" hidden>
+    <div class="topbar">
+      <button type="button" id="searchBack" data-i18n="nav.back" data-i18n-aria="nav.back"></button>
+      <h1 class="title" data-i18n="search.title"></h1>
+      <div class="search-scope" id="searchScope" role="group" data-i18n-aria="search.title" hidden>
+        <button type="button" data-scope="doc" aria-pressed="true" data-i18n="search.scope.doc"></button>
+        <button type="button" data-scope="library" aria-pressed="false" data-i18n="search.scope.library"></button>
+      </div>
+    </div>
+    <form class="search-form" id="searchForm" role="search" action="#" autocomplete="off">
+      <label class="sr-only" for="searchInput" data-i18n="search.input.label"></label>
+      <input type="search" id="searchInput" class="search-input" enterkeyhint="search" dir="auto"
+             autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="60"
+             data-i18n="search.input.placeholder" data-i18n-attr="placeholder">
+      <button type="button" class="search-clear" id="searchClear" data-i18n-aria="search.clear"><span aria-hidden="true">✕</span></button>
+      <button type="submit" class="primary search-go" id="searchGo" data-i18n="search.tab.find"></button>
+    </form>
+    <div class="search-tabs" id="searchTabs" role="tablist" hidden>
+      <button type="button" role="tab" id="searchTabFind" aria-selected="true" data-i18n="search.tab.find"></button>
+      <button type="button" role="tab" id="searchTabToc" aria-selected="false" data-i18n="search.tab.toc"></button>
+    </div>
+    <div class="search-recent" id="searchRecent" hidden>
+      <span class="search-recent-label" data-i18n="search.recent"></span>
+      <div class="search-chips" id="searchChips"></div>
+    </div>
+    <div class="search-status" id="searchStatus" role="status" aria-live="polite"></div>
+    <div class="search-results" id="searchResults"></div>
+    <div class="search-toc" id="searchToc" hidden></div>
   </section>
 
   <!-- ════ 퀴즈 (5-5 · 12-1) — 9b 단계 ═══════════════════

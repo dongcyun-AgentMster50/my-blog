@@ -43,10 +43,10 @@ import * as settings from '../settings.js';
 import { t, applyTranslations, formatNumber, onLangChange } from '../i18n/index.js';
 import { fromStored } from '../text/store.js';
 import { FOLD_ROLES, REF_ROLE, describePage, flowParasOf } from '../text/screen.js';
-import { go, replace, readerHash, libraryHash, quizHash } from '../router.js';
+import { go, replace, readerHash, libraryHash, quizHash, parseRoute } from '../router.js';
 import { openDoc, extractorFor } from './library.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
-import { initControls, leaveControls } from './controls.js';
+import { initControls, leaveControls, speechState } from './controls.js';
 // 5-4 · 5-5 제안 칩 — 퀴즈 화면은 스스로 배선된다(이 import 가 그것을 읽힌다).
 import { updateReaderChip, onQuizEntry } from './quiz.js';
 import { TTS, ORIGINAL } from '../config.js';
@@ -59,6 +59,8 @@ import { pickAnchorLine } from './original.js';
 import { algoVersion as ALGO_VERSION } from '../text/layout.js';
 // `[8g-3]` PDF 개요·쪽 라벨을 한가할 때 한 번 documents 에(17-8-12 §3) — 화면 변화 없음.
 import { ensure as ensureOutline, isOutlineCurrent } from '../search/outline.js';
+// `[8g-4a]` 검색 화면·결과로 이동·검색 띠(spec 17-8-12 §4). 리더는 입구와 훅만 준다 — 검색 규칙은 그쪽에 있다.
+import { initSearch } from './search.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
@@ -340,6 +342,20 @@ const state = {
   /** `[8i-1]` 방금 새 판으로 다시 그렸다면 옛 줄 id → 새 줄 id. 다른 렌더에서는 null. */
   lineRemap: null,
 
+  /* ── `[8g-4a]` 검색 화면 뒤에 숨은 리더 (17-8-12 §4-5) ── */
+  /** 검색 화면으로 가며 **숨기기만** 했다 — DOM·낭독이 그대로 살아 있다(`leaveReader` 의 검색 갈래). */
+  soft: false,
+  /** 숨기기 직전 리더의 스크롤 — 다시 보일 때 되돌린다(창 스크롤은 화면들이 함께 쓴다). */
+  softScrollY: 0,
+  /** 숨어 있는 동안 낭독이 쪽을 넘겼다(해시는 옛 쪽) — 다시 보일 때 낭독이 간 쪽으로 따라간다. */
+  hiddenTurn: false,
+  /** 숨어 있는 동안 UI 언어가 바뀌었다 — 다시 보일 때 동적 문구를 다시 만든다. */
+  relabelPending: false,
+  /** 숨길 때의 쪽(그 해시로 돌아오면 "돌아온 것") · 숨은 채 다시 그렸는가 · 리더가 보일 때의 마지막 스크롤. */
+  softFromPage: 0,
+  hiddenRender: false,
+  lastScrollY: 0,
+
   /* ── 6-5 자동 스크롤 ─────────────────────────────── */
   /** 지금 하이라이트된 줄들(문장 모드에서는 여럿). */
   currentLineIds: [],
@@ -373,6 +389,20 @@ const lineTapListeners = new Set();
 const pageListeners = new Set();
 
 export function onLineTap(fn) { lineTapListeners.add(fn); return () => lineTapListeners.delete(fn); }
+
+/** `[8g-4a — spec 17-8-12 §4-5]` DOM 을 새로 붙인 뒤(언어 바꿈 · 검색 화면에서 돌아와 다시 보임) — `notifyPage` 와 따로, 큐를 갈지 않는다. */
+const repaintListeners = new Set();
+/** 구독자는 `{docId, page, reason:'relabel'|'reshown'}` 를 받는다. 쪽을 새로 그리면(뷰 전환 포함) `onPageRender` 가 온다. */
+export function onPageRepaint(fn) { repaintListeners.add(fn); return () => repaintListeners.delete(fn); }
+/** `[8g-4a]` 리더를 정말로 떠났다(검색 화면으로 숨기기는 아니다) — 검색 강조 레지스트리를 지우게. */
+const leaveListeners = new Set();
+export function onReaderLeave(fn) { leaveListeners.add(fn); return () => leaveListeners.delete(fn); }
+
+function notifyRepaint(reason) {
+  for (const fn of repaintListeners) {
+    try { fn({ docId: state.docId, page: state.page, reason: reason }); } catch (e) { /* 구독자 예외 */ }
+  }
+}
 /** 구독자는 `{docId, page, refreshed?}` 를 받는다. `refreshed` 는 `[8i-1]` 같은 쪽을 새 판으로 다시 그렸을 때만 참. */
 export function onPageRender(fn) { pageListeners.add(fn); return () => pageListeners.delete(fn); }
 
@@ -532,6 +562,8 @@ export function initReader() {
   initTypeset();
   // 12-3 하단 컨트롤 바. 이 화면 안에서만 산다 — `main.js` 를 건드리지 않는다.
   initControls();
+  // `[8g-4a]` 검색 — controls 의 `onPageRender`(speaker.reload) 구독 **뒤에** 등록돼야 한다(17-8-12 §4-5). `main.js` 는 범위 밖.
+  initSearch();
 
   els.prev.addEventListener('click', () => goPage(state.page - 1));
   els.next.addEventListener('click', () => goPage(state.page + 1));
@@ -604,6 +636,8 @@ export function sourceLang() { return docLangOf(state.doc); }
 
 function onAnyScroll() {
   if (!els || els.root.hidden) return;
+  // `[8g-4a]` 검색 화면으로 숨길 때 되돌릴 자리 — 숨긴 뒤에는 창 높이가 바뀌어 scrollY 가 이미 잘려 있다.
+  state.lastScrollY = window.scrollY || 0;
   if (!state.currentLineIds.length) return;
   if (Date.now() - state.programScrollAt < TTS.USER_SCROLL_MS) return;   // 우리가 굴린 것
   if (state.scrollPaused) return;
@@ -638,6 +672,23 @@ export async function showReader(params) {
     return;
   }
 
+  // `[8g-4a — spec 17-8-12 §4-5]` 검색 화면에서 돌아왔다 — 숨겨 둔 리더(DOM·낭독)가 그대로 살아 있다.
+  if (state.soft && state.docId === docId) {
+    // 숨어 있는 동안 낭독이 쪽을 넘겼고 떠났던 쪽으로 돌아왔다(Android 뒤로) — 화면은 낭독이 간 쪽이다. 해시를 그쪽으로.
+    if (state.hiddenTurn && wanted === state.softFromPage && state.page !== wanted) {
+      state.hiddenTurn = false;
+      replace(readerHash(docId, state.page));
+      return;
+    }
+    if (state.page === wanted && els.mount.firstChild && !(state.view === 'original' && state.hiddenRender)) {
+      reshowReader(doc);
+      return;
+    }
+  }
+  state.soft = false;
+  state.hiddenTurn = false;
+  state.hiddenRender = false;
+
   const docChanged = state.docId !== docId;
   if (docChanged) {
     // 4-8 — region id 는 쪽 안에서만 유일하다. 문서가 바뀌면 비운다
@@ -664,8 +715,46 @@ export async function showReader(params) {
   wireExtractor(docId).catch((e) => banner(e, 'ERR_UNKNOWN'));
 }
 
+/**
+ * `[8g-4a]` 숨겨 둔 리더를 다시 보인다(검색 화면에서 뒤로·같은 쪽 결과) — 다시 그리지 않는다(다시 그리면 낭독이 읽던
+ * 문장을 처음부터 다시 읽는다). 스크롤을 되돌리고 `onPageRepaint` 로 알린다(검색이 강조를 다시 칠한다).
+ */
+function reshowReader(doc) {
+  state.soft = false;
+  state.hiddenTurn = false;
+  if (doc) state.doc = doc;
+  els.title.textContent = (state.doc && (state.doc.title || state.doc.fileName)) || '';
+  paintPager();
+  paintProgressBar();
+  const y = state.hiddenRender ? 0 : state.softScrollY;
+  state.hiddenRender = false;
+  state.programScrollAt = Date.now();
+  try { window.scrollTo({ top: y, behavior: 'instant' }); } catch (e) { window.scrollTo(0, y); }
+  if (state.relabelPending) { state.relabelPending = false; relabelReader(); return; }
+  notifyRepaint('reshown');
+}
+
+/** `[8g-4a]` 리더 → 검색 화면인가(리더가 살아 있고 해시가 검색). 그때는 숨기기만 한다. */
+function searchOverReader() {
+  if (!els || state.docId == null || !els.mount || !els.mount.firstChild) return false;
+  try { return parseRoute(typeof location !== 'undefined' ? location.hash : '').name === 'search'; } catch (e) { return false; }
+}
+
 /** 리더를 떠날 때 — 팝오버를 닫고 DOM 을 비운다(7000쪽 메모리). */
 export function leaveReader() {
+  // `[8g-4a — spec 17-8-12 §4-5]` 검색 화면으로 갈 때는 **숨기기만** 한다 — 낭독은 이어지고(결과를 누를 때 멈춘다),
+  // 돌아오면(Android 뒤로) 그 화면 그대로다. 검색 화면에서 다른 곳으로 가면 그때 정말로 떠난다(아래).
+  if (searchOverReader()) {
+    if (!state.soft) { state.softScrollY = state.lastScrollY; state.softFromPage = state.page; }
+    state.soft = true;
+    closeTypeset();
+    return;
+  }
+  state.soft = false;
+  state.hiddenTurn = false;
+  state.hiddenRender = false;
+  state.relabelPending = false;
+  for (const fn of leaveListeners) { try { fn(); } catch (e) { /* 구독자 예외 */ } }
   closeTypeset();
   // 리더를 떠나면 낭독도 멈춘다 — 서재에서 소리가 계속 나면 안 된다.
   leaveControls();
@@ -1469,6 +1558,111 @@ export function markDone(lineId, on) {
 
 export function currentPage() { return { docId: state.docId, page: state.page, pageCount: state.pageCount }; }
 
+/* ────────────────────────────────────────────────────────
+   `[8g-4a — spec 17-8-12 §4-3 · §4-5]` 검색이 쓰는 계약 — 읽던 자리 · 지금 화면 · 결과로 굴리기
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 읽던 자리 — 검색 화면을 열 때 기억한다([읽던 곳으로]). 낭독 하이라이트가 있으면(낭독 중·멈춤) 그 단위의 첫 줄·글자,
+ * 없으면 화면 가운데 줄(원본 보기도 같은 판정 `visibleNow`).
+ * @returns {{docId:string, page:number, lineId:(string|null), start:number, speaking:boolean}|null}
+ */
+export function readingSpot() {
+  if (!els || state.docId == null) return null;
+  const sp = speechState();
+  let lineId = null;
+  let start = 0;
+  if (state.currentLineIds.length) {
+    lineId = String(state.currentLineIds[0]);
+    const r = Array.isArray(state.currentRanges) ? state.currentRanges.find((x) => x && String(x.id) === lineId) : null;
+    start = r ? Number(r.start) || 0 : 0;
+  } else {
+    const seen = visibleNow();
+    lineId = seen.center || (seen.visible.length ? seen.visible[0] : null) || firstFlowLineId();
+  }
+  return { docId: state.docId, page: state.page, lineId: lineId == null ? null : String(lineId), start: start, speaking: sp === 'speaking' || sp === 'waiting-page' };
+}
+
+/**
+ * 지금 그려진 쪽 — 검색이 그 쪽 **화면 글자**에서 적중을 다시 찾는다(검색 레코드 `text` 와 같은 함수 `flowParasOf(desc)`).
+ * `ready` = 글자가 있는 쪽이 그려져 있다(자리표시자·깨진 쪽은 거짓). `visible` = 리더가 보인다(검색 화면 뒤가 아니다).
+ */
+export function currentScreen() {
+  if (!els || state.docId == null) return null;
+  return {
+    docId: state.docId, page: state.page, view: state.view, desc: state.desc, layout: state.layout,
+    lang: sourceLang(), ready: !!state.desc && !!els.mount.firstChild, visible: !els.root.hidden && !state.soft
+  };
+}
+
+/**
+ * 결과로 굴리기 — 그 줄(구간 `range` 가 있으면 그 글자들)을 **보이는 본문 영역의 세로 가운데**로(S23 ±20%).
+ * `programScrollAt` 을 세운다(6-5 — 사용자 스크롤로 읽지 않게). 원본 보기는 그 줄로 굴리고, 낭독 하이라이트가 없으면
+ * 기존 줄 오버레이로 그 줄을 보인다(글자 구간은 리플로우 전용 — 17-8-8).
+ */
+export function revealLine(lineId, range) {
+  if (!els || lineId == null) return false;
+  state.programScrollAt = Date.now();
+  if (state.view === 'original') {
+    const ok = original.scrollToLine(String(lineId));
+    if (!state.currentLineIds.length) original.setCurrentOriginal([String(lineId)], range ? [range] : null);
+    return ok;
+  }
+  const node = lineElement(lineId);
+  if (!node) return false;
+  let rect = null;
+  const tn = node.firstChild;
+  if (range && tn && tn.nodeType === 3 && typeof document.createRange === 'function') {
+    try {
+      const rg = document.createRange();
+      rg.setStart(tn, Math.min(tn.length, Math.max(0, Number(range.start) || 0)));
+      rg.setEnd(tn, Math.min(tn.length, Math.max(0, Number(range.end) || 0)));
+      const r = rg.getBoundingClientRect();
+      if (r && r.height > 0) rect = r;
+    } catch (e) { rect = null; }
+  }
+  if (!rect) rect = node.getBoundingClientRect();
+  centerRect(rect);
+  return true;
+}
+
+/** 표 적중 — 그 표 크롭(`figure[data-region-id]`)을 본문 가운데로. 원본 보기는 그 표 자리로. */
+export function revealRegion(regionId) {
+  if (!els || regionId == null) return false;
+  state.programScrollAt = Date.now();
+  if (state.view === 'original') return original.scrollToRegion(String(regionId));
+  const figs = els.mount.querySelectorAll('figure[data-region-id]');
+  for (let i = 0; i < figs.length; i++) {
+    if (figs[i].getAttribute('data-region-id') !== String(regionId)) continue;
+    const r = figs[i].getBoundingClientRect();
+    const vh = window.innerHeight || 0;
+    const area = bodyArea(vh);
+    // 표는 키가 클 수 있다 — 가운데가 아니라 머리를 본문 영역 위쪽에
+    const dy = r.top - (area.top + BODY_EDGE_PX * 4);
+    try { window.scrollBy({ top: dy, behavior: 'instant' }); } catch (e) { window.scrollBy(0, dy); }
+    return true;
+  }
+  return false;
+}
+
+/** 다시 찾지 못했다 — 쪽 맨 위로(17-8-3 "틀린 강조보다 강조 없음"). */
+export function revealTop() {
+  if (!els) return;
+  state.programScrollAt = Date.now();
+  if (state.view === 'original') { const sc = els.mount.querySelector('.original-scroll'); if (sc) sc.scrollTop = 0; }
+  try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) { window.scrollTo(0, 0); }
+}
+
+function centerRect(rect) {
+  const vh = window.innerHeight || 0;
+  if (!vh || !rect) return;
+  const area = bodyArea(vh);
+  const want = area.top + (area.bottom - area.top) / 2 - rect.height / 2;
+  const dy = rect.top - want;
+  if (Math.abs(dy) < 1) return;
+  try { window.scrollBy({ top: dy, behavior: 'instant' }); } catch (e) { window.scrollBy(0, dy); }
+}
+
 /**
  * ★ 5단계 낭독 큐의 입력. 지금 쪽의 **문단**을 읽기 순서로 준다.
  * `lines[i].hyphen` 이 "다음 줄과 어떻게 잇는가"이고, `tts/text.js` 가 그것으로
@@ -1598,7 +1792,8 @@ export function showSpoken(unit) {
     if (state.scrollPaused) { state.scrollPaused = false; hideBackChip(); }
   }
 
-  if (!state.scrollPaused && settings.get('reader.autoScroll') !== false) scrollToCurrent(false);
+  // `[8g-4a]` 검색 화면 뒤에 숨어 있으면 굴리지 않는다 — 창 스크롤은 지금 검색 화면의 것이다.
+  if (!state.scrollPaused && settings.get('reader.autoScroll') !== false && !els.root.hidden) scrollToCurrent(false);
   return true;
 }
 
@@ -1679,6 +1874,12 @@ const BODY_EDGE_PX = 4;
 function bodyArea(vh) {
   let top = 0;
   try { top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bar-top')) || 0; } catch (e) { top = 0; }
+  // `[8g-4a]` 검색 띠(상단바 아래에 붙는다)가 보이면 본문 영역은 그 아래부터.
+  const band = els && els.root ? els.root.querySelector('#searchBand') : null;
+  if (band && !band.hidden) {
+    const br = band.getBoundingClientRect();
+    if (br.height > 0) top = Math.max(top, br.bottom);
+  }
   let bottom = vh;
   const probe = chromeProbe();
   if (probe) {
@@ -1729,8 +1930,20 @@ export function goToPageForSpeech(pageNo) {
   // 상한·다른 쪽으로 감·리더를 떠남은 전과 같이 상한 뒤 false. 버려진 렌더는 알리지 않는다.
   const docId = state.docId;
   const waiting = renderDone.wait((r) => pageTurnCheck(state, pageFresh(state), r, docId, target), TTS.PAGE_WAIT_MS);
-  go(readerHash(state.docId, target));
+  // `[8g-4a]` 검색 화면 뒤에서 읽는 중이면 화면(해시)을 바꾸지 않고 숨은 리더에서 다음 쪽을 그린다 — 검색 화면이 갑자기 리더로 바뀌지 않게.
+  if (state.soft) turnHidden(target);
+  else go(readerHash(state.docId, target));
   return waiting;
+}
+
+/** `[8g-4a]` 숨은 리더의 쪽 넘김 — 다시 보일 때(떠났던 쪽 해시로 돌아오면) `showReader` 가 해시를 이 쪽으로 따라간다. */
+function turnHidden(target) {
+  state.page = target;
+  state.hiddenTurn = true;
+  state.hiddenRender = true;
+  paintPager();
+  if (state.wired.ex) { try { state.wired.ex.setCurrentPage(target); } catch (e) { /* 추출 우선순위만 */ } }
+  renderPage().then(() => saveLastPage(), () => { /* renderPage 가 스스로 안내한다 */ });
 }
 
 /* ────────────────────────────────────────────────────────
@@ -1742,7 +1955,8 @@ function relabelReader() {
   if (!els) return;
   applyTranslations(els.root);
   syncControls();
-  if (els.root.hidden) return;
+  // `[8g-4a]` 검색 화면 뒤에 숨어 있으면 다시 보일 때 다시 만든다(`reshowReader`).
+  if (els.root.hidden) { if (state.soft) state.relabelPending = true; return; }
   paintPager();
   paintProgressBar();
   paintViewToggle();
@@ -1758,6 +1972,7 @@ function relabelReader() {
     els.mount.appendChild(renderDescription(state.desc));
     fillTableCrops(state.renderToken);
     if (ids.length) setCurrentLines(ids, rs);
+    notifyRepaint('relabel');           // `[8g-4a]` DOM 을 새로 붙였다 — 검색 강조를 다시 칠하게
   } else {
     renderPage();
   }

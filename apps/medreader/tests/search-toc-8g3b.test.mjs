@@ -313,6 +313,27 @@ test('S34 ★ 결과는 쪽 순서 · 순수(입력을 바꾸지 않음) · 층 
 
 /* ══ S35 계층·순수 ════════════════════════════════════════ */
 
+/* ══ 8g-4a 보강 — 8g-3b Review 의 변이 M2·M4 (94권 S36 만 잡던 것, carryover 15) ═══════════ */
+
+test('S33b ★ R3 — 마침표·느낌표 없이 물음표로 갈린 두 문장도 multi (빠른 길 HAS_STOP 이 ? 를 본다 — M2)', () => {
+  assert.equal(why('Is it ok? Yes it is'), 'multi');
+  assert.equal(why('Is it ok? yes it is'), null, '뒤가 소문자면 한 문장(R3 정의 그대로)');
+  assert.equal(why('Ready? Go now'), 'multi');
+});
+
+test('S34b ★ 층 멈춤 경계 — 남는 수의 누적이 max 와 **정확히 같은** 층은 들어온다(`>` 이지 `>=` 가 아니다 — M4)', () => {
+  // 위 층 r 2.0 에 2항목 + 다음 층 r 1.5 에 2항목, max 4 → 누적 4 = max → 두 층 모두(4항목)
+  const recs = [
+    st('D', 1, [['Zorvat Top One', 2.0], ['Zorvat Mid One', 1.5]]),
+    st('D', 2, [['Zorvat Top Two', 2.0], ['Zorvat Mid Two', 1.5]]),
+    st('D', 3, [['Zorvat Low One', 1.3]])
+  ];
+  const toc = headingToc(recs, { max: 4 });
+  assert.deepEqual(toc.map((e) => e.t), ['Zorvat Top One', 'Zorvat Mid One', 'Zorvat Top Two', 'Zorvat Mid Two'], '★ 누적 = max 인 층까지');
+  assert.equal(headingToc(recs, { max: 3 }).length, 2, '누적이 max 를 넘는 층에서 멈춘다(위 층만)');
+  assert.equal(headingToc(recs, { max: 5 }).length, 5);
+});
+
 test('S35 ★ text/search.js 는 document·window·indexedDB 를 쓰지 않는다 · isJunkOutline 은 DB 를 부르지 않는다', () => {
   const src = read('../js/text/search.js');
   const banned = /\b(document|window|indexedDB|fetch)\b/;

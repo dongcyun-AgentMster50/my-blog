@@ -198,6 +198,8 @@ export function initControls() {
     setSpeechState(speaker.getState());          // 8i-1 — 낭독 중이면 지금 쪽 다시 그리기를 미룬다
     paintBar();
     readalong.setActive(speaker.getState() === 'speaking');   // 낭독 중일 때만 요청한다
+    // `[8g-4a]` 검색 띠 — [▶] 를 누르면 검색 강조를 지운다(17-8-8). 구독자 예외가 낭독을 막지 않는다.
+    for (const fn of speechListeners) { try { fn(speaker.getState()); } catch (e) { /* 구독자 예외 */ } }
   });
   speaker.addEventListener('repeatchange', () => { paintRepeat(); paintProgress(lastProgress.index, lastProgress.total); });
   speaker.addEventListener('end', () => { paintBar(); paintProgress(0, 0); });
@@ -276,6 +278,43 @@ function attachDebugHook() {
     }
   };
 }
+
+/* ────────────────────────────────────────────────────────
+   `[8g-4a — spec 17-8-12 §4-5]` 검색 결과로 이동 — 리더·검색 화면은 speaker 를 import 하지 않는다(3-2).
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 결과로 가기 **전에** — 낭독 중·쪽 넘김 대기(`waiting-page`)·새 판 대기면 멈춘다(`speaker.pause()` — 세대가 올라
+ * `advancePage`·`waitFresh` 의 대기가 스스로 물러난다). 멈춤은 `statechange` 로 `readalong.setActive(false)` 까지 간다 —
+ * 그 뒤 [▶] 전까지 번역 요청 0(17-8-8 결정 (2)).
+ * @returns {boolean} 이 호출이 낭독을 멈췄는가(화면이 `search.paused` 를 한 번 보인다)
+ */
+export function pauseForJump() { return pauseSpeakerForJump(speaker); }
+
+/** `pauseForJump` 의 판정 — **순수**(speaker 를 받는다 · tests/search-ui-8g.test.mjs 가 실제 `createSpeaker` 로 잰다). */
+export function pauseSpeakerForJump(sp) {
+  if (!sp) return false;
+  const s = sp.getState();
+  if (s !== 'speaking' && s !== 'waiting-page') return false;
+  sp.pause();
+  return sp.getState() === 'paused';
+}
+
+/**
+ * 결과 쪽을 그린 뒤 — 다음 [▶] 의 시작점을 적중이 든 문장으로(`speaker.cue`). 낭독 중이면 아무것도 하지 않는다.
+ * @returns {boolean}
+ */
+export function cueAt(lineId, start) {
+  if (!speaker || typeof speaker.cue !== 'function') return false;
+  return speaker.cue(lineId, start);
+}
+
+/** 지금 낭독 상태(`idle`·`speaking`·`paused`·`waiting-page`·`error`). speaker 가 없으면 `'idle'`. */
+export function speechState() { return speaker ? speaker.getState() : 'idle'; }
+
+/** `[8g-4a]` 낭독 상태가 바뀔 때마다 `fn(state)`. 해제 함수를 돌려준다. */
+const speechListeners = new Set();
+export function onSpeechChange(fn) { speechListeners.add(fn); return () => speechListeners.delete(fn); }
 
 /** 리더를 떠날 때 — 소리를 멈춘다. 서재에서 낭독이 계속되면 안 된다. */
 export function leaveControls() {

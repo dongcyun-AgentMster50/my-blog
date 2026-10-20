@@ -46,6 +46,8 @@ import {
 } from '../text/lang.js';
 // `[8g-2]` 검색 엔진 캐시 배선만(화면 변화 없음) — 새로 쓰인 쪽은 다음 검색 전에 다시 읽고, 다시 추출·삭제면 버린다.
 import { notePage as searchNotePage, invalidate as searchInvalidate } from '../search/engine.js';
+// `[8g-4a]` 서재 [검색](서재 전체 범위) — 되돌림 스위치(17-8-12 §9)가 끄면 숨긴다.
+import { SEARCH } from '../config.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -120,6 +122,10 @@ export function initLibrary() {
   });
 
   els.list.addEventListener('click', onListClick);
+
+  // `[8g-4a]` [검색] → `#/search`. 이동은 `data-nav` 전역 위임 하나(12-7) — 여기서는 보이기만 정한다.
+  const searchBtn = root.querySelector('#librarySearchBtn');
+  if (searchBtn) searchBtn.hidden = !SEARCH.ENABLED;
 
   // 20절 — file:// 로 열렸으면 빈 서재에 안내를 띄운다.
   if (location.protocol === 'file:') els.fileProto.hidden = false;

@@ -730,3 +730,177 @@
 .ai-translation .ai-tr-text:lang(ko) { word-break: keep-all; }
 .ai-translation .ai-tr-text:lang(ar),
 .ai-translation .ai-tr-lang:lang(ar) { font-family: var(--font-ar); }
+
+/* ── `[8g-4a]` 검색 화면 (spec 17-8-7 · 17-8-12 §4-1) ───────────────────
+   위에서부터: 상단바(뒤로 · 제목 · 이 책|서재) → 검색 칸 48 → (목차 탭 — 8g-4b) → 최근 칩 → 상태 → 결과.
+   논리 속성만(16-H). 결과 줄 전체가 누르는 자리, 높이 ≥ 48(16-G). 조각은 원서 글자라 dir=ltr(JS 가 단다). */
+.search-scope {
+  display: flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.search-scope[hidden] { display: none; }
+
+.topbar .search-scope button {
+  border: 0;
+  border-radius: 0;
+  min-block-size: var(--tap);
+  min-inline-size: var(--tap);
+  padding-inline: var(--sp-2);
+  background: var(--c-surface);
+}
+
+.topbar .search-scope button[aria-pressed="true"] {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  font-weight: 600;
+}
+
+.topbar .search-scope button[hidden] { display: none; }
+
+.search-form {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-block: var(--sp-3);
+}
+
+.search-input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-base);
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+
+.search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }   /* [✕] 하나만 */
+
+.search-clear,
+.search-go {
+  flex: 0 0 auto;
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+}
+
+.search-tabs[hidden],
+.search-toc[hidden],
+.search-recent[hidden] { display: none; }
+
+.search-recent {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-block-end: var(--sp-3);
+}
+
+.search-recent-label {
+  flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+/* 칩 줄은 그 안에서만 가로로 민다 — 화면 전체는 가로 스크롤 0(S20). */
+.search-chips {
+  display: flex;
+  gap: var(--sp-2);
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow-x: auto;
+}
+
+.search-chip {
+  flex: 0 0 auto;
+  max-inline-size: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding-inline: var(--sp-3);
+}
+
+.search-status-line {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+.search-status-line.is-error,
+.search-note.is-error { color: var(--c-danger); }
+
+.search-group-head {
+  margin: var(--sp-4) 0 var(--sp-2);
+  padding-block-end: var(--sp-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--c-text-dim);
+  border-block-end: 1px solid var(--c-border);
+}
+
+.search-row {
+  display: block;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  margin-block-end: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: start;
+  color: var(--c-text);
+  background: var(--c-surface);
+}
+
+.search-row-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-snip {
+  display: block;
+  margin-block-start: var(--sp-1);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.search-snip mark {
+  color: inherit;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--c-accent) 28%, transparent);
+  border-radius: 2px;
+}
+
+.search-doc {
+  margin-block: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface-2);
+}
+
+.search-doc-head {
+  min-block-size: var(--tap);
+  padding-block: var(--sp-2);
+  font-weight: 600;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.search-note {
+  margin: var(--sp-1) 0;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+.search-prep { margin-block: var(--sp-1) var(--sp-2); }
+
+.search-more { margin-block: var(--sp-3); }
