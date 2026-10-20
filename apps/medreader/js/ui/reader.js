@@ -355,6 +355,8 @@ const state = {
   softFromPage: 0,
   hiddenRender: false,
   lastScrollY: 0,
+  /** `[8g-4a-fix F1]` 검색 화면에서 리더로 오는 길 — 'back'(뒤로) | 'jump'(결과·[읽던 곳으로] — `noteSearchJump`). `softReturnPlan` 의 입력. */
+  softEntry: 'back',
 
   /* ── 6-5 자동 스크롤 ─────────────────────────────── */
   /** 지금 하이라이트된 줄들(문장 모드에서는 여럿). */
@@ -673,17 +675,22 @@ export async function showReader(params) {
   }
 
   // `[8g-4a — spec 17-8-12 §4-5]` 검색 화면에서 돌아왔다 — 숨겨 둔 리더(DOM·낭독)가 그대로 살아 있다.
-  if (state.soft && state.docId === docId) {
-    // 숨어 있는 동안 낭독이 쪽을 넘겼고 떠났던 쪽으로 돌아왔다(Android 뒤로) — 화면은 낭독이 간 쪽이다. 해시를 그쪽으로.
-    if (state.hiddenTurn && wanted === state.softFromPage && state.page !== wanted) {
-      state.hiddenTurn = false;
-      replace(readerHash(docId, state.page));
-      return;
-    }
-    if (state.page === wanted && els.mount.firstChild && !(state.view === 'original' && state.hiddenRender)) {
-      reshowReader(doc);
-      return;
-    }
+  // `[8g-4a-fix F1]` 판정은 순수 `softReturnPlan` — 뒤로 돌아옴과 결과로 이동(`noteSearchJump`)을 `softEntry` 로 가른다.
+  const plan = softReturnPlan({
+    soft: state.soft, sameDoc: state.docId === docId, entry: state.softEntry, wanted: wanted,
+    fromPage: state.softFromPage, page: state.page, hiddenTurn: state.hiddenTurn,
+    hasDom: !!els.mount.firstChild, stalePaint: state.view === 'original' && state.hiddenRender
+  });
+  state.softEntry = 'back';
+  // 숨어 있는 동안 낭독이 쪽을 넘겼고 떠났던 쪽으로 돌아왔다(Android 뒤로) — 화면은 낭독이 간 쪽이다. 해시를 그쪽으로.
+  if (plan === 'follow') {
+    state.hiddenTurn = false;
+    replace(readerHash(docId, state.page));
+    return;
+  }
+  if (plan === 'reshow') {
+    reshowReader(doc);
+    return;
   }
   state.soft = false;
   state.hiddenTurn = false;
@@ -713,6 +720,30 @@ export async function showReader(params) {
   // 백그라운드 추출을 되살린다(9-4). pdf.js 로드가 화면을 붙잡지 않도록
   // 그리기가 끝난 뒤에 부른다.
   wireExtractor(docId).catch((e) => banner(e, 'ERR_UNKNOWN'));
+}
+
+/**
+ * `[8g-4a-fix F1]` 검색 화면에서 리더로 올 때 숨은 리더를 어떻게 보일지 — **순수**(tests/search-jump-8g4afix.test.mjs 가 같은 함수를 쓴다).
+ * - `'follow'` — **뒤로** 돌아왔고(entry `'back'`) 숨은 동안 낭독이 쪽을 넘겼고 떠났던 쪽 해시로 왔다 → 해시를 낭독이 간 쪽으로 바꿔 쓴다.
+ * - `'reshow'` — 숨은 리더가 바로 그 쪽을 그려 두었다 → 다시 그리지 않고 보이기만(낭독이 읽던 문장을 처음부터 다시 읽지 않게).
+ * - `'render'` — 그 밖. **결과로 이동**(entry `'jump'`)은 숨은 동안 넘어간 쪽과 상관없이 원하는 쪽을 그린다(F1: 떠났던 쪽 결과 → 다음 쪽이 열렸다).
+ * @param {{soft:boolean, sameDoc:boolean, entry:('back'|'jump'), wanted:number, fromPage:number, page:number,
+ *          hiddenTurn:boolean, hasDom:boolean, stalePaint:boolean}} o  stalePaint = 원본 보기를 숨은 채 다시 그렸다(canvas 를 다시 그려야 한다)
+ * @returns {'follow'|'reshow'|'render'}
+ */
+export function softReturnPlan(o) {
+  if (!o || !o.soft || !o.sameDoc) return 'render';
+  if (o.entry !== 'jump' && o.hiddenTurn && o.wanted === o.fromPage && o.page !== o.wanted) return 'follow';
+  if (o.page === o.wanted && o.hasDom && !o.stalePaint) return 'reshow';
+  return 'render';
+}
+
+/**
+ * `[8g-4a-fix F1]` 검색이 결과(·[읽던 곳으로])로 **해시를 바꾸기 직전**에 부른다(`search.beginJump` 의 `env.mark`) — 다음 `showReader` 는
+ * 뒤로 돌아옴이 아니라 이동이다. 리더가 숨어 있을 때만 의미가 있다(보이는 리더는 `softReturnPlan` 이 어차피 'render').
+ */
+export function noteSearchJump() {
+  if (state.soft) state.softEntry = 'jump';
 }
 
 /**
@@ -747,10 +778,12 @@ export function leaveReader() {
   if (searchOverReader()) {
     if (!state.soft) { state.softScrollY = state.lastScrollY; state.softFromPage = state.page; }
     state.soft = true;
+    state.softEntry = 'back';
     closeTypeset();
     return;
   }
   state.soft = false;
+  state.softEntry = 'back';
   state.hiddenTurn = false;
   state.hiddenRender = false;
   state.relabelPending = false;

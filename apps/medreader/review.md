@@ -5609,3 +5609,77 @@ Build 의 G1–G15·V10 이 하지 않은 곳만 바꿨다. outline 변이 7개�
 2. Build 남은 문제 ①(360px 제목 0px)·③(진행 표시)을 4b 에서 할지.
 3. F3(다른 책 결과 때 빈 번역 띠·정리 생략)을 4b 에서 정리할지, 그대로 둘지.
 4. (기록) 실기기: 실제 할당량 실패 화면, Gboard 음성 입력, 쪽 넘김 대기 중 결과 누름 한 번.
+
+# 8g-4a-fix Review — 숨은 리더 쪽 넘김 뒤 "떠난 쪽 결과"로 이동(F1) (2026-10-20)
+
+> 지침: `.claude/tasks/medreader-review-8g-4a-fix.md`. Build 보고는 참고만 하고 내 스크립트로 다시 쟀다. 커밋하지 않았다. 앱 코드·테스트·spec 은 고치지 않았다(변이는 읽어서 쓰기로 되돌리고 매번 바이트 비교, 끝에 sha256 5개가 시작과 같음). 작업 폴더: 스크래치패드 `r8g4af/`(`lib.mjs`·`setup.mjs`·`rv.mjs`·`mut.mjs`·`revert-f1.mjs`, 결과 `rv-*.json`·`mut.log`·`mut/*.tap`·`full-*.tap`, 캡처 `shots/`, 백업 `bak/`). 브라우저: Edge headless · 새 프로필 1개(`r8g4af/pr`, CURRENT 2026 만 가져옴 — 추출 54초) · 캐시 끔 · 흉내 음성. 진짜 API 키·요청 없음.
+
+## 8g4afR-1. 결론 — **통과**
+
+F1 은 고쳐졌다. "뒤로 돌아옴"(낭독이 간 쪽으로 replace)은 그대로다. 8i-3·8i-1 B 회귀 없음. 판정 함수는 순수하고 표로 묶였으며, 내 변이 9개가 모두 빨강이다. 고칠 문제 없음(아래 기록 2건은 낮음).
+
+## 8g4afR-2. 변경 범위 · search.js 무결성
+
+- `git diff --stat`: `index.html`(stamp 2줄) · `reader.js` · `search.js`(+5 −3) · `tests/search-ui-8g.test.mjs`(U9 3줄) + 새 `tests/search-jump-8g4afix.test.mjs`. 지침 범위뿐이다. `.codex/`·`AGENTS.md`(8월 27일)는 이번 작업이 아니다.
+- **search.js 는 보고서가 말한 4곳뿐이다**: import 에 `noteSearchJump`, `beginJump` 주석 2줄, `env.mark();` 한 줄, `JUMP_ENV` 의 `mark: () => noteSearchJump()`. Build 의 손 복원 흔적은 없다. HEAD 와 줄 수 1201→1203, BOM·CRLF 0(HEAD 도 0), 끝 줄바꿈 같음, `git diff --check` 깨끗. 지금 파일 5개가 Build `b8g4af/bak` 과 바이트가 같고, Build `bak-orig` 는 HEAD 와 같다.
+
+## 8g4afR-3. F1 표시(`softEntry = 'jump'`)가 생기고 지워지는 길
+
+| 길 | 판정 |
+|---|---|
+| 생김 | `noteSearchJump()` 한 곳. `state.soft`(숨은 리더)일 때만 생긴다. 부르는 곳은 `beginJump` 의 `!same` 갈래뿐이고, 바로 다음 줄이 동기 `go`/`replace` 다. 보이는 리더(띠 ‹ ›·[읽던 곳으로])에서는 생기지 않는다 |
+| 지워짐 | ① `showReader` 가 `softReturnPlan` 판정 직후 ② `leaveReader` 의 숨김 갈래(검색으로 갈 때마다) ③ 정말 떠날 때. `onRoute` 가 reader 가 아닌 모든 길에서 `leaveReader` 를 부르므로, 다음 "뒤로"가 오기 전에 반드시 ② 를 지난다 |
+| mark 뒤 이동이 안 끝남 | 숨은 리더면 해시가 `#/search…` 라서 `go` 는 늘 hashchange 를 낸다. `showReader` 의 이른 return 중 범위 밖 쪽은 `replace` 로 다시 들어와 jump 를 그대로 쓴다(맞음). db 오류·문서 없음은 표시가 남지만 다음 검색 진입(②)이나 서재 이동(③)에서 지워진다. 해 없음 |
+| 같은 쪽 결과(숨은 리더) | X9 대로 같은 쪽이 아니다 → mark → go → `'reshow'`(다시 그리지 않음). headless `f1same`: 62쪽으로 넘어간 뒤 62쪽 결과 → 해시 62 · cur 1 · 쪽 DOM 표지 그대로(다시 그리지 않음) · 멈춤 |
+| 다른 책 결과(F3) | `sameDoc` 거짓 → 늘 `'render'`, 판정 직후 표시 지움. 표 12·13줄. headless 는 한 권 프로필이라 하지 않았다(코드 판정) |
+| 검색 화면 [뒤로] `goBack` | 직전 화면이 reader 면 `history.back()` → mark 없음 → follow. headless `appback` 으로 확인. 대체 경로 `go(spot 쪽)` 도 mark 가 없어 "뒤로"로 친다(Build 판단에 동의) |
+| 남은 표시가 다음 뒤로를 속이는가 | headless `stale`: F1 이동(61쪽 결과) → 띠 닫고 63쪽 낭독 → [🔍] → 64쪽으로 넘어감 → 뒤로 → 해시 64·낭독 계속·연달아 0. 속지 않는다 |
+
+## 8g4afR-4. `softReturnPlan` 표
+
+- 순수하다(입력만 읽고 상태·DOM 을 건드리지 않음). 테스트도 입력 스냅숏이 그대로인지 본다.
+- 축(뒤로/이동 × 같은 쪽/다른 쪽 × hiddenTurn × hasDom × stalePaint × soft/sameDoc)이 다 나온다. F1·뒤로 follow·X8·follow 뒤 다시 불림·같은 해시 replace 되풀이 없음이 실제 경로와 맞는다.
+- 기록(낮음): 보고서의 "표 17줄"은 표 16줄 + 빈 입력·순수성 1개다. "뒤로 + stalePaint", "이동 + DOM 없음" 줄은 없다. 다만 같은 조건을 다른 줄이 잡아서(아래 변이) 실질 공백은 아니다.
+
+## 8g4afR-5. headless (내 `rv.mjs`, 412×915)
+
+| 단계 | 결과 |
+|---|---|
+| **f1** 61쪽 끝 낭독 → [🔍] → 숨은 채 62쪽(해시는 검색 그대로) → "Progressive" 검색 → 61쪽 결과 | **해시 61 · 쪽 61 · hit 1 · cur 1("Progressive") · 띠 3/394 · `search.paused` · 멈춤 · 가운데에서 −10.7%**. 뒤로 한 번 = 결과 목록(284줄). 다시 앞으로 → [▶] 첫 발화가 61쪽 적중 문장. 판정 12/12. 2회 같음(`shots/f1.png`) |
+| f1 판정의 힘 | `reader.js` 의 `entry !== 'jump'` 만 잠깐 빼고 같은 절차 → 해시 62 · hit 0 · cur 0(F1 재현, `rv-f1-reverted.json`·`shots/f1-reverted.png`) → 복원 후 바이트 같음 |
+| **back** 같은 절차 → `history.back()` | 해시 62(낭독이 간 쪽) · 쪽 DOM 다시 그리지 않음 · speaking · 첫 발화 62쪽 · 연달아 0 |
+| appback · stale | 위 표(8g4afR-3), 둘 다 통과 |
+| **8i-3** 리플로우 30→36 낭독 | 발화 168 · 쪽별 30:26 · 31:34 · 32:24 · 33:27 · 34:23 · 35:32 · **같은 문장 연달아 0** · 끊김은 끝의 내 멈춤 1개뿐. 8g4aR-3 과 같은 수 |
+| **8i-1 B** 310쪽을 옛 판(algo 12→11)으로 두고 열자마자 [▶] | 78 ms `waiting-page`, 발화 0 → 551 ms speaking. 쪽 DOM 새로 붙음(2개). algoVersion 이 12 로 돌아옴. 8g4aR-3 과 같은 모양 |
+
+모든 실행에서 콘솔 오류는 기존 404 하나뿐이다. 로컬 밖 요청은 pdf.js CDN 2개뿐이다.
+
+## 8g4afR-6. 테스트의 힘 (`r8g4af/mut.mjs`)
+
+정확히 1회 일치하는지 보고 바꾼 뒤 전체 테스트를 TAP 로 돌렸다(상한 300초). 그다음 bak 을 읽어서 쓰는 방식으로 복원하고(재시도) 바이트를 비교했다. 아래 "빨강"은 IM2·IM6·IM7b(해시 표) 3개를 뺀 수다.
+
+| # | 변이 | 빨강 |
+|---|---|---|
+| M1 | `showReader` 판정 직후 `softEntry='back'` 빼기 | FX3 showReader |
+| M2 | `env.mark()` 를 `go/replace` **뒤로** | FX2 ×2 · FX3 검색 · U9 (4) |
+| M3 | `noteSearchJump` 가 `state.soft` 를 안 봄 | FX3 noteSearchJump |
+| M4 | 검색으로 숨길 때 back 되돌림 빼기 | FX3 noteSearchJump |
+| M5 | 정말 떠날 때 back 되돌림 빼기 | FX3 noteSearchJump |
+| M6 | `JUMP_ENV.mark` 를 빈 함수로 | FX3 검색 |
+| **X1** | `onReaderPage` pending 의 쪽 번호 확인 빼기 | FX3 검색 |
+| **X8** | follow 조건에서 `wanted === fromPage` 빼기 | FX1 X8 줄 |
+| **X9** | `beginJump` 같은 쪽 판정에서 `visible` 빼기 | FX2 X9 |
+
+→ 9/9 빨강, 복원 9/9 바이트 같음. 기록(낮음): M1·M3·M4·M5·M6·X1 은 소스 고정(정규식)으로만 잡힌다. M1·M3·M4·M5 는 겹친 안전장치라 하나만 빠져도 행동은 같다(위 표의 지워지는 길이 여럿이다). X1 을 행동 테스트로 묶는 일은 Build 제안대로 4b 에서 pending 판정을 순수 술어로 꺼낼 때 한다.
+
+## 8g4afR-7. 전체 테스트 · stamp · 정리
+
+- `node --test apps/medreader/tests/*.test.mjs` **1206/1206 × 2회**(변이 앞·뒤, 각 약 8초, fail 0·cancelled 0). `stamp-importmap --check` "그대로다(모듈 58개 · CSS 4개)", 종료 0. `.nojekyll` 있음.
+- 내가 띄운 Edge·node 는 모두 닫혔다. 프로세스 목록이 시작과 같다(msedge 46716 은 원래 있던 것). 8000번 python(PID 15088)은 켜 둠. 8123·8124·8125번 node 는 건드리지 않음. 프로필 `r8g4af/pr`(152 MB)은 `rm -rf` 금지라 남김.
+- 실험 중 내 프로필의 310쪽 저장본 판을 낮췄고, 앱의 재추출로 되돌아왔다.
+
+## 8g4afR-8. 운영자 결정 필요 사항
+
+1. **8g-4a-fix 커밋 승인**(reader.js · search.js · 테스트 2 · index.html stamp). 미푸시로 두고 8g-4 와 함께 배포.
+2. (기록) X1 의 행동 테스트화(`onReaderPage` pending 판정을 순수 술어로)를 4b 넘김 항목에 넣을지.
+3. 8g4aR-11 의 2·3·4(① 360px 제목 · ③ 진행 표시 · F3 · 실기기)는 그대로 4b 몫이다.

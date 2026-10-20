@@ -38,7 +38,7 @@ import { docLangOf } from '../text/lang.js';
 import * as charhl from './charhl.js';
 import {
   onPageRender, onPageRepaint, onReaderLeave, readingSpot, currentScreen, lineElement,
-  revealLine, revealRegion, revealTop
+  revealLine, revealRegion, revealTop, noteSearchJump
 } from './reader.js';
 import { pauseForJump, cueAt, speechState, onSpeechChange } from './controls.js';
 import { openDoc, extractorFor } from './library.js';
@@ -298,7 +298,8 @@ export function createSearchRun(deps) {
 /**
  * 결과로 가는 첫걸음(17-8-12 §4-5) — **먼저** 낭독을 멈추고(`pauseForJump`) 그다음 쪽으로 간다. 이미 그 쪽이 보이면
  * 이동 없이 그 자리에서 처리한다(같은 쪽 ‹ ›). 띠의 ‹ › 는 히스토리를 바꿔 쓰고(뒤로 한 번 = 결과 목록), 결과 목록에서
- * 누르면 쌓는다. env = {pauseForJump, screen, clear, go, replace}. **순수**(주입) — 테스트가 같은 함수를 쓴다.
+ * 누르면 쌓는다. env = {pauseForJump, screen, clear, mark, go, replace}. **순수**(주입) — 테스트가 같은 함수를 쓴다.
+ * `[8g-4a-fix F1]` 해시를 바꾸기 직전에 `env.mark()`(= 리더 `noteSearchJump`) — 숨은 리더가 이것을 "뒤로 돌아옴"과 가른다.
  * @returns {{paused:boolean, same:boolean}}
  */
 export function beginJump(env, target, fromBand) {
@@ -308,6 +309,7 @@ export function beginJump(env, target, fromBand) {
   if (!same) {
     env.clear();
     const hash = readerHash(target.docId, target.pageNo);
+    env.mark();
     if (fromBand && scr && scr.visible) env.replace(hash); else env.go(hash);
   }
   return { paused: paused, same: same };
@@ -960,7 +962,7 @@ function readerVisible() {
  * 띠 목록의 i 번째 적중으로. 결과 목록에서 누르면 히스토리에 쌓고(뒤로 = 결과 목록), 띠의 ‹ › 는 바꿔 쓴다
  * (‹ › 를 여러 번 눌러도 뒤로 한 번에 결과 목록 — 17-8-12 §4-3).
  */
-const JUMP_ENV = Object.freeze({ pauseForJump: () => pauseForJump(), screen: () => currentScreen(), clear: () => clearPaint(), go: (h) => go(h), replace: (h) => replace(h) });
+const JUMP_ENV = Object.freeze({ pauseForJump: () => pauseForJump(), screen: () => currentScreen(), clear: () => clearPaint(), mark: () => noteSearchJump(), go: (h) => go(h), replace: (h) => replace(h) });
 
 function jumpTo(i, fromBand) {
   const b = S.band;

@@ -437,19 +437,19 @@ test('U9 ★ beginJump — pauseForJump 를 **이동보다 먼저**(V12: 빼면 
   const log = [];
   const env = (scr) => ({
     pauseForJump: () => { log.push('pause:' + h.sp.getState()); return pauseSpeakerForJump(h.sp); },
-    screen: () => scr, clear: () => log.push('clear'), go: (x) => log.push('go ' + x), replace: (x) => log.push('replace ' + x)
+    screen: () => scr, clear: () => log.push('clear'), mark: () => log.push('mark'), go: (x) => log.push('go ' + x), replace: (x) => log.push('replace ' + x)
   });
   const r = ui.beginJump(env({ visible: false, ready: true, docId: 'D', page: 1 }), { docId: 'D', pageNo: 7 }, false);
   assert.deepEqual(r, { paused: true, same: false });
   assert.equal(h.sp.getState(), 'paused', '★ 결과로 가기 전에 멈췄다');
-  assert.deepEqual(log, ['pause:speaking', 'clear', 'go ' + readerHash('D', 7)], '★ 멈춤 → 지우기 → 이동 순서');
+  assert.deepEqual(log, ['pause:speaking', 'clear', 'mark', 'go ' + readerHash('D', 7)], '★ 멈춤 → 지우기 → 이동 표시(8g-4a-fix F1) → 이동 순서');
   log.length = 0;
   const same = ui.beginJump(env({ visible: true, ready: true, docId: 'D', page: 7 }), { docId: 'D', pageNo: 7 }, true);
   assert.deepEqual(same, { paused: false, same: true });
   assert.deepEqual(log, ['pause:paused'], '같은 쪽 — 이동 없음(렌더 없이 search-cur 만 옮긴다)');
   log.length = 0;
   ui.beginJump(env({ visible: true, ready: true, docId: 'D', page: 3 }), { docId: 'D', pageNo: 7 }, true);
-  assert.deepEqual(log, ['pause:paused', 'clear', 'replace ' + readerHash('D', 7)], '띠 ‹ › — 히스토리를 쌓지 않는다(뒤로 한 번 = 결과 목록)');
+  assert.deepEqual(log, ['pause:paused', 'clear', 'mark', 'replace ' + readerHash('D', 7)], '띠 ‹ › — 히스토리를 쌓지 않는다(뒤로 한 번 = 결과 목록)');
 });
 
 test('U9 ★ cue — 적중 글자가 든 문장이 다음 [▶] 의 시작점 · 멈춘 채 · 다시 칠함 · queue 이벤트 없음(번역 요청 0) · 낭독 중이면 아무것도 안 함', () => {
