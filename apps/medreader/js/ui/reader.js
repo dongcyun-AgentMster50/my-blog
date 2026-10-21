@@ -683,7 +683,7 @@ function onDocLang(d) {
 
 /**
  * `[7c]` 지금 열린 문서의 원문 언어(`documents.lang`, 없으면 `'en'`).
- * 원문 음성(`pickVoice(sourceLang())`)·낭독 큐의 언어가 이것을 읽는다.
+ * 원문 음성(`controls.applySourceSpeech` → `resolveSpeech(sourceLang(), …)`)·낭독 큐의 언어가 이것을 읽는다.
  */
 export function sourceLang() { return docLangOf(state.doc); }
 

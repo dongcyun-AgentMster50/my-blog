@@ -399,6 +399,9 @@ export default {
   'search.clear': 'Clear',
   'search.tab.find': 'Find',
   'search.tab.toc': 'Contents',
+  /* `[다듬기 1 — 8g-4b-R1 Review]` 탭 목록 이름 · 찾기 탭 이름이 [찾기] 단추와 같지 않게(보이는 글자를 앞에 그대로 — 이름 안의 라벨) */
+  'search.tabs.label': 'Find results and contents',
+  'search.tab.findLabel': 'Find results',
   'search.recent': 'Recent',
   'search.group.head': 'Headings {n}',
   'search.group.body': 'Text {n}',

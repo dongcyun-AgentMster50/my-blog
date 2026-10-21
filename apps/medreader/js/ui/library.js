@@ -506,19 +506,27 @@ async function attach(doc, pdfDoc) {
 /** 판정이 도는 문서(한 문서에 한 번에 하나). */
 const scanBusy = new Set();
 
-function scheduleScan(docId, pdfDoc, ex) {
+/**
+ * 판정 시작 예약 — 추출기의 첫 `page` 이벤트 또는 `SCAN.START_AFTER_MS` 뒤, **둘 중 먼저** 한 번만.
+ * `[다듬기 1 — 8l Review R1]` `deps`(`{run, setTimeout, clearTimeout}`)를 받는다 — 테스트가 가짜 추출기·타이머로 시작 시점을 잰다.
+ */
+export function scheduleScan(docId, pdfDoc, ex, deps) {
+  const d = deps || {};
+  const run = d.run || runScan;
+  const later = d.setTimeout || setTimeout;
+  const cancel = d.clearTimeout || clearTimeout;
   let fired = false;
   let timer = null;
   const start = () => {
     if (fired) return;
     fired = true;
-    if (timer) clearTimeout(timer);
+    if (timer) cancel(timer);
     ex.removeEventListener('page', start);
-    runScan(docId, pdfDoc);
+    run(docId, pdfDoc);
   };
   // 첫 쪽 표시를 막지 않게 — 추출기가 첫 쪽(지금 쪽)을 내면, 이미 다 뽑힌 문서면 잠시 뒤에.
   ex.addEventListener('page', start);
-  timer = setTimeout(start, SCAN.START_AFTER_MS);
+  timer = later(start, SCAN.START_AFTER_MS);
 }
 
 /**

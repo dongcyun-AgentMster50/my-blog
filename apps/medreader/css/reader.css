@@ -351,6 +351,12 @@
 }
 .scan-notice[hidden] { display: none; }
 .scan-notice .banner-text { flex: 1 1 16em; min-inline-size: 0; overflow-wrap: anywhere; }
+/* `[다듬기 1 — 8l Review 8lR-8 3]` 폰 폭에서는 412px 에서 [원본]만 글 옆에 남고 [닫기]가 혼자 둘째 줄로 내려갔다(띠 235px).
+   글이 한 줄을 다 쓰고 단추 **둘이 함께** 아래 한 줄로(끝 정렬) — 48px·가로 스크롤 0 그대로. 넓은 화면은 글 옆에 둘 다 들어간다. */
+@media (max-width: 599px) {
+  .scan-notice .banner-text { flex-basis: 100%; }
+  .scan-notice .banner-action { margin-inline-start: auto; }
+}
 body:has(.original) .scan-notice,
 body[data-reader-view="original"] .scan-notice { flex: 0 0 auto; }
 

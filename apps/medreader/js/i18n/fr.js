@@ -27,7 +27,7 @@ export default {
   'common.cancel': 'Cancel',
   'common.close': 'Fermer',
   'common.continue': 'Continue',
-  'common.dismiss': 'Dismiss',
+  'common.dismiss': 'Fermer',   // `[다듬기 1 — 8l Review]` 영어 값이었다 [검토 — Nour·운영자]
   'common.reload': 'Recharger',
   'common.loading': 'Loading…',
 
@@ -397,6 +397,9 @@ export default {
   'search.clear': 'Effacer',
   'search.tab.find': 'Chercher',
   'search.tab.toc': 'Sommaire',
+  /* `[다듬기 1 — 8g-4b-R1 Review]` 탭 목록 이름 · 찾기 탭 이름이 [찾기] 단추와 같지 않게 [검토 — Nour·운영자] */
+  'search.tabs.label': 'Résultats et sommaire',
+  'search.tab.findLabel': 'Chercher — résultats',
   'search.recent': 'Récentes',
   'search.group.head': 'Titres {n}',
   'search.group.body': 'Texte {n}',

@@ -899,12 +899,26 @@ export function applyQuizSpeech(sp, list, get) {
   return r;
 }
 
+/**
+ * `[다듬기 1 — 8k Review 8kR-9]` [읽기] 를 누를 때 쓸 음성 목록. 읽어 둔 목록이 비면 `getVoices()` 를 **동기로** 읽는다 —
+ * 퀴즈 화면에서 처음 누르면 `ensureSpeaker` 의 `loadVoices(…).then` 이 아직 돌지 않아(마이크로태스크) 목록이 `[]` 였고,
+ * 그래서 고른 목소리 대신 태그로 읽었다. 읽기 실패·빈 목록은 `[]`(그때는 태그만 — 휴대폰 설정 따름).
+ */
+export function quizVoicesNow(cached, synth) {
+  if (Array.isArray(cached) && cached.length) return cached;
+  try {
+    const v = synth && typeof synth.getVoices === 'function' ? synth.getVoices() : null;
+    return v && v.length ? Array.from(v) : [];
+  } catch (e) { return []; }
+}
+
 function toggleSpeak(text, btn) {
   const sp = ensureSpeaker();
   if (!sp) return;
   speakBtn = btn;
   if (sp.getState() === 'speaking') { sp.stop(); paintSpeakButton(false); return; }
-  applyQuizSpeech(sp, quizVoices, settings.get);     // `[8k]` 설정에서 목소리를 바꿨을 수 있다 — 누를 때마다
+  // `[8k]` 설정에서 목소리를 바꿨을 수 있다 — 누를 때마다. 목록이 아직 없으면(첫 누름) 동기로 읽는다(다듬기 1).
+  applyQuizSpeech(sp, quizVoicesNow(quizVoices, window.speechSynthesis), settings.get);
   speakParas = [{
     id: 'quiz-explanation',
     kind: 'body',
@@ -916,6 +930,9 @@ function toggleSpeak(text, btn) {
   sp.play();
   paintSpeakButton(true);
 }
+
+/** 테스트용 — 해설 [읽기] 누름 그대로(`tests/polish-1.test.mjs` 가 가짜 `window.speechSynthesis` 로 첫 누름·다시 고르기를 잰다). */
+export function _toggleSpeakForTest(text, btn) { toggleSpeak(text, btn); }
 
 function stopSpeaking() {
   if (speaker) { try { speaker.stop(); } catch (e) { /* 이미 멈춤 */ } }

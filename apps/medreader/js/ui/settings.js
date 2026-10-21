@@ -964,12 +964,21 @@ function paintTarget() {
   }
 }
 
-function onTargetLang(btn) {
-  const lang = normalizeTranslationLang(btn.getAttribute('data-lang'));
-  if (lang === targetLang()) return;
+/**
+ * 번역 대상 언어를 바꾼다 — 저장하고 알린다. 같은 값이면 아무것도 하지 않고 false.
+ * `[8k]` 번역문 음성·태그는 대상 언어의 것 — 리더가 다시 고르게 `medreader:voicepref` 를 알린다(전에는 음성 목록이 바뀔 때까지
+ * 옛 언어 태그로 읽었다). `[다듬기 1]` 알릴 대상을 받는다(기본 `document`) — `tests/polish-1.test.mjs` 가 이 알림을 동작으로 잰다.
+ */
+export function chooseTargetLang(raw, target) {
+  const lang = normalizeTranslationLang(raw);
+  if (lang === targetLang()) return false;
   settings.set('ai.translationLang', lang).catch(() => { });
-  // `[8k]` 번역문 음성·태그는 대상 언어의 것 — 리더가 다시 고르게 알린다(전에는 음성 목록이 바뀔 때까지 옛 언어 태그로 읽었다).
-  document.dispatchEvent(new CustomEvent('medreader:voicepref', { detail: { lang: lang } }));
+  (target || document).dispatchEvent(new CustomEvent('medreader:voicepref', { detail: { lang: lang } }));
+  return true;
+}
+
+function onTargetLang(btn) {
+  if (!chooseTargetLang(btn.getAttribute('data-lang'))) return;
   paintTarget();
   // "번역문 음성: 있음/없음"은 **선택한 언어**의 음성으로 다시 판정한다.
   refreshVoice();

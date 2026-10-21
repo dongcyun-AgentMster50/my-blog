@@ -275,11 +275,24 @@ test('M7 ★ 같은 캐시 키 동시 요청 → 진행 중인 Promise 공유(�
   const gate = new Promise((r) => { release = r; });
   const inner = echoTranslate();
   const fetch = stubFetch(async (u, init) => { await gate; return inner(u, init); });
-  const { p } = rig({ fetch });
+  const { p, cache } = rig({ fetch });
+  // `[다듬기 1 — 8g-4b-R1 Review]` 흔들림(세 번 관측, 2 !== 1)의 원인: 세 호출이 거의 동시에 시작하면 키 해시·캐시 조회(비동기)가
+  // 끝나는 **순서**가 부하에 따라 바뀐다. b 가 a 보다 먼저 진행 중 표에 SENTS[0] 을 올리면 b 가 그 한 문장을 보내고 a 는 나머지를
+  // 따로 보내 호출이 2건이 된다(고정 5ms 대기와 무관 — 대기를 늘려도 생긴다). 이 테스트가 재려는 것은 "**진행 중인** 요청과 같은 키면
+  // 그 Promise 를 나눈다"이므로 순서를 조건으로 맞춘다: a 의 요청이 실제로 나간 뒤(두 키가 진행 중) b·c 를 시작하고, 둘 다 캐시를
+  // 보고 진행 중 확인을 지난 뒤(그 사이 await 없음 — pipeline.js 3) 문을 연다. 상한 2초. 단언은 그대로다.
+  const getMany = cache.getMany;
+  let looked = 0;
+  cache.getMany = async function (keys) { const r = await getMany.call(this, keys); looked++; return r; };
+  const until = async (cond) => { for (let t0 = Date.now(); !cond() && Date.now() - t0 < 2000;) await new Promise((r) => setTimeout(r, 1)); };
   const a = p.translate(SENTS, RA);                 // 낭독 경로
+  await until(() => fetch.calls.length >= 1);
+  assert.equal(fetch.calls.length, 1, 'a 가 진행 중');
   const b = p.translate([SENTS[0]], T);             // 탭 경로 — 같은 문장
   const c = p.translate(SENTS, RA);                 // 같은 묶음 한 번 더
-  await new Promise((r) => setTimeout(r, 5));
+  await until(() => looked >= 3);
+  await new Promise((r) => setTimeout(r, 0));       // 마지막 조회 뒤의 동기 구간(진행 중 확인)이 끝나게
+  assert.equal(looked, 3, '세 호출 모두 캐시를 봤다');
   release();
   const [ra, rb, rc] = await Promise.all([a, b, c]);
   assert.equal(fetch.calls.length, 1, '같은 키는 한 번만 보낸다');

@@ -392,6 +392,9 @@ export default {
   'search.clear': 'مسح',
   'search.tab.find': 'ابحث',
   'search.tab.toc': 'الفهرس',
+  /* `[다듬기 1 — 8g-4b-R1 Review]` 탭 목록 이름 · 찾기 탭 이름이 [찾기] 단추와 같지 않게 [검토 — Nour·운영자] */
+  'search.tabs.label': 'نتائج البحث والفهرس',
+  'search.tab.findLabel': 'ابحث — النتائج',
   'search.recent': 'عمليات البحث الأخيرة',
   'search.group.head': 'العناوين {n}',
   'search.group.body': 'النص {n}',

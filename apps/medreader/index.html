@@ -53,8 +53,8 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=a82917db4d">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=66674e830a">
-<link rel="stylesheet" href="css/reader.css?v=66e77095f1">
+<link rel="stylesheet" href="css/screens.css?v=0070bef945">
+<link rel="stylesheet" href="css/reader.css?v=c0bfb9fb4a">
 <script type="importmap">
 {
   "imports": {
@@ -67,15 +67,15 @@
     "./js/ai/provider.js": "./js/ai/provider.js?v=48d1929564",
     "./js/ai/readalong.js": "./js/ai/readalong.js?v=6bf46b2af8",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
-    "./js/config.js": "./js/config.js?v=7611555c1d",
+    "./js/config.js": "./js/config.js?v=f9b25d1557",
     "./js/db.js": "./js/db.js?v=726d46e5c0",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=e35ff7829d",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=d255c44e11",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=1f3d5fa652",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=4628e84c9c",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=505748a480",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=7e3239af11",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=6af1b2130a",
-    "./js/main.js": "./js/main.js?v=b9706d4835",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=3011bbdd43",
+    "./js/main.js": "./js/main.js?v=4397e74713",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
     "./js/pdf/render.js": "./js/pdf/render.js?v=381bf3bc23",
@@ -107,14 +107,14 @@
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
     "./js/ui/controls.js": "./js/ui/controls.js?v=3dba20edc8",
-    "./js/ui/library.js": "./js/ui/library.js?v=3982f04e8c",
+    "./js/ui/library.js": "./js/ui/library.js?v=6e20857af4",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=a9b1f7c3f5",
-    "./js/ui/quiz.js": "./js/ui/quiz.js?v=d691cc4887",
-    "./js/ui/reader.js": "./js/ui/reader.js?v=4618661690",
-    "./js/ui/search.js": "./js/ui/search.js?v=4a50cc7230",
-    "./js/ui/settings.js": "./js/ui/settings.js?v=86844046ea",
+    "./js/ui/quiz.js": "./js/ui/quiz.js?v=f9cfebd1cf",
+    "./js/ui/reader.js": "./js/ui/reader.js?v=8837ce40da",
+    "./js/ui/search.js": "./js/ui/search.js?v=93c0720db7",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=3442c110be",
     "./js/ui/trband.js": "./js/ui/trband.js?v=2574e1bf06",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=9df6aeb8cd"
   }
@@ -584,8 +584,8 @@
       <button type="button" class="search-clear" id="searchClear" data-i18n-aria="search.clear"><span aria-hidden="true">✕</span></button>
       <button type="submit" class="primary search-go" id="searchGo" data-i18n="search.tab.find"></button>
     </form>
-    <div class="search-tabs" id="searchTabs" role="tablist" hidden>
-      <button type="button" role="tab" id="searchTabFind" aria-selected="true" aria-controls="searchResults" data-i18n="search.tab.find"></button>
+    <div class="search-tabs" id="searchTabs" role="tablist" data-i18n-aria="search.tabs.label" hidden>
+      <button type="button" role="tab" id="searchTabFind" aria-selected="true" aria-controls="searchResults" data-i18n="search.tab.find" data-i18n-aria="search.tab.findLabel"></button>
       <button type="button" role="tab" id="searchTabToc" aria-selected="false" aria-controls="searchToc" tabindex="-1" data-i18n="search.tab.toc"></button>
     </div>
     <div class="search-recent" id="searchRecent" hidden>

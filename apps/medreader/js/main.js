@@ -90,6 +90,14 @@ function showBanner(detail) {
   shownBanners.set(key, bar);
 }
 
+/** `[다듬기 1]` 키로 떠 있는 배너 하나를 거둔다([닫기]와 같은 정리). */
+function hideBanner(key) {
+  const bar = key ? shownBanners.get(key) : null;
+  if (!bar) return;
+  bar.remove();
+  shownBanners.delete(key);
+}
+
 /** `[8g-1]` versionchange 배너 기술(main.js 는 부팅을 돌리므로 Node 에서 import 하지 않는다 — 테스트는 소스로 본다). */
 function dbUpgradedBanner(code) {
   return { code: code, tone: 'error', actions: [{ reload: true, key: 'common.reload' }] };
@@ -146,6 +154,8 @@ function watchBannerHeight() {
 
 async function boot() {
   document.addEventListener('medreader:banner', (ev) => showBanner(ev.detail || {}));
+  // `[다듬기 1]` 그 상황이 끝난 안내를 거둔다(예: 목차 이동 멈춤 안내 → [▶]). 떠 있지 않으면 아무것도 안 함.
+  document.addEventListener('medreader:banner-hide', (ev) => hideBanner((ev.detail || {}).key));
 
   // db.js 의 blocked / versionchange 는 **코드가 아니라 이벤트**로 온다.
   // `[8g-1 — spec 17-8-12 U2]` versionchange = 다른 탭(새 판)이 DB 버전을 올렸다. db.js 가 이 탭의 연결을

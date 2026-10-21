@@ -400,7 +400,8 @@ test('K16 ★ 원문·번역문·표 안내·퀴즈(+ 설정 시험·들어 보�
   }
   const qa = q.match(/export function applyQuizSpeech\([^)]*\)\s*\{([\s\S]*?)\n\}/);
   assert.ok(qa && /resolveSpeech\(QUIZ_SPEECH_LANG, list, speechPref\(get, QUIZ_SPEECH_LANG\)\)/.test(qa[1]));
-  assert.ok(/applyQuizSpeech\(sp, quizVoices, settings\.get\)/.test(q), '퀴즈는 누를 때마다 다시 고른다');
+  // `[다듬기 1]` 첫 누름은 목록을 동기로 읽는다 — 동작은 tests/polish-1.test.mjs P1·P2 가 잰다.
+  assert.ok(/applyQuizSpeech\(sp, quizVoicesNow\(quizVoices, window\.speechSynthesis\), settings\.get\)/.test(q), '퀴즈는 누를 때마다 다시 고른다');
   // 설정 화면 — 번역문 [들어 보기]·목소리 [들어 보기] 도 같은 함수
   const test1 = s.match(/function runVoiceTest\(\)\s*\{([\s\S]*?)\n\}/)[1];
   assert.match(test1, /resolveSpeech\(lang, voices, speechPref\(settings\.get, lang\)\)/);
@@ -410,8 +411,11 @@ test('K16 ★ 원문·번역문·표 안내·퀴즈(+ 설정 시험·들어 보�
   assert.match(s, /dispatchEvent\(new CustomEvent\('medreader:voicepref'/);
   assert.match(c, /addEventListener\('medreader:voicepref', onVoicePref\)/);
   // 번역 언어를 바꿔도 번역문 음성·태그를 다시 고른다(headless 에서 찾은 옛 결함 — 대상 언어가 바뀌어도 옛 태그로 읽음)
+  // `[다듬기 1]` 알림은 chooseTargetLang 안으로 옮겼다 — 동작은 tests/polish-1.test.mjs P3 가 잰다.
   const tl = s.match(/function onTargetLang\(btn\)\s*\{([\s\S]*?)\n\}/)[1];
-  assert.match(tl, /dispatchEvent\(new CustomEvent\('medreader:voicepref'/);
+  assert.match(tl, /if \(!chooseTargetLang\(btn\.getAttribute\('data-lang'\)\)\) return;/);
+  const ct = s.match(/export function chooseTargetLang\(raw, target\)\s*\{([\s\S]*?)\n\}/)[1];
+  assert.match(ct, /dispatchEvent\(new CustomEvent\('medreader:voicepref'/);
   // 사라진 음성 — 이미 체크된 "휴대폰 설정 따름"을 다시 눌러도 저장값을 지운다(change 가 안 온다 → click 도 듣는다)
   assert.match(s, /addEventListener\('click', onVoicePick\)/);
   const vp = s.match(/function onVoicePick\(ev\)\s*\{([\s\S]*?)\n\}/)[1];

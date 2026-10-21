@@ -424,7 +424,8 @@ export const CITE = Object.freeze({
 });
 
 /* `[7c — spec 6-1]` 고를 음성이 없을 때 `utterance.lang` 에 넣는 언어별 기본 지역.
- * 음성이 있으면 그 음성의 `voice.lang` 이 우선이다(`tts/voices.js` 의 `utteranceLang`).
+ * `[8k · 다듬기 1]` 사용자가 목소리를 고르면 그 음성 자신의 태그, 억양만 고르면 그 억양이 우선이고, 아무것도 안 골랐으면
+ * 이 태그만 보낸다(voice 없이 — 휴대폰 설정 따름). 고르는 곳은 `tts/voices.js` 의 `resolveSpeech`(`defaultSpeechTag`).
  * 코드의 다른 곳에 지역 태그를 박지 않는다 — 여기 한 곳이다. */
 export const TTS_LANG_REGION = Object.freeze({
   en: 'en-US',

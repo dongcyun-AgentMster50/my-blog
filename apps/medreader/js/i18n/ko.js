@@ -27,7 +27,7 @@ export default {
   'common.cancel': 'Cancel',
   'common.close': '닫기',
   'common.continue': 'Continue',
-  'common.dismiss': 'Dismiss',
+  'common.dismiss': '닫기',   // `[다듬기 1 — 8l Review]` 14절 배너 닫기 — 띠의 [닫기](common.close)와 같은 말
   'common.reload': '다시 불러오기',
   'common.loading': 'Loading…',
 
@@ -397,6 +397,9 @@ export default {
   'search.clear': '지우기',
   'search.tab.find': '찾기',
   'search.tab.toc': '목차',
+  /* `[다듬기 1 — 8g-4b-R1 Review]` 탭 목록 이름 · 찾기 탭 이름이 [찾기] 단추와 같지 않게(보이는 글자를 앞에 그대로 — 이름 안의 라벨) */
+  'search.tabs.label': '찾기 결과와 목차',
+  'search.tab.findLabel': '찾기 결과',
   'search.recent': '최근 검색',
   'search.group.head': '제목 {n}',
   'search.group.body': '본문 {n}',

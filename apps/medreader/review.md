@@ -6593,3 +6593,246 @@ headless E 에서 label 을 실제로 탭했다(`page.click`).
    - Realme: 휴대폰 TTS 설정에서 영어·아랍어 목소리를 바꾸고 앱을 다시 열면 낭독도 바뀌는가
    - 설정 > 낭독 목소리 화면이 Nour 기기의 아랍어 locale 이름으로 어떻게 보이는가
    - "영국 억양"을 탭하면 실제로 영국 억양인가
+
+# 다듬기 1 Review — 8g·8l·8k Review 작은 항목 15개 · 배포 판정 (2026-10-21)
+
+> 2026-10-21 · Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-polish-1.md` · 커밋하지 않음.
+> 기준: Build 지침 `medreader-build-polish-1.md`(항목 1–15 · "하지 않는 것") · Build 보고 `medreader-build-polish-1-report.md` · 이 파일의 "8k Review"·"8l Review"·"8g-4b Review"·"8g-4b-R1 Review" · 직전 커밋 `b3c3552`.
+> 내 도구·결과: 스크래치패드 `rp1/`(`lib.mjs`·`setup.mjs`·`rv.mjs`·`mut.mjs`·`m7.mjs`·`m7f.mjs`, 결과 `rv-*.json`·`mut-out.json`·`full-*.tap`, 백업 `bak/`, 스크린샷 `shots/`). headless 는 새 프로필 `rp1/p1` 하나(Harrison·CMDT 2026·빈 3쪽 PDF), Edge 직접 실행(포트 9371) + puppeteer-core(`product-builder-lesson` 읽기만), 흉내 음성, 진짜 키 없음.
+
+## P1R-1. 결론 — **통과** · 배포 판정 — **배포해도 된다**
+
+- 15개 항목이 모두 지침대로 고쳐졌다. 특히 1·8·9·12 는 headless 에서 실제 동작으로 확인했다.
+- 8번은 search.js 를 잠깐 HEAD 판으로 되돌려 같은 시나리오를 돌려 봤다. HEAD 판에서는 결함이 재현되고, 고친 판에서는 사라진다(P1R-4).
+- M7 은 원인 분석이 맞다. 옛 M7 은 16개 동시 실행에서 **22/160 실패**, 새 M7 은 **340/340 초록**이다(P1R-5).
+- 2번의 코드 이동은 동작이 같다.
+- 회귀 없음. 콘솔 오류 0. 전체 테스트 **1301/1301** × 2회(+ 부하 중 1회).
+- 내 변이 8개: 5개 빨강, 2개 생존(배너 거두기의 키 — 배선이 정규식으로만 잡힘, headless 로는 맞게 돈다), 1개 동치.
+- 새로 찾은 것은 **낮음 2건**(P1R-9). 배포를 막지 않는다.
+
+## P1R-2. 범위
+
+- 바뀐 파일은 Build 보고 2절 표와 같다: 앱 14 + `spec.md` + 테스트 3 + 새 `tests/polish-1.test.mjs`.
+- 블로그 본체·`.nojekyll`(0 B)·`review.md` 앞 절은 그대로다.
+- 버전 불변:
+  - `config.js` 변경은 주석 2줄뿐이다(`TTS_LANG_REGION` 값 그대로).
+  - DB 버전·`algoVersion`·`SEARCH.VERSION`·`SCAN.VERSION`·`SPEECH_DEFAULT` 는 diff 에 없다.
+- "하지 않는 것"은 건드리지 않았다:
+  - 부분 OCR 20쪽 넘김·`reload` 시작점: `speaker.js` 변경 0.
+  - 412px 퀴즈 제목: 퀴즈·상단바 CSS 변경 0(`screens.css` 변경은 탭 목록뿐).
+  - Android 이름 줄: `settings.js` 변경은 `chooseTargetLang` 뿐.
+  - 기본 태그: `SPEECH_DEFAULT`·`TTS_LANG_REGION` 값 그대로.
+- `index.html` 에 `data-i18n-aria` 2개를 더한 것은 **적절하다**.
+  - 이 앱의 접근 이름은 원래 이 속성으로 붙인다(같은 화면의 `searchClear` 도 그렇다). 언어를 바꾸면 다시 칠해진다(ar·fr 이름 확인 — P1R-3 13).
+  - JS 로 `aria-label` 을 넣는 것보다 작고, stamp 구간 밖 마크업 속성뿐이다. stamp 다시 찍음 → `--check` 0.
+- `quiz.js` 작업 사본만 CRLF 다(1063줄 = CR 1063, HEAD 는 LF).
+  - stamp 해시는 CRLF→LF 로 정규화해 잰다. `.gitattributes` 가 `* text=auto eol=lf` 다.
+  - 그래서 커밋하면 LF 로 들어가고 판 번호도 맞다. 문제없다.
+
+## P1R-3. 항목별 확인 (코드 + headless 직접)
+
+| # | 확인 | 결과 |
+|---|---|---|
+| 1 | 퀴즈 첫 [읽기] — en 목소리 `urn:en_GB` 저장 → **페이지 새로 고침**(퀴즈 모듈 첫 누름) → Harrison 12쪽 퀴즈 → 해설 [읽기] | 첫 누름 `[en-GB, urn:en_GB]` · 둘째 같음 ✔. 그 뒤 "인도 억양만" → `[en-IN, 없음]`, 휴대폰 설정 → `[en-US, 없음]`(R8 다시 고르기) ✔ |
+| 2 | `chooseTargetLang` 이동 · 설정 화면 번역 언어 단추 실제 누름 | P1R-6. ko 누름 → 알림 `['ko']`·저장 ko·`aria-pressed` · 다시 ko → 알림 없음 · ar → `['ko','ar']` ✔ |
+| 3 | 낡은 주석 2곳 | `resolveSpeech`·`applySourceSpeech` 기준으로 맞다. 동작 0 ✔ |
+| 4 | 8l 배선 변이 R1–R4 테스트 | Q1(가짜 타이머·추출기 — 첫 page 또는 1.5초, 한 번)·Q3(`final`)·Q4(실제 `createSpeaker` — 인용만 있는 쪽)는 동작. Q2 는 정규식(Review 권고대로) ✔ |
+| 5 | 띠 단추 한 줄 — 빈 PDF(`notext`) 412·360 × ko·ar·fr | 6조합 모두 [원본]·[닫기] 같은 줄 · 48×48 이상 · 띠 안 · 가로 스크롤 0. 412 ko 띠 185px(전 235). ar 은 `rtl`(단추 왼쪽). fr 은 문구가 길어 260/284px(한 줄 규칙은 지켜짐) ✔ |
+| 6 | 판정이 검색 화면을 연 **뒤에** | 판정을 지운 빈 PDF 검색("patient") → "찾지 못했습니다" → **다른 책(Harrison) 판정 알림**을 보내도 줄 그대로 → 앱 길(`openDoc`)로 판정 → 1.7초 뒤 "이 책은 글자가 없어 검색할 수 없습니다."만, 검색 화면 그대로 ✔ |
+| 7 | `common.dismiss` 네 언어 | noRead 배너 [닫기] = ko "닫기" · ar "إخفاء" · fr "Fermer" · en "Dismiss" ✔ |
+| 8 | 목차 이동 뒤 뷰 전환 | P1R-4 ✔ |
+| 9 | 띠 없을 때 멈춤 배너 · 거두기 | P1R-4 ✔ |
+| 10 | 접기 단추 이름 | 세 의학책 모두 깊이 3 이 없다(Harrison 최대 2, CMDT 1 — 8g-4b Review 와 같은 사실). 그래서 이 시험 프로필 안에서만 Harrison 개요를 합성 개요(QUESTIONS/ANSWERS 가 섹션마다 되풀이)로 잠시 바꿨다(끝에 37개 되돌림). 접기 단추 8개, 같은 제목 6쌍인데 이름은 모두 다르다(예: "ANSWERS p. 60 SECTION 1 …" / "ANSWERS p. 210 SECTION 2 …"), 빈 id 0 ✔ |
+| 11 | M3·M4·M9 | R4 — 세 줄과 그것을 읽는 쪽을 함께 묶은 정규식. 이 파일들의 기존 방식(Node 에 DOM 없음)이라 받아들인다 ✔ |
+| 12 | sticky 탭 목록 · Tab → 지금 항목 | 12조합: 360·412 × ko·ar·fr(system) + dark·sepia·contrast + 루트 글자 20·22px. 모두 `--search-bar-h` = 상단바 실제 높이(51px), 탭 위 = 상단바 아래(차이 0) · 1,500px 더 굴려도 겹침 0 · 배경 불투명 · Tab → 지금 항목(화면 안, 탭 밑 아님, scrollY 그대로) · 다음 Tab 도 탭 밑 아님 · 가로 스크롤 0 ✔. 상단바 **내용 높이**를 늘리면(min-height 80) 탭도 80 으로 따라온다 ✔ |
+| 13 | 접근 이름(접근성 트리) | ko tablist "찾기 결과와 목차" · 탭 "찾기 결과"/"목차" · [찾기] 단추 "찾기"(다름). ar "نتائج البحث والفهرس" · "ابحث — النتائج"/"الفهرس" · 단추 "ابحث". fr "Résultats et sommaire" · "Chercher — résultats"/"Sommaire" ✔ |
+| 14 | M7 | P1R-5 ✔ |
+| 15 | spec | P1R-7 ✔ |
+
+## P1R-4. 8·9 — 경로별로 (CMDT 2026 521쪽 · 412×915 ko)
+
+**8 목차 이동 뒤 뷰 전환** — 521쪽(깊이 1 목차 항목)에서 그 쪽에만 한 번 나오는 낱말(11자)을 골라 결과 이동 → 같은 쪽 목차 항목 → 원본 ↔ 리플로우.
+
+| 단계 | 고친 판 | HEAD 판(search.js 만 잠깐 되돌림) |
+|---|---|---|
+| 결과 이동 | y 3064 · "43중 29번째 줄" · 적중 줄 521:52 | 같음 |
+| 결과 이동 뒤 원본 → 리플로우(F2·S26) | 원본에서 적중 상자가 화면 안 · 돌아오면 y 3070 · 29번째 · 강조 521:52 그대로. 언어 ko→ar 뒤에도 강조 그대로 | 같음 |
+| 목차 이동 | y 0 · "1번째 줄" | 같음 |
+| 목차 이동 뒤 원본 | 시작점 **1번째 그대로** · 적중 상자 없음 | **29번째로 되돌아감** · 적중 상자 |
+| 다시 리플로우 | 1번째 그대로 · 가운데 줄 521:60(적중 아님) | 29번째 · 가운데 줄 = 적중 521:52 |
+| [▶] 첫 발화 | 그 쪽 첫 줄("Blood Disorder…") | 적중 문장 |
+| 다시 결과 이동 → 원본 ↔ 리플로우 | 다시 적중 기준(상자·29번째·강조) | — |
+
+- 결론: `jumpOwnsPage` 는 목차·[읽던 곳으로] 뒤만 끊는다. 결과 이동 뒤 뷰 전환(F2·S26)은 여전히 적중 기준이다. 목차 이동 뒤 다시 결과로 가면 적중 기준이 되살아난다.
+- 코드 근거:
+  - `doHit` 은 `lastJump` 를 칠하기 **앞에서** 둔다. 그 사이(`paintBand`·`locate`)는 `lastJump` 를 읽지 않는다.
+  - `paint` 를 부르는 곳은 `doHit`·`repaint` 둘이다. `repaint` 의 다른 길(다시 그리기·다른 쪽)은 `lastJump` 가 그 쪽일 때만 적중이 있다(`locate` 가 `b.list[b.i].pageNo === scr.page` 를 본다).
+  - 그래서 바뀌는 것은 `doTop`·`doSpot` 뒤뿐이다.
+  - `doSpot`([읽던 곳으로])도 이제 기준 줄 힌트를 남기지 않는다. 의도에 맞고 spec 정정 (b) 에 적혔다.
+- 스크롤 관찰: 목차 이동 뒤 원본 → 리플로우는 y 3535(521:60)로 간다. 내 대조(`ctl` — 검색 없이 521쪽 맨 위에서 오감)도 y 3655(521:63)다. 원본 보기 화면 가운데 줄을 기준으로 삼는 `pickAnchorLine` 의 평소 규칙이다. 옛 적중으로 끌려가는 것이 아니다. Build 8절 1 과 같은 판단이다.
+
+**9 멈춤 배너** — 351쪽에서 낭독 중 → 목차 424쪽(띠 없음).
+
+| 확인 | 결과 |
+|---|---|
+| 낭독 중 목차 이동 | 멈춤 · 띠 숨김 · 배너 `search.paused` "낭독을 멈췄습니다 — …" · [닫기] ✔ |
+| 다른 배너(`reader.scan.noRead`)를 함께 띄운 채 [▶] | speaking · 멈춤 배너만 사라지고 noRead 배너는 남음 ✔ |
+| 다시 낭독 중 목차 이동 → 서재로 떠남 | 멈춤 배너만 사라지고 다른 배너는 남음 ✔ |
+| 멈춰 있지 않을 때(처음) 목차 이동 | 배너 없음 ✔ |
+| 띠가 있을 때 결과 이동(낭독 중) | 띠 아래 줄 `search.paused` · 배너 없음(예전 그대로) ✔ |
+| 띠가 이 책인 채 목차 이동(낭독 중) | 띠 아래 줄 · 배너 없음 ✔ |
+
+- 거두기 이벤트는 키(`search.paused`)로 하나만 거둔다(`hideBanner` — `shownBanners.get(key)`). 그 키를 쓰는 곳은 search.js 뿐이다. 키가 없으면 아무것도 안 한다.
+
+## P1R-5. 흔들리는 테스트 M7
+
+- **원인 분석이 맞다.**
+  - `pipeline.js translate` 는 키 해시(`Promise.all(keyFor)`)와 `cache.getMany` 두 번을 기다린 뒤, 기다림 없이 진행 중 표를 확인하고 등록한다.
+  - 한 문장짜리 b 가 두 문장짜리 a 보다 먼저 이 구간에 닿으면 b 가 SENTS[0] 을 따로 보낸다. 그러면 호출이 2건이다.
+  - 고정 5ms 대기는 `release` 앞이라 이 순서와 무관하다.
+- **원래 성질을 지킨다.**
+  - 새 M7 은 a 의 요청이 실제로 나간 뒤(두 키가 진행 중) b·c 를 시작한다. 세 호출 모두 캐시를 본 뒤 문을 연다.
+  - 단언은 그대로다(호출 1건, 결과 같음).
+  - "**진행 중인** 요청과 같은 키면 Promise 를 나눈다"가 이 테스트의 성질이다. a 가 등록하기 전에 시작한 호출은 설계상 공유 대상이 아니다.
+  - 상한은 2초다. `cache.getMany` 감싸기는 `this` 를 넘기고, pipeline 은 호출 때 속성을 읽으므로 감싸기가 실제로 걸린다(`looked === 3` 단언).
+- **힘**: 내 변이 X6(`inflight.set(k, p)` 빼기 — Build 의 공유 줄 빼기와 다른 줄)에서 M7 이 빨갛다.
+- **반복**(각 실행 상한 60초):
+
+| 실행 | 결과 |
+|---|---|
+| 새 M7 · 차례로 | **60/60** |
+| 새 M7 · 8개씩 동시 | **80/80** |
+| 새 M7 · 8개씩 동시 + 전체 테스트를 함께 돌리며 | **40/40** (그 전체 실행도 1301/1301) |
+| 새 M7 · 16개씩 동시(파일을 `rp1/m7old/` 에 복사, import 만 절대 경로) | **160/160** |
+| **옛 M7**(HEAD) · 16개씩 동시 · 같은 조건 | **138/160 — 22 실패, 모두 "2 !== 1"** |
+
+- 옛 판이 같은 부하에서 14% 실패하고 새 판은 340회 모두 초록이다. 고침이 흔들림을 없앤 것이 맞다.
+
+## P1R-6. 2번 — 코드 이동 동치
+
+- 옛 `onTargetLang`: 정규화 → 같으면 return → 저장 → `document` 에 `medreader:voicepref`{lang} → `paintTarget` → `refreshVoice`.
+- 새 코드는 둘로 나뉜다:
+  - `chooseTargetLang(raw, target)`: 정규화 → 같으면 false → 저장 → `(target || document)` 에 같은 이벤트 → true.
+  - `onTargetLang`: false 면 return → `paintTarget` → `refreshVoice`.
+- 순서·조건·이벤트 이름과 detail·대상이 같다. 남은 본문은 `lang` 을 쓰지 않는다.
+- `document` 는 부를 때 읽으므로 Node import 에도 안전하다.
+- 부르는 곳은 `case 'target-lang'` 한 곳이다.
+- headless 에서 실제 단추 누름으로 같은 동작을 확인했다(P1R-3 2).
+
+## P1R-7. spec 정정 6곳
+
+- 6곳 모두 17-8-12 안이다(3642–4125행 — 3796·3819·3844·3847·3862·3919).
+- 꼬리표는 모두 `[정정 2026-10-21 — 다듬기 1 …]` 이다.
+
+| 곳 | 대조 |
+|---|---|
+| (a) §4-2 뒤 목차 탭 세부 | Build 8g-4b 보고 7절 (a) 6가지를 모두 담았다. 그 위에 8g-4b Review ②③(지금 항목 보이는 글자·접기 단추 이름)과 이번 9·12·13 을 더했다. "지금 항목 = 쪽 ≤ 지금 쪽 중 가장 큰 쪽, 같으면 뒤"는 `tocCurrentIndex`(`p >= bp`)와 맞다. "들여쓰기 두 칸"은 `indent = min(d,3)-1` 과 맞다 |
+| (b) §4-5 뷰 전환 보충 | 7절 (b) F2 문안 + R2 "마지막으로 간 적중의 쪽에서만". 코드(`jumpOwnsPage`·`shouldRecue`·`repaint`)와 headless(P1R-4)가 같다 |
+| §4-6 `search.toc.fallback` | ko 번들 값 = §11 E5 (가) 문안 |
+| §4-6 `search.toc.here` | 보이는 글자 + `aria-current` — 8g-4b Review 와 구현 |
+| §4-6 키 문단 | `search.*` 40 = U10 기대값 · ko·fr `common.dismiss` |
+| (c) S20 아래 | 7절 (c) 그대로. `reader.css` `@media (max-width: 400px)` [⧉] 글리프 규칙과 맞다. 412 미적용·문턱 420 운영자 결정 |
+
+## P1R-8. 테스트의 힘 (내 변이 — `rp1/mut.mjs`, Build 27개와 겹치지 않게)
+
+절차:
+
+1. 백업 `rp1/bak/`(19파일)에 둔다.
+2. 정확히 1곳을 바꾼다(X1 은 2곳 — 순서 되돌리기).
+3. 전체 테스트를 돌린다(상한 300초).
+4. 읽어 둔 원본을 그대로 쓴다.
+5. 바이트를 비교한다. 끝에 백업 `cmp` 19/19 같음, 앱 파일 189개 sha1 이 시작 때와 같다.
+
+stamp 테스트(IM2·IM6·IM7b)는 앱 파일이 바뀌면 늘 빨갛다. 아래는 그 셋을 뺀 **의미 빨강**이다.
+
+| # | 변이 | 의미 빨강 |
+|---|---|---|
+| X1 | `doHit` 의 `lastJump` 를 칠하기 **뒤로**(옛 순서 — 결과 이동 뒤 기준 줄 힌트 없음) | R1 |
+| X2 | `main.js hideBanner` 가 키와 상관없이 맨 앞 배너를 거둠 | **없음(생존)** |
+| X3 | `pausedBanner(false)` 가 거두기 알림에 키를 안 실음 | **없음(생존)** |
+| X4 | `noteDocScan` 이 서재 범위에서도 true | Q5 |
+| X5 | `chooseTargetLang` 이 같은 값이어도 저장·알림 | P3 |
+| X6 | `pipeline.js` 진행 중 표 등록(`inflight.set`) 빼기 | M7 |
+| X7 | `tocTabSkips` 가 Shift+Tab 도 지금 항목으로 | R5 |
+| X8 | `scheduleScan` 의 `fired` 문지기 빼기 | 없음 — **동치 변이** |
+
+- X8 이 동치인 이유: 시작하면 page 듣기를 떼고 타이머를 거두므로 두 번째 시작 길이 없다. 문지기는 이중 안전이다.
+- **X2·X3 는 테스트 공백이다(낮음).** R2 는 `hideBanner` 본문 모양과 이벤트 이름만 본다.
+  - "키 하나만 거둔다"와 "거두기 알림이 `search.paused` 키를 싣는다"는 테스트가 없다.
+  - 실제 동작은 headless 에서 맞다(P1R-4 — 다른 배너는 남고 멈춤 배너만 거둠).
+  - 다음 묶음에서 R2 에 `{ key: 'search.paused' } }` 와 `shownBanners.get(key)` 두 줄을 더하면 잡힌다(정규식 2줄).
+
+## P1R-9. 새로 찾은 것 (모두 낮음 · 배포를 막지 않음)
+
+**(a) 상단바 높이 재기는 내용 높이만 본다.**
+
+- `watchSearchBar` 의 `ResizeObserver` 는 기본값(`content-box`)이다.
+- headless 에서 상단바 padding 만 키우면(51 → 79px) `--search-bar-h` 가 51 에 머문다. 그러면 탭이 상단바 밑에 28px 깔린다. min-height 로 내용 높이를 키우면 따라온다.
+- 실제 조합(3언어 × 2폭 × 4테마 × 루트 글자 크기)에서는 상단바 높이가 늘 51 이라 재현되지 않는다.
+- 테마가 테두리·여백만 바꾸는 일이 생기면 몇 px 어긋날 수 있다.
+- 권고: `observe(bar, { box: 'border-box' })` 한 줄(다음 묶음).
+
+**(b) Tab 으로 지금 항목에 간 뒤 Shift+Tab 은 탭으로 돌아가지 않고 바로 위 항목으로 간다(DOM 순서).**
+
+- 탭으로 돌아가려면 지금 항목 위의 항목 수만큼 Shift+Tab 을 눌러야 한다.
+- 지침 12의 "Tab → 지금 항목"을 고르면 따라오는 트레이드오프다. 결함이라기보다 설계 선택이다.
+- 탭 목록이 sticky 로 늘 보이므로 터치·클릭으로는 바로 돌아간다.
+- 운영자·Nour 가 불편하다고 하면 다음 묶음에서 다룬다(예: 지금 항목에서 Shift+Tab → 탭).
+
+관찰(결함 아님):
+
+- 목차 이동 뒤 원본 → 리플로우 스크롤이 쪽 아래쪽으로 가는 것은 뷰 전환의 평소 규칙이다(P1R-4, 검색 없는 대조와 같음).
+- 멈춤 배너는 쪽만 넘기면 남는다(Build 8절 2 — noRead 배너와 같은 성격).
+- 내 첫 `reg` 실행에서 8i-1 B 가 `waiting-page` 에 머물렀다. 같은 세션에서 이미 c26 을 연 뒤 옛 판을 만든 내 순서 탓이다. 실제로는 한 세션 안에서 판이 내려가지 않는다. 새 세션(`oldB`)에서 다시 돌려 통과했다(P1R-10).
+
+## P1R-10. 회귀 (headless 412×915 · ko — 콘솔 오류 0 · 바깥 요청은 pdf.js CDN 둘뿐)
+
+| 확인 | 결과 |
+|---|---|
+| 8k 기본 태그 | 리더 ▶ 원문 `[en-US, voice 없음]` ✔ |
+| 8k 고른 목소리·억양·휴대폰 설정(퀴즈) | P1R-3 1 ✔ |
+| 8k 번역 언어 변경 알림 | P1R-3 2 ✔ |
+| 8i-3 쪽 넘김 낭독 | 88쪽 50발화 → 89쪽 이어서(`[en-US, 없음]`), 연달아 같은 문장 0, 주소 89 ✔ |
+| 8i-1 B(새 세션, 333쪽 옛 판) | 93 ms `waiting-page`, 발화 0 → 589 ms speaking · 쪽 DOM 새로 · `algoVersion` 11 → 12 ✔ |
+| 8g 결과 이동 뒤 ▶ | "anemia" → 226쪽 → ▶ 226쪽부터 `[en-US, 없음]` ✔ |
+| 8g 결과 이동 뒤 뷰·언어 전환(S26·F2) | P1R-4 ✔ |
+| 8g-4a F1 | 71쪽 끝 낭독 → [🔍] → 숨은 리더 72쪽 → 71쪽 결과 → 주소·쪽 71 · 멈춤 · 띠 `search.paused` · ▶ 71쪽부터 ✔ |
+| 8g-4b-R1 탭 키보드 | →(ar 은 ←)로 목차 탭 · 자동 선택 · 초점 탭 보임(P1R-3 12) ✔ |
+| 8l 스캔본 ▶ · 배지 · 띠 [닫기] | ko·ar·fr·en ▶: idle · 발화 0 · noRead 배너 · 쪽 그대로. 서재 배지 "스캔본 — 글자 없음". 띠 [닫기] → `noticed=true` · 띠 숨김 ✔ |
+| 8j manifest | `manifest.webmanifest` 200 · `application/manifest+json` · name MedReader · start `./` · standalone · 아이콘 5 ✔ |
+
+## P1R-11. 전체 테스트 · stamp · 정리
+
+- 전체 `node --test apps/medreader/tests/*.test.mjs`: **1301/1301**, fail 0 · cancelled 0.
+  - 시작 때 1회, M7 부하와 겹쳐 1회, 변이·복원 뒤 1회.
+- `stamp-importmap --check` "그대로다(모듈 59개 · CSS 4개)" 종료 0.
+- `git diff --check` 깨끗(quiz.js CRLF 경고만 — P1R-2).
+- `.nojekyll` 있음(0바이트).
+- 앱·테스트·spec 은 고치지 않았다.
+  - 변이 8개와 search.js HEAD 판 비교 1회는 모두 되돌렸다(sha1 189개 같음, 백업 `cmp` 19/19 같음).
+  - 이 절만 덧붙였다.
+
+프로세스:
+
+- **8000번 python(PID 30352)은 쓰고 켜 두었다.**
+- **8123번 `npx http-server`(PID 17392 → 47028)는 시작 때부터 떠 있었고 건드리지 않았다.** 8124·8125 는 없었다.
+- 내가 띄운 Edge(명령줄에 `rp1`)는 0개다. 내 node 도 0개다.
+- 프로필 `rp1/p1`(세 권)은 `rm -rf` 금지라 남겼다.
+  - 이 프로필 안에서만 바꾼 것: 빈 PDF `scan`(지움 → 다시 판정 · `noticed`), Harrison `outline`(합성 → 원래 37개로 되돌림), CMDT 333쪽 `algoVersion`(앱이 새 판으로 되돌림), 설정값.
+
+## P1R-12. 배포 판정 · 운영자 몫
+
+1. **배포해도 된다.** 이번 변경을 한 커밋으로 얹으면 된다.
+2. 커밋할 것:
+   - Build 보고 2절의 앱 파일 14개 + `spec.md` + 테스트 3개 + 새 `tests/polish-1.test.mjs`
+   - 이 review.md
+   - 관례대로 `.claude/tasks/medreader-*-polish-1*.md`(build·report·review)
+   - **`.codex/`·`AGENTS.md` 는 넣지 않는다**(`git add -A` 금지). `.nojekyll` 그대로.
+3. 운영자 결정:
+   - 이번 묶음 안에서는 없다.
+   - "하지 않는 것" 5개(부분 OCR 20쪽 넘김·`reload` 시작점·412 퀴즈 제목 문턱·Android 이름 줄·기본 태그)는 그대로 Nour 결과·운영자 결정 대기다.
+   - ar·fr 새 문구 `[검토 — Nour·운영자]`: `search.tabs.label`·`search.tab.findLabel`(ar·fr), `common.dismiss`(fr).
+4. 다음 묶음 후보(모두 낮음):
+   - R2 에 거두기 키 정규식 2줄(P1R-8 X2·X3)
+   - `watchSearchBar` 를 `border-box` 로(P1R-9 a)
+   - 지금 항목에서 Shift+Tab → 탭을 할지(P1R-9 b, 사용 확인 뒤)
