@@ -414,21 +414,24 @@ export function createPipeline(deps) {
   async function sendAll(items, ctx) {
     const result = new Map();
 
-    if (ondevice && ctx.useOnDevice) {
+    // `[8m]` 문서 언어와 다른 언어의 항목(`src`)은 기기 내 번역(언어 쌍 하나)에 넣지 않는다 — 원격으로만.
+    const odItems = items.filter((it) => !it.src);
+    if (ondevice && ctx.useOnDevice && odItems.length) {
       let out = null;
-      try { out = await ondevice(items.map((it) => it.text), ctx.src, ctx.target); } catch (e) { out = null; }
-      if (Array.isArray(out) && out.length === items.length && out.every((x) => typeof x === 'string' && x.trim())) {
+      try { out = await ondevice(odItems.map((it) => it.text), ctx.src, ctx.target); } catch (e) { out = null; }
+      if (Array.isArray(out) && out.length === odItems.length && out.every((x) => typeof x === 'string' && x.trim())) {
         const entries = [];
-        for (let i = 0; i < items.length; i++) {
-          result.set(items[i].key, { state: SEG.READY, text: out[i].trim(), ondevice: true });
+        for (let i = 0; i < odItems.length; i++) {
+          result.set(odItems[i].key, { state: SEG.READY, text: out[i].trim(), ondevice: true });
           entries.push({
-            key: items[i].key, docId: ctx.docId, kind: ctx.kind, targetLang: ctx.target, result: out[i].trim(),
+            key: odItems[i].key, docId: ctx.docId, kind: ctx.kind, targetLang: ctx.target, result: out[i].trim(),
             provider: 'ondevice', model: null, promptVersion: PROMPT_VERSION
           });
         }
         try { await cache.putMany(entries); } catch (e) { /* 무시 */ }
         await bumpUsage({ ondeviceHits: 1 }, { db: db, now: now() });
-        return result;
+        if (odItems.length === items.length) return result;
+        items = items.filter((it) => !result.has(it.key));
       }
     }
 
@@ -465,7 +468,9 @@ export function createPipeline(deps) {
   async function translate(segments, opts) {
     const o = opts || {};
     const list = (Array.isArray(segments) ? segments : []).map((s) => ({
-      text: textOf(s), frag: s && (s.frag === 'head' || s.frag === 'tail') ? s.frag : null
+      text: textOf(s), frag: s && (s.frag === 'head' || s.frag === 'tail') ? s.frag : null,
+      // `[8m — spec 19-1-2 2-4]` 항목의 원문 언어 — 문서 언어(`opts.src`)와 다르고 지시문에 이름이 있을 때만
+      src: s && typeof s.src === 'string' && s.src && langName(s.src) ? s.src : null
     }));
     const kind = o.kind === AI.READALONG_KIND ? AI.READALONG_KIND : 'translate';
     const src = typeof o.src === 'string' ? o.src.trim() : '';
@@ -508,7 +513,7 @@ export function createPipeline(deps) {
       const p = new Promise((res) => { resolve = res; });
       inflight.set(k, p);
       waits.set(k, p);
-      fresh.push({ key: k, text: list[i].text, frag: list[i].frag, resolve: resolve });
+      fresh.push({ key: k, text: list[i].text, frag: list[i].frag, src: list[i].src && list[i].src !== src ? list[i].src : null, resolve: resolve });
     }
 
     const ctx = {

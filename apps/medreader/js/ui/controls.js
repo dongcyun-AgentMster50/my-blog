@@ -123,7 +123,11 @@ export function initControls() {
     requestWakeLock: requestWakeLock,
     // `[8h-1 — spec 6-6-2]` 9-3 `tts.readCitations`(기본 false). speaker 가 **큐를 만들 때마다** 읽는다 —
     // 설정 화면에서 바꾸고 돌아오면 다음 큐(재생·쪽 넘김·다시 그리기)부터 따른다. 동기(캐시 읽기)다.
-    readCitations: function () { return settings.get('tts.readCitations') === true; }
+    readCitations: function () { return settings.get('tts.readCitations') === true; },
+    // `[8m — spec 19-1-2 2-3 · 2-5]` 9-3 `tts.scriptSwitch`(기본 켬) — 큐를 만들 때마다 읽는다(다음 큐부터).
+    scriptSwitch: function () { return settings.get('tts.scriptSwitch') !== false; },
+    // 전환한 단위의 음성 — 8k 해석 함수 그대로(사용자 고르기·억양). 동기(목록·설정 캐시 읽기).
+    langSpeech: function (lang) { return langSpeechOf(lang, voices, settings.get); }
   });
 
   // `[8b-2]` 띠가 같은 두 객체의 이벤트를 듣는다(띠는 speaker 를 조작하지 않는다).
@@ -207,7 +211,7 @@ export function initControls() {
   });
   speaker.addEventListener('repeatchange', () => { paintRepeat(); paintProgress(lastProgress.index, lastProgress.total); });
   speaker.addEventListener('end', () => { paintBar(); paintProgress(0, 0); });
-  speaker.addEventListener('error', (ev) => onSpeakerError((ev.detail || {}).code));
+  speaker.addEventListener('error', (ev) => onSpeakerError((ev.detail || {}).code, ev.detail || {}));
 
   /* ── 6-5 줄 탭 — 낭독 중이면 그 줄부터. 아니면 아무 것도 하지 않는다
      (인라인 번역은 7단계다). ──────────────────────── */
@@ -278,6 +282,8 @@ function attachDebugHook() {
     voices: function () { return voices.map((v) => ({ lang: v.lang, name: v.name, local: v.localService })); },
     // 8b-1 — 발화 단계·낭독 동반 번역 상태(키·원문 문장을 담지 않는다).
     phase: function () { return speaker.getPhase(); },
+    // 8m — 음성 실패로 이 세션 동안 문장별 전환을 끈 언어들.
+    switchOff: function () { return speaker.getSwitchOff(); },
     readalong: function () {
       const st = readalong.stats();
       return { mode: readalong.mode(), remote: readalong.remoteState(), calls: st.calls, chars: st.chars, maxInflight: st.maxInflight };
@@ -434,6 +440,16 @@ export function applyTrSpeech(sp, lang, list, get) {
   return r;
 }
 
+/**
+ * `[8m — spec 19-1-2 2-3]` 문장별 언어 전환 경로 — 단위의 `lang` 으로 같은 해석 함수(`resolveSpeech`).
+ * speaker 가 발화마다 부른다(`deps.langSpeech`). 순수 — 목록·설정 읽기만.
+ * @returns {{tag:string, voice:?Object}}
+ */
+export function langSpeechOf(lang, list, get) {
+  const r = resolveSpeech(lang, list, speechPref(get, lang));
+  return { tag: r.tag, voice: r.voice };
+}
+
 /** 표 안내 경로(UI 언어 문장 — 6-1). */
 export function applyNoticeSpeech(sp, lang, list, get) {
   const r = resolveSpeech(lang, list, speechPref(get, lang));
@@ -476,6 +492,14 @@ function noVoiceNotice(lang) {
   const k = 'onboarding.lang.' + lang;
   const name = t(k) === k ? String(lang) : t(k);
   notice('reader.tts.noVoice', 'warn', { lang: name }, 'reader.tts.noVoice:' + lang);
+}
+
+/** `[8m]` "{lang} 음성이 없어 그 문장들을 원서 언어로 읽습니다" — `{lang}` 은 그 언어의 자국어 이름. */
+function switchNoVoiceNotice(lang) {
+  const l = typeof lang === 'string' && lang ? lang : '';
+  const k = 'onboarding.lang.' + l;
+  const name = !l ? '' : t(k) === k ? l : t(k);
+  notice('reader.tts.switchNoVoice', 'warn', { lang: name }, 'reader.tts.switchNoVoice:' + l);
 }
 
 /**
@@ -732,10 +756,11 @@ const CODE_KEYS = Object.freeze({
   [CODES.LINE_SKIPPED]: 'reader.tts.lineSkipped',
   [CODES.PAGE_TIMEOUT]: 'reader.tts.pageTimeout',
   [CODES.NO_VOICE]: 'reader.tts.noVoice',
-  [CODES.WAKELOCK_UNAVAILABLE]: 'reader.tts.wakeLock'
+  [CODES.WAKELOCK_UNAVAILABLE]: 'reader.tts.wakeLock',
+  [CODES.SWITCH_NO_VOICE]: 'reader.tts.switchNoVoice'
 });
 
-function onSpeakerError(code) {
+function onSpeakerError(code, detail) {
   // `[8b-1]` 첫 번역문 발화가 실패 — 번역문 음성 불가(7-8-5). 유효 모드가 show 로 내려가고 서비스가
   // `notice` 를 한 번 낸다(문구는 8b-2). 원문 낭독은 그대로 이어진다.
   if (code === CODES.TR_VOICE_FAILED) { syncReadalong(); return; }
@@ -745,6 +770,8 @@ function onSpeakerError(code) {
   if (code === CODES.LINE_SKIPPED) return;
   // 7c — 음성 없음 문구는 원문 언어 이름을 받는다.
   if (code === CODES.NO_VOICE) { noVoiceNotice(sourceLang()); return; }
+  // `[8m]` 문장별 전환 언어의 음성이 없다 — 그 언어는 이 세션 동안 문서 언어로 읽는다(언어마다 한 번).
+  if (code === CODES.SWITCH_NO_VOICE) { switchNoVoiceNotice(detail && detail.lang); return; }
   notice(key, code === CODES.NOT_ALLOWED ? 'error' : 'warn');
 }
 

@@ -62,19 +62,19 @@
     "./js/ai/cache.js": "./js/ai/cache.js?v=5626b26724",
     "./js/ai/jsonrepair.js": "./js/ai/jsonrepair.js?v=1b8d7ede4d",
     "./js/ai/ondevice.js": "./js/ai/ondevice.js?v=febf2b47a8",
-    "./js/ai/pipeline.js": "./js/ai/pipeline.js?v=c7244fc748",
-    "./js/ai/prompts.js": "./js/ai/prompts.js?v=5469d7791d",
+    "./js/ai/pipeline.js": "./js/ai/pipeline.js?v=2a5da8a049",
+    "./js/ai/prompts.js": "./js/ai/prompts.js?v=41a1c152fe",
     "./js/ai/provider.js": "./js/ai/provider.js?v=48d1929564",
-    "./js/ai/readalong.js": "./js/ai/readalong.js?v=6bf46b2af8",
+    "./js/ai/readalong.js": "./js/ai/readalong.js?v=3c905a1d72",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
     "./js/config.js": "./js/config.js?v=f9b25d1557",
     "./js/db.js": "./js/db.js?v=726d46e5c0",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=4628e84c9c",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=505748a480",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=7e3239af11",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=626f458b91",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=1047de377f",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=26d9c1df67",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=3011bbdd43",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=e74b225361",
     "./js/main.js": "./js/main.js?v=4397e74713",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -86,13 +86,13 @@
     "./js/router.js": "./js/router.js?v=936e01879d",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
-    "./js/settings.js": "./js/settings.js?v=0e32bb675d",
+    "./js/settings.js": "./js/settings.js?v=930ef37aa9",
     "./js/text/bidi.js": "./js/text/bidi.js?v=2bda7b28c4",
     "./js/text/blocks.js": "./js/text/blocks.js?v=d1928663d6",
     "./js/text/cite.js": "./js/text/cite.js?v=259bcf49ea",
     "./js/text/columns.js": "./js/text/columns.js?v=4dc381ad94",
     "./js/text/hyphen.js": "./js/text/hyphen.js?v=33d5d44018",
-    "./js/text/lang.js": "./js/text/lang.js?v=6cc2d75549",
+    "./js/text/lang.js": "./js/text/lang.js?v=c42d7c924d",
     "./js/text/layout.js": "./js/text/layout.js?v=4f04936974",
     "./js/text/lines.js": "./js/text/lines.js?v=8a5f9e1f9b",
     "./js/text/rowtable.js": "./js/text/rowtable.js?v=76a7ee780f",
@@ -101,12 +101,12 @@
     "./js/text/search.js": "./js/text/search.js?v=0c59056516",
     "./js/text/segment.js": "./js/text/segment.js?v=09707527bd",
     "./js/text/store.js": "./js/text/store.js?v=0e6752a027",
-    "./js/tts/speaker.js": "./js/tts/speaker.js?v=79563b2120",
-    "./js/tts/text.js": "./js/tts/text.js?v=1e07c9c45e",
+    "./js/tts/speaker.js": "./js/tts/speaker.js?v=d412ae37fd",
+    "./js/tts/text.js": "./js/tts/text.js?v=dc530a53d4",
     "./js/tts/voices.js": "./js/tts/voices.js?v=67fb29c15a",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=3dba20edc8",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=5f4813971c",
     "./js/ui/library.js": "./js/ui/library.js?v=6e20857af4",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
@@ -114,7 +114,7 @@
     "./js/ui/quiz.js": "./js/ui/quiz.js?v=f9cfebd1cf",
     "./js/ui/reader.js": "./js/ui/reader.js?v=8837ce40da",
     "./js/ui/search.js": "./js/ui/search.js?v=93c0720db7",
-    "./js/ui/settings.js": "./js/ui/settings.js?v=3442c110be",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=b8510fa77b",
     "./js/ui/trband.js": "./js/ui/trband.js?v=2574e1bf06",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=9df6aeb8cd"
   }
@@ -738,6 +738,12 @@
          기본은 "휴대폰 설정 따름"(voice 지정 없이 lang 만). 성별은 표시하지 않고 안내 한 줄만. -->
     <div class="card settings-card" id="settingsVoices">
       <h2 data-i18n="settings.tts.voice.title"></h2>
+      <!-- `[8m]` 글자 체계로 문장마다 목소리 바꾸기(spec 19-1-2 2-5, 기본 켬) — 다음에 큐를 만들 때부터 -->
+      <div class="consent-row">
+        <input type="checkbox" id="ttsScriptSwitch">
+        <label for="ttsScriptSwitch" data-i18n="settings.tts.scriptSwitch"></label>
+      </div>
+      <p class="muted" data-i18n="settings.tts.scriptSwitch.help"></p>
       <div class="voice-langs" id="ttsVoiceLangs"></div>
       <p class="muted" id="ttsVoiceHint" data-i18n="settings.tts.voiceHint"></p>
     </div>

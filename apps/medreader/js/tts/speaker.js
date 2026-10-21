@@ -43,11 +43,20 @@
    그래서 반복·`step`·진행 표시·워치독·쪽 넘김은 인용을 모른다(고칠 것 없음). 쪽이 인용뿐이면 큐가 비어
    기존 "빈 쪽 넘기기"(`MAX_EMPTY_PAGES`)로 간다. 켜져 있으면 거르지 않는다 — 인용은 `seg` 가 없어
    번역문 단계가 붙지 않고(`trActive` 거짓) 원문 음성으로만 읽힌다.
+
+   ── `[8m]` 문장별 글자 체계로 목소리 전환 (spec 19-1-2 2-3) ──────
+   `tts.scriptSwitch`(기본 켬)이면 `queueOf` 가 `scriptSwitch:true` 로 큐를 만든다 — 예외인 단위에 `Unit.lang`.
+   `speakAt` 이 그 단위의 `utt.lang`·`voice` 를 `deps.langSpeech(lang)`(화면이 `resolveSpeech` 로 — 8k 의 고르기·억양)로 바꾼다.
+   표 안내가 이미 단위마다 lang·voice 를 바꾸던 그 자리다 — 새 재생 경로가 아니다. 발화는 지금도 단위마다 하나.
+     · 전환한 단위가 `VOICE_ERRORS` 로 끝나면(기존 1회 재시도 뒤) `NO_VOICE`(문서 언어 판정)를 내지 않고
+       그 언어 전환을 세션 동안 끄고(`switchOff`) 같은 단위를 문서 언어로 다시 읽는다 + `SWITCH_NO_VOICE {lang}` 한 번.
+     · 번역 대상 언어와 같은 언어의 단위는 번역문 단계가 없다(`trActive` 거짓) — `linechange` 의 `seg` 를 비워
+       띠가 "이 문장은 번역 없음"을 보이고 번역 커서는 그대로 둔다(spec 19-1-2 2-4).
    ============================================================ */
 
 import { TTS, TTS_LANG_REGION, READALONG } from '../config.js';
 import { buildUnits, watchdogMs, indexOfLine, indexAtOrAfterLine, TABLE_NOTICE_KIND, trSpeechParts, trWatchdogMs } from './text.js';
-import { VOICE_ERRORS } from './voices.js';
+import { VOICE_ERRORS, defaultSpeechTag } from './voices.js';
 
 export const STATES = Object.freeze(['idle', 'speaking', 'paused', 'waiting-page', 'error']);
 
@@ -60,7 +69,9 @@ export const CODES = Object.freeze({
   /* `[8b-1]` 번역문 발화(6-2 `speakTr`). 문구는 화면이 고른다. */
   TR_SKIPPED: 'TTS_TR_SKIPPED',            // 번역문 발화 하나가 오류로 끝나 건너뛰었다(재시도 없음)
   TR_VOICE_FAILED: 'TTS_TR_VOICE_FAILED',  // 세션의 첫 번역문 발화가 실패 — 번역문 음성 불가로 보고 tr 을 멈춘다(7-8-5)
-  TR_LAGGING: 'TTS_TR_LAGGING'             // 연속 LAG_NOTICE_AFTER 문장의 tr-wait 이 상한으로 끝났다(한 번)
+  TR_LAGGING: 'TTS_TR_LAGGING',            // 연속 LAG_NOTICE_AFTER 문장의 tr-wait 이 상한으로 끝났다(한 번)
+  /* `[8m]` 문장별 언어 전환 음성 불가 — 그 언어 전환을 세션 동안 끄고 문서 언어로 읽는다(언어마다 한 번, `lang`). */
+  SWITCH_NO_VOICE: 'TTS_SWITCH_NO_VOICE'
 });
 
 /** `[8b-1]` 발화 단계(6-1). */
@@ -114,6 +125,10 @@ export function snapRepeatCount(n) {
  * @param {Object} [deps.timers]     `{setTimeout, clearTimeout}`
  * @param {Function} [deps.readCitations]  `[8h-1]` `() => boolean` — 9-3 `tts.readCitations`. 큐를 만들 때마다 읽는다.
  *                                    없으면 `setReadCitations` 로 정한 값(기본 false — 인용을 거른다)
+ * @param {Function} [deps.scriptSwitch]  `[8m]` `() => boolean` — 9-3 `tts.scriptSwitch`(기본 켬). 큐를 만들 때마다 읽는다.
+ *                                    없으면 `setScriptSwitch` 로 정한 값(기본 true)
+ * @param {Function} [deps.langSpeech]    `[8m]` `(lang) => {tag, voice}` — 전환한 단위의 음성(화면이 `resolveSpeech` 로).
+ *                                    없으면 voice 없이 `defaultSpeechTag(lang)`
  *
  * `view` 계약:
  *   paras()            → `[{id, kind, lines:[{id,text,hyphen}]}]` 지금 쪽
@@ -188,6 +203,10 @@ export function createSpeaker(deps) {
   let readCitations = false;     // 9-3 tts.readCitations — 기본 false(거른다). `deps.readCitations` 가 있으면 그것이 우선
   let citeOnlyQueue = false;     // 마지막으로 만든 큐가 "인용을 걸러서" 비었는가(본래 빈 쪽과 구별)
 
+  /* ── `[8m]` 문장별 언어 전환 (spec 19-1-2 2-3) ─────── */
+  let scriptSwitch = true;       // 9-3 tts.scriptSwitch — 기본 켬. `deps.scriptSwitch` 가 있으면 그것이 우선
+  const switchOff = {};          // lang → true: 그 언어 전환 음성이 실패 — 세션 동안 문서 언어로
+
   /* ── `[8i-1]` 옛 판 쪽에서 재생 (spec 4-13-9) ─────────── */
   let freshGen = -1;             // 지금 쪽 새 판을 기다리기 시작한 세대(`'waiting-page'` 의 한 갈래 — 상태는 늘리지 않는다)
   let rebuildNext = false;       // 기다림이 끝난 `play()` 는 큐를 새로 만든다
@@ -257,7 +276,30 @@ export function createSpeaker(deps) {
   /** `[8b-1]` 이 문장에 번역문 단계가 붙는가 — speak 모드·번역 대상 문장·번역 서비스가 있을 때만. */
   function trActive(u) {
     return raMode === 'speak' && !trDisabled && !!translation && !!u &&
-      u.kind !== TABLE_NOTICE_KIND && Number.isInteger(u.seg);
+      u.kind !== TABLE_NOTICE_KIND && Number.isInteger(u.seg) && !sameAsTarget(u);
+  }
+
+  /** `[8m — spec 19-1-2 2-4]` 번역 대상 언어와 같은 언어의 단위 — 번역하지 않는다(번역문 단계 없음). */
+  function sameAsTarget(u) {
+    return !!(u && typeof u.lang === 'string' && u.lang && trLang && u.lang === langKey(trLang));
+  }
+
+  /**
+   * `[8m]` 이 단위를 어느 언어로 말하나 — 전환할 언어, 아니면 null(문서 언어). 표 안내는 따로(UI 언어).
+   * 전환이 꺼졌거나(설정) 그 언어 음성이 실패했으면(`switchOff`) null.
+   */
+  function switchLangOf(u) {
+    if (!u || u.kind === TABLE_NOTICE_KIND || typeof u.lang !== 'string' || !u.lang) return null;
+    if (switchOff[u.lang]) return null;
+    return u.lang;
+  }
+
+  /** `[8m]` 전환한 언어의 `{tag, voice}` — 화면이 준 해석(`resolveSpeech`), 없으면 voice 없이 기본 태그. */
+  function speechOf(lang) {
+    let r = null;
+    if (typeof d.langSpeech === 'function') { try { r = d.langSpeech(lang); } catch (e) { r = null; } }
+    const tag = r && typeof r.tag === 'string' && r.tag ? r.tag : defaultSpeechTag(lang);
+    return { tag: tag, voice: (r && r.voice) || null };
   }
 
   /** 같은 문장(같은 seg·src)의 첫 조각·끝 조각 번호. */
@@ -371,8 +413,11 @@ export function createSpeaker(deps) {
     const utt = makeUtterance(u.text);
     // `[8b-1]` 6-1 — 표 안내는 UI 언어 문장이므로 UI 언어 음성으로 읽는다(지정돼 있을 때).
     const notice = u.kind === TABLE_NOTICE_KIND && noticeLang;
-    utt.lang = notice ? noticeLang : docLang;
-    const v = notice ? noticeVoice : voiceFor[langKey(docLang)];
+    // `[8m]` 문서 언어와 다른 글자 체계로 판별된 단위 — 그 언어의 음성(8k 해석 그대로)으로.
+    const sl = notice ? null : switchLangOf(u);
+    const sp = sl ? speechOf(sl) : null;
+    utt.lang = notice ? noticeLang : sp ? sp.tag : docLang;
+    const v = notice ? noticeVoice : sp ? sp.voice : voiceFor[langKey(docLang)];
     if (v) utt.voice = v;
     utt.rate = rate;
     utt.pitch = 1;
@@ -387,7 +432,7 @@ export function createSpeaker(deps) {
       utt.onend = function () {
         if (myGen !== gen) return;
         clearWatchdog();
-        if (u.kind !== TABLE_NOTICE_KIND) srcEverOk = true;
+        if (u.kind !== TABLE_NOTICE_KIND && !sl) srcEverOk = true;   // `[8m]` 전환한 단위는 문서 언어 음성의 근거가 아니다
         if (state !== 'speaking') return;
         // `[8b-1]` speak 모드 문장 — 조각이 남았으면 다음 조각, 마지막 조각이면 번역문 단계로.
         if (tr && trActive(u)) { onSrcEnd(index); return; }
@@ -399,7 +444,7 @@ export function createSpeaker(deps) {
         retriedAt = -1;
         speakAt(to);
       };
-      utt.onerror = function (ev) { onUtterError(ev, myGen, u); };
+      utt.onerror = function (ev) { onUtterError(ev, myGen, u, sl); };
     }
     stallOnce = false;
 
@@ -434,7 +479,7 @@ export function createSpeaker(deps) {
     }, watchdogMs(u.text, rate));
   }
 
-  function onUtterError(ev, myGen, u) {
+  function onUtterError(ev, myGen, u, sl) {
     if (myGen !== gen) return;
     clearWatchdog();
     const code = String((ev && ev.error) || '');
@@ -462,10 +507,28 @@ export function createSpeaker(deps) {
       return;
     }
 
+    // `[8m — spec 19-1-2 2-3]` 전환한 언어의 음성을 못 낸다 — `NO_VOICE`(문서 언어 판정)를 내지 않는다.
+    // 그 언어 전환을 세션 동안 끄고 같은 단위를 문서 언어로 다시 읽는다 + 안내 한 번(언어마다).
+    if (sl && VOICE_ERRORS.indexOf(code) >= 0) {
+      if (!switchOff[sl]) { switchOff[sl] = true; emit('error', { code: CODES.SWITCH_NO_VOICE, lang: sl, error: code }); }
+      retriedAt = -1;
+      const at = index;
+      cancelSynth();
+      setState('speaking');
+      const nextGen = gen;
+      deferred = timers.setTimeout(function () {
+        deferred = null;
+        if (nextGen !== gen) return;
+        speakAt(at, { noShow: true });
+      }, TTS.CANCEL_DELAY_MS);
+      return;
+    }
+
     // `[8b-1 — 오케스트레이터 결정 2026-10-10]` "음성 없음"은 **실제 발화 오류**로만 판정한다 —
     // 목록에 그 언어 음성이 없어도 `utterance.lang` 만으로 소리가 나는 기기가 있다(운영자 폰 진단).
     // 언어·음성 오류 코드이거나, 이 세션에서 원문 발화가 한 번도 끝까지 간 적이 없을 때. 표 안내(UI 언어)는 제외.
-    if (u && u.kind !== TABLE_NOTICE_KIND && (VOICE_ERRORS.indexOf(code) >= 0 || !srcEverOk)) {
+    // `[8m]` 전환한 단위(다른 언어)의 오류는 문서 언어 음성의 판정 근거가 아니다.
+    if (u && u.kind !== TABLE_NOTICE_KIND && !sl && (VOICE_ERRORS.indexOf(code) >= 0 || !srcEverOk)) {
       emit('error', { code: CODES.NO_VOICE, error: code });
     }
     emit('error', { code: CODES.LINE_SKIPPED, lineId: firstLineId(u) });
@@ -642,7 +705,8 @@ export function createSpeaker(deps) {
       lineId: firstLineId(u), lineIds: u.lineIds.slice(),
       paraId: u.paraId, index: index, total: units.length, onPage: ok,
       // `[8b-1]` 낭독 동반 번역의 커서(7-8-3) — 쪽 번호와 쪽 안의 문장 번호. 표 안내는 seg 가 null.
-      page: pg ? pg.page : null, seg: Number.isInteger(u.seg) ? u.seg : null, src: u.src == null ? null : u.src
+      // `[8m]` 번역 대상 언어와 같은 단위는 번역하지 않는다 — seg 를 비워 띠가 "번역 없음"을 보이고 커서는 그대로.
+      page: pg ? pg.page : null, seg: Number.isInteger(u.seg) && !sameAsTarget(u) ? u.seg : null, src: u.src == null ? null : u.src
     });
     return ok;
   }
@@ -653,7 +717,17 @@ export function createSpeaker(deps) {
   function langKey(l) { return String(l || 'en').replace(/_/g, '-').split('-')[0].toLowerCase() || 'en'; }
 
   /** `[7c]` 큐를 만들 때 넘기는 원문 언어. */
-  function unitOpts() { return { lang: langKey(docLang) }; }
+  function unitOpts() {
+    const o = { lang: langKey(docLang) };
+    if (switchOn()) o.scriptSwitch = true;      // `[8m]` 끄면 8m 이전과 같은 큐
+    return o;
+  }
+
+  /** `[8m]` 9-3 `tts.scriptSwitch` — 큐를 만들 때마다 읽는다(재생을 건드리지 않는다 — 8h 와 같은 규칙). */
+  function switchOn() {
+    if (typeof d.scriptSwitch === 'function') { try { return d.scriptSwitch() !== false; } catch (e) { return true; } }
+    return scriptSwitch;
+  }
 
   /**
    * `[8h-1]` 큐를 만드는 **한 곳**. 설정이 꺼져 있으면 인용(`Unit.cite`) 단위를 뺀다.
@@ -945,6 +1019,8 @@ export function createSpeaker(deps) {
    * 켜도 인용은 원문 음성으로만 읽고 번역하지 않는다(`seg` 없음).
    */
   function setReadCitations(on) { readCitations = on === true; }
+  /** `[8m]` 9-3 `tts.scriptSwitch`. 다음에 큐를 만들 때부터(재생을 건드리지 않는다). */
+  function setScriptSwitch(on) { scriptSwitch = on !== false; }
   function setDocLang(l) { docLang = String(l || TTS_LANG_REGION.en); }
 
   /** 쪽이 새로 그려졌다 — 큐를 그 쪽 것으로 갈아 끼운다(사용자가 쪽을 넘긴 경우). */
@@ -1090,6 +1166,7 @@ export function createSpeaker(deps) {
     setVoice: setVoice,
     setDocLang: setDocLang,
     setReadCitations: setReadCitations,
+    setScriptSwitch: setScriptSwitch,
     reload: reload,
     reshow: reshow,
     cue: cue,
@@ -1123,6 +1200,8 @@ export function createSpeaker(deps) {
     getPhase: function () { return phase; },
     /** `[8b-1]` 번역문 음성이 첫 발화 실패로 꺼졌는가(7-8-5 — 세션 동안). */
     isTrDisabled: function () { return trDisabled; },
+    /** `[8m]` 음성 실패로 세션 동안 전환을 끈 언어들. */
+    getSwitchOff: function () { return Object.keys(switchOff).filter(function (k) { return switchOff[k]; }); },
     /** 반복 상태 한 덩어리 — UI 는 **이것만** 읽고 그린다(표시 어긋남 방지). */
     getRepeat: function () {
       return {

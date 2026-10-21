@@ -28,6 +28,11 @@
      5. 남은 것에서 누적 maxReqChars 이하(문장 경계)를 한 청크로 보낸다
    **창 밖은 요청하지 않는다**(자동 전체 번역 없음 — RA3). 자동 재시도는 파이프라인의 상한뿐.
 
+   ── `[8m]` 문장별 언어 (spec 19-1-2 2-4) ────────────────
+   `Unit.lang`(글자 체계 예외 — `tts.scriptSwitch` 켬일 때만)이 **번역 대상 언어와 같은** 문장은 흐름에 넣지 않는다 —
+   요청·창 계산·readStats 에서 빠진다(호출이 준다). 문서 언어와도 대상 언어와도 다른 문장은 요청 항목에 `src` 를 붙인다.
+   캐시 키(7-5)는 그대로 — 원문 언어를 넣지 않는다. `SAME_LANG`(문서 = 대상)은 그대로 꺼진다(결정 O-D4 (가)).
+
    ── 원격 상태 이벤트 거르기 (8a Review 주의) ───────────
    파이프라인은 성공 호출마다 `inflight → ready` 를 낸다. 그것을 "돌아왔다"로 읽으면
    매 호출마다 회복 처리(알림 거두기·blocked 재전송)가 돈다. **이전 상태(`prev`)가 막힌
@@ -178,10 +183,22 @@ export function createReadalong(deps) {
   /* ── 쪽 → 문장 ─────────────────────────────────────── */
 
   function sentencesFromUnits(page, units) {
-    const list = sentencesOf(units);
-    return list.map((s) => ({
-      page: page, seg: s.seg, src: s.src, frag: s.frag, key: srcKey(s.src), chars: charCount(s.src), cacheKey: null
-    }));
+    const list = sentencesOf(units).filter((s) => !sameAsTarget(s));     // `[8m]` 대상 언어와 같은 문장 — 번역하지 않는다
+    return list.map((s) => {
+      const o = { page: page, seg: s.seg, src: s.src, frag: s.frag, key: srcKey(s.src), chars: charCount(s.src), cacheKey: null };
+      if (s.lang && s.lang !== doc.lang) o.lang = s.lang;                 // `[8m]` 요청 항목 `src`(문서 언어와 다를 때만)
+      return o;
+    });
+  }
+
+  /** `[8m]` 그 문장의 말할 언어가 번역 대상 언어와 같은가. */
+  function sameAsTarget(s) { return !!(s && s.lang && doc.target && s.lang === doc.target); }
+
+  /** `[8m]` 다음 쪽 큐를 speaker 와 같은 규칙으로 — 9-3 `tts.scriptSwitch`(기본 켬). */
+  function unitOpts() {
+    const o = { lang: doc.lang || undefined };
+    if (getSetting('tts.scriptSwitch') !== false) o.scriptSwitch = true;
+    return o;
   }
 
   function countPage(page, list) {
@@ -213,7 +230,7 @@ export function createReadalong(deps) {
     // 다른 refill 이 그 사이에 넣었으면 그것을 쓴다(같은 쪽을 두 번 세지 않게).
     const again2 = stream.get(page);
     if (Array.isArray(again2)) return again2;
-    const list = sentencesFromUnits(page, buildUnits(paras, 'sentence', { lang: doc.lang || undefined }));
+    const list = sentencesFromUnits(page, buildUnits(paras, 'sentence', unitOpts()));
     putPage(page, list);
     return list;
   }
@@ -341,7 +358,7 @@ export function createReadalong(deps) {
 
     let r = null;
     try {
-      r = await pipeline.translate(list.map((s) => ({ text: s.src, frag: s.frag })), {
+      r = await pipeline.translate(list.map((s) => (s.lang ? { text: s.src, frag: s.frag, src: s.lang } : { text: s.src, frag: s.frag })), {
         src: doc.lang, target: doc.target, kind: 'readalong', docId: doc.id, retry: !!o.retry
       });
     } catch (e) {

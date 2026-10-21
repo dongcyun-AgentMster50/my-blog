@@ -232,6 +232,96 @@ export function applyUserLang(rec, lang) {
   return { changed: lang !== before, rec: next };
 }
 
+/* ────────────────────────────────────────────────────────
+   `[8m — spec 19-1-2 2-1 · 2-2]` 문장(낭독 단위)별 말할 언어 — 글자 체계 예외
+
+   문서의 원문 언어(`documents.lang`)는 그대로 두고, **글자 체계(Unicode Script)** 로만 예외를 둔다.
+   한글 → ko, 아랍 문자 → ar, 라틴 → 문서 언어가 라틴 계열(en·fr)이면 문서 언어, 아니면 en `[가정]`.
+   그리스 문자·한자·가나 등 표에 없는 체계는 **중립** — 세지 않는다(끊기만 한다). 책 이름·낱말 목록·
+   언어별 문턱은 두지 않는다(메모리 원칙). 같은 체계 안의 언어(영·불)는 가르지 않는다.
+
+   세는 것은 **덩어리**(같은 체계 글자가 이어진 것 — 낱말 비슷한 것)다. 글자 수로 세면 한글 한 음절이
+   라틴 여러 글자를 이기지 못한다("ADHD는 주의력 결핍 장애다" — 덩어리 1 대 4 → ko).
+
+   `[실측 2026-10-21 — 8m Build]` 해커스 영한 PDF 87개 14,729단위에서 "섞임"(동률·3/5 미만) 10.06% —
+   운영자 결정(2026-10-21): 섞인 단위는 **문서 목소리**(설계 그대로). 줄 경계로 끊기·단위 안 쪼개기·문턱 바꾸기는 하지 않는다.
+   ──────────────────────────────────────────────────────── */
+
+/** 판별 문턱 — 덩어리 다수결 3/5, 2글자 미만은 "짧음"(물려받기). 분수로 둔다(부동소수 경계 없음). */
+export const SCRIPT_SWITCH = Object.freeze({
+  MIN_LETTERS: 2,
+  SHARE_NUM: 3,
+  SHARE_DEN: 5
+});
+
+/** 셀 글자 체계 → 말할 언어. 라틴은 `null`(문서 언어에 따라 — `unitLang` 이 정한다). */
+const SCRIPT_TO_LANG = Object.freeze({ hangul: 'ko', arabic: 'ar', latin: null });
+/** 라틴 문자로 쓰는 지원 원문 언어(라틴 덩어리는 이 문서들에서 문서 언어로 읽는다). */
+const LATIN_DOC_LANGS = Object.freeze(['en', 'fr']);
+/** 라틴 계열이 아닌 문서 안의 라틴 덩어리 `[가정]`. */
+const LATIN_FALLBACK = 'en';
+
+/** 셀 체계 이름 · 'other'(글자인데 셀 체계가 아님 — 중립) · null(글자 아님). */
+function countedScript(ch) {
+  if (!RE_LETTER.test(ch)) return null;
+  if (RE_HANGUL.test(ch)) return 'hangul';
+  if (RE_ARABIC.test(ch)) return 'arabic';
+  if (RE_LATIN.test(ch)) return 'latin';
+  return 'other';
+}
+
+/**
+ * 셀 체계(한글·아랍·라틴)별 덩어리 수와 글자 수. 숫자·기호·공백·중립 체계 글자는 덩어리를 끊기만 한다.
+ * 아랍 발음 부호(타슈킬 — 결합 문자 `\p{M}`)는 글자가 아니라 덩어리를 끊지 않는다.
+ * @returns {{runs:{hangul:number, arabic:number, latin:number}, letters:{hangul:number, arabic:number, latin:number}}}
+ */
+export function scriptRuns(text) {
+  const runs = { hangul: 0, arabic: 0, latin: 0 };
+  const letters = { hangul: 0, arabic: 0, latin: 0 };
+  let prev = null;
+  for (const ch of str(text)) {
+    if (/\p{M}/u.test(ch)) continue;          // 결합 부호 — 앞 글자에 붙어 있다
+    const s = countedScript(ch);
+    if (s && s !== 'other') {
+      letters[s]++;
+      if (s !== prev) runs[s]++;
+    }
+    prev = s;
+  }
+  return { runs: runs, letters: letters };
+}
+
+/**
+ * ★ 단위 하나의 말할 언어(spec 19-1-2 2-2). 순수 함수.
+ *   `short`  셀 글자 2개 미만("A", "(b)", "12.5 mg/kg") — 호출자가 같은 문단 앞 단위의 값을 물려준다
+ *   `mixed`  가장 많은 체계가 동률이거나 3/5 미만 — 문서 언어(예외 없음)
+ *   `lang`   문서 언어와 다를 때만 그 언어, 아니면 `null`(예외 없음)
+ * @param {string} src  `Unit.src`
+ * @param {string} docLang  문서의 원문 언어(en·fr·ko …)
+ * @returns {{lang:string|null, short:boolean, mixed:boolean}}
+ */
+export function unitLang(src, docLang) {
+  const doc = typeof docLang === 'string' && docLang ? docLang : 'en';
+  const { runs, letters } = scriptRuns(src);
+  const total = letters.hangul + letters.arabic + letters.latin;
+  if (total < SCRIPT_SWITCH.MIN_LETTERS) return { lang: null, short: true, mixed: false };
+  const nRuns = runs.hangul + runs.arabic + runs.latin;
+  let best = null;
+  let bestN = 0;
+  let tie = false;
+  const order = ['hangul', 'arabic', 'latin'];
+  for (let i = 0; i < order.length; i++) {
+    const n = runs[order[i]];
+    if (n > bestN) { best = order[i]; bestN = n; tie = false; } else if (n === bestN && n > 0) tie = true;
+  }
+  if (!best || tie || bestN * SCRIPT_SWITCH.SHARE_DEN < nRuns * SCRIPT_SWITCH.SHARE_NUM) {
+    return { lang: null, short: false, mixed: true };
+  }
+  let lang = SCRIPT_TO_LANG[best];
+  if (best === 'latin') lang = LATIN_DOC_LANGS.indexOf(doc) >= 0 ? doc : LATIN_FALLBACK;
+  return { lang: lang === doc ? null : lang, short: false, mixed: false };
+}
+
 /**
  * 추정 표본 모으기. 쪽들의 문단에서 **제목이 아닌** 글자를 쪽 순서대로 잇는다.
  *

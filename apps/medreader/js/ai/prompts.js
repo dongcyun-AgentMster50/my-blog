@@ -26,7 +26,7 @@ import { estimateTokens } from './tokens.js';
  * 10-1 — 프롬프트 판본. 캐시 값(`aiCache.promptVersion`)에 기록한다(키에는 넣지 않는다 — 7-5).
  * 지시문·스키마를 바꾸면 올린다. 옛 번역은 그대로 유효하다(재호출을 유발하지 않는다).
  */
-export const PROMPT_VERSION = 1;
+export const PROMPT_VERSION = 2;   // `[8m]` 2 — 항목 `src`(문서 언어와 다른 원문 언어) 한 줄
 /** 지침 표기(`promptVersion`)와 같은 값. */
 export const promptVersion = PROMPT_VERSION;
 
@@ -186,10 +186,15 @@ export function translateInstruction(srcLang, targetLang) {
     ' term in parentheses on first occurrence in a segment' + ex + '.' + style;
 }
 
+/** `[8m]` 항목에 `src` 가 있을 때만 더하는 한 줄(그 항목은 그 언어에서 옮긴다). */
+export const SRC_LINE = 'A segment with a `src` language code is written in that language: translate it from that language instead.';
+
 /**
  * 10-2 요청(`CompletionRequest`, 8-1)을 만든다.
  *
- * @param {{text:string, frag?:'head'|'tail'|null}[]} segments `text` = `Unit.src`
+ * @param {{text:string, frag?:'head'|'tail'|null, src?:string|null}[]} segments `text` = `Unit.src`
+ *   `[8m]` `src` — 그 항목의 원문 언어가 문서 언어(`langs.src`)와 다를 때만(spec 19-1-2 2-4). 항목에 코드를 붙이고
+ *   지시문에 한 줄(`SRC_LINE`)을 더한다. `src` 항목이 없는 요청은 8m 이전과 글자 하나 다르지 않다.
  * @param {{src:string, target:string}} langs
  * @returns {{system:string, user:string, json:true, schema:Object,
  *            maxOutputTokens:number, temperature:number}|null} 언어를 모르거나 문장이 없으면 `null`
@@ -202,18 +207,20 @@ export function buildTranslateRequest(segments, langs) {
 
   const items = [];
   let srcText = '';
+  let anySrc = false;
   for (let i = 0; i < list.length; i++) {
     const s = list[i] || {};
     const text = escapeDoc(s.text);
     const item = { i: i, text: text };
     if (s.frag === 'head' || s.frag === 'tail') item.frag = s.frag;
+    if (typeof s.src === 'string' && s.src && s.src !== l.src && langName(s.src)) { item.src = s.src; anySrc = true; }
     items.push(item);
     srcText += text + '\n';
   }
 
   return {
     system: commonSystem(true),
-    user: task + '\n' +
+    user: task + '\n' + (anySrc ? SRC_LINE + '\n' : '') +
       'Schema: {"segments": [{"i": number, "t": string}], "notes": string}\n' +
       '<<<DOC\n' + JSON.stringify(items) + '\n>>>',
     json: true,

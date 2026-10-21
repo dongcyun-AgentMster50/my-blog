@@ -642,7 +642,8 @@ export function initSettingsScreen() {
     howTo: q('aiVoiceHowTo'),
     howToBody: q('aiVoiceHowToBody'),
     voiceLangs: q('ttsVoiceLangs'),   // `[8k]` 낭독 목소리 — 없으면(반쪽 캐시) 그리지 않는다
-    readCitations: null      // `[8h-1]` 아래 buildCitationsRow 가 만든다(정적 HTML 은 import map 만 고친다)
+    readCitations: null,     // `[8h-1]` 아래 buildCitationsRow 가 만든다(정적 HTML 은 import map 만 고친다)
+    scriptSwitch: q('ttsScriptSwitch')   // `[8m]` 글자 체계로 문장마다 목소리 — 없으면(반쪽 캐시) 그리지 않는다
   };
   // 반쪽 캐시(옛 index.html + 새 JS) — 그릇이 없으면 조용히 물러난다. 던지지 않는다.
   if (!els.keyInput || !els.verifyBtn || !els.testBtn) { els = null; return; }
@@ -671,6 +672,12 @@ export function initSettingsScreen() {
   if (els.readCitations) {
     els.readCitations.addEventListener('change', () => {
       settings.set('tts.readCitations', !!els.readCitations.checked).catch(() => { });
+    });
+  }
+  // `[8m — spec 19-1-2 2-5]` 다음에 큐를 만들 때부터(speaker·readalong 이 큐를 만들 때마다 읽는다 — 재생을 건드리지 않는다).
+  if (els.scriptSwitch) {
+    els.scriptSwitch.addEventListener('change', () => {
+      settings.set('tts.scriptSwitch', !!els.scriptSwitch.checked).catch(() => { });
     });
   }
   if (els.voiceLangs) { els.voiceLangs.addEventListener('change', onVoicePick); els.voiceLangs.addEventListener('click', onVoicePick); }
@@ -784,6 +791,7 @@ function paintAll() {
   els.dailyCap.value = String(settings.get('ai.dailyCap'));
   els.onDevice.checked = settings.get('ai.useOnDevice') !== false;
   if (els.readCitations) els.readCitations.checked = settings.get('tts.readCitations') === true;
+  if (els.scriptSwitch) els.scriptSwitch.checked = settings.get('tts.scriptSwitch') !== false;
   renderReadalongRow(els.readalongHost);
   paintTarget();
   paintVoiceText();

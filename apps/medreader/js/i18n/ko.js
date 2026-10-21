@@ -192,6 +192,8 @@ export default {
   'reader.tts.repeat.statusEndless': '반복 중',
   'reader.tts.backToLine': '현재 줄로 돌아가기',
   'reader.tts.waitingPage': '다음 쪽 준비 중…',
+  // `[8m]` 문장별 전환 언어의 음성 실패 — 그 언어는 세션 동안 원서 언어로
+  'reader.tts.switchNoVoice': "{lang} 음성을 쓸 수 없어 그 문장들을 원서 언어 목소리로 읽습니다.",
   'reader.tts.noVoice':
     '이 기기에 {lang} 음성이 없습니다. 설정 > 시스템 > 언어 및 입력 > 텍스트 음성 변환 출력에서 Speech Services by Google 언어 팩을 설치하세요.',
   'reader.tts.notAllowed': '브라우저가 낭독을 막았습니다. 재생을 다시 누르세요.',
@@ -305,6 +307,9 @@ export default {
   /* `[8h-1 — spec 6-6-2]` 설정 낭독 묶음 — 인용 거르기 스위치 */
   'settings.tts.readCitations': "인용·참고문헌도 읽기",
   'settings.tts.readCitations.help': "저자·학술지·PMID 번호는 기본으로 건너뜁니다. 켜면 원서 언어로만 읽고 번역하지 않습니다.",
+  // `[8m — spec 19-1-2 2-5]` 글자 체계로 문장마다 목소리 바꾸기
+  'settings.tts.scriptSwitch': "글자를 보고 문장마다 목소리 바꾸기",
+  'settings.tts.scriptSwitch.help': "한국어·아랍어처럼 글자가 다른 문장은 그 언어 목소리로 읽습니다. 섞인 문장은 원서 언어로 읽고, 번역 언어와 같은 문장은 번역하지 않습니다.",
   /* `[8k — spec 19-1-2 3절]` 설정 > 낭독 목소리(언어 → 억양 → 이름). 성별은 표시하지 않는다(O-D7). */
   'settings.tts.voice.title': "낭독 목소리",
   'settings.tts.voice.phone': "휴대폰 설정 따름 (기본)",

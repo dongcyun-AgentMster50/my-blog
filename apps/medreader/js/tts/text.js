@@ -21,7 +21,9 @@
        src:     string,     // ★ 8a — normalizeSpeech 이전의 문장 원문(번역·캐시 키의 입력, 7-8-2)
        seg:     number|null,// ★ 8a — 쪽 안의 문장 번호(0부터). 조각들은 같은 seg. 표 안내·인용은 null
        kind:    string,     // ★ 8a — 문단 kind ('table-notice' 포함)
-       cite?:   true        // ★ 8h-1 — 인용·참고문헌 문장의 모든 조각(문장 모드만). 아니면 **속성 자체가 없다**
+       cite?:   true,       // ★ 8h-1 — 인용·참고문헌 문장의 모든 조각(문장 모드만). 아니면 **속성 자체가 없다**
+       lang?:   string      // ★ 8m — 문서 언어와 다른 글자 체계로 판별된 단위의 말할 언어('ko'·'ar'·'en').
+                            //   `scriptSwitch` 를 켰을 때만, 예외인 단위에만 둔다. 아니면 **속성 자체가 없다**
      }
    `part`/`parts` 가 있어야 "쪼개진 동안 하이라이트는 유지"(6-4)를 UI 가 안다.
 
@@ -54,6 +56,8 @@ import { joinPieces, localRange } from '../text/screen.js';
 import { markReferences } from '../text/cite.js';
 // `[8b-1]` 번역문 발화 텍스트의 괄호 판정은 화면(bdi 격리)과 **같은 함수**를 쓴다 — 규칙이 두 벌이 되지 않게.
 import { ltrRuns } from '../text/bidi.js';
+// `[8m — spec 19-1-2 2-2]` 문장별 글자 체계 판별 — 순수 모듈.
+import { unitLang } from '../text/lang.js';
 
 /** 7-8-2 — 표 안내 문단의 kind. 번역 입력에서 빠지고 문장 번호를 받지 않는다. */
 export const TABLE_NOTICE_KIND = 'table-notice';
@@ -228,8 +232,11 @@ export function trWatchdogMs(text, rate) {
  *
  * @param {Array} paras  `reader.flowParas()` — `[{id, kind, lines:[{id,text,hyphen}]}]`
  * @param {'sentence'|'line'} unit
- * @param {{lang?:string}} [opts] `[7c]` 원문 언어(`documents.lang`). 문장 분할 규칙과
+ * @param {{lang?:string, scriptSwitch?:boolean}} [opts] `[7c]` 원문 언어(`documents.lang`). 문장 분할 규칙과
  *   기호 표(`TTS_SYMBOLS`)를 고른다. **없거나 'en' 이면 지금까지와 한 글자도 다르지 않다.**
+ *   `[8m]` `scriptSwitch: true` 면 단위마다 글자 체계로 말할 언어를 판별해 예외인 단위에 `lang` 을 둔다
+ *   (`unitLangIn` — 한 곳). 주지 않으면(기본 끔) 8m 이전과 같다 — 켜고 끄는 것은 9-3 `tts.scriptSwitch` 를 읽는
+ *   호출자(speaker·readalong)의 몫이다.
  * @returns {Unit[]} 읽기 순서
  *
  * `'line'` 모드에서도 **하이픈으로 이어지는 줄들은 한 발화**다(6-1). 그래서
@@ -243,6 +250,7 @@ export function buildUnits(paras, unit, opts) {
   const mode = unit === 'line' ? 'line' : 'sentence';
   const lang = opts && typeof opts.lang === 'string' && opts.lang ? opts.lang : 'en';
   const symbols = symbolsFor(lang);
+  const sw = !!(opts && opts.scriptSwitch === true);
   const out = [];
   // ★ 8a — 쪽 안의 문장 번호. 실제로 발화가 나온 문장만 번호를 받는다(빈 문장은 건너뛴다).
   const seq = { next: 0 };
@@ -251,7 +259,10 @@ export function buildUnits(paras, unit, opts) {
     const para = list[p] || {};
     const lines = Array.isArray(para.lines) ? para.lines : [];
     if (!lines.length) continue;
-    const meta = { kind: para.kind ? String(para.kind) : 'body', seq: seq, symbols: symbols };
+    // `[8m]` 물려받기는 **문단 안에서만** — 문단마다 새 상태(본문·인용 meta 가 같은 것을 나눠 쓴다).
+    // 표 안내(UI 언어 문장 — speaker 가 UI 언어 음성으로 읽는다)는 판별하지 않는다.
+    const ls = sw && para.kind !== TABLE_NOTICE_KIND ? { doc: lang, last: null } : null;
+    const meta = { kind: para.kind ? String(para.kind) : 'body', seq: seq, symbols: symbols, ls: ls };
 
     if (mode === 'line') {
       let group = [];
@@ -274,7 +285,7 @@ export function buildUnits(paras, unit, opts) {
     // `[8h-1 — spec 6-6-2]` 인용·참고문헌 문장(A1 ∪ A2 ∪ `[8h-2]` A3). 표 안내는 판별하지 않는다. 같은 문단 안에서만 본다
     // — A3 의 "바로 다음 식별자"도 이 문단의 다음 문장만 본다(문단을 넘지 않는다).
     const cites = meta.kind === TABLE_NOTICE_KIND ? null : markReferences(sentences);
-    const citeMeta = { kind: meta.kind, seq: seq, symbols: symbols, cite: true };
+    const citeMeta = { kind: meta.kind, seq: seq, symbols: symbols, cite: true, ls: ls };
 
     // `splitSentences` 는 공백 하나로 정확히 되붙는다(그 함수의 계약). 그래서
     // 누적 길이로 각 문장이 원문의 어느 구간인지 되찾을 수 있다.
@@ -316,13 +327,15 @@ function emit(out, joined, paraId, from, to, meta) {
   const ids = [];
   for (let i = 0; i < joined.spans.length; i++) ids.push(joined.spans[i].id);
 
-  const spoken = normalizeSpeech(joined.text, meta && meta.symbols);
-  if (!spoken) return;
-
   // ★ 8a — `src` 는 정규화(기호 → 낱말)·300자 분할 **이전**의 문장 원문이다(7-8-2).
   //   문장 모드에서는 `splitSentences` 가 낸 그 문장 = `joinPieces` 결과의 [from, to) 구간.
   const kind = meta && meta.kind ? meta.kind : 'body';
   const src = String(joined.text).replace(/\s+/g, ' ').trim();
+  // ★ 8m — 말할 언어 예외. 기호 표도 그 언어 것으로(한국어 문장의 "%"를 영어 낱말로 읽지 않게).
+  const ul = meta && meta.ls ? unitLangIn(src, meta.ls) : null;
+
+  const spoken = normalizeSpeech(joined.text, ul ? symbolsFor(ul) : meta && meta.symbols);
+  if (!spoken) return;
   // ★ 8h-1 — 인용(`cite`)은 표 안내처럼 번호를 받지 않는다 → `sentencesOf`·번역 요청·창·readStats 에서 저절로 빠진다.
   const cite = !!(meta && meta.cite);
   let seg = null;
@@ -353,8 +366,25 @@ function emit(out, joined, paraId, from, to, meta) {
     };
     if (cite) u.cite = true;      // 아닌 단위에는 속성을 두지 않는다 — 8h 이전 큐와 JSON 이 같다(T-U)
     if (ranges) u.ranges = ranges;
+    if (ul) u.lang = ul;          // ★ 8m — 예외인 단위에만(300자 조각은 같은 src 라 같은 lang). 단일 언어 문서 큐 불변(T-L2)
     out.push(u);
   }
+}
+
+/**
+ * ★ `[8m — spec 19-1-2 2-3]` 단위의 말할 언어를 정하는 **한 곳**. 지금은 단위마다 전환한다.
+ * 실기기 전환 간격(spec 19-1-3 §4-3 M7 — Nour 결과 대기)이 1초를 넘으면 문단 묶음으로 바꾸는 자리가 여기다.
+ *   짧음(2글자 미만) → 같은 문단 앞 단위의 값을 물려받는다(없으면 문서 언어 — `null`)
+ *   섞임·문서 언어와 같음 → `null`(문서 목소리 — 운영자 결정 2026-10-21)
+ * @param {string} src
+ * @param {{doc:string, last:(string|null)}} ls 문단 상태(문단마다 새로)
+ * @returns {string|null}
+ */
+function unitLangIn(src, ls) {
+  const r = unitLang(src, ls.doc);
+  if (r.short) return ls.last;
+  ls.last = r.lang;
+  return r.lang;
 }
 
 /**
@@ -368,7 +398,8 @@ function emit(out, joined, paraId, from, to, meta) {
  *         null   — 그 밖. 한 문장뿐인 쪽이 둘 다에 해당하면 'head' 가 이긴다.
  *
  * @param {Unit[]} units 한 쪽의 낭독 큐
- * @returns {{seg:number, src:string, paraId:string|null, kind:string, frag:'head'|'tail'|null}[]} seg 오름차순
+ * @returns {{seg:number, src:string, paraId:string|null, kind:string, frag:'head'|'tail'|null, lang?:string}[]} seg 오름차순
+ *   `[8m]` `lang` 은 그 문장의 `Unit.lang` 이 있을 때만
  */
 export function sentencesOf(units) {
   const list = Array.isArray(units) ? units : [];
@@ -377,7 +408,9 @@ export function sentencesOf(units) {
     const u = list[i];
     if (!u || u.kind === TABLE_NOTICE_KIND || !Number.isInteger(u.seg)) continue;
     if (bySeg.has(u.seg)) continue;                       // 조각들 — 첫 조각이 대표
-    bySeg.set(u.seg, { seg: u.seg, src: String(u.src == null ? '' : u.src), paraId: u.paraId == null ? null : u.paraId, kind: u.kind || 'body', frag: null });
+    const item = { seg: u.seg, src: String(u.src == null ? '' : u.src), paraId: u.paraId == null ? null : u.paraId, kind: u.kind || 'body', frag: null };
+    if (typeof u.lang === 'string' && u.lang) item.lang = u.lang;   // ★ 8m — 있을 때만(번역 생략·`src` 항목 — spec 19-1-2 2-4)
+    bySeg.set(u.seg, item);
   }
   const out = Array.from(bySeg.values()).sort((a, b) => a.seg - b.seg);
   if (!out.length) return out;

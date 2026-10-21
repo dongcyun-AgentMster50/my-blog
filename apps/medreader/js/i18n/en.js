@@ -194,6 +194,8 @@ export default {
   'reader.tts.backToLine': 'Back to the current line',
   'reader.tts.waitingPage': 'Preparing the next page…',
   // 6-3 — 안내 문구는 spec 그대로. 기기 설정 경로를 그대로 적는다.
+  // `[8m]` 문장별 전환 언어의 음성 실패 — 그 언어는 세션 동안 원서 언어로
+  'reader.tts.switchNoVoice': "The {lang} voice is unavailable, so those sentences are read in the book's language voice.",
   'reader.tts.noVoice':
     'This device has no voice for {lang}. Install a language pack in Settings > System > Languages & input > Text-to-speech output > Speech Services by Google.',
   'reader.tts.notAllowed': 'The browser blocked read-aloud. Tap Play again.',
@@ -307,6 +309,9 @@ export default {
   /* `[8h-1 — spec 6-6-2]` 설정 낭독 묶음 — 인용 거르기 스위치 */
   'settings.tts.readCitations': "Also read citations and references",
   'settings.tts.readCitations.help': "Authors, journals and PMID numbers are skipped by default. When on, they are read in the book's language only and are not translated.",
+  // `[8m — spec 19-1-2 2-5]` 글자 체계로 문장마다 목소리 바꾸기
+  'settings.tts.scriptSwitch': "Switch voice by script, sentence by sentence",
+  'settings.tts.scriptSwitch.help': "Sentences in a different script, such as Korean or Arabic, are read in that language's voice. Mixed sentences use the book's language, and sentences already in your translation language are not translated.",
   /* `[8k — spec 19-1-2 3절]` 설정 > 낭독 목소리(언어 → 억양 → 이름). 성별은 표시하지 않는다(O-D7). */
   'settings.tts.voice.title': "Reading voice",
   'settings.tts.voice.phone': "Follow phone settings (default)",
