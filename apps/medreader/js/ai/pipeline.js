@@ -46,7 +46,7 @@ import * as realProvider from './provider.js';
 import { CODES, localDay, bumpUsage } from './provider.js';
 import { parseAIJson } from './jsonrepair.js';
 import {
-  buildTranslateRequest, checkTranslation, TRANSLATE_SCHEMA, PROMPT_VERSION, langName
+  buildTranslateRequest, checkTranslation, TRANSLATE_SCHEMA, PROMPT_VERSION, langName, normalizeDomain
 } from './prompts.js';
 import { keyFor, defaultCache } from './cache.js';
 import { exceedsRequestBudget } from './tokens.js';
@@ -267,7 +267,7 @@ export function createPipeline(deps) {
    * @returns {Promise<{state:string, text?:string, code?:string}[]>} 청크 순서대로
    */
   async function sendChunk(chunk, ctx) {
-    const req = buildTranslateRequest(chunk, { src: ctx.src, target: ctx.target });
+    const req = buildTranslateRequest(chunk, { src: ctx.src, target: ctx.target, domain: ctx.domain });
     const chars = chunk.reduce((n, it) => n + charCount(it.text), 0);
     const all = (state, code) => chunk.map(() => ({ state: state, code: code }));
 
@@ -435,7 +435,7 @@ export function createPipeline(deps) {
       }
     }
 
-    const chunks = chunksOf(items, { src: ctx.src, target: ctx.target });
+    const chunks = chunksOf(items, { src: ctx.src, target: ctx.target, domain: ctx.domain });
     for (let c = 0; c < chunks.length; c++) {
       const chunk = chunks[c];
       const g = await gate();
@@ -459,8 +459,10 @@ export function createPipeline(deps) {
    *
    * @param {({text:string, frag?:string}|string)[]} segments `text` = `Unit.src`(7-8-2)
    * @param {{src:string, target:string, kind?:'translate'|'readalong', docId:string,
-   *          retry?:boolean, signal?:AbortSignal}} opts
+   *          retry?:boolean, signal?:AbortSignal, domain?:string}} opts
    *   `retry` — 사용자의 [다시 시도]. 이 문장들의 "보냈다가 실패" 기록을 지우고 다시 보낸다.
+   *   `[8p]` `domain` — 문서의 번역 문체. 지시문에만 들어간다(**캐시 키에는 넣지 않는다** — L-D9 (가), 7-5).
+   *   진행 중인 같은 키의 요청은 그대로 공유한다(떠 있는 요청은 옛 문체 그대로 — 다음 요청부터).
    * @returns {Promise<{status:string, calls:number,
    *           results:{state:'ready'|'failed'|'blocked'|'skipped', text?:string, code?:string, cached?:boolean}[]}>}
    *   결과는 입력 순서와 같다. **던지지 않는다.**
@@ -518,6 +520,7 @@ export function createPipeline(deps) {
 
     const ctx = {
       src: src, target: target, kind: kind, docId: docId, signal: o.signal || null, calls: 0,
+      domain: normalizeDomain(o.domain),
       useOnDevice: getSetting('ai.useOnDevice') !== false
     };
     if (fresh.length) {

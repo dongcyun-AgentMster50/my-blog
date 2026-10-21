@@ -86,6 +86,10 @@ export default {
   'library.card.more': 'خيارات أخرى لهذا المستند',
   'library.lang.title': 'لغة النص الأصلي',
   'library.lang.hint': 'اللغة التي كُتب بها الكتاب. تُستخدم للقراءة بصوت عالٍ وللترجمة.',
+  /* `[8p]` 19-1-3 §7 — أسلوب الترجمة في [⋯] [검토 — Nour·운영자] */
+  'library.domain.title': 'أسلوب الترجمة',
+  'library.domain.medical': 'طبي',
+  'library.domain.general': 'عام',
   // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
   'library.reextract.title': 'إعادة استخراج النص',
   'library.reextract.hint': 'إذا بدت الفقرات مقطّعة أو عادت ترويسات الصفحات تُقرأ بصوت عالٍ، فأعِد تجهيز نص هذا الكتاب من البداية.',

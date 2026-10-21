@@ -2499,7 +2499,7 @@ RULES:
 
 사용자 메시지는 `작업 지시 + JSON 스키마 + <<<DOC … >>>`. 원문에 `<<<`, `>>>`가 있으면 전송 전 `‹‹‹`, `›››`로 치환한다(구분자 탈출).
 
-`promptVersion` 상수를 `prompts.js`에 두고 캐시 `extra`와 `questions.promptVersion`에 기록한다.
+`promptVersion` 상수를 `prompts.js`에 두고 캐시 **값**(`extra` — 키 아님)과 `questions.promptVersion`에 기록한다. `[정정 2026-10-21 — 8m Review L3]` 초판 문구 "캐시 `extra`" 는 키에 넣으라는 뜻으로 읽힐 수 있었다. 7-5 대로 `promptVersion` 은 **값에만** 기록하고 캐시 키(`kind|target|docId|hash(text)` — `ai/cache.js` `keyFor`)에는 넣지 않는다. 키에 넣으면 판을 올릴 때마다 캐시가 전부 무효가 된다.
 
 ### 10-2. 번역 `[수정 2026-09-28]`
 
@@ -4649,6 +4649,7 @@ scanVerdict(samples)                        # samples = [{ pageNo, chars, bad, i
 | 나중 | 11a 설명·11b 요약의 지시문도 같은 `domain` 을 받는다(그 단계 Plan 에서) |
 
 - 수용 기준(뼈대): `[N]` medical·없음 → 옛 문자열과 같음 · general → 용어 문장 없음·ROLE 한 곳만 다름·스키마 같음 · 캐시 키가 domain 과 무관 · `db.patch` 가 `domain` 만(P1 경합 꼴) · 변이: readalong 이 `domain` 을 넘기지 않으면 빨강. `[D]` [⋯] 네 UI 언어·RTL. `[M]` 운영자: 영어 교재 한 쪽을 일반·의학으로 각각 받아 비교(호출 2회 — 운영자 키). 크기 **작음**(`ai/prompts.js`·`ai/readalong.js`·탭 번역 호출부·`ui/library.js`·`db.js` 필드 목록·`i18n/*` ×4 키 3개). 한도 0(새 호출 없음).
+- `[정정 2026-10-21 — 8p Build]` (보고 `.claude/tasks/medreader-build-8p-report.md`) **구현**: `ai/prompts.js` — `DOMAINS`·`normalizeDomain`(`'general'` 만 일반, 없음·모르는 값은 `medical`)·`domainOf(rec)`·`TARGET_STYLE_GENERAL`·`GENERAL_STYLE_LINE`, `commonSystem(withNotes, domain)`(general 은 ROLE 한 줄만)·`translateInstruction(src, target, domain)`·`buildTranslateRequest(…, {src, target, domain})`. 아랍어 문체 머리 `Modern Standard Arabic (الفصحى).` 는 두 표가 한 조각(`AR_MSA`)을 쓴다 — 7b J3 "지시문 한 곳" 그대로. `PROMPT_VERSION` 2 → **3**(8m 이 먼저 2). `[시험 번역]`(`TEST_PROMPT`)은 그대로. **부르는 곳**: `pipeline.translate` 를 부르는 곳은 `readalong` 하나다(줄 탭은 낭독 이동 — 따로 번역을 부르지 않는다). 리더 `docDomain()` → `controls.syncReadalong`(재생·쪽 그리기마다) → `readalong.setDoc({…, domain})` → 보내는 순간의 `doc.domain`. `setDoc` 은 `domain` 만 바뀌면 메모리를 비우지 않는다(같은 키 · 받은 번역 그대로). `pipeline` 은 `domain` 을 지시문(`chunksOf`·`sendChunk`)에만 넘기고 `keyFor` 에는 넣지 않는다. 진행 중인 같은 키 요청은 공유 그대로(떠 있는 요청은 옛 문체). **데이터**: `ui/library.js` `DOMAIN_FIELDS = ['domain']`·`setDocDomain`(`db.patch`, 같은 값·모르는 값은 쓰지 않음) — `db.js` 는 고치지 않았다(`domain` 은 파생 필드가 아니라 `resetDerived` 가 남기고, 9c 백업은 레코드 통째). 바뀌면 `medreader:docdomain` — 열린 리더는 레코드 값만 고친다(큐·화면 그대로). **[⋯] 자리**: 원문 언어 단추 아래 · [텍스트 다시 추출] 위, 제목(h3) + `role=group` 단추 둘(`aria-pressed`), 문구 `library.domain.title/medical/general` ×4(ar·fr `[검토 — Nour·운영자]`). 새 문서는 `domain` 을 쓰지 않는다(자동 추정 없음). **이 표와 다른 점**: ① **캐시 값에 `domain` 을 기록하지 않았다** — `ai/cache.js` `putMany` 가 적을 필드를 골라 쓰고 8p 수정 범위 밖이다(남은 일, 한 줄). ② 일반 문체는 지시문이 짧아 `chunksOf` 의 토큰 상한 판정이 청크 경계를 1–2항목 옮길 수 있다(실측: 해커스 bulls eye ko→ar 9요청 중 4개, 요청 수·캐시 키 같음).
 
 #### 8. 8g-6 — 검색: CJK·한국어 조사 (F7)
 

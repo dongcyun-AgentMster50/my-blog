@@ -70,7 +70,7 @@ test('S1 성공 — 번역이 입력 순서대로 오고 캐시에 provider·mod
   assert.equal(rec.result, '«' + SENTS[0] + '»');
   assert.equal(rec.provider, 'gemini');
   assert.equal(rec.model, 'gemini-3.5-flash-lite');
-  assert.equal(rec.promptVersion, 2);   // `[8m]` 2 — 항목 `src` 한 줄(prompts.js PROMPT_VERSION)
+  assert.equal(rec.promptVersion, 3);   // `[8m]` 2 — 항목 `src` 한 줄 · `[8p]` 3 — 번역 문체 domain(prompts.js PROMPT_VERSION)
   // 요청: 키는 헤더로만, 문장은 DOC 안에, 언어는 이름으로.
   const init = fetch.calls[0].init;
   assert.ok(!fetch.calls[0].url.includes(FAKE_KEY));

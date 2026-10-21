@@ -90,6 +90,10 @@ export default {
   'library.card.more': 'Autres options pour ce document',
   'library.lang.title': 'Langue d’origine',
   'library.lang.hint': 'La langue dans laquelle le livre est écrit. Sert à la lecture à voix haute et à la traduction.',
+  /* `[8p]` 19-1-3 §7 — style de traduction dans [⋯] [검토 — Nour·운영자] */
+  'library.domain.title': 'Style de traduction',
+  'library.domain.medical': 'Médical',
+  'library.domain.general': 'Général',
   // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
   'library.reextract.title': 'Réextraire le texte',
   'library.reextract.hint': 'Si des paragraphes semblent coupés ou si les en-têtes de page sont de nouveau lus à voix haute, préparez à nouveau le texte de ce livre depuis le début.',

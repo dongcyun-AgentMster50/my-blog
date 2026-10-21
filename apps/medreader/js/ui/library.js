@@ -53,6 +53,8 @@ import {
   probePages, countItems, imageCheckPages, scanVerdict, scanRecord, needsScan, badgeKey,
   imageOpIds, textOpIds, countOps, SCAN_FIELDS
 } from '../text/scan.js';
+// `[8p — spec 19-1-3 §7]` 번역 문체(`documents.domain`) — 값 해석은 순수 `ai/prompts.js` 한 곳.
+import { DOMAINS, domainOf } from '../ai/prompts.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -280,6 +282,27 @@ function langPanel(doc, panelId) {
   panel.appendChild(choices);
   paintLangChoices(panel, doc);
 
+  // `[8p — spec 19-1-3 §7]` 번역 문체: 의학 / 일반 — 원문 언어 줄 아래 한 줄. 기본값을 자동으로 고르지 않는다(L-D4).
+  const dm = el('div', 'doc-domain');
+  const dmTitleId = panelId + '-d';
+  const dh = el('h3', 'doc-lang-title', t('library.domain.title'));
+  dh.id = dmTitleId;
+  dm.appendChild(dh);
+  const dchoices = el('div', 'doc-lang-choices doc-domain-choices');
+  dchoices.setAttribute('role', 'group');
+  dchoices.setAttribute('aria-labelledby', dmTitleId);
+  for (let i = 0; i < DOMAINS.length; i++) {
+    const code = DOMAINS[i];
+    const b = el('button', null, t('library.domain.' + code));
+    b.type = 'button';
+    b.setAttribute('data-action', 'set-domain');
+    b.setAttribute('data-domain', code);
+    dchoices.appendChild(b);
+  }
+  dm.appendChild(dchoices);
+  panel.appendChild(dm);
+  paintDomainChoices(panel, doc);
+
   // `[배포 안전장치]` 9-4 [텍스트 다시 추출] — 같은 [⋯] 패널, 같은 위임(`data-action`).
   const rx = el('div', 'doc-reextract');
   rx.appendChild(el('h3', 'doc-lang-title', t('library.reextract.title')));
@@ -297,6 +320,15 @@ function paintLangChoices(panel, doc) {
   const btns = panel.querySelectorAll('button[data-lang]');
   for (let i = 0; i < btns.length; i++) {
     btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-lang') === lang ? 'true' : 'false');
+  }
+}
+
+/** `[8p]` 번역 문체 단추의 눌림 — 레코드에 없으면 `medical`. */
+function paintDomainChoices(panel, doc) {
+  const d = domainOf(doc);
+  const btns = panel.querySelectorAll('button[data-domain]');
+  for (let i = 0; i < btns.length; i++) {
+    btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-domain') === d ? 'true' : 'false');
   }
 }
 
@@ -743,6 +775,44 @@ async function setUserLang(docId, lang) {
   announceLang(res.rec, res.changed);
 }
 
+/* ── `[8p — spec 19-1-3 §7]` 번역 문체 ───────────────────── */
+
+/** `[8p]` 번역 문체 쓰기가 맡은 필드(7c `LANG_FIELDS` 꼴 — `db.patch` 로 자기 필드만). */
+export const DOMAIN_FIELDS = Object.freeze(['domain']);
+
+/**
+ * `[8p]` 번역 문체 저장 — **한 트랜잭션 안에서 읽고** `domain` 만 합친다(P1 경합 꼴). 값이 같으면 쓰지 않는다.
+ * 캐시 키는 바뀌지 않는다(L-D9 (가)) — 받은 번역은 그대로, 다음 요청부터 새 문체.
+ * @param {string} docId
+ * @param {string} domain `'medical'`|`'general'`(그 밖은 쓰지 않는다)
+ * @param {{patch:Function}} [dbx] 테스트 주입(기본 `db.js`)
+ * @returns {Promise<{wrote:boolean, rec:Object|null}>}
+ */
+export async function setDocDomain(docId, domain, dbx) {
+  const d = dbx || db;
+  if (DOMAINS.indexOf(domain) < 0) return { wrote: false, rec: null };
+  return d.patch('documents', docId, (cur) => {
+    if (cur.domain === domain) return null;
+    const part = {};
+    for (const f of DOMAIN_FIELDS) part[f] = domain;
+    return part;
+  });
+}
+
+/** `[8p]` [⋯] 에서 고른 번역 문체 — 저장하고 카드를 고치고 열린 리더에 알린다. */
+async function setUserDomain(docId, domain) {
+  const res = await setDocDomain(docId, domain);
+  if (!res.wrote || !res.rec) return;
+  if (els && els.list) {
+    const card = els.list.querySelector('[data-doc-id="' + cssEscape(res.rec.id) + '"]');
+    const panel = card && card.querySelector('.doc-lang-panel');
+    if (panel) paintDomainChoices(panel, res.rec);
+  }
+  document.dispatchEvent(new CustomEvent('medreader:docdomain', {
+    detail: { docId: res.rec.id, domain: domainOf(res.rec) }
+  }));
+}
+
 /** 서재·리더가 문서를 열 때. 이미 추출기가 붙어 있으면 그것을 쓴다. */
 export async function openDoc(docId) {
   // 다시 추출이 옛 추출기를 내리고 새것을 붙이는 사이에 열면, 여기서 따로 추출기를 만들어
@@ -935,6 +1005,15 @@ async function onListClick(ev) {
   if (btn.getAttribute('data-action') === 'set-lang') {
     try {
       await setUserLang(docId, btn.getAttribute('data-lang'));
+    } catch (e) {
+      banner(e);
+    }
+    return;
+  }
+
+  if (btn.getAttribute('data-action') === 'set-domain') {
+    try {
+      await setUserDomain(docId, btn.getAttribute('data-domain'));
     } catch (e) {
       banner(e);
     }

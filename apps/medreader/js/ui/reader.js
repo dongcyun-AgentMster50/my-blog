@@ -53,6 +53,7 @@ import { initControls, leaveControls, speechState } from './controls.js';
 import { updateReaderChip, onQuizEntry } from './quiz.js';
 import { TTS, ORIGINAL } from '../config.js';
 import { docLangOf } from '../text/lang.js';
+import { domainOf } from '../ai/prompts.js';
 import * as render from '../pdf/render.js';
 import * as charhl from './charhl.js';
 import * as original from './original.js';
@@ -617,6 +618,8 @@ export function initReader() {
 
   // 7c — 열린 문서의 **원문** 언어가 바뀌었다(서재 [⋯] 또는 자동 추정).
   document.addEventListener('medreader:doclang', (ev) => onDocLang(ev.detail || {}));
+  // `[8p]` 열린 문서의 번역 문체가 바뀌었다(서재 [⋯]) — 레코드 값만 고친다. 큐·화면은 그대로(다음 요청부터).
+  document.addEventListener('medreader:docdomain', (ev) => onDocDomain(ev.detail || {}));
 
   // `[8l]` 스캔본·깨짐 판정이 막 저장됐다(가져온 직후 — 리더가 이미 열려 있다) · 띠의 두 단추.
   document.addEventListener('medreader:docscan', (ev) => onDocScan(ev.detail || {}));
@@ -686,6 +689,18 @@ function onDocLang(d) {
  * 원문 음성(`controls.applySourceSpeech` → `resolveSpeech(sourceLang(), …)`)·낭독 큐의 언어가 이것을 읽는다.
  */
 export function sourceLang() { return docLangOf(state.doc); }
+
+/**
+ * `[8p — spec 19-1-3 §7]` 지금 열린 문서의 번역 문체(`documents.domain`, 없으면 `'medical'`).
+ * 낭독 동반 번역(`controls.syncReadalong` → `readalong.setDoc`)이 읽어 요청 지시문에 넘긴다.
+ */
+export function docDomain() { return domainOf(state.doc); }
+
+/** `[8p]` 번역 문체 변경 — 레코드 값만. 쪽을 다시 그리거나 큐를 갈지 않는다(글자·낭독 단위는 그대로다). */
+function onDocDomain(d) {
+  if (!d || d.docId == null || String(d.docId) !== String(state.docId) || !state.doc) return;
+  state.doc = Object.assign({}, state.doc, { domain: domainOf(d) });
+}
 
 function onAnyScroll() {
   if (!els || els.root.hidden) return;

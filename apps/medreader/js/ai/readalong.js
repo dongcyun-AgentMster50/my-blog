@@ -146,7 +146,7 @@ export function createReadalong(deps) {
   const bus = new EventTarget();
 
   /* ── 문서 ─────────────────────────────────────────── */
-  let doc = { id: null, lang: '', target: '', pageCount: 0 };
+  let doc = { id: null, lang: '', target: '', pageCount: 0, domain: undefined };
   let docGen = 0;                       // 문서가 바뀌면 늦게 온 응답을 버린다
   let mem = new Map();                  // srcKey → {state, text?, code?}
   let stream = new Map();               // page → sentence[] | 'unextracted'
@@ -359,7 +359,8 @@ export function createReadalong(deps) {
     let r = null;
     try {
       r = await pipeline.translate(list.map((s) => (s.lang ? { text: s.src, frag: s.frag, src: s.lang } : { text: s.src, frag: s.frag })), {
-        src: doc.lang, target: doc.target, kind: 'readalong', docId: doc.id, retry: !!o.retry
+        src: doc.lang, target: doc.target, kind: 'readalong', docId: doc.id, retry: !!o.retry,
+        domain: doc.domain              // `[8p]` 보내는 순간의 문서 문체 — 바꾸면 다음 요청부터
       });
     } catch (e) {
       r = null;
@@ -446,12 +447,15 @@ export function createReadalong(deps) {
 
   /**
    * 문서·언어를 정한다. 문서나 대상 언어가 바뀌면 메모리를 비운다(늦게 온 응답은 버린다).
-   * @param {{docId:string, lang:string, target:string, pageCount?:number, readStats?:{pages:number, chars:number}}} o
+   * `[8p]` `domain`(문서의 번역 문체)만 바뀌면 메모리를 비우지 않는다 — 캐시 키가 같고(L-D9 (가)) 받은 번역은
+   * 그대로 쓴다. **다음 요청부터** 새 문체로 보낸다(떠 있는 요청은 그대로).
+   * @param {{docId:string, lang:string, target:string, pageCount?:number, domain?:string,
+   *          readStats?:{pages:number, chars:number}}} o
    */
   function setDoc(o) {
     const x = o || {};
     const next = { id: x.docId == null ? null : String(x.docId), lang: String(x.lang || ''), target: String(x.target || ''),
-      pageCount: Number(x.pageCount) || 0 };
+      pageCount: Number(x.pageCount) || 0, domain: typeof x.domain === 'string' && x.domain ? x.domain : undefined };
     const same = next.id === doc.id && next.lang === doc.lang && next.target === doc.target;
     doc = next;
     if (same) return;

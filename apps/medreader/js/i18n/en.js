@@ -91,6 +91,10 @@ export default {
   'library.card.more': 'More options for this document',
   'library.lang.title': 'Source language',
   'library.lang.hint': 'The language the book is written in. Used for reading aloud and translation.',
+  /* `[8p]` 19-1-3 §7 — library [⋯] translation style (document `domain`) */
+  'library.domain.title': 'Translation style',
+  'library.domain.medical': 'Medical',
+  'library.domain.general': 'General',
   // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
   'library.reextract.title': 'Re-extract text',
   'library.reextract.hint': 'If paragraphs look broken or page headers are read aloud again, prepare this book’s text again from the start.',

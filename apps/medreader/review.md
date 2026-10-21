@@ -7326,3 +7326,192 @@ stamp 테스트(IM2·IM6·IM7b)는 앱 파일이 바뀌면 늘 빨갛다. 아래
 5. 다음 묶음 후보(모두 낮음):
    - N1 테스트 세 줄
    - 번역문 발화 속 꼴(남은 문제 4) — 실기기에서 들리면
+
+# 8p Review — 번역 문체: 문서 속성 `domain`(F6 · L-D4 · L-D9 (가)) · 배포 판정 (2026-10-21)
+
+검증자: Review 서브에이전트(Build 와 분리). 기준 `baa358c`(HEAD) 대 작업 트리. 스크래치 `r8p/`(HEAD 사본 `r8p/head/` = `git archive baa358c`). 앱·테스트·spec 은 고치지 않았다. 이 절만 덧붙였다.
+
+## 8pR-1. 결론 — **통과** · 배포 판정 — **배포해도 된다**
+
+- Nour 의 의학 번역은 1바이트도 바뀌지 않는다. 지시문·요청 본문·캐시 키·청크 경계가 HEAD 와 같다. HEAD 가 채운 캐시로 다시 읽으면 재요청 0.
+- 캐시 키는 `domain` 을 모른다. 일반으로 바꿔도 옛 번역이 그대로 맞는다.
+- 일반 지시문은 system 첫 줄(ROLE)과 user 첫 줄(작업 지시)만 다르다. 안전 규칙 1–6·스키마·토큰 상한은 같다.
+- 배포를 막는 문제는 없다. 낮은 항목 4개(8pR-8).
+
+## 8pR-2. 의학 번역 무변 (반드시 따질 것 1)
+
+**지시문 문자열** — `r8p/strings.mjs`(HEAD `prompts.js` 와 현재를 직접 import)
+- 비교 28,455건, **다름 0**.
+  - 대상: `commonSystem(withNotes 5종, domain 20종)`, `translateInstruction`·`buildTranslateRequest`(언어 11종 × 11종 × domain 20종 × 항목 묶음 5종 — `frag`·`src`·`<<<`·빈 배열 포함).
+  - domain 20종: 없음·`null`·`''`·`'medical'`·대소문자 바꾼 값·앞뒤 공백 붙은 `' general'`·모르는 값·숫자·불리언·객체·배열·`toString` 이 `'general'` 인 객체 등. `'general'` 그 글자 하나만 일반이다.
+- 그대로인 상수: `LANG_NAMES`·`TARGET_STYLE`·`TERM_EXAMPLES`·`SRC_LINE`·`TRANSLATE_SCHEMA`·`TEST_PROMPT`([시험 번역]).
+- `AR_MSA` 조각으로 나눈 `TARGET_STYLE.ar` 도 글자가 같다.
+
+**실제 요청·캐시** — `r8p/books.mjs`(8m Review 방식, 스크립트는 새로 씀)
+- 구성: 실제 `readalong` + 실제 `pipeline` + fetch 흉내. 네 판을 따로 돌렸다.
+  - HEAD
+  - 현재 · `setDoc` 에 domain 없음
+  - 현재 · `'medical'`
+  - 현재 · `'general'`
+- 표본: 의학책 3권 × 대상 ar·ko. 45쪽부터 고르게 15–16쪽(Build 와 다른 표본).
+
+| 책 | 대상 | 요청 H/없음/의학/일반 | 본문 H=없음=의학 | 키 수 · 네 판 같음 | 청크 경계 H=없음=일반 | 판 값 H / 현재 | 일반 차이 자리 | HEAD 캐시로 재요청(없음 / 일반) · 일반 캐시로 의학 |
+|---|---|---|---|---|---|---|---|---|
+| CMDT 2026 | ar | 14 ×4 | 같음(124,854B) | 734 · 같음 | 같음 | 2 / 3 | sys0·task0 | **0 / 0 · 0** |
+| CMDT 2026 | ko | 14 ×4 | 같음 | 734 · 같음 | 같음 | 2 / 3 | sys0·task0 | 0 / 0 · 0 |
+| CMDT 2021 | ar | 6 ×4 | 같음(47,204B) | 235 · 같음 | 같음 | 2 / 3 | sys0·task0 | 0 / 0 · 0 |
+| CMDT 2021 | ko | 6 ×4 | 같음 | 235 · 같음 | 같음 | 2 / 3 | sys0·task0 | 0 / 0 · 0 |
+| Harrison | ar | 12 ×4 | 같음(105,450B) | 599 · 같음 | 같음 | 2 / 3 | sys0·task0 | 0 / 0 · 0 |
+| Harrison | ko | 12 ×4 | 같음 | 599 · 같음 | 같음 | 2 / 3 | sys0·task0 | 0 / 0 · 0 |
+
+- 일반 요청에 "Medical terminology" 0, 일반 ROLE 이 모든 요청에.
+- 캐시를 쓴 뒤에도 키 목록이 그대로였다.
+- 의학책 표본에서는 일반 문체도 청크 경계가 같았다. Build 가 해커스에서 본 1–2항목 이동(남은 문제 2)은 일반에서만 생긴다. 지시문이 짧아져 한 요청에 더 담기는 쪽이라 요청 수가 늘지 않는다.
+
+**브라우저**(8pR-6) — CMDT 2026 40쪽(필드 없음): 요청 2건의 system 이 HEAD `commonSystem(true)` 와 **글자 하나까지 같았다**(2/2).
+
+## 8pR-3. 캐시 키 불변 (반드시 따질 것 2)
+
+- 코드
+  - `ai/cache.js` 는 고치지 않았다. `keyFor(docId, text, target, kind, extra)` 그대로.
+  - `pipeline.translate` 의 `keyFor(docId, s.text, target, kind)` 에 domain 이 없다.
+  - domain 은 `ctx.domain` 으로 `chunksOf`·`sendChunk` 의 `buildTranslateRequest` 에만 간다.
+  - 캐시 레코드를 고르는 `putMany` 는 domain 을 적지 않는다(남은 문제 1).
+- 실측: 위 표의 "네 판 같음"·재요청 0·역방향(일반이 채운 캐시를 의학으로 읽음) 0.
+- 브라우저: 일반으로 바꾼 뒤 같은 쪽을 다시 읽었다. 첫 번역 3개가 나올 때까지 요청 0, 이미 보낸 문장의 재요청 0.
+- 진행 중 공유(`inflight`)도 키로만 묶인다. 떠 있는 의학 요청을 일반 요청이 함께 기다리면 그 문장은 의학 문체로 온다. "떠 있는 요청은 그대로"(spec §7)와 같다.
+
+## 8pR-4. 일반 지시문 (반드시 따질 것 3)
+
+**차이 자리** — 언어 쌍 8개 × 항목 묶음 3종 모두 같았다.
+- system 은 0번 줄만 다르다: "inside a medical textbook reader" → "inside a book reader". 1–8번 줄(RULES·규칙 1–6)은 같다.
+- user 는 0번 줄(작업 지시)만 다르다.
+  - "Medical terminology: …(e.g. …). Write the translation in {의학 문체}" 대신 `GENERAL_STYLE_LINE` + "Write the translation in {일반 문체}".
+  - 일반 문체 표: ar 는 MSA 한 마디, ko 는 "natural, standard Korean.".
+  - en·fr 대상은 표에 없어 문체 문장이 없다. 의학도 같다.
+- 그대로인 것: `SRC_LINE`·스키마 줄·DOC, `maxOutputTokens`(215/224 같음)·`temperature`·`json`.
+
+**안전 규칙** — 규칙 1–6 이 글자 그대로다. 13절 의료 안전 경계는 일반 문체에서도 유지된다.
+- 치료 프로토콜·용량 권고 금지
+- DOC 밖 의학 사실 금지
+- 개인정보 [REDACTED]
+
+**문안 의견** (운영자 검토용 — 배포를 막지 않음)
+1. 일반 교재에 쓰기에 무리가 없다. 의학 용어 괄호 병기가 빠져 어학 교재의 군더더기가 줄어든다.
+2. `keep proper nouns as written` 에 규칙 5 "Preserve … exactly as written" 이 더해진다. 그래서 ko 대상에서 영어 인명·지명을 **로마자 그대로** 둘 수 있다.
+   - 어학 교재에는 오히려 좋다.
+   - 소설·잡지라면 한국어 관례(음역, 처음에 원어 괄호)와 다르다.
+   - `[M]` 실키 비교 때 이 점을 함께 보면 좋다.
+3. 규칙 3–5 의 "medical" 낱말은 일반 책에서도 해가 없다. 안전 경계를 일반에서도 지키는 것이 맞다.
+
+## 8pR-5. spec 10-1 정정 (반드시 따질 것 4)
+
+- 뜻은 7-5·코드와 맞는다. `PROMPT_VERSION` 은 `pipeline.js` 두 곳(398·428)에서 캐시 **값** `promptVersion` 에만 적힌다. 키에는 없고, 앱 어디서도 읽어 비교하지 않는다.
+- **L1(낮음, 문서만)**: 정정 문구 "캐시 **값**(`extra` — 키 아님)" 의 `extra` 는 7-5 에서는 **키의 일부**다. `cacheKey(…, extra)` 가 `|extra` 를 키에 붙인다.
+  - 그래서 괄호가 오히려 헷갈린다. "캐시 값의 `promptVersion` 필드" 로 쓰는 편이 정확하다.
+  - 7-5 의 `extra: … 퀴즈는 'n=5|v=프롬프트버전'` 은 판을 **키에** 넣는 예외다. AI 퀴즈(10-4)는 아직 구현 전이라 지금 충돌은 없다. 10-4 Plan 에서 정리하면 된다.
+
+## 8pR-6. headless Edge (412×915 · ko→ar·en·fr · 새 프로필 `r8p/p1` · 포트 9358 · 가짜 키 · 흉내 응답)
+
+`r8p/hl.mjs` → `r8p/hl.json`, 스크린샷 `r8p/shots/`. 콘솔 오류 0. 가로 넘침 0(412/412, 네 UI 언어 모두).
+
+| 단계 | 결과 |
+|---|---|
+| 1. CMDT 2026 40쪽(필드 없음) | 요청 2건(43항목): 의학 ROLE·용어 문장 2/2, system 이 HEAD 와 같음 2/2. 띠 `ar · rtl · ready`, 원문 en-US·번역 ar-SA |
+| 2. [⋯] ko | 순서: 원문 언어 → **번역 문체** → 다시 추출. 제목 h3 "번역 문체" + `role=group` `aria-labelledby` 이어짐. 단추 169×48 둘, 필드 없는 문서는 "의학" `aria-pressed=true`. [일반] → DB `domain:'general'`, 눌림 갱신, 알림 1번. 같은 값 다시 → 알림 0. 모르는 값(단추를 `surgery` 로 꾸밈) → 알림 0, DB 그대로. 다른 필드(`lang`·`langSource`·`scan` 등 22개)는 그대로 |
+| 3. 같은 쪽 다시(일반) | 첫 번역 3개까지 요청 0(캐시 적중). 더 읽어 나간 새 요청 1건(55항목): 일반 ROLE·`Translate naturally…`, 용어 문장 0, 규칙 1–6 같음, 재전송 0 |
+| 4. 다시 [의학] → 43쪽 | 새 요청 2건: system 이 HEAD 와 같음 2/2, 용어 문장 2/2, 재전송 0 |
+| 5. UI ar·en·fr | ar: `أسلوب الترجمة`·`طبي`/`عام`, html·패널 rtl, 단추 순서 뒤집힘(의학이 오른쪽). en "Translation style · Medical/General", fr "Style de traduction · Médical/Général" |
+| 6. 회귀 해커스 DM plus B2(일반) 2쪽 | 요청 2건 모두 일반, `src` 항목 11·SRC 줄 있음(8m). 전환 어긋남 0. 언어 분포 ko-KR 42·en-US 11·ar-SA 2(8o 때와 거의 같음). 빈칸 꼴 4개는 발화 0(8o), 낱말 blank 2·빈칸 13 |
+| 7. 회귀 8k · 8i-3 | 목소리 고르기 en_GB → `en-GB|urn:en_GB`. 쪽 넘김 60→61 en-US |
+
+- 바깥 요청: pdf.js CDN(기존)과 가로챈 Gemini 뿐이다.
+- 관찰(L2): 필드가 없는 문서(화면엔 이미 "의학" 눌림)에서 [의학]을 누르면 `domain:'medical'` 을 **적고** 알림을 낸다.
+  - `setDocDomain` 은 `cur.domain === domain` 으로 글자 비교를 하기 때문이다. 정규화한 값으로 비교하지 않는다.
+  - 뜻은 같아서 요청·캐시에 영향이 없다. "같은 값은 쓰지 않는다"를 엄격히 읽으면 어긋난다.
+
+## 8pR-7. 테스트의 힘 — 내 변이 6개(`r8p/mutate.mjs`, Build M1–M6 과 겹치지 않게)
+
+- 실행 범위: `domain-8p`·`prompts-8a`·`pipeline-8a`·`mixlang-8m`(67개).
+- 복원: 백업 `r8p/bak/` 에서 읽어서 쓰기. 6/6 모두 `Buffer.compare` 와 `cmp` 가 같았다.
+- 처음 두 번은 테스트 경로 기준이 틀려(cwd) 테스트가 돌지 않았다. 그 결과는 버리고 세 번째 결과만 쓴다.
+
+| # | 변이 | 결과 |
+|---|---|---|
+| R1 | `sendChunk` 가 domain 을 빼고 요청(`chunksOf` 는 그대로) | 빨강 P8-4 |
+| R2 | `setDoc` 이 같은 문서면 새 값을 받지 않음(중간 변경 무시) | 빨강 P8-6 |
+| R3 | `setDocDomain` 이 트랜잭션 밖에서 읽은 옛 레코드로 덮음(P1 경합) | 빨강 P8-7 |
+| R4 | 리더 `onDocDomain` 이 `state.doc` 을 고치지 않음 | **초록(살아남음)** |
+| R5 | `normalizeDomain` 이 대소문자·공백 무시 | 빨강 P8-1·P8-3 |
+| R6 | 일반 지시문에서 "Write the translation in …" 빠짐 | 빨강 P8-2·P8-4 |
+
+- R4 판정 — **사용자 영향 없음, 테스트 공백(L3)**.
+  - `showReader` 는 리더로 올 때마다 `db.get('documents')` 로 `state.doc` 을 다시 읽는다. 숨겼다 다시 보일 때(`reshowReader`)도 그렇다.
+  - `saveLastPage` 도 patch 결과로 `state.doc` 을 바꾼다.
+  - 그래서 지금 경로에서는 서재에서 바꾼 값이 다음 리더 진입 때 들어간다(8pR-6 단계 3이 실증).
+  - `onDocDomain` 은 "리더가 열린 채 다른 길로 바뀌는" 미래 경로용 보험이다. P8-8 은 리스너가 **있는지**만 본다.
+- 흔들림(P8-6 조건 대기):
+  - `domain-8p` 단독 10회 10/10 초록.
+  - 동시 6개 × 3회(부하) 18/18 초록.
+  - 전체 2회 초록.
+  - 안정적이다.
+
+## 8pR-8. 새로 찾은 것 (모두 낮음 · 배포를 막지 않음)
+
+- **L1** spec 10-1 정정 문구의 "(`extra` — 키 아님)" 은 7-5 용어와 어긋난다. 7-5 의 퀴즈 키 `v=프롬프트버전` 은 남은 예외다(8pR-5).
+- **L2** 필드 없는 문서에서 [의학]을 누르면 `domain:'medical'` 을 적고 알림을 낸다(뜻은 같음). 고치려면 `normalizeDomain(cur.domain) === domain` 비교 한 줄.
+- **L3** R4 살아남음 — 리더 `onDocDomain` 의 효과를 보는 테스트가 없다. 지금은 경로가 없어 무해하다.
+- **L4** spec §7·L-D9 의 "원하면 기존 [다시 생성]" 이 가리키는 단추는 앱에 **없다**(grep 0, 7-5·3190행도 "다시 생성" 만 말함).
+  - 일반으로 바꾼 뒤 이미 받은 의학 문체 번역을 다시 받는 길은 지금 두 가지뿐이다.
+    - 설정의 "AI 캐시 전체 지우기"(모든 책)
+    - 문서 지우고 다시 가져오기
+  - 운영자가 어학 교재를 **처음 열 때** 일반으로 정하면 문제가 없다(L-D9 근거와 같음). 운영자 안내 한 줄이면 된다.
+- 참고: 9c 백업은 아직 구현 전이다. Build 의 "9c 백업에 저절로" 는 spec 설계상 그렇다는 뜻으로 읽었다.
+- `resetDerived`(다시 추출)의 `derivedDocReset` 에 domain 이 없다. 그래서 다시 추출해도 문체가 남는다.
+
+## 8pR-9. Build 남은 문제 1–4 판정
+
+1. **캐시 값에 domain 기록(진단) 미구현** → **지금 넣지 않아도 된다. 다음 다듬기 묶음에 넣기를 권한다.**
+   - 읽는 코드가 없는 진단 필드라 지금 빠져도 동작·비용 손해가 없다.
+   - 나중에 넣을 때의 손해는 "그 사이 캐시엔 기록이 없다" 하나다.
+     - `promptVersion` 으로 가를 수 없다(의학·일반 모두 3).
+     - 그 사이 일반 캐시는 운영자의 어학 교재뿐이다. 그 문서의 현재 `domain` 으로 거의 추정된다.
+   - 다만 8p 를 배포하면 운영자가 곧 교재를 일반으로 바꿀 것이라 기록 없는 창이 바로 생긴다. 미래에 "문체가 다른 캐시만 다시 받기"를 만들 생각이면 이른 편이 낫다.
+   - 크기: `cache.js` `putMany` 레코드 한 줄 + pipeline 두 `entries` 에 `domain: ctx.domain` + 테스트(키 불변 유지 확인).
+2. **일반에서 청크 경계 1–2항목 이동** — 일반에만 생기고 요청 수가 늘지 않는다. 키도 같다. 의학책 표본에선 이동 0. 기록만으로 충분.
+3. **문안·ar·fr 문구 검토** — 운영자·Nour 몫(8pR-4 의견 2).
+4. **열린 리더 + 다른 길의 변경 경로 없음** — 맞다. R4 판정과 같다.
+
+## 8pR-10. 전체 테스트 · stamp · 정리
+
+**검사**
+- 전체 `node --test apps/medreader/tests/*.test.mjs` **1347/1347 × 2회**(변이·복원 뒤). fail 0.
+- `stamp-importmap --check` "그대로다(모듈 59개 · CSS 4개)" 종료 0(시작·끝).
+- `git diff --check` 깨끗. `.nojekyll` 있음(0바이트).
+- 작업 트리 변경은 Build 의 15파일 + 새 테스트 그대로다(변이 흔적 없음).
+
+**프로세스**
+- 8000번 python(PID 30352)은 쓰고 켜 두었다.
+- 8123(PID 47028)·8124(PID 55092)는 건드리지 않았다. 8125 는 LISTEN 이 없었다.
+- 내가 띄운 Edge(`r8p/p1`, 9358)는 `browser.close()` 로 닫았다. 남은 msedge 0, 포트 닫힘, 내 node 0.
+- 프로필 `r8p/p1` 은 `rm -rf` 금지라 남겼다.
+- G:·D:/OCR 은 읽기만 했다(해커스 PDF 를 브라우저로 올림).
+
+## 8pR-11. 배포 판정 · 운영자 몫
+
+1. **배포해도 된다.**
+   - Nour 문서(필드 없음 = 의학)의 요청은 HEAD 와 바이트까지 같다.
+   - 이미 받은 번역은 문체를 바꿔도 그대로 쓰인다(무료 한도 재사용 없음).
+2. 커밋할 것
+   - Build 보고 1절의 앱 파일: `index.html`·`css/screens.css`·`js/ai/{prompts,pipeline,readalong}.js`·`js/ui/{library,reader,controls}.js`·`js/i18n/*` ×4
+   - `spec.md`
+   - 테스트: `tests/domain-8p.test.mjs`(새)·`mixlang-8m`·`pipeline-8a`
+   - 이 review.md
+   - 관례대로 `.claude/tasks/medreader-*-8p*.md`(build·report·review)
+3. 커밋하지 않을 것: `.codex/`·`AGENTS.md`(`git add -A` 금지). `.nojekyll` 그대로.
+4. 운영자 결정이 필요한 것
+   - 일반 문안(`GENERAL_STYLE_LINE`·`TARGET_STYLE_GENERAL`·ROLE) 승인. 특히 ko 대상 고유명사를 로마자로 둘지(8pR-4 의견 2). `[M]` 실키 비교(교재 한 쪽 의학·일반, 호출 2회)로 보면 된다.
+   - ar·fr 새 문구 3개 `[검토 — Nour·운영자]`: `library.domain.title/medical/general`.
+   - 캐시 값 domain 기록(남은 문제 1)을 다음 다듬기에 넣을지.
+   - L4: 어학 교재는 처음 열 때 [⋯]에서 일반으로 정하도록 운영자 안내. 나중에 바꾸면 옛 번역은 의학 문체로 남는다.
+5. 다음 묶음 후보(모두 낮음): L1 spec 10-1 문구, L2 정규화 비교 한 줄, L3 리더 `onDocDomain` 테스트 한 줄, 남은 문제 1.

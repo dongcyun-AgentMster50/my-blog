@@ -23,7 +23,7 @@ import { createSpeaker, CODES } from '../tts/speaker.js';
 import { sharedVoiceWatch, resolveSpeech, speechPref, languageVoices } from '../tts/voices.js';
 import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
-  onLineTap, onPageRender, sourceLang, loadFlowParas, flowLineIds,
+  onLineTap, onPageRender, sourceLang, docDomain, loadFlowParas, flowLineIds,
   // `[8i-1]` 판 바뀜 재추출 중 지금 쪽을 새 판으로(spec 4-13-9)
   setSpeechState, currentPageReady, whenCurrentPageReady, remapLineId, setCurrentLines,
   // `[8l]` 스캔본 문서의 ▶ 갈래(spec 17-5-1 3)
@@ -562,7 +562,8 @@ function syncReadalong() {
     pipeline.configChanged('key');
   }
   lastConfigFp = fp;
-  readalong.setDoc({ docId: page.docId, lang: src, target: target, pageCount: page.pageCount });
+  // `[8p]` 문서의 번역 문체 — 재생·쪽 그리기마다 다시 읽는다. 바뀌었으면 readalong 이 다음 요청부터 쓴다.
+  readalong.setDoc({ docId: page.docId, lang: src, target: target, pageCount: page.pageCount, domain: docDomain() });
   const em = readalong.setContext({
     mode: st.mode,
     consented: !!settings.get('privacy.consentedAt'),

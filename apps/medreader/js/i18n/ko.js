@@ -90,6 +90,10 @@ export default {
   'library.card.more': '이 문서의 다른 설정',
   'library.lang.title': '원문 언어',
   'library.lang.hint': '책이 쓰인 언어입니다. 소리 내어 읽기와 번역에 쓰입니다.',
+  /* `[8p]` 19-1-3 §7 — 서재 [⋯] 번역 문체(문서 속성 `domain`) */
+  'library.domain.title': '번역 문체',
+  'library.domain.medical': '의학',
+  'library.domain.general': '일반',
   // [배포 안전장치] 9-4 [텍스트 다시 추출] — 서재 [⋯] 패널과 확인 대화상자
   'library.reextract.title': '텍스트 다시 추출',
   'library.reextract.hint': '문단이 이상하게 끊기거나 쪽 머리말이 다시 소리 내어 읽히면, 이 책의 텍스트를 처음부터 다시 준비합니다.',

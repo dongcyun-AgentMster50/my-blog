@@ -417,7 +417,7 @@ test('T-L7 buildTranslateRequest — src 는 문서 언어와 다르고 이름�
   const a = mix.user.indexOf('<<<DOC\n');
   const items = JSON.parse(mix.user.slice(a + 7, mix.user.lastIndexOf('\n>>>')));
   assert.deepEqual(items, [{ i: 0, text: EN1 }, { i: 1, text: KO1, src: 'ko' }]);
-  assert.equal(PROMPT_VERSION, 2);
+  assert.ok(PROMPT_VERSION >= 2);   // `[8p]` 3 — 번역 문체(domain). 8m 이 올린 판 이상
 });
 
 test('T-L7 실제 파이프라인 — 요청 본문의 항목 src · 기기 내 번역은 src 없는 항목만(같은 언어 쌍)', async () => {

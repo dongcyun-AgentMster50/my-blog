@@ -26,9 +26,27 @@ import { estimateTokens } from './tokens.js';
  * 10-1 — 프롬프트 판본. 캐시 값(`aiCache.promptVersion`)에 기록한다(키에는 넣지 않는다 — 7-5).
  * 지시문·스키마를 바꾸면 올린다. 옛 번역은 그대로 유효하다(재호출을 유발하지 않는다).
  */
-export const PROMPT_VERSION = 2;   // `[8m]` 2 — 항목 `src`(문서 언어와 다른 원문 언어) 한 줄
+export const PROMPT_VERSION = 3;   // `[8m]` 2 — 항목 `src` 한 줄 · `[8p]` 3 — 번역 문체 `domain`(general 지시문)
 /** 지침 표기(`promptVersion`)와 같은 값. */
 export const promptVersion = PROMPT_VERSION;
+
+/* ────────────────────────────────────────────────────────
+   `[8p — spec 19-1-3 §7 · L-D4 · L-D9]` 번역 문체 — 문서 속성 `domain`(문서 스토어 레코드의 필드)
+   ──────────────────────────────────────────────────────── */
+
+/** 번역 문체의 값. 레코드에 없거나 모르는 값이면 `medical`(Nour 문서 전부 그대로). */
+export const DOMAINS = Object.freeze(['medical', 'general']);
+export const DEFAULT_DOMAIN = 'medical';
+
+/** 값 → `'medical'`|`'general'`. `'general'` 만 일반이다(없음·빈 값·모르는 값은 의학). */
+export function normalizeDomain(v) {
+  return v === 'general' ? 'general' : DEFAULT_DOMAIN;
+}
+
+/** 문서 레코드의 번역 문체(필드 `domain`, 없으면 `medical`). */
+export function domainOf(rec) {
+  return normalizeDomain(rec && rec.domain);
+}
 
 /** 10-1 — 언어 코드 → 지시문에 넣을 영어 이름. 없는 코드면 요청을 만들지 않는다. */
 export const LANG_NAMES = Object.freeze({
@@ -57,8 +75,11 @@ export function langName(code) {
    ──────────────────────────────────────────────────────── */
 
 /** 대상 언어의 문체 지시. 표에 없는 대상 언어는 빈 문자열. */
+/** `[8p]` 아랍어 문체 머리 — 의학·일반 두 표가 같은 조각을 쓴다(문자열은 8p 이전과 같다). */
+const AR_MSA = 'Modern Standard Arabic (الفصحى).';
+
 export const TARGET_STYLE = Object.freeze({
-  ar: 'Modern Standard Arabic (الفصحى). Use standard Arabic medical terminology.',
+  ar: AR_MSA + ' Use standard Arabic medical terminology.',
   ko: 'Korean. Use standard Korean medical terminology.'
 });
 
@@ -67,6 +88,15 @@ export const TERM_EXAMPLES = Object.freeze({
   ar: 'التهاب المفاصل الروماتويدي (rheumatoid arthritis)',
   ko: '류마티스 관절염(rheumatoid arthritis)'
 });
+
+/** `[8p]` 일반 문체(`domain: 'general'`)의 대상 언어 문체 지시. 표에 없는 대상 언어는 빈 문자열. `[문안 검토 — 운영자]` */
+export const TARGET_STYLE_GENERAL = Object.freeze({
+  ar: AR_MSA,
+  ko: 'natural, standard Korean.'
+});
+
+/** `[8p]` 일반 문체에서 "Medical terminology: …" 문장 대신 들어가는 문장. `[문안 검토 — 운영자]` */
+export const GENERAL_STYLE_LINE = 'Translate naturally and faithfully; keep proper nouns as written; do not add explanations.';
 
 /* ────────────────────────────────────────────────────────
    10-1 공통 골격
@@ -87,12 +117,18 @@ const RULE_TAIL = [
   ' 6. Never include personal data. If the DOC seems to contain real patient identifiers, replace them with [REDACTED] in your output.'
 ];
 
+/** `[8p]` 일반 문체의 ROLE — 의학 ROLE 과 "medical textbook reader" → "book reader" 한 곳만 다르다. */
+const ROLE_GENERAL = 'ROLE: You are a language assistant inside a book reader used for EDUCATION ONLY.';
+
 /**
  * 10-1 고정 블록. `withNotes` 면 규칙 4 에 "notes 필드" 문장을 붙인다 —
  * 스키마에 `notes` 가 있을 때만(10-2 번역은 있다, [시험 번역]은 없다).
+ * `[8p]` `domain === 'general'` 이면 ROLE 줄 하나만 바꾼다(안전 규칙 1–6 그대로).
+ * 그 밖(없음·`medical`)은 8p 이전과 글자 하나 다르지 않다.
  */
-export function commonSystem(withNotes) {
-  return RULE_LINES.concat([RULE_4 + (withNotes ? RULE_4_NOTES : '')], RULE_TAIL).join('\n');
+export function commonSystem(withNotes, domain) {
+  const head = normalizeDomain(domain) === 'general' ? [ROLE_GENERAL].concat(RULE_LINES.slice(1)) : RULE_LINES;
+  return head.concat([RULE_4 + (withNotes ? RULE_4_NOTES : '')], RULE_TAIL).join('\n');
 }
 
 /**
@@ -170,18 +206,25 @@ export const TRANSLATE_SCHEMA = Object.freeze({
 
 /**
  * 10-2 작업 지시. 언어는 이름으로만 들어간다. 대상 언어의 문체 지시·용어 예시는 표에 있을 때만.
+ * `[8p]` `domain` — 없음·`medical` 이면 8p 이전 문자열 그대로. `general` 이면 용어 문장 대신
+ * `GENERAL_STYLE_LINE`, 문체 표는 `TARGET_STYLE_GENERAL`(용어 예시 없음).
  * @returns {string|null} 언어 이름을 모르면 `null`
  */
-export function translateInstruction(srcLang, targetLang) {
+export function translateInstruction(srcLang, targetLang, domain) {
   const src = langName(srcLang);
   const tgt = langName(targetLang);
   if (!src || !tgt) return null;
-  const ex = TERM_EXAMPLES[targetLang] ? ' (e.g. ' + TERM_EXAMPLES[targetLang] + ')' : '';
-  const style = TARGET_STYLE[targetLang] ? ' Write the translation in ' + TARGET_STYLE[targetLang] : '';
-  return 'Translate each segment from ' + src + ' into ' + tgt + '. ' +
+  const head = 'Translate each segment from ' + src + ' into ' + tgt + '. ' +
     'Keep segment count and order; output exactly one item per input `i`. ' +
     'Segments marked `frag` are incomplete pieces of a sentence that continues on the previous/next page — ' +
-    'translate the piece as it is, do not complete it. ' +
+    'translate the piece as it is, do not complete it. ';
+  if (normalizeDomain(domain) === 'general') {
+    const gstyle = TARGET_STYLE_GENERAL[targetLang] ? ' Write the translation in ' + TARGET_STYLE_GENERAL[targetLang] : '';
+    return head + GENERAL_STYLE_LINE + gstyle;
+  }
+  const ex = TERM_EXAMPLES[targetLang] ? ' (e.g. ' + TERM_EXAMPLES[targetLang] + ')' : '';
+  const style = TARGET_STYLE[targetLang] ? ' Write the translation in ' + TARGET_STYLE[targetLang] : '';
+  return head +
     'Medical terminology: give the standard ' + tgt + ' term and keep the original ' + src +
     ' term in parentheses on first occurrence in a segment' + ex + '.' + style;
 }
@@ -195,14 +238,16 @@ export const SRC_LINE = 'A segment with a `src` language code is written in that
  * @param {{text:string, frag?:'head'|'tail'|null, src?:string|null}[]} segments `text` = `Unit.src`
  *   `[8m]` `src` — 그 항목의 원문 언어가 문서 언어(`langs.src`)와 다를 때만(spec 19-1-2 2-4). 항목에 코드를 붙이고
  *   지시문에 한 줄(`SRC_LINE`)을 더한다. `src` 항목이 없는 요청은 8m 이전과 글자 하나 다르지 않다.
- * @param {{src:string, target:string}} langs
+ * @param {{src:string, target:string, domain?:string}} langs
+ *   `[8p]` `domain` — 문서 레코드의 번역 문체(`domain`). 없음·`medical` 이면 요청이 8p 이전과 같다.
+ *   `general` 이면 system 의 ROLE 한 줄과 작업 지시의 용어·문체 문장만 다르다(스키마·DOC 같음).
  * @returns {{system:string, user:string, json:true, schema:Object,
  *            maxOutputTokens:number, temperature:number}|null} 언어를 모르거나 문장이 없으면 `null`
  */
 export function buildTranslateRequest(segments, langs) {
   const list = Array.isArray(segments) ? segments : [];
   const l = langs || {};
-  const task = translateInstruction(l.src, l.target);
+  const task = translateInstruction(l.src, l.target, l.domain);
   if (!task || !list.length) return null;
 
   const items = [];
@@ -219,7 +264,7 @@ export function buildTranslateRequest(segments, langs) {
   }
 
   return {
-    system: commonSystem(true),
+    system: commonSystem(true, l.domain),
     user: task + '\n' + (anySrc ? SRC_LINE + '\n' : '') +
       'Schema: {"segments": [{"i": number, "t": string}], "notes": string}\n' +
       '<<<DOC\n' + JSON.stringify(items) + '\n>>>',
