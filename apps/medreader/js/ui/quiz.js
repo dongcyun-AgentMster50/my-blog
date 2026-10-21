@@ -29,7 +29,7 @@ import { parserVersion } from '../quiz/parser.js';
 import * as render from '../pdf/render.js';
 import * as charhl from './charhl.js';
 import { createSpeaker } from '../tts/speaker.js';
-import { loadVoices, pickVoice } from '../tts/voices.js';
+import { loadVoices, resolveSpeech, speechPref } from '../tts/voices.js';
 import { openDoc, extractorFor } from './library.js';
 
 /* ────────────────────────────────────────────────────────
@@ -874,14 +874,29 @@ function ensureSpeaker() {
   speaker.addEventListener('error', () => paintSpeakButton(false));
   speaker.setRate(settings.get('tts.rate'));
   speaker.setUnit(settings.get('tts.unit') === 'line' ? 'line' : 'sentence');
+  // `[8k]` 음성 목록이 오기 전에도 같은 규칙(고른 것이 없으면 voice 없이 태그만 — 휴대폰 설정 따름).
+  applyQuizSpeech(speaker, [], settings.get);
   loadVoices(synth, TTS.VOICES_TIMEOUT_MS).then((list) => {
-    const v = pickVoice('en', list, settings.get('tts.voice.en'));
-    if (v && speaker) {
-      speaker.setVoice('en', v);
-      speaker.setDocLang(String(v.lang || 'en-US').replace(/_/g, '-'));
-    }
+    quizVoices = Array.isArray(list) ? list : [];
+    if (speaker) applyQuizSpeech(speaker, quizVoices, settings.get);
   }).catch(() => { /* 음성 목록 실패는 낭독만 못 할 뿐이다 */ });
   return speaker;
+}
+
+/** `[8k]` 퀴즈 해설 낭독이 쓰는 음성 목록(한 번 읽어 둔다). */
+let quizVoices = [];
+/** 해설은 영어다(9b) — 해설 언어. */
+const QUIZ_SPEECH_LANG = 'en';
+
+/**
+ * `[8k — spec 19-1-2 3절 3]` 퀴즈 낭독도 원문·번역문·표 안내와 **같은 해석 함수** `resolveSpeech` 를 쓴다.
+ * 고른 것이 없으면 voice 를 지우고(`setVoice(…, null)`) 태그만 — 휴대폰 설정 따름. speaker 를 받는다(테스트가 잰다).
+ */
+export function applyQuizSpeech(sp, list, get) {
+  const r = resolveSpeech(QUIZ_SPEECH_LANG, list, speechPref(get, QUIZ_SPEECH_LANG));
+  sp.setVoice(QUIZ_SPEECH_LANG, r.voice);
+  sp.setDocLang(r.tag);
+  return r;
 }
 
 function toggleSpeak(text, btn) {
@@ -889,6 +904,7 @@ function toggleSpeak(text, btn) {
   if (!sp) return;
   speakBtn = btn;
   if (sp.getState() === 'speaking') { sp.stop(); paintSpeakButton(false); return; }
+  applyQuizSpeech(sp, quizVoices, settings.get);     // `[8k]` 설정에서 목소리를 바꿨을 수 있다 — 누를 때마다
   speakParas = [{
     id: 'quiz-explanation',
     kind: 'body',

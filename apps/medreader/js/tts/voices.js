@@ -280,6 +280,174 @@ export function speechLang(lang, voice) {
   return utteranceLang(l || undefined, null);
 }
 
+/* ────────────────────────────────────────────────────────
+   `[8k — spec 19-1-1 E1 (가) · 19-1-2 3절 O3]` 낭독 목소리 해석 — **휴대폰 설정 따름**이 기본
+
+   Nour 실기기(Realme, 2026-10-21): 목록이 알파벳 순이라 옛 규칙(`pickVoice` — 기기 내장 음성 먼저)이 영어를
+   `en_AU`, 프랑스어를 `fr_CA` 로 읽었다. 페이지는 Android 의 TTS 설정을 읽을 수 없지만 **voice 를 지정하지 않고
+   `lang` 만 주면 엔진(= 휴대폰 설정)이 고른다.** 그래서 고른 것이 없으면 voice 없이 태그만 준다.
+
+   원문·번역문·표 안내·퀴즈 네 경로(그리고 8m 문장별 언어)가 **`resolveSpeech` 하나**를 쓴다. 옛 `pickVoice` 는
+   목록 유무 판정(`voiceVerdict`·`availability`)과 진단 페이지의 "이전 규칙" 비교용으로만 남는다.
+
+   ★ Android 의 `voice.lang` 은 `en_AU`·`zh_HK_#Hans`·`bs_BA_#Latn` 꼴이다(Locale.toString — 밑줄 + `#스크립트`).
+     `parseVoiceLang` 이 BCP 47(`zh-Hans-HK`)로 바꾼다. **억양 묶음은 지역(region)만으로** 짓는다 — 스크립트는 글자
+     체계이지 발음이 아니고, 엔진은 언어 + 지역으로 그 지역 목소리를 찾는다. 같은 지역의 `#Hans`·`#Hant` 음성은
+     한 묶음에 들어가고, 목소리를 직접 고르면 그 음성 자신의 태그(스크립트 포함)를 쓴다.
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 고른 것이 없을 때의 동작 — **설정 한 곳.** Nour 점검표 2 (다) 결과가 E1 (가)와 다르면 여기만 바꾼다.
+ *   voice: 'phone' = voice 미지정(휴대폰 TTS 설정이 목소리를 고름 — E1 (가)) · 'pick' = 이전 규칙(`pickVoice`, E1 (나))
+ *   tag:   'region' = 언어별 기본 지역 태그(`READALONG.TR_LANG_REGION` → `TTS_LANG_REGION`) · 'bare' = 지역 없는 언어 코드
+ */
+export const SPEECH_DEFAULT = Object.freeze({ voice: 'phone', tag: 'region' });
+
+/**
+ * `voice.lang` 을 BCP 47 조각으로. `en_AU` → en-AU, `zh_HK_#Hans` → zh-Hans-HK, `sr-Latn-RS` 그대로,
+ * `en-us-x-sfg` → en-US(사설 꼬리 버림). 언어가 없으면 `lang: ''`.
+ * @returns {{lang:string, script:string, region:string, tag:string}}
+ */
+export function parseVoiceLang(raw) {
+  const parts = String(raw == null ? '' : raw).trim().split(/[-_]+/).filter(Boolean);
+  let lang = '';
+  let script = '';
+  let region = '';
+  for (let i = 0; i < parts.length; i++) {
+    let p = parts[i];
+    if (i === 0) {
+      if (!/^[A-Za-z]{2,8}$/.test(p)) break;
+      lang = p.toLowerCase();
+      continue;
+    }
+    if (/^x$/i.test(p)) break;                           // 사설 꼬리(-x-…)는 보지 않는다
+    if (p.charAt(0) === '#') p = p.slice(1);             // Android 의 `#Hans`
+    if (!script && /^[A-Za-z]{4}$/.test(p)) { script = p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); continue; }
+    if (!region && (/^[A-Za-z]{2}$/.test(p) || /^[0-9]{3}$/.test(p))) { region = p.toUpperCase(); continue; }
+  }
+  const tag = lang ? [lang, script, region].filter(Boolean).join('-') : '';
+  return { lang: lang, script: script, region: region, tag: tag };
+}
+
+/** 그 언어의 음성들(목록 순서 그대로). `voiceMatches` 와 같은 기준. */
+export function languageVoices(lang, voices) {
+  const list = Array.isArray(voices) ? voices : [];
+  return list.filter(function (v) { return voiceMatches(v, lang); });
+}
+
+/** 언어 코드만(`en-GB` → en). */
+function baseLang(lang) { return parseVoiceLang(lang).lang; }
+
+/** 고른 것이 없을 때의 태그(`SPEECH_DEFAULT.tag`). */
+export function defaultSpeechTag(lang, policy) {
+  const l = baseLang(lang) || 'en';
+  const pol = policy || SPEECH_DEFAULT;
+  if (pol.tag === 'bare') return l;
+  if (Object.prototype.hasOwnProperty.call(READALONG.TR_LANG_REGION, l)) return READALONG.TR_LANG_REGION[l];
+  if (Object.prototype.hasOwnProperty.call(TTS_LANG_REGION, l)) return TTS_LANG_REGION[l];
+  return l;
+}
+
+/** 음성 자신의 태그(BCP 47). */
+export function voiceTag(voice) { return parseVoiceLang(voice && voice.lang).tag; }
+
+/**
+ * 억양(지역) 값 정규화 — 그 언어의 `언어-지역` 이 아니면 ''. 저장값·묶음 머리 줄이 같은 꼴을 쓴다.
+ * `en_GB`·`en-gb` → en-GB, `fr-CA` 를 en 으로 → ''.
+ */
+export function normalizeAccent(accent, lang) {
+  const a = parseVoiceLang(accent);
+  if (!a.lang || !a.region) return '';
+  if (lang && a.lang !== baseLang(lang)) return '';
+  return a.lang + '-' + a.region;
+}
+
+/** 설정값 두 개를 읽는다 — `get` 은 `settings.get` 같은 것. */
+export function speechPref(get, lang) {
+  const l = baseLang(lang);
+  const g = typeof get === 'function' ? get : function () { return ''; };
+  const uri = g('tts.voice.' + l);
+  const accent = g('tts.accent.' + l);
+  return { uri: typeof uri === 'string' ? uri : '', accent: typeof accent === 'string' ? accent : '' };
+}
+
+/**
+ * **해석 함수 하나** (spec 19-1-2 3절 3). 다섯 갈래:
+ *   ① uri 가 목록에 있다           → { voice: 그 음성, tag: 그 음성의 태그, via:'voice' }
+ *   ② uri 가 사라졌고 accent 가 있다 → { voice: null, tag: accent, via:'accent', missing:true }
+ *   ③ accent 만                     → { voice: null, tag: accent, via:'accent' }
+ *   ④ 둘 다 없다                    → { voice: null, tag: 기본 태그, via:'phone' }   ← 휴대폰 설정 따름
+ *   ⑤ 목록이 비었다                 → uri 는 찾을 수 없다 — ②·④ 와 같이 voice 없이(아랍어: 목록 0개여도 ar-SA 로 소리 남)
+ * `missing` = uri 를 저장했는데 지금 목록에 없다(설정 화면이 "사라짐"을 보인다 — 낭독은 조용히 물러선다).
+ * accent 는 목록으로 거르지 않는다 — 태그일 뿐이고, 목록이 늦게 오는 동안에도 같은 소리를 내야 한다.
+ *
+ * @param {string} lang  'en' 같은 언어 코드
+ * @param {Array} voices `getVoices()` 목록
+ * @param {{uri?:string, accent?:string}} [pref]
+ * @param {{voice:string, tag:string}} [policy] 시험용 — 기본 `SPEECH_DEFAULT`
+ * @returns {{voice:?SpeechSynthesisVoice, tag:string, via:'voice'|'accent'|'phone'|'pick', missing:boolean}}
+ */
+export function resolveSpeech(lang, voices, pref, policy) {
+  const l = baseLang(lang) || 'en';
+  const p = pref || {};
+  const uri = typeof p.uri === 'string' ? p.uri : '';
+  const accent = normalizeAccent(p.accent, l);
+  const mine = languageVoices(l, voices);
+  if (uri) {
+    for (let i = 0; i < mine.length; i++) {
+      if (mine[i] && mine[i].voiceURI === uri) {
+        return { voice: mine[i], tag: voiceTag(mine[i]) || defaultSpeechTag(l, policy), via: 'voice', missing: false };
+      }
+    }
+  }
+  const missing = !!uri;
+  if (accent) return { voice: null, tag: accent, via: 'accent', missing: missing };
+  const pol = policy || SPEECH_DEFAULT;
+  if (pol.voice === 'pick') {
+    const v = pickVoice(l, mine);
+    if (v) return { voice: v, tag: voiceTag(v) || defaultSpeechTag(l, pol), via: 'pick', missing: missing };
+  }
+  return { voice: null, tag: defaultSpeechTag(l, pol), via: 'phone', missing: missing };
+}
+
+/**
+ * 억양 묶음 — **목록에 있는 음성의 지역에서만** 만든다(코드에 지역을 박지 않는다). 목록 순서를 지키고,
+ * 묶음은 처음 나온 순서. 지역이 없는 음성(`ko` 처럼)은 `region: ''` 묶음 하나(머리 줄은 고를 수 없다 — 억양이 아니다).
+ * @returns {Array<{region:string, accent:string, voices:Array}>}
+ */
+export function accentGroups(lang, voices) {
+  const out = [];
+  const byKey = new Map();
+  const mine = languageVoices(lang, voices);
+  for (let i = 0; i < mine.length; i++) {
+    const pl = parseVoiceLang(mine[i].lang);
+    const key = pl.region;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { region: key, accent: key ? pl.lang + '-' + key : '', voices: [] };
+      byKey.set(key, g);
+      out.push(g);
+    }
+    g.voices.push(mine[i]);
+  }
+  // 지역 없는 묶음은 맨 뒤로(머리 줄이 선택지가 아니다).
+  out.sort(function (a, b) { return (a.region ? 0 : 1) - (b.region ? 0 : 1); });
+  return out;
+}
+
+/** 지역 이름 — `Intl.DisplayNames(UI 언어, {type:'region'})`, 없으면 지역 코드 그대로. */
+export function regionName(region, uiLang) {
+  const r = String(region || '');
+  if (!r) return '';
+  try {
+    if (typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function') {
+      const n = new Intl.DisplayNames([uiLang || 'en'], { type: 'region' }).of(r);
+      if (n) return n;
+    }
+  } catch (e) { /* 모르는 코드 — 코드 그대로 */ }
+  return r;
+}
+
 /**
  * `[8b-1]` 발화 오류 중 "이 언어를 말할 수 없다"로 볼 것(SpeechSynthesisErrorEvent.error).
  * 그 밖의 오류(`audio-busy`·`network`·`text-too-long` 등)는 그 발화 하나의 문제다.

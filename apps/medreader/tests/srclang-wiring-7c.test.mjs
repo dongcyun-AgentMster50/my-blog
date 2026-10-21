@@ -57,9 +57,14 @@ test('W2 ★ controls — 원문 음성은 sourceLang() 으로 고르고, 쪽 �
   const body = code.match(/function syncSourceVoice\(\)\s*\{([\s\S]*?)\n\}/);
   assert.ok(body, 'syncSourceVoice 가 있다');
   assert.match(body[1], /const lang = sourceLang\(\)/);
-  assert.match(body[1], /pickVoice\(lang,/);
-  assert.match(body[1], /speaker\.setVoice\(lang,/);
-  assert.match(body[1], /speaker\.setDocLang\(utteranceLang\(lang,/);
+  // `[8k]` 고르기는 resolveSpeech(applySourceSpeech) — setVoice·setDocLang 은 그 함수 안(voice-8k.test.mjs 가 실제 speaker 로 잰다).
+  assert.match(body[1], /applySourceSpeech\(speaker, lang,/);
+  assert.ok(!/pickVoice\(/.test(body[1]), '원문 경로가 옛 pickVoice 를 쓰지 않는다');
+  const apply = code.match(/export function applySourceSpeech\([^)]*\)\s*\{([\s\S]*?)\n\}/);
+  assert.ok(apply, 'applySourceSpeech 가 있다');
+  assert.match(apply[1], /resolveSpeech\(lang,/);
+  assert.match(apply[1], /sp\.setVoice\(lang, r\.voice\)/);
+  assert.match(apply[1], /sp\.setDocLang\(r\.tag\)/);
   // 순서 — 음성을 먼저, 큐를 나중에(새 큐가 새 언어로 나뉘도록).
   assert.match(code, /onPageRender\(\(\) => \{\s*syncSourceVoice\(\);\s*speaker\.reload\(\);/);
   // 음성 목록을 읽은 뒤에도 다시 고른다.

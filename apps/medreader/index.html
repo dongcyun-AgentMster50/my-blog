@@ -53,7 +53,7 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=a82917db4d">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=d3176b6d99">
+<link rel="stylesheet" href="css/screens.css?v=66674e830a">
 <link rel="stylesheet" href="css/reader.css?v=66e77095f1">
 <script type="importmap">
 {
@@ -70,11 +70,11 @@
     "./js/config.js": "./js/config.js?v=7611555c1d",
     "./js/db.js": "./js/db.js?v=726d46e5c0",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=8f49fdd365",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=7bc28807e7",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=f1e6d8f5ff",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=e35ff7829d",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=d255c44e11",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=1f3d5fa652",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=f4cb3a1a0e",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=6af1b2130a",
     "./js/main.js": "./js/main.js?v=b9706d4835",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -86,7 +86,7 @@
     "./js/router.js": "./js/router.js?v=936e01879d",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
-    "./js/settings.js": "./js/settings.js?v=5dfc747cd4",
+    "./js/settings.js": "./js/settings.js?v=0e32bb675d",
     "./js/text/bidi.js": "./js/text/bidi.js?v=2bda7b28c4",
     "./js/text/blocks.js": "./js/text/blocks.js?v=d1928663d6",
     "./js/text/cite.js": "./js/text/cite.js?v=259bcf49ea",
@@ -101,20 +101,20 @@
     "./js/text/search.js": "./js/text/search.js?v=0c59056516",
     "./js/text/segment.js": "./js/text/segment.js?v=09707527bd",
     "./js/text/store.js": "./js/text/store.js?v=0e6752a027",
-    "./js/tts/speaker.js": "./js/tts/speaker.js?v=5239cfa97d",
+    "./js/tts/speaker.js": "./js/tts/speaker.js?v=79563b2120",
     "./js/tts/text.js": "./js/tts/text.js?v=1e07c9c45e",
-    "./js/tts/voices.js": "./js/tts/voices.js?v=2cfb48af51",
+    "./js/tts/voices.js": "./js/tts/voices.js?v=67fb29c15a",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=389ac5d979",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=3dba20edc8",
     "./js/ui/library.js": "./js/ui/library.js?v=3982f04e8c",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=a9b1f7c3f5",
-    "./js/ui/quiz.js": "./js/ui/quiz.js?v=63bb06c544",
+    "./js/ui/quiz.js": "./js/ui/quiz.js?v=d691cc4887",
     "./js/ui/reader.js": "./js/ui/reader.js?v=4618661690",
     "./js/ui/search.js": "./js/ui/search.js?v=4a50cc7230",
-    "./js/ui/settings.js": "./js/ui/settings.js?v=38e8cefc6c",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=86844046ea",
     "./js/ui/trband.js": "./js/ui/trband.js?v=2574e1bf06",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=9df6aeb8cd"
   }
@@ -732,6 +732,14 @@
       <button type="button" class="link" id="aiVoiceHowTo" data-action="voice-howto" aria-expanded="false"
               aria-controls="aiVoiceHowToBody" hidden data-i18n="settings.readalong.voice.howTo"></button>
       <p class="muted" id="aiVoiceHowToBody" hidden></p>
+    </div>
+
+    <!-- `[8k]` 낭독 목소리 — 언어 → 억양(지역) → 목소리 이름(spec 19-1-2 3절). 목록은 기기 음성에서 `js/ui/settings.js` 가 그린다.
+         기본은 "휴대폰 설정 따름"(voice 지정 없이 lang 만). 성별은 표시하지 않고 안내 한 줄만. -->
+    <div class="card settings-card" id="settingsVoices">
+      <h2 data-i18n="settings.tts.voice.title"></h2>
+      <div class="voice-langs" id="ttsVoiceLangs"></div>
+      <p class="muted" id="ttsVoiceHint" data-i18n="settings.tts.voiceHint"></p>
     </div>
   </section>
 

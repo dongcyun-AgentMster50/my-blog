@@ -14,19 +14,24 @@
 
   ★ 무엇을 보나 (점검표 2 — Nour 가 결과를 복사해 보낸다)
     · 이 기기 브라우저가 음성 목록을 언제·무엇을 주는가 (1분 기록)
-    · 언어(ar·en·fr·ko)마다 세 가지 소리:
-        [앱이 고른 음성]  = 지금 앱 규칙(`pickVoice`, 선호 URI 없음 — 앱 설정의 `tts.voice.*` 는 늘 빈 값이다)
-                            그대로 `utt.voice` 를 박는다. 목록에 없으면 앱처럼 voice 없이 태그만.
+    · 언어(ar·en·fr·ko)마다 네 가지 소리:
+        [앱이 고른 음성]  = `[8k]` 지금 앱 규칙 `resolveSpeech`(앱 설정을 읽지 않으므로 "고른 것 없음" = 휴대폰 설정 따름:
+                            voice 없이 기본 태그). 설정에서 목소리를 고른 경우의 소리는 앱 설정 화면의 [들어 보기]로.
+        [이전 규칙]        = 8k 전 앱 규칙(`pickVoice` — 기기 내장 음성 먼저, 목록이 알파벳 순이면 en_AU·fr_CA 가 먼저)
+                            그대로 `utt.voice` 를 박는다. 비교용(Nour 2026-10-21 영상의 [앱이 고른 음성]이 이것이다).
         [voice 없이 xx]    = 지역 없는 언어 태그만 → 엔진(= 휴대폰 TTS 설정)이 목소리를 고른다
         [voice 없이 xx-YY] = 지역 태그만 (ar-SA·en-US·fr-FR·ko-KR, 영어는 en-GB 도 — O3 억양 사전 확인)
       → 휴대폰 설정 목소리와 같은 것이 어느 단추인가 (8k 기본값 E1 · 기본 태그 A/B)
+    · `[8k]` 억양 묶음 — 목록의 `voice.lang` 지역마다 [억양 xx-YY](voice 없이 그 태그) 단추를 목록에서 만든다
+      (앱 설정 화면의 "억양만" 선택지와 같은 소리). 밑줄·`#스크립트` 꼬리표는 앱의 `parseVoiceLang` 이 정규화한다.
     · [en → ko → en 이어 말하기] — 앱처럼 앞 발화의 `onend` 에서 다음을 `speak` 하고,
       `onend` → 다음 `onstart` 간격(ms)을 잰다 (8m M7: 1초를 넘으면 문단 묶음 재검토).
       [en → en → en 기준] 은 언어를 바꾸지 않을 때의 같은 간격 — 둘의 차이가 언어 전환 비용이다.
 
-  `[앱이 고른 음성]` 은 규칙을 베끼지 않고 앱 모듈의 `pickVoice`·`utteranceLang`·`speechLang` 을 그대로 부른다
-  (동적 import). 모듈을 못 받으면 그 단추만 안 되고 나머지는 된다.
-  아랍어는 앱에서 **번역문** 경로(`speechLang` → ar-SA), 나머지는 **원문** 경로(`utteranceLang`)로 태그를 정한다.
+  `[앱이 고른 음성]`·`[이전 규칙]`·억양 묶음은 규칙을 베끼지 않고 앱 모듈의 `resolveSpeech`·`accentGroups`·`pickVoice`·
+  `utteranceLang`·`speechLang` 을 그대로 부른다(동적 import). 모듈을 못 받으면 그 단추들만 안 되고 나머지는 된다.
+  이전 규칙의 태그: 아랍어는 **번역문** 경로(`speechLang` → ar-SA), 나머지는 **원문** 경로(`utteranceLang`).
+  `[8k]` 새 규칙은 네 경로가 같은 함수라 언어마다 태그가 하나다.
   ============================================================
 -->
 <style>
@@ -55,7 +60,7 @@
 
 <div class="scroll">
 <table>
-  <thead><tr><th>언어</th><th>목록의 음성</th><th>앱이 고를 음성 (pickVoice)</th><th>앱이 쓸 lang</th></tr></thead>
+  <thead><tr><th>언어</th><th>목록의 음성</th><th>앱이 고를 음성 (resolveSpeech)</th><th>앱이 쓸 lang</th><th>이전 규칙 (pickVoice)</th><th>억양 묶음</th></tr></thead>
   <tbody id="summary"></tbody>
 </table>
 </div>
@@ -63,31 +68,39 @@
 <h2 lang="ar" dir="rtl">العربية · ar</h2>
 <div class="row">
   <button type="button" data-say="app" data-lang="ar">앱이 고른 음성 · App</button>
+  <button type="button" data-say="old" data-lang="ar">이전 규칙 · Old rule</button>
   <button type="button" data-say="tag" data-lang="ar" data-tag="ar">voice 없이 ar</button>
   <button type="button" data-say="tag" data-lang="ar" data-tag="ar-SA">voice 없이 ar-SA</button>
 </div>
+<div class="row" data-accents="ar"></div>
 
 <h2>English · en</h2>
 <div class="row">
   <button type="button" data-say="app" data-lang="en">앱이 고른 음성 · App</button>
+  <button type="button" data-say="old" data-lang="en">이전 규칙 · Old rule</button>
   <button type="button" data-say="tag" data-lang="en" data-tag="en">voice 없이 en</button>
   <button type="button" data-say="tag" data-lang="en" data-tag="en-US">voice 없이 en-US</button>
   <button type="button" data-say="tag" data-lang="en" data-tag="en-GB">voice 없이 en-GB</button>
 </div>
+<div class="row" data-accents="en"></div>
 
 <h2>Français · fr</h2>
 <div class="row">
   <button type="button" data-say="app" data-lang="fr">앱이 고른 음성 · App</button>
+  <button type="button" data-say="old" data-lang="fr">이전 규칙 · Old rule</button>
   <button type="button" data-say="tag" data-lang="fr" data-tag="fr">voice 없이 fr</button>
   <button type="button" data-say="tag" data-lang="fr" data-tag="fr-FR">voice 없이 fr-FR</button>
 </div>
+<div class="row" data-accents="fr"></div>
 
 <h2>한국어 · ko</h2>
 <div class="row">
   <button type="button" data-say="app" data-lang="ko">앱이 고른 음성 · App</button>
+  <button type="button" data-say="old" data-lang="ko">이전 규칙 · Old rule</button>
   <button type="button" data-say="tag" data-lang="ko" data-tag="ko">voice 없이 ko</button>
   <button type="button" data-say="tag" data-lang="ko" data-tag="ko-KR">voice 없이 ko-KR</button>
 </div>
+<div class="row" data-accents="ko"></div>
 
 <p class="out" id="sayResult" aria-live="polite"></p>
 
@@ -159,12 +172,53 @@
   log('UA: ' + navigator.userAgent);
   log('주소: ' + location.href.replace(/[?#].*$/, ''));
 
-  /* 앱 규칙 — 앱 모듈을 그대로 부른다. */
+  /* 앱 규칙 — 앱 모듈을 그대로 부른다. `[8k]` 새 규칙 = resolveSpeech(고른 것 없음 = 휴대폰 설정 따름). */
   function appChoice(k, list) {
+    if (!app) return null;
+    var r = app.resolveSpeech(k, list, { uri: '', accent: '' });
+    return { voice: r.voice, tag: r.tag, path: r.via === 'phone' ? '휴대폰 설정 따름' : r.via };
+  }
+
+  /* 8k 전 규칙(비교용) — pickVoice(기기 내장 음성 먼저) + 경로별 태그. */
+  function oldChoice(k, list) {
     if (!app) return null;
     var v = app.pickVoice(k, list, '');
     var tag = k === 'ar' ? app.speechLang(k, v) : app.utteranceLang(k, v);
     return { voice: v, tag: tag, path: k === 'ar' ? '번역문 경로' : '원문 경로' };
+  }
+
+  /* `[8k]` 억양 묶음 — 앱 설정 화면과 같은 함수(accentGroups). */
+  function accentsOf(k, list) {
+    if (!app) return null;
+    return app.accentGroups(k, list);
+  }
+
+  function accentText(groups) {
+    if (!groups) return '(앱 모듈 대기)';
+    if (!groups.length) return '없음';
+    return groups.map(function (g) { return (g.accent || '지역 없음') + ' ' + g.voices.length + '개'; }).join(' · ');
+  }
+
+  function renderAccents(list) {
+    LANGS.forEach(function (k) {
+      var host = document.querySelector('[data-accents="' + k + '"]');
+      if (!host) return;
+      var groups = accentsOf(k, list) || [];
+      var sig = groups.map(function (g) { return g.accent; }).join(',');
+      if (host.getAttribute('data-sig') === sig) return;
+      host.setAttribute('data-sig', sig);
+      host.textContent = '';
+      groups.forEach(function (g) {
+        if (!g.accent) return;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('data-say', 'accent');
+        b.setAttribute('data-lang', k);
+        b.setAttribute('data-tag', g.accent);
+        b.textContent = '억양 ' + g.accent + ' (' + g.voices.length + ')';
+        host.appendChild(b);
+      });
+    });
   }
 
   function renderSummary(list) {
@@ -172,11 +226,14 @@
     LANGS.forEach(function (k) {
       var hit = list.filter(function (x) { return matches(x, k); });
       var c = appChoice(k, list);
+      var o = oldChoice(k, list);
       var cells = [
         NAMES[k] + ' (' + k + ')',
         hit.length ? hit.length + '개' : '없음',
         !app ? '(앱 모듈 대기)' : c.voice ? c.voice.name + ' · ' + c.voice.lang : '없음 → voice 없이',
-        !app ? '-' : c.tag + ' (' + c.path + ')'
+        !app ? '-' : c.tag + ' (' + c.path + ')',
+        !app ? '-' : (o.voice ? o.voice.name + ' · ' + o.voice.lang : '없음') + ' · ' + o.tag,
+        accentText(accentsOf(k, list))
       ];
       var tr = document.createElement('tr');
       cells.forEach(function (txt, i) {
@@ -206,6 +263,7 @@
     var v = voices();
     var sig = v.map(function (x) { return x.lang + '|' + x.name + '|' + x.localService + '|' + x['default']; }).join(';');
     renderSummary(v);
+    renderAccents(v);
     renderVoices(v);
     if (sig === lastSig && why.indexOf('timer') === 0) return v;
     lastSig = sig;
@@ -222,7 +280,7 @@
 
   import('../js/tts/voices.js').then(function (m) {
     app = m;
-    log('앱 모듈 voices.js 읽음 — [앱이 고른 음성] = 앱의 pickVoice 그대로');
+    log('앱 모듈 voices.js 읽음 — [앱이 고른 음성] = 앱의 resolveSpeech · [이전 규칙] = 앱의 pickVoice 그대로');
     snapshot('앱 모듈 읽은 뒤');
   }, function (e) {
     log('앱 모듈 voices.js 를 못 불러옴: ' + (e && e.message) + ' — [앱이 고른 음성] 단추만 안 된다');
@@ -280,6 +338,14 @@
       if (!c) { $('sayResult').textContent = '앱 모듈을 아직 못 불러왔다 — 잠시 뒤 다시'; log('[앱이 고른 음성 ' + k + '] 앱 모듈 없음'); return; }
       voice = c.voice; tag = c.tag;
       label = '[앱이 고른 음성 ' + k + '] voice=' + (voice ? voice.name + ' (' + voice.lang + (voice.localService ? ', 기기' : ', 네트워크') + ')' : '없음') + ' lang=' + tag;
+    } else if (kind === 'old') {
+      var oc = oldChoice(k, voices());
+      if (!oc) { $('sayResult').textContent = '앱 모듈을 아직 못 불러왔다 — 잠시 뒤 다시'; log('[이전 규칙 ' + k + '] 앱 모듈 없음'); return; }
+      voice = oc.voice; tag = oc.tag;
+      label = '[이전 규칙 ' + k + '] voice=' + (voice ? voice.name + ' (' + voice.lang + (voice.localService ? ', 기기' : ', 네트워크') + ')' : '없음') + ' lang=' + tag;
+    } else if (kind === 'accent') {
+      tag = b.getAttribute('data-tag');
+      label = '[억양 ' + tag + '] voice 없이';
     } else {
       tag = b.getAttribute('data-tag');
       label = '[voice 없이 ' + tag + ']';
@@ -342,8 +408,11 @@
     var out = ['MedReader 음성 진단 — ' + new Date().toISOString()];
     LANGS.forEach(function (k) {
       var c = appChoice(k, v);
+      var o = oldChoice(k, v);
       var n = v.filter(function (x) { return matches(x, k); }).length;
-      out.push(k + ': 목록 ' + n + '개 · 앱이 고를 음성 ' + (!c ? '(앱 모듈 없음)' : c.voice ? c.voice.name + ' (' + c.voice.lang + ')' : '없음') + (c ? ' · lang ' + c.tag : ''));
+      out.push(k + ': 목록 ' + n + '개 · 앱이 고를 음성 ' + (!c ? '(앱 모듈 없음)' : c.voice ? c.voice.name + ' (' + c.voice.lang + ')' : '없음') + (c ? ' · lang ' + c.tag : '') +
+        (o ? ' · 이전 규칙 ' + (o.voice ? o.voice.name + ' (' + o.voice.lang + ')' : '없음') + ' · lang ' + o.tag : '') +
+        ' · 억양 ' + accentText(accentsOf(k, v)));
     });
     if ($('gapResult').textContent) out.push($('gapResult').textContent);
     out.push('--- 기록 ---');

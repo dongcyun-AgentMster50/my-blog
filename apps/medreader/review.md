@@ -6265,3 +6265,331 @@ Build 와 겹치지 않게 스캔본 원본 5개·스피쿠스 unit 2개·OCR �
    - 띠 단추 한 줄 CSS
    - 검색 화면에 `medreader:docscan` 듣기(남은 문제 2)
    - ko 배너 "Dismiss"
+
+---
+
+# 8k Review — 낭독 목소리: 휴대폰 설정 따름 + 언어별 고르기 + 억양(O3)
+
+> 2026-10-21 · Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-8k.md` · 커밋하지 않음.
+> 기준: spec 19-1-1(E1·N2·8k 줄·수용 기준) · 19-1-2 3절(O3 문안 1–6) · 정정 줄 2개 · `.claude/tasks/medreader-8k-carryover.md` · Build 보고 `medreader-build-8k-report.md` · 직전 커밋 `890059e`.
+> 내 도구·결과: 스크래치패드 `r8k/`(`lib.mjs`·`setup.mjs`·`rv.mjs`·`hb.mjs`·`mut.mjs`, 결과 `rv*.json`·`hb.json`·`mut.json`, 스크린샷 `shots/`).
+
+## 8kR-1. 결론 — **통과** · 배포 판정 — **배포해도 된다**
+
+- `resolveSpeech` 다섯 갈래는 spec 과 줄 단위로 맞고 순수하다.
+- 원문·번역문·표 안내·퀴즈·[들어 보기] 가 모두 이 함수 하나를 쓴다.
+- 기본(고른 것 없음)은 네 경로 모두 `utt.voice` 없이 태그만 보낸다. Nour 모양 목록에서 headless 로 확인했다.
+- Build 가 함께 고친 결함 2개는 화면에서 실제 탭으로 고쳐진 것을 확인했다.
+- 회귀 없음. 콘솔 오류 0. 내 변이 12개 모두 빨강. 전체 테스트 1285/1285 × 3회.
+- 새로 찾은 것은 **낮음 1건**(8kR-9 — 퀴즈 화면에서 처음 누른 [읽기]만 고른 목소리 대신 태그로 읽음). 8k 이전부터 있던 경쟁 상태이고, Android 에서는 소리 차이가 없다. 배포를 막지 않는다.
+
+## 8kR-2. 범위
+
+- 바뀐 파일은 Build 보고 1 표와 같다(15개 + 새 `tests/voice-8k.test.mjs`).
+- `db.js`·`config.js`·`text/*`·`ai/*` 는 바뀌지 않았다. 그래서 DB 버전·`algoVersion`·번역 캐시 키·프롬프트는 그대로다.
+- `speaker.js` 의 바뀜은 `setTrVoice` 세 번째 인자 한 곳뿐이다.
+- `quiz.js` 의 "CRLF will be replaced" 경고는 `core.autocrlf=true` 가 내는 문구다. 작업 파일에도 HEAD 에도 CR 은 0개다.
+
+## 8kR-3. `resolveSpeech` 줄 단위 · 기본 태그 의견
+
+### 갈래 대조 (`js/tts/voices.js`)
+
+| spec 갈래 | 코드 | 맞음 |
+|---|---|---|
+| ① uri 가 목록(그 언어)에 있음 → 그 음성·그 `voice.lang` | `mine`(= `languageVoices(l)`)에서만 찾음 → `{voice, voiceTag(v), 'voice'}` | ✔ 다른 언어 음성은 고르지 않는다(K5, 내 R2) |
+| ② uri 사라짐 + accent → `{null, accent}` | `missing = !!uri` → accent 갈래 | ✔ `missing:true`(내 R7 빨강) |
+| ③ accent 만 → `{null, accent}` | `normalizeAccent(p.accent, l)` — 다른 언어 억양은 '' | ✔ (내 R1) |
+| ④ 둘 다 없음 → `{null, 기본 태그}` | `SPEECH_DEFAULT.voice==='phone'` → `defaultSpeechTag` | ✔ |
+| ⑤ 목록 빔 → voice 없이 | `mine` 이 비어 ①을 못 탐 → ②/④ | ✔ |
+
+- **순수성**: DOM·`settings`·`speechSynthesis` 를 만지지 않는다. 입력은 `(lang, voices, pref, policy)` 뿐이다. `defaultSpeechTag` 는 `config.js` 의 얼린 표만 읽는다.
+- accent 를 목록으로 거르지 않는 것은 맞다. 목록이 늦게 오는 동안에도 같은 태그를 보내야 하기 때문이다(정정 줄 그대로).
+- `via:'pick'` 은 정책 값으로만 탄다(E1 (나) 대비). 기본값에서는 탈 수 없다.
+
+### 기본 태그 — 지금 값(`tag:'region'` = en-US·fr-FR·ko-KR·ar-SA)을 **유지**하자는 의견
+
+근거는 Chromium 소스(main 판)다. Nour 의 Chrome 143 도 같다고 보지만 `[가정]` 이다.
+
+**Android Chrome**
+
+음성 목록과 이름·`lang` 은 이렇게 만들어진다.
+
+- 목록은 엔진의 진짜 목소리가 아니다. `Locale.getAvailableLocales()` 중 `isLanguageAvailable(locale) > 0` 인 것, 곧 **나라 단위로 되는 locale** 들이다.
+- 이름은 `getDisplayLanguage()+" "+getDisplayCountry()` 다.
+- `lang` 은 `Locale.toString()` 이다. 그래서 `en_AU`·`zh_HK_#Hans` 꼴이 나온다.
+- Nour 목록에 아랍어가 없는 것도 이것으로 설명된다. 엔진의 아랍어가 나라 단위로 "있음"을 돌려주지 않으면 목록에서 빠진다. 그래도 언어 단위로는 되므로 `ar-SA` 로 소리가 난다.
+
+`speak()` 는 **voice 이름을 쓰지 않는다.** utterance 의 `lang` 만 `forLanguageTag(lang.replace('_','-'))` 로 바꿔 `setLanguage` 한다. 그러니 Android 에서 소리를 정하는 것은 **태그 하나**다.
+
+- 옛 버그(en_AU·fr_CA)도 실제로는 `utt.voice` 때문이 아니다. 옛 코드가 `docLang = voice.lang`(en-AU)으로 태그를 바꾼 탓이다.
+- 8k 가 고친 것도 태그다. 기본이면 en-US 를 보낸다.
+
+지역 태그와 지역 없는 태그의 차이:
+
+- `en-US` 처럼 지역을 붙이면 엔진은 그 나라 locale 을 쓴다. 휴대폰 TTS 설정에서 그 locale 에 고른 목소리(남/여·변형)는 따른다. 다만 휴대폰의 "기본 언어"가 English (UK) 면 그것을 US 로 덮는다.
+- 지역 없는 `en` 은 언어의 기본 나라를 엔진이 고른다. Google TTS 는 대개 US 로 안다 `[가정 — 엔진마다 다름]`. "휴대폰 따름"에 더 가까울 수는 있으나 실기기로 확인된 적이 없다.
+
+**PC(Edge/Chrome)**
+
+- voice 를 안 주면 `GetMatchingVoice` 가 점수로 고른다. 언어 정확 일치 1024 · 지역 512 · 접두 256 · 앱 locale 8/4/2, 같은 점수면 목록 앞쪽이 이긴다.
+- 지역 없는 `en` 이면 영어 음성이 모두 접두 일치로 같은 점수다. 그래서 UI 가 ko·ar 인 PC 에서는 **목록 첫 영어 음성**이 이긴다. 알파벳 첫째(en-AU 류) 문제가 PC 에서 되살아나는 셈이다.
+- `en-US` 는 정확 일치로 결정된다.
+
+**실기기 기록**
+
+- `ar-SA`(지역 태그)는 Galaxy·Realme 둘 다에서 소리가 났다(2026-10-10·10-21).
+- 지역 없는 `ar`·`en` 은 아직 확인 전이다(8k-0 [voice 없이 en] 단추 — 점검표 2).
+
+**판단**
+
+- 실기기 결과 전에는 **지금 값(region)이 위험이 적다.** 실기기에서 확인된 길이고, PC 에서 결정적이다.
+- bare 로 바꾸는 조건: Nour 의 [voice 없이 en] 이 휴대폰 목소리와 같고 [voice 없이 en-US] 는 다를 때. 그때도 위 PC 영향을 함께 본다.
+- `SPEECH_DEFAULT` 한 줄로 바뀌는 것은 확인했다. 내 R9(`tag:'bare'`)에서 K1·K2·K3·K4·K11·K11b·K13·K14 가 빨강이다. 바꿀 때 테스트 기대값도 함께 고친다.
+
+### 원문 언어가 지역을 가진 경우(`en-GB` 문서 속성)
+
+- 지금은 생기지 않는다. 문서 `lang` 은 `SUPPORTED_SRC`(en·fr·ko)나 `und` 뿐이고, 서재 [⋯] 선택지도 그 셋이다.
+- `resolveSpeech`·`speechPref`·speaker `langKey` 는 모두 `baseLang` 으로 지역을 떼어 `en` 으로 다룬다. 그래서 문서의 지역은 무시되고 기본 en-US 가 된다.
+- 문서 속성에 지역이 들어오게 되면(8m 이후) 순서를 이렇게 권한다: 사용자 설정(uri/accent) > 문서 지역 > 기본 태그. 함수의 `pref` 앞에 갈래 하나를 더하면 된다.
+- 지금 배포를 막을 일은 아니다.
+
+## 8kR-4. 꼬리표 · 억양 묶음
+
+**정규화(`parseVoiceLang`)**
+
+- 밑줄 · `#스크립트` · 사설 꼬리(`-x-…`) · 대소문자 · 숫자 지역(`es_419`) · 빈 값·null 을 K6 이 표로 고정한다.
+- 지역 대문자화를 빼면 K5·K6 이 빨강이다(내 R12).
+- 지역 없는 `en`·`EN` 은 `region ''` 이 된다. 그 음성은 "지역 표시 없음" 머리 줄 아래로 가고, 그 줄은 라디오가 없어 고를 수 없다.
+- 빈 `lang` 음성은 `voiceMatches` 에서 빠진다.
+
+**묶음 만들기**
+
+- 묶음은 목록의 `voice.lang` 에서만 생긴다. 코드에 지역 목록은 0개다(K7).
+- 지역 없는 묶음을 뒤로 보내는 정렬을 뒤집으면 K8 이 빨강이다(내 R5).
+
+**`#Hans`·`#Hant` 한 묶음 결정 — 타당하다**
+
+- Android 엔진은 위 8kR-3 대로 `setLanguage(locale)` 로 고른다. 억양(발음)을 가르는 것은 언어+나라이고, 스크립트는 글자 체계다.
+- 목소리를 직접 고르면 그 음성 자신의 태그(`zh-Hans-HK`)를 보낸다. `forLanguageTag` 가 받는 올바른 BCP 47 이다(옛 `zh-HK-#Hans` 는 깨진 태그였다).
+- 앱이 보이는 언어는 en·fr·ko·ar 라 지금 화면 영향은 0이다. 8m 이 중국어 등을 다룰 때도 문제없다.
+
+**Android 에서의 관찰 — 운영자 판단 거리**
+
+- Android 목록의 "목소리" 한 줄은 곧 locale 하나다. 그래서 묶음마다 목소리가 하나다.
+- [영국 억양] 줄과 그 아래 이름 줄("الإنجليزية (المملكة المتحدة)" 꼴)은 Android 에서 **같은 소리**다. 둘 다 결국 `en-GB` 태그다.
+- 다만 이름 줄은 uri 를 저장한다. 기기 언어를 바꾸면 이름(= voiceURI)이 바뀌어 "사라짐"이 될 수 있다.
+- 그래도 소리는 그대로다. Build 가 목소리를 고를 때 억양도 함께 저장해 두었기 때문이다(내 R11 이 K20 으로 잡힌다).
+- 묶음에 목소리가 하나뿐일 때 이름 줄을 숨길지는 운영자 결정 거리다(8kR-12 3 (b)). 지금 그대로도 틀린 동작은 없다.
+
+## 8kR-5. 네 경로 통일
+
+grep 결과(주석 제외):
+
+| 자리 | 쓰는 함수 |
+|---|---|
+| `ui/controls.js` | `applySourceSpeech`·`applyTrSpeech`·`applyNoticeSpeech` — 셋 다 `resolveSpeech(lang, list, speechPref(get, lang))` |
+| `ui/quiz.js` | `applyQuizSpeech` — 만들 때 · 목록이 온 뒤 · [읽기] 누를 때마다 |
+| `ui/settings.js` | 번역문 [들어 보기](`runVoiceTest`) · 목소리 [들어 보기](`runVoiceListen`) |
+
+- 화면 코드의 `pickVoice`·`utteranceLang`·`speechLang` 호출은 0이다. 남은 곳은 `voices.js` 안(`availability`·`voiceVerdict`·진단 "이전 규칙")뿐이다.
+- 새 발화(`SpeechSynthesisUtterance`)를 만드는 다른 자리는 없다.
+- 낡은 주석 두 곳(`config.js:427` `utteranceLang`·`reader.js:686` `pickVoice(sourceLang())`)은 동작과 무관하다.
+
+**`speaker.setTrVoice(tag, voice, listed)` 세 번째 인자**
+
+- 뜻: "목록에 그 언어 음성이 하나라도 있다" → 실제 발화 오류로 꺼졌던 tr 을 다시 허락한다.
+- 옛 조건 "`pickVoice(target)` 이 음성을 돌려줬다"와 정확히 같다. `pickVoice` 가 null 이 아닐 때와 `languageVoices` 가 비어 있지 않을 때가 같기 때문이다.
+- 빼면 K15 가 빨강이다(내 R3).
+- 작은 남은 점(8k 이전과 같음): 대상 언어를 목록 0개 언어(ar)로 바꾸면, 앞 언어 실패로 꺼진 `trDisabled` 가 그대로 남는다. 실제 발화 오류가 있어야 생기는 상태라 낮음이다.
+
+## 8kR-6. Build 가 함께 고친 결함 2개 — 확인
+
+**① 사라진 상태에서 이미 체크된 "휴대폰 설정 따름" 탭**
+
+headless E 에서 label 을 실제로 탭했다(`page.click`).
+
+1. uri `urn:old-device-voice` + 억양 '' 로 두었다 → "사라짐" 배지, 체크는 phone.
+2. 그 줄을 탭했다 → `tts.voice.en=''`, 배지 사라짐.
+3. 같은 줄을 한 번 더 탭했다 → `medreader:voicepref` **0회**(저장값과 같으면 아무것도 안 함).
+4. 리더 ▶ → `[en-US, null]`.
+
+- `click`+`change` 를 둘 다 들어도 이중 저장은 없다. 첫 처리에서 값이 같아져 둘째는 바로 돌아간다.
+- 키보드: ArrowDown 은 다음 라디오(en-IN 억양)를 고르고 바로 저장한다(라디오 표준 동작). 초점은 새 체크 줄에 남는다.
+
+**② 8b-1 부터 있던 결함 — 번역 언어를 바꿔도 옛 태그로 읽음**
+
+- 결함이 맞다. HEAD 의 `syncTrVoice` 는 `refreshVoices`·`applyVoices` 에서만 불린다(HEAD 397·407행). 그래서 목록이 바뀌기 전까지 `trLang` 이 옛 언어(ar-SA)에 머문다.
+- 고침: `onTargetLang` 이 `medreader:voicepref` 를 보내고, 리더 `onVoicePref` 가 세 경로를 다시 고른다.
+- headless C: 설정에서 대상 ko 만 바꾸고(음성 목록 그대로) 리더 ▶ → 번역문 `[ko-KR, null]`.
+
+다른 경로 영향은 없다.
+
+- `onVoicePref` 는 `applyVoices` 와 같은 세 함수를 부른다. 목록이 바뀔 때마다 이미 돌던 길이다.
+- `und` 문서 안내는 `noticedOnce` 로 한 번만 뜬다.
+- 재생 중이면 다음 발화부터 바뀐다(speaker 가 발화마다 `trLang` 을 읽는다).
+
+이 dispatch 를 빼면(내 R4) K16 만 빨강이다. K16 은 동작이 아니라 소스 글자 고정이다(8kR-10).
+
+## 8kR-7. headless Edge (412×915 · 새 프로필 `r8k/p1` 하나 · Nour 모양 흉내 음성 92개 · 흉내 키·번역)
+
+- Edge 실행 파일이 곧장 넘겨주고 끝나는 상태라, Build 처럼 직접 띄우고(포트 9351) `puppeteer.connect` 했다.
+- puppeteer-core 는 `product-builder-lesson/node_modules` 를 읽기만 했다.
+- 책: Harrison(729쪽) · CMDT 2026(1967쪽) · 빈 3쪽 PDF(`r8k/blank-3p.pdf`, 내가 만든 것).
+- `[태그, voice]` 는 발화의 `utt.lang`·`utt.voice.voiceURI` 이다.
+
+| 확인 | 결과 |
+|---|---|
+| A 기본(ko UI, 대상 ar) 리더 ▶ | 원문 `[en-US, null]` · 번역문 `[ar-SA, null]` · 번역 띠 보임 ✔ |
+| A2 표 안내(CMDT 41쪽 — 표 그림이 있는 첫 쪽) | 안내 `[ko-KR, null]` · 본문 `[en-US, null]` · UI ar 로 바꾸면 안내 `[ar-SA, null]` ✔ |
+| B 설정 화면(ko 412) | 순서 en·fr·ko·ar ✔ |
+| — en 묶음 | 11줄(휴대폰 1 + 억양 5 + 이름 5) ✔ |
+| — ar 묶음 | 1줄 + "이 기기 목록에 العربية 목소리가 없습니다…" ✔ |
+| — 화면 전체 | 안내 한 줄 = ko 키 · 성별 글자 없음 · 가로 412/412 ✔ |
+| B [들어 보기] | 휴대폰 `[en-US, null]` · 영국 억양 `[en-GB, null]` · en_GB `[en-GB, urn:en_GB]` ✔ |
+| — 다른 언어 | 캐나다 억양 `[fr-CA, null]` · ko 목소리 `[ko-KR, urn:ko_KR]` · ar `[ar-SA, null]` ✔ |
+| — 번역문 [들어 보기] | `[ar-SA, null]` · 들어 보기는 저장하지 않음 ✔ |
+| C 실제 탭으로 en_GB 고름 → 리더 | 저장 `urn:en_GB`+`en-GB` ✔ |
+| — 리더 ▶ | 원문 `[en-GB, urn:en_GB]`(목록의 그 객체) · 번역문 `[ar-SA, null]` · 띠 보임 ✔ |
+| C 대상 ko(결함 ②) | 번역문 `[ko-KR, null]` ✔ · ko 목소리 고름 → `[ko-KR, urn:ko_KR]` ✔ |
+| **D 퀴즈 [읽기] — 화면에서 직접** | Harrison 12쪽 → 퀴즈 "문항 1/149" → 보기 탭 → 해설 [읽기] |
+| — en_GB 를 고른 상태 | **첫 누름 `[en-GB, null]`**(8kR-9) · 둘째 누름 `[en-GB, urn:en_GB]` ✔ |
+| — 설정에서 "인도 억양만" → 퀴즈로 돌아옴 | `[en-IN, null]` ✔ |
+| — 휴대폰 설정 | `[en-US, null]` ✔ |
+| E 사라진 음성(uri 사라짐 + 억양 en-GB) | 머리 "사라짐" 배지 + "…지금은 다음으로 읽습니다: 영국 억양" · 체크 = 영국 억양 줄 ✔ |
+| — 리더 ▶ | `[en-GB, null]` · 배너 0 ✔ (결함 ① 은 8kR-6) |
+| F 모두 "휴대폰 설정 따름"으로(탭) | 8개 키 모두 '' · 원문 `[en-US, null]` · 번역문 `[ar-SA, null]` ✔ |
+| G ar UI | `rtl ar` · 412/412 · 360/360 · 줄 방향 rtl ✔ |
+| — 크기·문구 | 줄 높이 48–50 · [들어 보기] 최소 48px · 안내 한 줄 = ar 키 · 제목 "صوت القراءة" ✔ |
+| G ko 360 | 360/360 · 억양 줄 48–74px(한국어 두 줄 줄바꿈) · 버튼 48 ✔ |
+| G en·fr UI | 360/360 · "Australia accent — the phone picks the voice" / "Accent (Australie) — le téléphone choisit la voix" ✔ |
+| 회귀 8i-3 쪽 넘김 낭독 | 60쪽 46발화 → 61쪽 이어서(`[en-US, null]`), 주소 61 ✔ |
+| 회귀 8i-1 B(310쪽 옛 판, 서재에서 바로 — `hb.mjs`) | 86 ms `waiting-page`, 발화 0 → 556 ms speaking ✔ |
+| — 판 확인 | 쪽 DOM 새로 붙음 · 310쪽 `algoVersion` 12(이웃 309·311 과 같음) ✔ |
+| 회귀 8g 결과 이동 뒤 ▶ | "fever" → 59쪽 → ▶ 59쪽에서 speaking `[en-US, null]` ✔ |
+| 회귀 8l 스캔본 ▶(빈 PDF, 새 세션) | 띠 `scan` · ▶ 뒤 `idle` · 발화 0 · `reader.scan.noRead` · 쪽 그대로 ✔ |
+| 콘솔 오류 | **0**(모든 실행) · 바깥 요청은 pdf.js CDN 둘뿐 |
+
+스크립트 사정(앱 문제 아님):
+
+- 첫 `rv.mjs` 에서는 A·C·F 의 번역이 0이었다. 키가 `sessionStorage` 라 세션마다 흉내 키를 다시 넣어야 했다. 다시 돌려 위 값을 얻었다.
+- 같은 세션에서 앞 단계 상태(`paused`)를 물려받으면 8i-1 B·8l 판정이 어긋났다. 그래서 그 둘은 Review 8l 과 같은 순서(서재에서 바로)로 새 세션에서 다시 돌렸다.
+- 첫 실행의 `algoBack:false` 는 내가 같은 쪽을 세 번 낮춰 기준값이 오염된 탓이다. 지금 값(12)을 따로 읽어 확인했다.
+
+## 8kR-8. `dev/voices.html`
+
+**요약 표**
+
+- [앱이 고를 음성]: 네 언어 모두 "없음 → voice 없이" + `xx-YY (휴대폰 설정 따름)`.
+- [이전 규칙]: en `صوت en_AU · en-AU` · fr `fr-CA` · ko `ko-KR` · ar 없음·ar-SA.
+- 억양 묶음: en 5 · fr 2 · ko 1 · ar 없음.
+
+**단추**
+
+- [앱이 고른 음성] = `resolveSpeech` ✔: en `[en-US, null]` · fr `[fr-FR, null]` · ko `[ko-KR, null]` · ar `[ar-SA, null]`.
+- [이전 규칙] = Nour 영상의 옛 동작 재현 ✔: en `[en-AU, urn:en_AU]` · fr `[fr-CA, urn:fr_CA]`.
+- [억양 en-GB] `[en-GB, null]` · [억양 fr-CA] `[fr-CA, null]` ✔.
+- [voice 없이 en] `[en, null]` ✔.
+
+**앱 저장소 변화 0**
+
+- 진단 페이지를 열고 단추를 누르기 전후로 같은 오리진을 비교했다: `localStorage`·`sessionStorage` 키, IndexedDB `settings` 전부, DB 목록·버전.
+- 완전히 같았다. 가로 412/412.
+
+**점검표 2 안내 한 줄 권장(8kR-3 에 비추어)**
+
+- Android 에서는 [이전 규칙]·[억양 xx-YY]·[voice 없이 xx-YY] 가 **태그만 같으면 같은 소리**다(voice 이름을 쓰지 않는다).
+- Nour 가 "같은 소리"를 이상하게 여기지 않게 이 사실을 안내에 넣으면 좋다.
+
+## 8kR-9. 새로 찾은 것 — 퀴즈 첫 [읽기] 는 고른 목소리 대신 태그로 (낮음 · 다음 묶음)
+
+**원인**
+
+- `toggleSpeak` 가 처음 불리면 `ensureSpeaker()` 가 speaker 를 만들고 `loadVoices(...).then(...)` 을 건다. 이 `then` 은 마이크로태스크라 아직 돌지 않았다.
+- 곧바로 `applyQuizSpeech(sp, quizVoices, …)` 를 부르는데, 이때 `quizVoices` 는 아직 `[]` 다.
+- 그래서 ① 갈래(uri)를 못 타고 ②/④ 로 간다.
+
+**확인(headless D)**: 퀴즈 화면에 들어와 처음 누르면 `[en-GB, null]`, 둘째부터 `[en-GB, urn:en_GB]` 다.
+
+**회귀인가**: 아니다. 8k 전에도 첫 누름은 음성 없이 `en-US` 였다(같은 경쟁 상태). 8k 는 오히려 태그를 맞게 만들었다.
+
+**영향**
+
+- Android: voice 이름을 쓰지 않으므로(8kR-3) 소리 차이가 없다.
+- PC: 첫 한 번만 같은 억양의 다른 음성일 수 있다. spec `[D]` "고르면 실제 낭독이 그 목소리"의 작은 예외다.
+- 테스트: 이 경로를 잡는 테스트가 없다. K11–K14 는 목록을 직접 넘기고, K16 은 글자만 본다.
+
+**권고(다음 묶음, 한두 줄)**
+
+- `toggleSpeak` 에서 `quizVoices` 가 비면 `synth.getVoices()`(또는 `sharedVoiceWatch(synth).snapshot().voices`)를 동기로 읽는다.
+- 같은 꼴의 테스트를 하나 더한다.
+
+## 8kR-10. 테스트의 힘 (내 변이 — `r8k/mut.json`, Build M1–M9 와 겹치지 않게)
+
+절차:
+
+1. 백업 `r8k/bak/` 에 둔다.
+2. 정확히 1곳을 바꾼다.
+3. 전체 테스트를 돌린다.
+4. 백업을 읽어서 쓴다 → `cmp` 같음(12/12).
+5. 앱 파일 189개 sha1 이 시작 때와 같음을 확인한다.
+
+앱 파일이 바뀌면 stamp 테스트(IM2·IM6·IM7b)는 늘 빨개진다. 그래서 아래는 그 셋을 뺀 **의미 빨강**이다.
+
+| # | 변이 | 의미 빨강 |
+|---|---|---|
+| R1 | `normalizeAccent` 가 언어를 안 봄(fr-CA 를 en 억양으로) | K5·K20 |
+| R2 | uri 를 전체 목록에서 찾음(한국어 음성으로 영어) | K5 |
+| R3 | 번역문 경로가 `listed` 를 안 넘김 | K15 |
+| R4 | 번역 언어를 바꿔도 알리지 않음(결함 ② 되살림) | K16(소스 글자) |
+| R5 | 지역 없는 묶음을 맨 앞으로 | K8 |
+| R6 | `speechPref` 가 억양을 `tts.voice.*` 에서 읽음 | K10·K12·K14 |
+| R7 | 사라진 uri + 억양에서 `missing:false` | K3·K19 |
+| R8 | 퀴즈 [읽기] 가 누를 때 다시 고르지 않음 | K16(소스 글자) |
+| R9 | `SPEECH_DEFAULT.tag='bare'` | K1·K2·K3·K4·K11·K11b·K13·K14 |
+| R10 | 설정 "사라짐"이 목록 안정 여부를 안 봄 | K19 |
+| R11 | 목소리를 고를 때 억양을 저장하지 않음 | K20 |
+| R12 | 꼬리표 정규화가 지역을 대문자로 안 함 | K5·K6 |
+
+- 12개 모두 빨강이다.
+- R4·R8 은 소스 정규식(K16)만 잡는다. 두 동작은 headless C·D 에서 맞게 도는 것을 봤다.
+- 다음 묶음에서 이 둘을 실제 speaker·가짜 이벤트로 재는 테스트를 권한다(8kR-9 의 첫 누름 테스트와 함께).
+
+## 8kR-11. 전체 테스트 · stamp · 정리
+
+- 전체 테스트: `node --test apps/medreader/tests/*.test.mjs` 3회(변이 전 1, 복원 뒤 2). 모두 **1285/1285**, fail 0.
+- `stamp-importmap --check` "그대로다(모듈 59개 · CSS 4개)" 종료 0.
+- `git diff --check` 깨끗.
+- `.nojekyll` 있음(0바이트).
+- 앱·테스트·spec 은 고치지 않았다. 변이는 모두 되돌렸다(sha1 189개 같음). 이 절만 덧붙였다.
+
+프로세스:
+
+- **8000번 python(PID 30352)은 쓰고 켜 두었다.**
+- 8123·8124·8125번은 시작 때도 끝날 때도 떠 있지 않았고, 건드리지 않았다.
+- 내가 띄운 Edge(명령줄에 `r8k`)는 0개다. 남은 msedge 는 사용자 Edge(시작 부스트, PID 16480 과 그 자식)다.
+- 내 node 도 0개다.
+- 프로필 `r8k/p1`(세 권)은 `rm -rf` 금지라 남겼다.
+
+## 8kR-12. 배포 판정 · 운영자 몫
+
+1. **배포해도 된다.** 이번 변경을 한 커밋으로 얹으면 된다.
+2. 커밋할 것:
+   - Build 보고 1 의 앱 파일 15개 + 새 `tests/voice-8k.test.mjs`
+   - `spec.md`(정정 줄 2)
+   - 이 review.md
+   - 관례대로 `.claude/tasks/medreader-*-8k*.md`(build·report·review·carryover)
+   **`.codex/`·`AGENTS.md` 는 넣지 않는다**(`git add -A` 금지). `.nojekyll` 그대로.
+3. 운영자 결정:
+   - (a) 기본 태그는 **지금 값(지역 붙은 태그) 유지**를 권한다(8kR-3). 점검표 2 에서 [voice 없이 en] 만 휴대폰 목소리와 같다고 나올 때 `SPEECH_DEFAULT.tag` 를 바꾼다. 그때 PC 영향(목록 첫 영어 음성)도 함께 판단한다.
+   - (b) Android 에서는 억양 줄과 이름 줄이 같은 소리다(8kR-4). 묶음에 목소리가 하나면 이름 줄을 숨길지 정한다. 권장: 지금 그대로 두고 Nour 화면을 본 뒤 정한다.
+   - (c) spec 19-1-2 3절 5 `[M]`("억양만"이 실제 억양인가)은 Android 에서 이름 줄과 같은 길(태그)이다. 억양이 안 되면 이름 줄도 안 된다. 숨김 판단은 둘을 함께 한다.
+   - (d) ar·fr 새 문구 13개는 `[검토 — Nour·운영자]` 다.
+4. 다음 묶음 후보:
+   - 퀴즈 첫 [읽기](8kR-9)
+   - R4·R8 동작 테스트
+   - 낡은 주석 2곳(`config.js:427`·`reader.js:686`)
+   - 점검표 2 안내 한 줄(8kR-8)
+5. 실기기 `[M]`(배포 뒤):
+   - Realme: 휴대폰 TTS 설정에서 영어·아랍어 목소리를 바꾸고 앱을 다시 열면 낭독도 바뀌는가
+   - 설정 > 낭독 목소리 화면이 Nour 기기의 아랍어 locale 이름으로 어떻게 보이는가
+   - "영국 억양"을 탭하면 실제로 영국 억양인가

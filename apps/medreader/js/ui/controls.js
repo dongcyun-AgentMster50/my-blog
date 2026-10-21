@@ -20,7 +20,7 @@ import * as settings from '../settings.js';
 import { t, applyTranslations, formatNumber, onLangChange, getLang } from '../i18n/index.js';
 import { TTS, AI } from '../config.js';
 import { createSpeaker, CODES } from '../tts/speaker.js';
-import { pickVoice, utteranceLang, sharedVoiceWatch, speechLang } from '../tts/voices.js';
+import { sharedVoiceWatch, resolveSpeech, speechPref, languageVoices } from '../tts/voices.js';
 import {
   flowParas, currentPage, goToPageForSpeech, showSpoken, markDone,
   onLineTap, onPageRender, sourceLang, loadFlowParas, flowLineIds,
@@ -237,6 +237,8 @@ export function initControls() {
   });
 
   onLangChange(() => { paintBar(); paintRatePanel(); paintProgress(lastProgress.index, lastProgress.total); syncNoticeVoice(); });
+  // `[8k]` 설정 > 낭독 목소리를 바꿨다 — 세 경로를 다시 고른다(settings.js 가 저장한 뒤 보낸다).
+  document.addEventListener('medreader:voicepref', onVoicePref);
 
   /* `[8b-2]` 속도 팝오버의 "번역 따라가기" 줄(7b 에서 저장만 되던 것)이 이제 실제로 동작한다.
      저장은 settings.js 가 그 줄(`[data-readalong-host]`)에 건 위임이 한다. 여기서는 **팝오버(조상)의 버블 단계**에서
@@ -411,9 +413,45 @@ function applyVoices(snap) {
 /** `[7c]` 지금 음성을 고른 원문 언어. 같으면 다시 고르지 않는다(쪽마다 불린다). */
 let voicesLang = null;
 
+/* ────────────────────────────────────────────────────────
+   `[8k — spec 19-1-2 3절 3]` 세 낭독 경로(원문·번역문·표 안내)가 **같은 해석 함수** `resolveSpeech` 를 쓴다
+   (퀴즈는 `ui/quiz.js` 의 `applyQuizSpeech` — 같은 함수). 고른 것이 없으면 voice 없이 태그만 = 휴대폰 설정 따름.
+   speaker 를 받는 작은 함수로 둔다 — `tests/voice-8k.test.mjs` 가 실제 `createSpeaker` 로 잰다.
+   ──────────────────────────────────────────────────────── */
+
+/** 원문 경로. 음성이 없으면 **지운다**(`setVoice(lang, null)`) — 설정에서 "휴대폰 설정 따름"으로 돌아온 경우. */
+export function applySourceSpeech(sp, lang, list, get) {
+  const r = resolveSpeech(lang, list, speechPref(get, lang));
+  sp.setVoice(lang, r.voice);
+  sp.setDocLang(r.tag);
+  return r;
+}
+
+/** 번역문 경로. 목록에 그 언어 음성이 있으면 실패로 껐던 tr 을 다시 허락한다(옛 "음성이 생겼다"와 같은 조건). */
+export function applyTrSpeech(sp, lang, list, get) {
+  const r = resolveSpeech(lang, list, speechPref(get, lang));
+  sp.setTrVoice(r.tag, r.voice, languageVoices(lang, list).length > 0);
+  return r;
+}
+
+/** 표 안내 경로(UI 언어 문장 — 6-1). */
+export function applyNoticeSpeech(sp, lang, list, get) {
+  const r = resolveSpeech(lang, list, speechPref(get, lang));
+  sp.setNoticeVoice(r.tag, r.voice);
+  return r;
+}
+
+/** `[8k]` 설정 화면에서 목소리를 바꿨다(`medreader:voicepref`) — 세 경로를 다시 고른다. 다음 발화부터. */
+function onVoicePref() {
+  voicesLang = null;
+  syncSourceVoice();
+  syncTrVoice();
+  syncNoticeVoice();
+}
+
 /**
- * `[7c]` 6-3 — 원문 음성은 **문서의 원문 언어**로 고른다(`pickVoice(doc.lang)`).
- * `utterance.lang` 은 고른 음성의 `voice.lang`, 없으면 언어별 기본 지역(`utteranceLang`).
+ * `[7c]` 6-3 — 원문 음성은 **문서의 원문 언어**로 고른다.
+ * `[8k]` 고르기는 `resolveSpeech`(`applySourceSpeech`) — 고른 것이 없으면 voice 없이 그 언어 태그만.
  * 음성이 없으면 설치 안내 — 언어마다 세션당 1회, 문구에 그 언어의 자국어 이름.
  */
 function syncSourceVoice() {
@@ -421,9 +459,8 @@ function syncSourceVoice() {
   const lang = sourceLang();
   if (lang === voicesLang) return;
   voicesLang = lang;
-  const v = pickVoice(lang, voices, settings.get('tts.voice.' + lang));
-  if (v) speaker.setVoice(lang, v);
-  speaker.setDocLang(utteranceLang(lang, v));
+  applySourceSpeech(speaker, lang, voices, settings.get);
+  const v = languageVoices(lang, voices).length > 0;
   // `[8b-1 — 오케스트레이터 결정 2026-10-10]` **목록만으로 "음성 없음"을 말하지 않는다.** 목록에 그 언어가
   // 없어도 `utterance.lang` 만으로 소리가 나는 기기가 있다(운영자 폰 — 목록에 아랍어 0개인데 lang 으로 발화됨).
   // "음성 없음"은 실제 발화 오류(`CODES.NO_VOICE`)로만 낸다. 미지원 언어(`und` 등)는 따로 안내한다.
@@ -466,22 +503,19 @@ function providerId() {
 
 function targetLang() { return normalizeTranslationLang(settings.get('ai.translationLang')); }
 
-/** 번역문 음성 — `pickVoice(target)`(7-8-5). 목록에 없으면 voice 없이 `utterance.lang` 만으로 시도한다. */
+/** 번역문 음성 — `[8k]` `resolveSpeech(target)`(`applyTrSpeech`). 고른 것이 없거나 목록에 없으면 voice 없이 태그만. */
 function syncTrVoice() {
   if (!speaker) return;
   const target = targetLang();
-  const v = pickVoice(target, voices, settings.get('tts.voice.' + target));
   const was = speaker.isTrDisabled();
-  speaker.setTrVoice(speechLang(target, v), v);
+  applyTrSpeech(speaker, target, voices, settings.get);
   if (was && !speaker.isTrDisabled()) syncReadalong();     // 음성이 생겼다 — 유효 모드를 되돌린다
 }
 
-/** 6-1 — 표 안내는 UI 언어 문장이다. UI 언어 음성으로 읽는다. */
+/** 6-1 — 표 안내는 UI 언어 문장이다. UI 언어로 읽는다(`[8k]` `applyNoticeSpeech`). */
 function syncNoticeVoice() {
   if (!speaker) return;
-  const ui = getLang();
-  const v = pickVoice(ui, voices, settings.get('tts.voice.' + ui));
-  speaker.setNoticeVoice(speechLang(ui, v), v);
+  applyNoticeSpeech(speaker, getLang(), voices, settings.get);
 }
 
 /**

@@ -50,6 +50,12 @@ export const DEFAULTS = Object.freeze({
   'tts.voice.ar': '',
   'tts.voice.fr': '',
   'tts.voice.ko': '',
+  // `[8k — spec 19-1-2 3절 2]` 억양만 고른 것(`en-GB` 꼴, 목소리는 휴대폰이 고름). 기본 '' — 둘 다 '' 면 휴대폰 설정 따름.
+  // 목소리를 고르면 `tts.voice.*` 에 voiceURI, 이 키는 그 음성의 억양(목소리가 사라지면 이것으로 물러선다).
+  'tts.accent.en': '',
+  'tts.accent.ar': '',
+  'tts.accent.fr': '',
+  'tts.accent.ko': '',
   'tts.autoSummarize': false,   // 9-3 — 기본 false. 자동 호출 금지(18절)
   'tts.wakeLock': true,
   // `[8h-1 — spec 6-6-2]` 인용·참고문헌(저자·학술지·PMID)도 읽는가. 기본 false — 거른다.

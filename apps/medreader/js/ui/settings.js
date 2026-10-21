@@ -35,7 +35,10 @@ import * as keys from '../privacy/keys.js';
 import { redactString } from '../privacy/redact.js';
 import { AI, TTS } from '../config.js';
 import { t, applyTranslations, formatNumber, onLangChange, BUNDLES, dirOf } from '../i18n/index.js';
-import { pickVoice, sharedVoiceWatch, voiceVerdict, speechLang } from '../tts/voices.js';
+import {
+  sharedVoiceWatch, voiceVerdict, resolveSpeech, speechPref, accentGroups, regionName,
+  normalizeAccent, voiceTag, languageVoices, parseVoiceLang
+} from '../tts/voices.js';
 import { piiWarning } from './notice.js';
 // `[8b-2]` 번역문 bidi 격리는 화면 공용 모듈 하나(자막 띠와 같은 함수 — 규칙 한 벌).
 import { appendBidiText } from './bididom.js';
@@ -265,10 +268,10 @@ export function nativeLangName(code) {
   return c;
 }
 
-/** 6-3 — 번역문 음성이 **목록에** 있는가. `pickVoice(target)` 그대로.
+/** 6-3 — 번역문 음성이 **목록에** 있는가(`[8k]` 목록 유무만 — 고르기는 `resolveSpeech`).
  *  `[8b-1]` 'no' 는 "목록에 없음"일 뿐 "말할 수 없음"이 아니다 — 화면은 `voiceVerdict` 로 세 갈래를 낸다. */
 export function voiceStatus(lang, voices) {
-  return pickVoice(lang, voices) ? 'yes' : 'no';
+  return languageVoices(lang, voices).length ? 'yes' : 'no';
 }
 
 /**
@@ -638,6 +641,7 @@ export function initSettingsScreen() {
     voice: q('aiVoiceStatus'),
     howTo: q('aiVoiceHowTo'),
     howToBody: q('aiVoiceHowToBody'),
+    voiceLangs: q('ttsVoiceLangs'),   // `[8k]` 낭독 목소리 — 없으면(반쪽 캐시) 그리지 않는다
     readCitations: null      // `[8h-1]` 아래 buildCitationsRow 가 만든다(정적 HTML 은 import map 만 고친다)
   };
   // 반쪽 캐시(옛 index.html + 새 JS) — 그릇이 없으면 조용히 물러난다. 던지지 않는다.
@@ -669,6 +673,7 @@ export function initSettingsScreen() {
       settings.set('tts.readCitations', !!els.readCitations.checked).catch(() => { });
     });
   }
+  if (els.voiceLangs) { els.voiceLangs.addEventListener('change', onVoicePick); els.voiceLangs.addEventListener('click', onVoicePick); }
   els.keyInput.addEventListener('input', paintFormatWarning);
   els.consentCheck.addEventListener('change', () => { if (els.consentCheck.checked) els.consentHint.hidden = true; });
 
@@ -710,6 +715,7 @@ export function showSettings(params) {
   void params;
   paintAll();
   refreshVoice();
+  refreshVoicePicker();
   paintCache();
 }
 
@@ -781,6 +787,7 @@ function paintAll() {
   renderReadalongRow(els.readalongHost);
   paintTarget();
   paintVoiceText();
+  paintVoicePicker();
   paintCacheText();
   say(lastSay);
   sayModel(lastModelSay);
@@ -961,6 +968,8 @@ function onTargetLang(btn) {
   const lang = normalizeTranslationLang(btn.getAttribute('data-lang'));
   if (lang === targetLang()) return;
   settings.set('ai.translationLang', lang).catch(() => { });
+  // `[8k]` 번역문 음성·태그는 대상 언어의 것 — 리더가 다시 고르게 알린다(전에는 음성 목록이 바뀔 때까지 옛 언어 태그로 읽었다).
+  document.dispatchEvent(new CustomEvent('medreader:voicepref', { detail: { lang: lang } }));
   paintTarget();
   // "번역문 음성: 있음/없음"은 **선택한 언어**의 음성으로 다시 판정한다.
   refreshVoice();
@@ -1035,10 +1044,11 @@ function runVoiceTest() {
   const phrase = VOICE_TEST_PHRASES[lang];
   if (!phrase) return;
   const voices = sharedVoiceWatch(synth).snapshot().voices;
-  const v = pickVoice(lang, voices, settings.get('tts.voice.' + lang));
+  // `[8k]` 낭독과 같은 해석 함수 — 고른 것이 없으면 voice 없이 태그만(휴대폰 설정 따름).
+  const r = resolveSpeech(lang, voices, speechPref(settings.get, lang));
   const u = new window.SpeechSynthesisUtterance(phrase);
-  u.lang = speechLang(lang, v);
-  if (v) u.voice = v;
+  u.lang = r.tag;
+  if (r.voice) u.voice = r.voice;
   let started = false;
   let done = false;
   let timer = null;
@@ -1062,6 +1072,299 @@ function runVoiceTest() {
   paintVoiceText();
   timer = setTimeout(() => finish(started), TTS.VOICES_TIMEOUT_MS * 10);
   try { synth.speak(u); } catch (e) { finish(false); }
+}
+
+/* ────────────────────────────────────────────────────────
+   `[8k — spec 19-1-1 E1 (가) · 19-1-2 3절 O3]` 낭독 목소리 — 언어 → 억양(지역) → 목소리 이름
+
+   언어마다 접는 묶음 하나(`<details>`). 안은 라디오 하나의 무리(화살표 키로 옮겨 다닌다):
+     ◉ 휴대폰 설정 따름(기본)                      [들어 보기]     → tts.voice = '' · tts.accent = ''
+       ○ 영국 억양 — 목소리는 휴대폰이 고름        [들어 보기]     → tts.voice = '' · tts.accent = 'en-GB'
+           ○ (목소리 이름 그대로) · 기기            [들어 보기]     → tts.voice = voiceURI · tts.accent = 그 음성의 억양
+   억양 묶음은 **기기 목록의 `voice.lang` 지역에서만** 만든다(`accentGroups`) — 코드에 지역을 박지 않는다.
+   성별은 API 에 없어 표시하지 않는다(O-D7) — 카드 아래 안내 한 줄(`settings.tts.voiceHint`).
+   저장한 목소리가 목록에서 사라지면(기기·엔진 바뀜) 낭독은 `resolveSpeech` 가 조용히 억양 → 휴대폰 설정으로 물러서고,
+   여기에만 "사라짐"을 보인다(목록이 안정된 뒤 — 늦게 오는 목록을 사라짐으로 오해하지 않게).
+   innerHTML 0건 — 음성 이름은 기기가 주는 글자라 `textContent` 로만.
+   ──────────────────────────────────────────────────────── */
+
+/** 설정 화면이 보이는 언어 순서. */
+const VOICE_LANGS = Object.freeze(['en', 'fr', 'ko', 'ar']);
+
+/** [들어 보기] 가 읽는 지어낸 짧은 문장(원서 문장이 아니다). */
+export const VOICE_SAMPLES = Object.freeze({
+  en: 'This is how the reading voice sounds.',
+  fr: 'Voici la voix de lecture.',
+  ko: '낭독 목소리는 이렇게 들립니다.',
+  ar: 'هكذا يبدو صوت القراءة.'
+});
+
+/** 펼쳐 둔 언어 — 목록이 다시 그려져도 접히지 않게. */
+const voiceOpen = new Set();
+/** 목소리 목록 감시 구독(한 번). */
+let voicePickSub = null;
+/** 들어 보기 발화(GC 로 onend 를 잃지 않게 붙들어 둔다). */
+let voiceListenUtter = null;
+
+/**
+ * 한 언어의 선택지 줄들 — **순수**(DOM 없음, `tests/voice-8k.test.mjs` 가 고정한다).
+ * @param {string} lang
+ * @param {Array} voices
+ * @param {{uri?:string, accent?:string}} pref
+ * @param {{settled?:boolean, uiLang?:string}} [opts]
+ * @returns {{rows:Array<{kind:'phone'|'accent'|'voice'|'region', value:string, level:number, label:string,
+ *           params?:Object, meta?:string, title?:string, checked:boolean, unlisted?:boolean}>,
+ *           resolved:Object, missing:boolean, empty:boolean}}
+ */
+export function voiceChoiceRows(lang, voices, pref, opts) {
+  const o = opts || {};
+  const p = pref || {};
+  const r = resolveSpeech(lang, voices, p);
+  const groups = accentGroups(lang, voices);
+  const rows = [];
+  const accentNow = r.via === 'accent' ? r.tag : '';
+  rows.push({ kind: 'phone', value: '', level: 0, label: 'settings.tts.voice.phone', checked: r.via === 'phone' || r.via === 'pick' });
+  // 저장한 억양이 목록에 없다(기기가 바뀜) — 지금 그 태그로 읽고 있으므로 그 줄을 보인다(고를 수 있게 남긴다).
+  if (accentNow && !groups.some(function (g) { return g.accent === accentNow; })) {
+    rows.push({
+      kind: 'accent', value: accentNow, level: 1, label: 'settings.tts.voice.unlistedAccent',
+      params: { region: regionName(parseVoiceLang(accentNow).region, o.uiLang) }, checked: true, unlisted: true
+    });
+  }
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    if (g.region) {
+      rows.push({
+        kind: 'accent', value: g.accent, level: 1, label: 'settings.tts.voice.accent',
+        params: { region: regionName(g.region, o.uiLang) }, checked: accentNow === g.accent
+      });
+    } else {
+      rows.push({ kind: 'region', value: '', level: 1, label: 'settings.tts.voice.noRegion', checked: false });
+    }
+    for (let j = 0; j < g.voices.length; j++) {
+      const v = g.voices[j];
+      rows.push({
+        kind: 'voice', value: String(v.voiceURI || ''), level: 2, label: String(v.name || v.voiceURI || ''),
+        meta: v.localService === false ? 'settings.tts.voice.remote' : 'settings.tts.voice.local',
+        title: String(v.name || '') + ' · ' + String(v.lang || ''),
+        checked: r.via === 'voice' && r.voice === v
+      });
+    }
+  }
+  return {
+    rows: rows,
+    resolved: r,
+    missing: !!r.missing && o.settled === true,
+    empty: languageVoices(lang, voices).length === 0
+  };
+}
+
+/** 저장할 값 두 개 — 고른 줄에서. */
+export function voicePrefFor(kind, value, voices, lang) {
+  if (kind === 'voice') {
+    const v = languageVoices(lang, voices).filter(function (x) { return x.voiceURI === value; })[0];
+    return { uri: String(value || ''), accent: v ? normalizeAccent(voiceTag(v), lang) : '' };
+  }
+  if (kind === 'accent') return { uri: '', accent: normalizeAccent(value, lang) };
+  return { uri: '', accent: '' };
+}
+
+function voiceWatchNow() {
+  const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
+  return sharedVoiceWatch(synth);
+}
+
+/** 화면이 보일 때 — 목록 감시를 한 번 구독하고 그린다. */
+function refreshVoicePicker() {
+  if (!els || !els.voiceLangs) return;
+  const watch = voiceWatchNow();
+  if (!voicePickSub) voicePickSub = watch.subscribe(function () { if (root && !root.hidden) paintVoicePicker(); });
+  paintVoicePicker();
+}
+
+/** 지금 고른 것의 짧은 이름(묶음 머리 줄). */
+function voiceSummaryText(lang, model) {
+  const r = model.resolved;
+  if (r.via === 'voice' && r.voice) return String(r.voice.name || r.voice.voiceURI || '');
+  if (r.via === 'accent') return t('settings.tts.voice.accentShort', { region: regionName(parseVoiceLang(r.tag).region, getUiLang()) });
+  return t('settings.tts.voice.phone');
+}
+
+function getUiLang() {
+  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || 'en';
+}
+
+function paintVoicePicker() {
+  if (!els || !els.voiceLangs) return;
+  const host = els.voiceLangs;
+  const snap = voiceWatchNow().snapshot();
+  const ui = getUiLang();
+  // 펼침 상태를 읽어 둔다(사용자가 접고 편 것).
+  host.querySelectorAll('details[data-voice-lang]').forEach(function (d) {
+    const l = d.getAttribute('data-voice-lang');
+    if (d.open) voiceOpen.add(l); else voiceOpen.delete(l);
+  });
+  while (host.firstChild) host.removeChild(host.firstChild);
+  for (let i = 0; i < VOICE_LANGS.length; i++) {
+    const lang = VOICE_LANGS[i];
+    const model = voiceChoiceRows(lang, snap.voices, speechPref(settings.get, lang), { settled: snap.settled, uiLang: ui });
+    host.appendChild(buildVoiceLang(lang, model, snap));
+  }
+}
+
+function buildVoiceLang(lang, model, snap) {
+  const d = document.createElement('details');
+  d.className = 'voice-lang';
+  d.setAttribute('data-voice-lang', lang);
+  if (voiceOpen.has(lang)) d.open = true;
+  const sum = document.createElement('summary');
+  const name = document.createElement('span');
+  name.className = 'voice-lang-name';
+  name.lang = lang;
+  name.dir = dirOf(lang);
+  name.textContent = nativeLangName(lang);
+  const now = document.createElement('span');
+  now.className = 'voice-lang-now muted';
+  const nowText = document.createElement('bdi');     // 음성 이름이면 기기 언어 — 격리
+  nowText.textContent = voiceSummaryText(lang, model);
+  now.appendChild(nowText);
+  sum.appendChild(name);
+  sum.appendChild(now);
+  if (model.missing) {
+    const badge = document.createElement('span');
+    badge.className = 'voice-missing-badge';
+    badge.textContent = t('settings.tts.voice.missingBadge');
+    sum.appendChild(badge);
+  }
+  d.appendChild(sum);
+
+  if (model.missing) {
+    const p = document.createElement('p');
+    p.className = 'warn-note voice-missing';
+    p.setAttribute('data-voice-missing', lang);
+    fillWithBdi(p, t('settings.tts.voice.missing'), 'fallback', voiceSummaryText(lang, model), '', '');
+    d.appendChild(p);
+  }
+  if (!snap.settled && model.empty) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = t('settings.tts.voice.checking');
+    d.appendChild(p);
+  } else if (model.empty) {
+    const p = document.createElement('p');
+    p.className = 'muted voice-none';
+    fillWithBdi(p, t('settings.tts.voice.none'), 'lang', nativeLangName(lang), dirOf(lang), lang);
+    d.appendChild(p);
+  }
+
+  const group = document.createElement('div');
+  group.className = 'voice-list';
+  group.setAttribute('role', 'radiogroup');
+  group.setAttribute('aria-label', nativeLangName(lang));
+  for (let i = 0; i < model.rows.length; i++) group.appendChild(buildVoiceRow(lang, model.rows[i], i));
+  d.appendChild(group);
+  return d;
+}
+
+function buildVoiceRow(lang, row, i) {
+  const div = document.createElement('div');
+  div.className = 'voice-row';
+  div.setAttribute('data-level', String(row.level));
+  div.setAttribute('data-kind', row.kind);
+  if (row.kind === 'region') {
+    // 지역 없는 음성 묶음 머리 — 억양이 아니라 고를 수 없다.
+    const s = document.createElement('span');
+    s.className = 'voice-region muted';
+    s.textContent = t(row.label);
+    div.appendChild(s);
+    return div;
+  }
+  const id = 'ttsVoice-' + lang + '-' + i;
+  const input = document.createElement('input');
+  input.type = 'radio';
+  input.name = 'ttsVoice-' + lang;
+  input.id = id;
+  input.checked = !!row.checked;
+  input.setAttribute('data-voice-lang', lang);
+  input.setAttribute('data-voice-kind', row.kind);
+  input.setAttribute('data-voice-value', row.value);
+  const label = document.createElement('label');
+  label.setAttribute('for', id);
+  const name = document.createElement('span');
+  name.className = 'voice-name';
+  if (row.kind === 'voice') {
+    // 음성 이름은 기기 언어로 온다(Nour: 아랍어) — `bdi` 로 격리하고, 줄 맞춤은 화면 방향(시작 쪽)을 따른다.
+    const bdi = document.createElement('bdi');
+    bdi.textContent = row.label;
+    name.appendChild(bdi);
+    if (row.title) label.title = row.title;
+  } else {
+    name.textContent = t(row.label, row.params);
+  }
+  label.appendChild(name);
+  if (row.meta) {
+    const meta = document.createElement('span');
+    meta.className = 'voice-meta muted';
+    meta.textContent = t(row.meta);
+    label.appendChild(meta);
+  }
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'voice-listen';
+  btn.setAttribute('data-action', 'voice-listen');
+  btn.setAttribute('data-voice-lang', lang);
+  btn.setAttribute('data-voice-kind', row.kind);
+  btn.setAttribute('data-voice-value', row.value);
+  btn.textContent = t('settings.readalong.voice.test');
+  btn.setAttribute('aria-label', t('settings.readalong.voice.test') + ' — ' + name.textContent);
+  div.appendChild(input);
+  div.appendChild(label);
+  div.appendChild(btn);
+  return div;
+}
+
+/**
+ * 라디오를 골랐다 — 저장하고 리더 낭독에 알린다(`medreader:voicepref`). 다음 발화부터.
+ * `change` 와 `click` 둘 다 듣는다: 저장한 목소리가 **사라지면** 화면은 이미 "휴대폰 설정 따름"(또는 억양)에 체크돼 있어
+ * 그 줄을 눌러도 `change` 가 오지 않는다 — 그래도 눌렀으면 사라진 값을 지워야 한다. 저장값과 같으면 아무것도 하지 않는다.
+ */
+function onVoicePick(ev) {
+  const input = ev.target;
+  if (!input || input.type !== 'radio' || !input.hasAttribute('data-voice-kind')) return;
+  const lang = input.getAttribute('data-voice-lang');
+  const pref = voicePrefFor(input.getAttribute('data-voice-kind'), input.getAttribute('data-voice-value'),
+    voiceWatchNow().snapshot().voices, lang);
+  const now = speechPref(settings.get, lang);
+  if (now.uri === pref.uri && now.accent === pref.accent) return;
+  settings.set('tts.voice.' + lang, pref.uri).catch(() => { });
+  settings.set('tts.accent.' + lang, pref.accent).catch(() => { });
+  document.dispatchEvent(new CustomEvent('medreader:voicepref', { detail: { lang: lang } }));
+  voiceOpen.add(lang);
+  paintVoicePicker();
+  const again = els && els.voiceLangs ? els.voiceLangs.querySelector('input[name="ttsVoice-' + lang + '"]:checked') : null;
+  if (again) again.focus();
+}
+
+/**
+ * [들어 보기] — 그 줄의 선택 그대로(휴대폰 설정 = voice 없이 기본 태그 · 억양 = voice 없이 그 태그 · 목소리 = 그 음성).
+ * 탭 핸들러 안에서 **동기로** `speak()`(6-4 (5)). 앞 들어 보기는 끊는다.
+ */
+function runVoiceListen(btn) {
+  const synth = (typeof window !== 'undefined' && window.speechSynthesis) || null;
+  if (!synth || typeof window.SpeechSynthesisUtterance !== 'function') return;
+  const lang = btn.getAttribute('data-voice-lang');
+  const phrase = VOICE_SAMPLES[lang];
+  if (!phrase) return;
+  const voices = voiceWatchNow().snapshot().voices;
+  const pref = voicePrefFor(btn.getAttribute('data-voice-kind'), btn.getAttribute('data-voice-value'), voices, lang);
+  const r = resolveSpeech(lang, voices, pref);
+  try { if (synth.speaking || synth.pending) synth.cancel(); } catch (e) { /* 무시 */ }
+  const u = new window.SpeechSynthesisUtterance(phrase);
+  u.lang = r.tag;
+  if (r.voice) u.voice = r.voice;
+  u.onend = u.onerror = function () { if (voiceListenUtter === u) voiceListenUtter = null; };
+  voiceListenUtter = u;
+  try { synth.speak(u); } catch (e) { voiceListenUtter = null; }
 }
 
 /** 캐시 줄 — 센 값을 들고 있다가 언어가 바뀌면 그 값으로 다시 쓴다. */
@@ -1258,6 +1561,7 @@ function onAction(ev) {
     case 'cache-clear': onCacheClear(); break;
     case 'target-lang': onTargetLang(btn); break;
     case 'voice-test': runVoiceTest(); break;
+    case 'voice-listen': runVoiceListen(btn); break;
     case 'voice-howto': {
       const open = els.howToBody.hidden;
       els.howToBody.hidden = !open;

@@ -4315,6 +4315,8 @@ Nour 의 추가 요구(2026-10-03)로 8c 뒤의 순서를 다시 짠다. **7b·7
 
 **8k 수용 기준(뼈대)** — `[N]` 선호 키가 비면 고르기 결과 `null`(= `utt.voice` 미지정, `utt.lang` 만), 키에 URI 가 있고 목록에 있으면 그 음성, 목록에 없으면 `null` 로 물러섬 · 원문·번역문·표 안내·퀴즈 네 경로가 같은 규칙(변이: 한 경로만 옛 `pickVoice` → 빨강) · `[D]` 설정 [목소리]: 네 UI 언어·RTL, 360px 가로 스크롤 0, 버튼 ≥ 48px · `[M]` Realme: 휴대폰 TTS 설정에서 아랍어 목소리를 바꾸고 앱을 다시 열면 번역문 낭독 목소리도 바뀐다(E1 (가)일 때).
 
+`[정정 2026-10-21 — 8k Build]` (1) 기본 태그는 네 경로가 같다: `READALONG.TR_LANG_REGION` → `TTS_LANG_REGION` → 언어 코드(en-US·fr-FR·ko-KR·ar-SA) — 옛 원문 경로의 `utteranceLang`·번역문 경로의 `speechLang` 구분이 없어졌다. 기본 동작(voice 미지정·지역 태그)은 `tts/voices.js` `SPEECH_DEFAULT` **한 곳**이다(Nour 점검표 2 결과가 E1 (나)면 `voice:'pick'`, 지역 없는 태그면 `tag:'bare'`). (2) 위 2 의 근거 행 `ui/controls.js` 354·403·413 · `ui/quiz.js` 878 · `ui/settings.js` 1038 은 8k 뒤 `applySourceSpeech`·`applyTrSpeech`·`applyNoticeSpeech`(controls) · `applyQuizSpeech`(quiz) · `runVoiceTest`·`runVoiceListen`(settings) — 모두 `resolveSpeech(lang, voices, speechPref(get, lang))`. 화면 코드의 `pickVoice` 는 0(목록 유무 판정은 `languageVoices`). (3) 번역문 경로는 voice 가 없어도 "목록에 그 언어 음성이 생겼다"로 실패한 tr 을 다시 허락한다 — `speaker.setTrVoice(tag, voice, listed)` 세 번째 인자(옛 조건과 같은 뜻). (4) 번역 언어를 바꾸면 리더가 번역문 음성·태그를 다시 고른다(`medreader:voicepref`) — 8b-1 부터 음성 목록이 바뀔 때까지 옛 언어 태그로 읽던 결함을 8k headless 에서 찾아 함께 고침.
+
 #### 4. 19-1 갱신 — 권장 순서
 
 **8g-1(Build 중) → 8j + 8k-0(한 배포) → 8g-2·8g-3·8g-4 → 8k(점검표 2 결과 뒤) → (8g-5 측정 → 조건부) → 8d → 8e → 9a → 9b → 8c + 8f → 18(+검색어 바로가기) → 9c → 10 → 11b(+저장) + 11c → 11a → 12 → 13 → 14(+ 8i-4 측정 Plan) → 15(+복습 묶음) → 16 → 19 → 20.** 17 은 빠진다(E4).
@@ -4434,6 +4436,8 @@ unitLang(src, docLang) → { lang: string|null, short: boolean }
 > 6. 8k-0 진단 페이지(아직 배포 전이면 같은 배포에)에 **[voice 없이 en-US] [voice 없이 en-GB]** 단추 — 위 5 `[M]` 의 사전 확인. 그리고 2-3 의 **[en → ko → en 이어 말하기]** 간격 표시.
 
 크기 영향: 8k 는 "작다" → **작다~중간**(목록 세 층·키 4개·해석 함수). 무료 한도 0, DB 무관.
+
+`[정정 2026-10-21 — 8k Build]` 3 의 해석 함수는 `resolveSpeech(lang, voices, {uri, accent}, policy?) → {voice|null, tag, via:'voice'|'accent'|'phone'|'pick', missing}` — `missing` = uri 를 저장했는데 목록에 없음(설정 화면의 "사라짐"은 목록이 **안정된 뒤**에만). accent 는 목록으로 거르지 않는다(태그일 뿐 — 목록이 늦게 와도 같은 소리). **꼬리표**: Android `voice.lang`(`en_AU`·`zh_HK_#Hans`)은 `parseVoiceLang` 이 BCP 47(`zh-Hans-HK`)로 바꾸고, **억양 묶음·`tts.accent.*` 는 언어-지역만**(`zh-HK`) — 스크립트는 글자 체계이지 발음이 아니라 같은 지역의 `#Hans`·`#Hant` 는 한 묶음이다. 목소리를 직접 고르면 그 음성 자신의 태그(스크립트 포함). 지역 없는 음성(`ko` 꼴)은 고를 수 없는 머리 줄 "지역 표시 없음" 아래. 2 의 저장 규칙에 더함: **목소리를 고르면 `tts.accent.{lang}` 에 그 음성의 억양도** 쓴다 — 음성이 사라지면 같은 억양으로 물러선다(②). [들어 보기] 문구는 i18n 키를 늘리지 않고 `settings.readalong.voice.test` 를 같이 쓴다. 새 i18n 키 13개(`settings.tts.voice.*`·`settings.tts.voiceHint`).
 
 #### 4. 19-1 갱신 — 권장 순서
 

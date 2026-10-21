@@ -1035,3 +1035,70 @@
 @media (prefers-reduced-motion: reduce) {
   .toc-fold-glyph { transition: none; }
 }
+
+/* ── `[8k]` 설정 > 낭독 목소리 — 언어 → 억양 → 목소리 이름 (spec 19-1-2 3절) ──
+   언어마다 접는 묶음. 한 줄 = 라디오 + 이름(길면 말줄임 — 전체 이름은 title) + [들어 보기].
+   360px 에서 가로 스크롤 0: 이름 칸만 줄어든다(min-inline-size: 0). 누를 곳은 줄 전체 48px(16-G). */
+.voice-lang { border-block-start: 1px solid var(--c-border); }
+.voice-lang:first-child { border-block-start: 0; }
+.voice-lang > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--sp-2);
+  min-block-size: var(--tap);
+  cursor: pointer;
+}
+.voice-lang-name { font-weight: 600; }
+.voice-lang-name:lang(ar) { font-family: var(--font-ar); }
+.voice-lang-now {
+  flex: 1 1 8em;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-missing-badge {
+  font-size: var(--fs-sm);
+  color: var(--c-warn-text);
+  background: var(--c-warn-bg);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-1);
+}
+.voice-list { margin-block-end: var(--sp-2); }
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--tap);
+}
+.voice-row[data-level="1"] { padding-inline-start: var(--sp-4); }
+.voice-row[data-level="2"] { padding-inline-start: var(--sp-6); }
+.voice-row input[type="radio"] { flex: 0 0 auto; inline-size: 20px; block-size: 20px; margin: 0; }
+.voice-row label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-block-size: var(--tap);
+  cursor: pointer;
+}
+.voice-row .voice-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 목소리 이름만 말줄임(spec "길면 말줄임"). "휴대폰 설정 따름"·억양 줄은 뜻이 잘리지 않게 줄을 바꾼다. */
+.voice-row:not([data-kind="voice"]) .voice-name { white-space: normal; overflow-wrap: anywhere; }
+.voice-row .voice-name:lang(ko) { word-break: keep-all; }   /* 한국어는 어절에서 줄을 바꾼다 */
+.voice-row .voice-name:lang(ar),
+.voice-lang:lang(ar) .voice-name { font-family: var(--font-ar); }
+.voice-row .voice-meta { line-height: 1.2; }
+.voice-row .voice-listen {
+  flex: 0 0 auto;
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.voice-region { padding-block: var(--sp-2); }
+.voice-missing, .voice-none { margin-block: var(--sp-1) var(--sp-2); }

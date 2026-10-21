@@ -1058,11 +1058,13 @@ export function createSpeaker(deps) {
     }
   }
 
-  /** `[8b-1]` 번역문 발화의 `utterance.lang`·음성(7-8-5 `pickVoice(target)`). 음성이 생기면 tr 을 다시 허락한다. */
-  function setTrVoice(lang, voice) {
+  /** `[8b-1]` 번역문 발화의 `utterance.lang`·음성. 음성이 생기면 tr 을 다시 허락한다.
+   *  `[8k]` 음성은 `resolveSpeech` 가 정한다 — 기본(휴대폰 설정 따름)은 voice 가 없으므로, "목록에 그 언어 음성이 생겼다"는
+   *  사실은 세 번째 인자 `listed` 로 받는다(옛 조건 "고른 음성이 있다"와 같은 뜻). */
+  function setTrVoice(lang, voice, listed) {
     trLang = lang ? String(lang) : null;
     trVoice = voice || null;
-    if (trVoice) { trDisabled = false; }
+    if (trVoice || listed === true) { trDisabled = false; }
   }
 
   /** `[8b-1]` 6-1 — 표 안내 발화의 언어(UI 언어)·음성. */
