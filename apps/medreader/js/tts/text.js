@@ -49,7 +49,7 @@
      그때 UI 는 지금처럼 줄 단위로 칠한다(틀린 구간을 그리느니 넓게 칠한다).
    ============================================================ */
 
-import { TTS, TTS_SYMBOLS, READALONG, SPEECH_MARKS } from '../config.js';
+import { TTS, TTS_SYMBOLS, READALONG, SPEECH_MARKS, SPEECH_BLANK } from '../config.js';
 import { splitSentences, endsSentence } from '../text/segment.js';
 import { joinPieces, localRange } from '../text/screen.js';
 // `[8h-1]` 인용·참고문헌 판별(spec 6-6-2) — 순수 모듈. 문장을 나누지 않는다(나누는 곳은 아래 buildUnits 한 곳).
@@ -126,17 +126,70 @@ export function speechMarks(text) {
   return out.replace(/\s+/g, ' ').replace(SPACE_BEFORE_MARK_PUNCT, '$1').trim();
 }
 
+/* ────────────────────────────────────────────────────────
+   `[8o — spec 19-1-3 §6 · 결정 L-D11 (가)]` 빈칸 낭독
+   ──────────────────────────────────────────────────────── */
+
+/** 빈칸 꼴 — 조사에서 실제로 센 것만: 하이픈 4개 이상 · 밑줄 3개 이상 · en 대시 3개 이상 · em 대시 2개 이상.
+ *  `---`(3개)·`--`·`—` 하나·낱말 속 하이픈(`10-20`, `cardio-`)은 걸리지 않는다. 마침표 줄(목차 점선)은 넣지 않는다. */
+const BLANK_RE = /-{4,}|_{3,}|–{3,}|—{2,}/g;
+const BLANK_ANY = /-{4,}|_{3,}|–{3,}|—{2,}/;
+/** 구분선·표 괘선 줄 — 줄 **전체**가 빈칸 꼴 글자·괘선 글자(`= + |`)·공백뿐. 그 줄의 꼴은 바꾸지 않는다. */
+const RULE_LINE_RE = /^[\s\-_–—―=+|]+$/u;
+
+/**
+ * 빈칸 낱말 — `SPEECH_BLANK[lang]`. 언어가 없으면 en(`symbolsFor` 와 같은 규칙), **표에 없는 언어는 쉼표 하나**.
+ * @param {string} [lang] 그 단위의 말할 언어(`Unit.lang` ‖ 문서 언어)
+ * @returns {string}
+ */
+export function blankWordFor(lang) {
+  if (lang == null || lang === '') return SPEECH_BLANK.en;
+  const k = String(lang);
+  return Object.prototype.hasOwnProperty.call(SPEECH_BLANK, k) ? SPEECH_BLANK[k] : ',';
+}
+
+/**
+ * ★ 발화 텍스트의 빈칸 꼴을 낱말로 바꾼다. **`src`·화면·번역 입력·검색에는 쓰지 않는다**(캐시 키 불변).
+ * `keep` 구간(구분선·괘선 줄 — `emit` 이 줄 단위로 찾는다) 안에 통째로 든 꼴과 URL·이메일 안의 꼴은 그대로 둔다.
+ * 꼴이 없거나 하나도 바꾸지 않았으면 **입력을 그대로** 돌려준다(공백 정리도 하지 않는다 — 8o 이전과 같다).
+ * @param {string} text
+ * @param {string} word 낱말(`blankWordFor`). 비면 쉼표
+ * @param {{start:number,end:number}[]} [keep] `text` 좌표의 지킬 구간
+ * @returns {string}
+ */
+export function speechBlanks(text, word, keep) {
+  const s = str(text);
+  if (!BLANK_ANY.test(s)) return s;
+  const w = word == null || word === '' ? ',' : String(word);
+  const zones = Array.isArray(keep) ? keep.slice() : [];
+  for (const m of s.matchAll(URL_RE)) zones.push({ start: m.index, end: m.index + m[0].length });
+  let replaced = false;
+  const out = s.replace(BLANK_RE, function (m, off) {
+    for (let i = 0; i < zones.length; i++) {
+      if (off >= zones[i].start && off + m.length <= zones[i].end) return m;
+    }
+    replaced = true;
+    return ' ' + w + ' ';
+  });
+  if (!replaced) return s;
+  return out.replace(/\s+/g, ' ').replace(SPACE_BEFORE_MARK_PUNCT, '$1').trim();
+}
+
 /**
  * 낭독용 정규화. **원서 텍스트를 바꾸지 않는다** — 사본만 바꾼다.
+ *   0. `[8o]` 빈칸 꼴 → 언어별 낱말(`speechBlanks` — 원문 좌표가 살아 있을 때 먼저)
  *   0. `[8h-1]` 각주 기호 정리(`speechMarks`)
  *   1. URL·이메일 → "link"
  *   2. `TTS_SYMBOLS` 의 기호 → 낱말 (앞뒤에 공백을 둔다)
  *   3. 공백 정리
  * 연속 대문자 약어(NSAIDs)는 **건드리지 않는다**(6-1).
+ * @param {{blank?:string, keep?:{start:number,end:number}[]}} [opts] `[8o]` `blank` = 빈칸 낱말(없으면 en — 기호 표 기본과 같다),
+ *   `keep` = 바꾸지 않을 구분선·괘선 줄 구간(`text` 좌표)
  */
-export function normalizeSpeech(text, symbols) {
+export function normalizeSpeech(text, symbols, opts) {
   const table = symbols || TTS_SYMBOLS.en;
-  let s = speechMarks(str(text)).replace(URL_RE, 'link');
+  const blank = opts && typeof opts.blank === 'string' ? opts.blank : SPEECH_BLANK.en;
+  let s = speechMarks(speechBlanks(str(text), blank, opts && opts.keep)).replace(URL_RE, 'link');
   const keys = Object.keys(table);
   for (let i = 0; i < keys.length; i++) {
     const k = keys[i];
@@ -262,7 +315,8 @@ export function buildUnits(paras, unit, opts) {
     // `[8m]` 물려받기는 **문단 안에서만** — 문단마다 새 상태(본문·인용 meta 가 같은 것을 나눠 쓴다).
     // 표 안내(UI 언어 문장 — speaker 가 UI 언어 음성으로 읽는다)는 판별하지 않는다.
     const ls = sw && para.kind !== TABLE_NOTICE_KIND ? { doc: lang, last: null } : null;
-    const meta = { kind: para.kind ? String(para.kind) : 'body', seq: seq, symbols: symbols, ls: ls };
+    // `[8o]` `lang` = 문서 언어 — 빈칸 낱말의 기본(단위 예외 `Unit.lang` 이 있으면 그쪽).
+    const meta = { kind: para.kind ? String(para.kind) : 'body', seq: seq, symbols: symbols, ls: ls, lang: lang };
 
     if (mode === 'line') {
       let group = [];
@@ -285,7 +339,7 @@ export function buildUnits(paras, unit, opts) {
     // `[8h-1 — spec 6-6-2]` 인용·참고문헌 문장(A1 ∪ A2 ∪ `[8h-2]` A3). 표 안내는 판별하지 않는다. 같은 문단 안에서만 본다
     // — A3 의 "바로 다음 식별자"도 이 문단의 다음 문장만 본다(문단을 넘지 않는다).
     const cites = meta.kind === TABLE_NOTICE_KIND ? null : markReferences(sentences);
-    const citeMeta = { kind: meta.kind, seq: seq, symbols: symbols, cite: true, ls: ls };
+    const citeMeta = { kind: meta.kind, seq: seq, symbols: symbols, cite: true, ls: ls, lang: lang };
 
     // `splitSentences` 는 공백 하나로 정확히 되붙는다(그 함수의 계약). 그래서
     // 누적 길이로 각 문장이 원문의 어느 구간인지 되찾을 수 있다.
@@ -296,7 +350,8 @@ export function buildUnits(paras, unit, opts) {
       const from = start < 0 ? cursor : start;
       const to = from + sent.length;
       cursor = to + 1;
-      emit(out, { text: sent, spans: spansIn(joined.spans, from, to) }, para.id, from, to, cites && cites[s] ? citeMeta : meta);
+      // `[8o]` `base` = 문단 전체 글자 — 구분선 줄은 문장 조각이 아니라 **줄 전체**로 판정한다(`ruleZones`).
+      emit(out, { text: sent, spans: spansIn(joined.spans, from, to), base: joined.text }, para.id, from, to, cites && cites[s] ? citeMeta : meta);
     }
   }
 
@@ -316,12 +371,33 @@ function spansIn(spans, from, to) {
 }
 
 /**
+ * `[8o]` 구분선·괘선 줄 — 줄 **전체**가 `RULE_LINE_RE` 인 줄의 구간을 발화 덩어리(`joined.text`) 좌표로.
+ * 문장 모드는 `joined.base`(문단 전체)에서 줄을 판정하고 `from` 만큼 당긴다 — 문장이 줄 중간에서 끊겨도
+ * "글자 있는 줄의 빈칸"을 구분선으로 잘못 보지 않는다. 줄 모드는 `joined.text` 가 곧 줄 묶음이다.
+ * 빈칸 꼴이 없으면 빈 배열(일을 하지 않는다).
+ */
+function ruleZones(joined, from) {
+  if (!BLANK_ANY.test(joined.text)) return [];
+  const hasBase = typeof joined.base === 'string';
+  const base = hasBase ? joined.base : joined.text;
+  const off = hasBase && Number.isFinite(from) ? from : 0;
+  const out = [];
+  for (let i = 0; i < joined.spans.length; i++) {
+    const sp = joined.spans[i];
+    const line = base.slice(sp.start, sp.end);
+    if (line && RULE_LINE_RE.test(line)) out.push({ start: sp.start - off, end: sp.end - off });
+  }
+  return out;
+}
+
+/**
  * 한 덩어리를 정규화 → 300자 분할 → Unit 들로. 빈 텍스트는 버린다.
  *
  * @param {number} [from] `joined.spans` 와 같은 좌표계의 구간 시작(문장 모드)
  * @param {number} [to]   같은 구간 끝. 주지 않으면 **덩어리 전체**(줄 모드)다.
- * @param {{kind:string, seq:{next:number}, symbols?:Object, cite?:boolean}} [meta] ★ 8a — 문단 kind 와 쪽 안의 문장 번호 계수기
- *   (`[7c]` `symbols` = 원문 언어의 기호 표. 없으면 en 표. `[8h-1]` `cite` = 인용 문장 — 번호를 받지 않는다)
+ * @param {{kind:string, seq:{next:number}, symbols?:Object, cite?:boolean, lang?:string}} [meta] ★ 8a — 문단 kind 와 쪽 안의 문장 번호 계수기
+ *   (`[7c]` `symbols` = 원문 언어의 기호 표. 없으면 en 표. `[8h-1]` `cite` = 인용 문장 — 번호를 받지 않는다.
+ *   `[8o]` `lang` = 문서 언어 — 빈칸 낱말의 기본)
  */
 function emit(out, joined, paraId, from, to, meta) {
   const ids = [];
@@ -334,7 +410,9 @@ function emit(out, joined, paraId, from, to, meta) {
   // ★ 8m — 말할 언어 예외. 기호 표도 그 언어 것으로(한국어 문장의 "%"를 영어 낱말로 읽지 않게).
   const ul = meta && meta.ls ? unitLangIn(src, meta.ls) : null;
 
-  const spoken = normalizeSpeech(joined.text, ul ? symbolsFor(ul) : meta && meta.symbols);
+  // ★ 8o — 빈칸 낱말은 그 단위의 말할 언어(`Unit.lang` ‖ 문서 언어)로. 구분선·괘선 줄은 그대로.
+  const blank = blankWordFor(ul || (meta && meta.lang));
+  const spoken = normalizeSpeech(joined.text, ul ? symbolsFor(ul) : meta && meta.symbols, { blank: blank, keep: ruleZones(joined, from) });
   if (!spoken) return;
   // ★ 8h-1 — 인용(`cite`)은 표 안내처럼 번호를 받지 않는다 → `sentencesOf`·번역 요청·창·readStats 에서 저절로 빠진다.
   const cite = !!(meta && meta.cite);

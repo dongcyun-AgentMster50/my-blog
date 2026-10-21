@@ -413,6 +413,18 @@ export const TTS_SYMBOLS = Object.freeze({
  * 그 밖(단어 끝 "Practice∗", 줄머리 "∗See", 따옴표 뒤)은 지운다. `src`·화면·번역 입력은 그대로(캐시 키 불변). */
 export const SPEECH_MARKS = Object.freeze(['∗', '*', '†', '‡', '§']);   // ∗ * † ‡ §
 
+/* `[8o — spec 19-1-3 §6 · 결정 L-D11 (가)]` 빈칸(문제집의 `-------`·`___`) 낭독 낱말 — **언어별**.
+ * 낭독 사본에서만(`tts/text.js` 의 `speechBlanks`) — `src`·화면·번역 입력·검색은 그대로(캐시 키 불변).
+ * 언어 = 그 단위의 말할 언어(8m `Unit.lang`) ‖ 문서 언어. 언어가 없으면 en(기호 표와 같은 규칙),
+ * **표에 없는 언어는 쉼표 하나**(소리 없이 짧은 쉼 — 영어 낱말을 끼워 넣지 않는다).
+ * fr·ar 문안 `[검토 — Nour·운영자]`(ar 은 spec 에 문안이 없어 Build 가 고른 것). es 는 8n 이 더한다. */
+export const SPEECH_BLANK = Object.freeze({
+  en: 'blank',
+  ko: '빈칸',
+  fr: 'blanc',
+  ar: 'فراغ'
+});
+
 /* `[8h-1 — spec 6-6-2 A · 6-6-3 B]` 인용 단위·참고문헌 묶음·글머리 경계 (`text/cite.js` · `text/segment.js`).
  * 판별은 **언어·책에 기대지 않는 꼴**(식별자 토큰·국제 인용 꼴·글리프)만 쓴다. 숫자의 출처는 spec 6-6-1(CMDT 2026 전수). */
 export const CITE = Object.freeze({
