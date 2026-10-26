@@ -341,6 +341,11 @@ export default {
   'readalong.mode.show': "표시",
   'readalong.mode.speak': "표시+낭독",
   'readalong.speakSource': "원문도 소리 내어 읽기",
+  /* `[8d]` 7-7-1 — 번역 위치(리플로우). 원본 보기는 늘 아래 띠 */
+  'readalong.display.label': "번역 위치",
+  'readalong.display.band': "아래 띠",
+  'readalong.display.inline': "문장 아래",
+  'readalong.inline.arrived': "번역이 도착했습니다 — 눌러서 보기",
   'reader.readalong.settings': "번역 설정",
   'ai.state.region': "이 지역에서는 {provider} API 를 쓸 수 없습니다. 키 문제가 아닙니다. 낭독·읽기·퀴즈는 계속 쓸 수 있습니다.",
   'ai.state.noKey': "번역에는 API 키가 필요합니다.",

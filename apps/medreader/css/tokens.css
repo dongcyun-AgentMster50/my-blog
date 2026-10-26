@@ -121,10 +121,13 @@
    **`--reader-chrome-bottom` 하나가 늘어난다.** 본문 아래 여백·원본 뷰 flex 상자·팝오버 위치·
    편안 영역·`scroll-padding` 이 전부 이 토큰을 쓰므로(10b) 따로 고칠 곳이 없다.
    꺼지면 이 규칙이 빠져 138px 로 돌아오고 빈 자리가 남지 않는다.
-   ★ `body` 가 아니라 `html` 에 건다 — 문서 스크롤러의 `scroll-padding` 은 루트 요소에 있다(6-5). */
+   ★ `body` 가 아니라 `html` 에 건다 — 문서 스크롤러의 `scroll-padding` 은 루트 요소에 있다(6-5).
+   `[8d — 7-7-1]` 문장 아래 표시(리플로우 · `ui/inlinetr.js` 가 `<html data-tr-inline="on">`)면 띠가 없다 —
+   띠 높이 토큰 하나를 0 으로 두어 위 식이 그대로 138px 이 된다(식을 두 벌 두지 않는다). 띠는 reader.css 가 감춘다. */
 :root[data-tr-band="on"] {
   --reader-chrome-bottom: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + var(--tts-h) + var(--tr-band-h));
 }
+:root[data-tr-inline="on"] { --tr-band-h: 0px; }
 
 /* system 테마 — 사용자가 명시적으로 고르지 않았을 때만 OS 를 따른다. */
 @media (prefers-color-scheme: dark) {

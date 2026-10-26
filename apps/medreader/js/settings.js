@@ -69,6 +69,8 @@ export const DEFAULTS = Object.freeze({
      설정 AI 탭과 리더 속도 팝오버가 **이 두 키 하나씩**을 같은 그리기 함수로 보인다. */
   'readalong.mode': 'speak',    // 'off' | 'show' | 'speak'. 기본 표시+낭독(요구가 "소리 내어 번역")
   'readalong.speakSource': true, // speak 모드에서 원문도 소리 내어 읽는가 — 기본 true(사용자 확정)
+  // `[8d — spec 7-7-1]` 리플로우에서 번역을 'band'(아래 띠, 기본) · 'inline'(문장 아래 — 대역). 원본 뷰는 늘 띠. DB 무관.
+  'readalong.display': 'band',
 
   /* 검색 (8g — spec 17-8-7 · 17-8-12 U14) — 최근 검색어 칩. 기기 안에만, 최대 `SEARCH.RECENT_MAX`(5).
      8g-1 은 키만 둔다(쓰는 화면은 8g-4). `search.aiQuery` 는 만들지 않는다(17-8-9 가 — 기본 끔). */

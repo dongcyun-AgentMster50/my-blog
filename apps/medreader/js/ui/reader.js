@@ -2027,6 +2027,7 @@ function sentenceExtent(firstNode) {
     rects = rects.filter((q) => q.height > 0);
   }
   if (!rects.length) { const r = firstNode.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, firstBottom: r.bottom }; }
+  const trb = els.mount.querySelector('.ra-tr[data-ra-current]'); if (trb && trb.getBoundingClientRect().height > 0) rects.push(trb.getBoundingClientRect());   // `[8d — 7-7-1 · 6-5]` 잣대 = 문장 + 지금 번역 블록
   let top = Infinity;
   let bottom = -Infinity;
   for (const q of rects) { if (q.top < top) top = q.top; if (q.bottom > bottom) bottom = q.bottom; }

@@ -33,6 +33,10 @@
    요청·창 계산·readStats 에서 빠진다(호출이 준다). 문서 언어와도 대상 언어와도 다른 문장은 요청 항목에 `src` 를 붙인다.
    캐시 키(7-5)는 그대로 — 원문 언어를 넣지 않는다. `SAME_LANG`(문서 = 대상)은 그대로 꺼진다(결정 O-D4 (가)).
 
+   ── `[8d]` 문장 아래 표시(spec 7-7-1) ────────────────────
+   화면(`ui/inlinetr.js`)은 이 서비스 객체를 **주입받아** `get`·`onChange`·`translatable`·`readyNow`·`cachedFor` 만 쓴다.
+   `cachedFor` 는 refill 과 같은 키 함수(`cacheKeyOf`)로 캐시를 **읽기만** 한다 — 요청·창·readStats 무관(호출 0).
+
    ── 원격 상태 이벤트 거르기 (8a Review 주의) ───────────
    파이프라인은 성공 호출마다 `inflight → ready` 를 낸다. 그것을 "돌아왔다"로 읽으면
    매 호출마다 회복 처리(알림 거두기·blocked 재전송)가 돈다. **이전 상태(`prev`)가 막힌
@@ -300,15 +304,21 @@ export function createReadalong(deps) {
     return out;
   }
 
+  /**
+   * ★ 7-5 캐시 키 — 이 서비스가 캐시를 읽는 **한 곳**. refill(`dropCached`)과 `[8d]` 문장 아래 표시(`cachedFor`)가
+   * 같이 쓴다(키를 두 곳에서 따로 만들지 않는다 — 7-7-1 "readalong 이 쓴 바로 그 키").
+   */
+  async function cacheKeyOf(s) {
+    if (!s.cacheKey) s.cacheKey = await keyFor(doc.id, s.src, doc.target, 'readalong');
+    return s.cacheKey;
+  }
+
   /** 캐시 적중은 ready 로 올리고, 남은 빈 문장만 돌려준다. */
   async function dropCached(list) {
     const need = list.filter((s) => !missed.has(s.key) && stateOf(s.key) === 'none');
     if (!need.length) return list;
     const g = docGen;
-    const keys = await Promise.all(need.map(async (s) => {
-      if (!s.cacheKey) s.cacheKey = await keyFor(doc.id, s.src, doc.target, 'readalong');
-      return s.cacheKey;
-    }));
+    const keys = await Promise.all(need.map(cacheKeyOf));
     let hits = new Map();
     try { hits = await cache.getMany(keys); } catch (e) { hits = new Map(); }
     if (g !== docGen) return [];
@@ -534,6 +544,56 @@ export function createReadalong(deps) {
     return r ? Object.assign({}, r) : { state: 'none' };
   }
 
+  /**
+   * `[8d — spec 7-7-1]` 이 단위의 문장이 번역 흐름에 드는가 — 문장 번호가 있고(표 안내·인용 아님) `[8m]` 대상 언어와
+   * 같은 언어가 아니다. 문장 아래 표시가 "블록을 둘 문장인가"를 이것 하나로 묻는다(규칙을 화면에 두 벌 두지 않는다).
+   */
+  function translatable(u) {
+    if (!u || !Number.isInteger(u.seg)) return false;
+    return sentencesFromUnits(null, [u]).length > 0;
+  }
+
+  /**
+   * `[8d — spec 7-7-1 "캐시에서 다시 그리기"]` 이 큐(낭독과 **같은 단위** — speaker 의 `queue`)의 문장 중 번역이 이미 있는 것.
+   * 동기 — 메모리(`get` 과 같은 키)만 본다. 쪽을 그린 직후 스크롤을 잡기 전에 넣을 몫(I4 (i)).
+   * @returns {Map<number, {src:string, text:string}>} seg → 번역
+   */
+  function readyNow(units) {
+    const out = new Map();
+    if (!doc.id) return out;
+    for (const s of sentencesFromUnits(null, Array.isArray(units) ? units : [])) {
+      const r = mem.get(s.key);
+      if (r && r.state === SEG.READY) out.set(s.seg, { src: s.src, text: String(r.text == null ? '' : r.text) });
+    }
+    return out;
+  }
+
+  /**
+   * `[8d]` `readyNow` + 메모리에 없는 문장은 **캐시(IndexedDB) 읽기만**. 키는 refill 과 같은 `cacheKeyOf`.
+   * ★ 요청하지 않는다 — `pipeline` 을 부르지 않고, 메모리·창·readStats 도 바꾸지 않는다(호출 0 · 7-1 원칙 2).
+   * 문서·대상 언어가 그 사이 바뀌면 빈 표를 준다.
+   * @returns {Promise<Map<number, {src:string, text:string}>>}
+   */
+  async function cachedFor(units) {
+    const out = readyNow(units);
+    if (!doc.id || !doc.target) return out;
+    const g = docGen;
+    const need = sentencesFromUnits(null, Array.isArray(units) ? units : []).filter((s) => !out.has(s.seg));
+    if (!need.length) return out;
+    let keys = [];
+    let hits = new Map();
+    try {
+      keys = await Promise.all(need.map(cacheKeyOf));
+      hits = await cache.getMany(keys);
+    } catch (e) { hits = new Map(); }
+    if (g !== docGen) return new Map();
+    for (let i = 0; i < need.length; i++) {
+      const rec = hits.get(keys[i]);
+      if (rec && typeof rec.result === 'string') out.set(need[i].seg, { src: need[i].src, text: rec.result });
+    }
+    return out;
+  }
+
   /** 그 문장의 상태가 바뀌면 `fn({state, text, code, …})`. 되돌림 함수를 준다. */
   function onChange(unitOrSrc, fn) {
     const src = typeof unitOrSrc === 'string' ? unitOrSrc : (unitOrSrc && unitOrSrc.src);
@@ -596,6 +656,9 @@ export function createReadalong(deps) {
     onProgress: onProgress,
     get: get,
     onChange: onChange,
+    translatable: translatable,
+    readyNow: readyNow,
+    cachedFor: cachedFor,
     retry: retry,
     dispose: dispose,
     /** 지금 유효 모드 `{mode, reason}`. */

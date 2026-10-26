@@ -27,7 +27,9 @@ import {
   // `[8i-1]` 판 바뀜 재추출 중 지금 쪽을 새 판으로(spec 4-13-9)
   setSpeechState, currentPageReady, whenCurrentPageReady, remapLineId, setCurrentLines,
   // `[8l]` 스캔본 문서의 ▶ 갈래(spec 17-5-1 3)
-  docScanVerdict
+  docScanVerdict,
+  // `[8d]` 문장 아래 번역(spec 7-7-1) — 줄 찾기·DOM 을 새로 붙인 알림
+  lineElement, onPageRepaint
 } from './reader.js';
 import { blocksPlay } from '../text/scan.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
@@ -42,6 +44,8 @@ import { hashHexSync } from '../hash.js';
 import { SUPPORTED_SRC } from '../text/lang.js';
 // `[8b-2]` 하단 자막 띠(7-7) — 8b-1 계약 8절: controls 가 만든 readalong·speaker 를 넘기는 한 줄.
 import { initTrBand } from './trband.js';
+// `[8d]` 문장 아래 번역(7-7-1) — 같은 readalong·speaker 를 넘긴다(요청하지 않는 화면 — pipeline 을 모른다).
+import { initInlineTr } from './inlinetr.js';
 
 let els = null;
 let speaker = null;
@@ -51,6 +55,10 @@ let pipeline = null;
 let readalong = null;
 /** `[8b-2]` 자막 띠 — `sync()`(유효 모드 → 자리) · `leave()`(리더를 떠남). */
 let trband = null;
+/** `[8d]` 문장 아래 번역 — `sync()` · `willShow(u)`(보이기 직전) · `leave()`. */
+let inlinetr = null;
+/** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
+let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
 let lastConfigFp = null;
 /** `[8b-1]` 음성 목록 감시 구독(한 번). */
@@ -107,7 +115,8 @@ export function initControls() {
       paras: flowParas,
       page: function () { const p = currentPage(); return { page: p.page, pageCount: p.pageCount }; },
       goToPage: goToPageForSpeech,
-      show: function (u) { return showSpoken(u); },
+      // `[8d]` 문장 아래 표시면 지금 문장의 블록을 **먼저** 넣는다 — 6-5 편안 영역 판정이 그 블록까지 본다(7-7-1).
+      show: function (u) { lastShown = u || null; if (inlinetr) inlinetr.willShow(u); return showSpoken(u); },
       markDone: function (u) {
         const ids = u.lineIds || [];
         for (let i = 0; i < ids.length; i++) markDone(ids[i], true);
@@ -229,6 +238,18 @@ export function initControls() {
   // `view.remapLine` 으로 옮김) — 멈춘 자리(다음 재생 시작점)를 스크롤 없이 다시 칠한다. 구독 순서 = 부르는 순서.
   onPageRender((p) => { if (p && p.refreshed) speaker.reshow(); });
 
+  // `[8d]` 문장 아래 번역(7-7-1). 그리기는 `syncReadalong()` 끝의 `inlinetr.sync()`(문서·유효 모드를 맞춘 뒤)가 한다.
+  inlinetr = initInlineTr({
+    readalong: readalong,
+    speaker: speaker,
+    mount: root.querySelector('#readerMount'),
+    root: root,
+    lineElement: lineElement,
+    onPageRepaint: onPageRepaint,
+    // 현재 블록에 번역이 늦게 도착해 커졌다 — 읽는 중이면 같은 단위로 6-5 를 다시(하이라이트 같음 · 편안 영역 밖일 때만 굴림).
+    recheck: function () { if (lastShown && speaker.getState() === 'speaking') showSpoken(lastShown); }
+  });
+
   /* ── 6-4 백그라운드 ────────────────────────────────
      hidden 이면 일시정지로 **상태를 분명히 하고**, 다시 보일 때
      **자동 재개하지 않는다**. 어디까지 들었는지 사용자가 확인하게. */
@@ -249,7 +270,7 @@ export function initControls() {
      들어 그 저장이 끝난 뒤에 유효 모드를 다시 계산한다 — DOM 전파 순서가 보장하므로 타이머가 필요 없다
      (`settings.set` 은 캐시를 먼저 고친다). 띠는 `syncReadalong()` 끝의 `trband.sync()` 로 따라온다. */
   els.ratePanel.addEventListener('click', (ev) => {
-    const hit = ev.target && ev.target.closest ? ev.target.closest('[data-readalong-mode], [data-readalong-source]') : null;
+    const hit = ev.target && ev.target.closest ? ev.target.closest('[data-readalong-mode], [data-readalong-source], [data-readalong-display]') : null;
     if (hit && els.ratePanel.contains(hit)) syncReadalong();
   });
 
@@ -361,6 +382,8 @@ export function leaveControls() {
   speaker.stop();
   if (readalong) readalong.setActive(false);
   if (trband) trband.leave();
+  if (inlinetr) inlinetr.leave();
+  lastShown = null;
   toggleRatePanel(false);
 }
 
@@ -577,6 +600,8 @@ function syncReadalong() {
   speaker.setReadalong({ mode: em.mode, speakSource: st.speakSource });
   // `[8b-2]` 띠 자리 — 값이 같아 `mode` 이벤트가 없어도(리더에 다시 들어옴) 여기서 맞춘다.
   if (trband) trband.sync();
+  // `[8d]` 문장 아래 표시 — 띠 자리(`data-tr-inline`)와 블록. 문서·대상 언어·유효 모드를 위에서 맞춘 뒤라야 캐시 키가 맞다.
+  if (inlinetr) inlinetr.sync();
 }
 
 /** 6-4 Wake Lock — 여기만이 기능 감지로 분기하는 곳이다. */

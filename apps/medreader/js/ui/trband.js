@@ -75,7 +75,17 @@ export function bandView(rec, ctx) {
 }
 
 /**
- * 7-7 경과 비율 스크롤 — `(경과 − 1s) / 예상 시간` 을 0~1 로 자른다. 순수 함수.
+ * `[8d — spec 7-7-1 I5]` 상태 → 한 줄 문구 키·[다시 시도] 여부. 띠(`bandView`)와 문장 아래 블록(`ui/inlinetr.js`)이
+ * **이 규칙 하나**를 쓴다(문구 고르기가 두 벌이 되지 않게). 순수 함수.
+ * @returns {{state:string, noteKey:string|null, retry:boolean}}
+ */
+export function noteKeyFor(rec, ctx) {
+  const v = bandView(rec, ctx);
+  return { state: v.state, noteKey: v.noteKey, retry: v.retry };
+}
+
+/**
+ * 7-7 경과 비율 스크롤 —`(경과 − 1s) / 예상 시간` 을 0~1 로 자른다. 순수 함수.
  * @returns {number}
  */
 export function scrollRatio(elapsedMs, expectedMs) {

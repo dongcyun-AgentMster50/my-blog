@@ -337,6 +337,11 @@ export default {
   'readalong.mode.show': "عرض",
   'readalong.mode.speak': "عرض + قراءة صوتية",
   'readalong.speakSource': "قراءة النص الأصلي بصوت مسموع أيضًا",
+  /* `[8d]` 7-7-1 — موضع الترجمة [검토 — Nour·운영자] */
+  'readalong.display.label': "موضع الترجمة",
+  'readalong.display.band': "شريط سفلي",
+  'readalong.display.inline': "تحت كل جملة",
+  'readalong.inline.arrived': "وصلت الترجمة — اضغط للعرض",
   'reader.readalong.settings': "إعدادات الترجمة",
   'ai.state.region': "لا يمكن استخدام واجهة برمجة التطبيقات (API) الخاصة بـ {provider} في هذه المنطقة. المشكلة ليست في المفتاح. القراءة والقراءة الصوتية والاختبارات تعمل كالمعتاد.",
   'ai.state.noKey': "تحتاج الترجمة إلى مفتاح API.",

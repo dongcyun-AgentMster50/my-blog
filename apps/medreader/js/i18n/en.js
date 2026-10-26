@@ -343,6 +343,11 @@ export default {
   'readalong.mode.show': "Show",
   'readalong.mode.speak': "Show + read aloud",
   'readalong.speakSource': "Also read the original aloud",
+  /* `[8d]` 7-7-1 — where the translation shows (reflow). Original view always uses the band */
+  'readalong.display.label': "Translation position",
+  'readalong.display.band': "Bottom band",
+  'readalong.display.inline': "Under each sentence",
+  'readalong.inline.arrived': "Translation arrived — tap to show",
   'reader.readalong.settings': "Translation settings",
   'ai.state.region': "The {provider} API cannot be used in this region. This is not a key problem. Reading, read-aloud, and quizzes still work.",
   'ai.state.noKey': "Translation needs an API key.",

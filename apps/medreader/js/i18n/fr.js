@@ -341,6 +341,11 @@ export default {
   'readalong.mode.show': "Afficher",
   'readalong.mode.speak': "Afficher + lire",
   'readalong.speakSource': "Lire aussi l'original à voix haute",
+  /* `[8d]` 7-7-1 — position de la traduction [검토 — Nour·운영자] */
+  'readalong.display.label': "Position de la traduction",
+  'readalong.display.band': "Bandeau en bas",
+  'readalong.display.inline': "Sous chaque phrase",
+  'readalong.inline.arrived': "Traduction arrivée — touchez pour l'afficher",
   'reader.readalong.settings': "Réglages de traduction",
   'ai.state.region': "L'API {provider} n'est pas utilisable dans cette région. Ce n'est pas un problème de clé. La lecture, la lecture à voix haute et les quiz fonctionnent toujours.",
   'ai.state.noKey': "La traduction nécessite une clé API.",

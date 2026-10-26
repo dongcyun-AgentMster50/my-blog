@@ -363,7 +363,7 @@ test('A1 ★ 기본값 — readalong.mode = speak, speakSource = true (사용자
   assert.equal(DEFAULT_READALONG_MODE, 'speak');
   assert.deepEqual([...READALONG_MODES], ['off', 'show', 'speak']);
   const s = readalongState((k) => DEFAULTS[k]);
-  assert.deepEqual(s, { mode: 'speak', speakSource: true, sourceEnabled: true });
+  assert.deepEqual(s, { mode: 'speak', speakSource: true, sourceEnabled: true, display: 'band' });   // `[8d]` 7-7-1 번역 위치 기본 띠
 });
 
 test('A2 모르는 값은 기본으로, speakSource 는 false 로 명시했을 때만 꺼진다', () => {
@@ -371,7 +371,7 @@ test('A2 모르는 값은 기본으로, speakSource 는 false 로 명시했을 �
   assert.equal(normalizeReadalongMode(undefined), 'speak');
   assert.equal(normalizeReadalongMode('off'), 'off');
   const s = readalongState((k) => ({ 'readalong.mode': 'show', 'readalong.speakSource': false })[k]);
-  assert.deepEqual(s, { mode: 'show', speakSource: false, sourceEnabled: false });
+  assert.deepEqual(s, { mode: 'show', speakSource: false, sourceEnabled: false, display: 'band' });
   assert.equal(readalongState((k) => (k === 'readalong.mode' ? 'speak' : undefined)).speakSource, true);
 });
 

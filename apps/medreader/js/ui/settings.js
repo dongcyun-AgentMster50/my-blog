@@ -58,6 +58,15 @@ export const SETTINGS_AI_HASH = '#/settings/ai';
 export const READALONG_MODES = Object.freeze(['off', 'show', 'speak']);
 export const DEFAULT_READALONG_MODE = 'speak';
 
+/** `[8d — spec 7-7-1]` 9-3 `readalong.display`. 순서가 버튼 순서다. 첫 값이 기본(띠). */
+export const READALONG_DISPLAYS = Object.freeze(['band', 'inline']);
+export const DEFAULT_READALONG_DISPLAY = 'band';
+
+/** `[8d]` 모르는 값은 기본(`band`)으로. */
+export function normalizeReadalongDisplay(v) {
+  return READALONG_DISPLAYS.indexOf(v) >= 0 ? v : DEFAULT_READALONG_DISPLAY;
+}
+
 /**
  * 8-4 다섯 갈래 + 화면 전용 두 가지(키 없음·취소).
  * 서비스 계층 코드(`CODES`)와 **같은 것이 아니다** — 화면이 고를 문구의 갈래다.
@@ -133,7 +142,9 @@ export function readalongState(get) {
     // 9-3 기본 true(사용자 확정). `false` 로 **명시**했을 때만 끈다.
     speakSource: g('readalong.speakSource') !== false,
     // 원문 읽기는 번역문을 소리 내 읽을 때만 뜻이 있다(7-8-1).
-    sourceEnabled: mode === 'speak'
+    sourceEnabled: mode === 'speak',
+    // `[8d — 7-7-1]` 번역 위치(리플로우만 — 원본 뷰는 늘 띠).
+    display: normalizeReadalongDisplay(g('readalong.display'))
   };
 }
 
@@ -537,6 +548,30 @@ function buildReadalongRow(host) {
   sw.appendChild(swText);
   host.appendChild(sw);
 
+  // `[8d — spec 7-7-1]` "번역 위치: 아래 띠 / 문장 아래" — "번역 따라가기" 줄 아래 한 줄. 같은 키·같은 그리기 함수(12-3).
+  const dLabelId = 'readalongDisplayLabel' + rowSeq;
+  const dHead = document.createElement('div');
+  dHead.className = 'typeset-head readalong-display-head';
+  const dLabel = document.createElement('span');
+  dLabel.className = 'readalong-label';
+  dLabel.id = dLabelId;
+  dLabel.setAttribute('data-i18n', 'readalong.display.label');
+  dHead.appendChild(dLabel);
+  host.appendChild(dHead);
+  const dGroup = document.createElement('div');
+  dGroup.className = 'typeset-choices readalong-modes readalong-displays';
+  dGroup.setAttribute('role', 'group');
+  dGroup.setAttribute('aria-labelledby', dLabelId);
+  for (let i = 0; i < READALONG_DISPLAYS.length; i++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-readalong-display', READALONG_DISPLAYS[i]);
+    b.setAttribute('data-i18n', 'readalong.display.' + READALONG_DISPLAYS[i]);
+    b.setAttribute('aria-pressed', 'false');
+    dGroup.appendChild(b);
+  }
+  host.appendChild(dGroup);
+
   host.addEventListener('click', onReadalongClick);
   host.setAttribute('data-readalong-built', '1');
   applyTranslations(host);
@@ -552,6 +587,10 @@ function paintReadalongRow(host) {
   if (sw) {
     sw.setAttribute('aria-checked', s.speakSource ? 'true' : 'false');
     sw.disabled = !s.sourceEnabled;
+  }
+  const disp = host.querySelectorAll('[data-readalong-display]');
+  for (let i = 0; i < disp.length; i++) {
+    disp[i].setAttribute('aria-pressed', disp[i].getAttribute('data-readalong-display') === s.display ? 'true' : 'false');
   }
 }
 
@@ -569,6 +608,15 @@ function onReadalongClick(ev) {
     // `settings.set` 은 캐시를 먼저 고친다 — 저장이 늦어도 다시 그리기는 새 값을 본다.
     settings.set('readalong.mode', mode).catch(() => { /* 저장 실패가 화면을 막지 않는다 */ });
     paintAllReadalongRows();
+    return;
+  }
+  const dv = ev.target.closest('[data-readalong-display]');
+  if (dv) {
+    const display = normalizeReadalongDisplay(dv.getAttribute('data-readalong-display'));
+    settings.set('readalong.display', display).catch(() => { /* 저장 실패가 화면을 막지 않는다 */ });
+    paintAllReadalongRows();
+    // `[8d]` 리더가 새로고침 없이 따라오게(띠 ↔ 문장 아래). 받는 쪽은 `ui/inlinetr.js` — 설정 화면은 리더를 import 하지 않는다.
+    document.dispatchEvent(new CustomEvent('medreader:readalong-display', { detail: { display: display } }));
     return;
   }
   const sw = ev.target.closest('[data-readalong-source]');
