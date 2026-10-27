@@ -920,6 +920,37 @@
 
 .search-more { margin-block: var(--sp-3); }
 
+/* ── `[8g-7]` "장" 묶음(사전으로 찾은 장 — spec 19-1-4 2-4) · 글자 체계 안내의 [«الفهرس» 로] ──────────
+   줄은 결과 줄과 같은 꼴, 높이 ≥ 48(16-G). 장 제목은 원서 글자(dir=ltr — JS 가 단다). */
+.search-chap {
+  display: block;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  margin-block-end: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: start;
+  color: var(--c-text);
+  background: var(--c-surface);
+}
+
+.search-chap-title {
+  display: block;
+  margin-block-start: var(--sp-1);
+  font-weight: 600;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.search-dict { overflow-wrap: anywhere; }
+
+.search-to-toc {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  margin-block-start: var(--sp-1);
+  padding-inline: var(--sp-3);
+}
+
 /* ── `[8g-4b]` 탭 [찾기] [목차] · 목차 목록 (spec 17-8-6 · 17-8-12 §4-1·§4-2·§4-4 · S19) ──────────
    논리 속성만(16-H). 탭·항목 높이 ≥ 48(16-G). 목차 제목은 원서 글자(dir=ltr — JS 가 단다), 쪽 표시·"지금 읽는 곳"은 UI 방향.
    깊이는 `--toc-indent`(0·1·2)만큼 들인다 — 깊이 3 이상은 접고(JS) 한 칸만 더 들인다. */
@@ -1001,6 +1032,18 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 .toc-title {
   flex: 1 1 12em;
   min-inline-size: 0;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+/* `[8g-7 · N-D2 (가)]` 사전 이름(UI 언어 — 책 언어와 다를 때만) — 제목·쪽 표시 아래 한 줄, 흐리게 */
+.toc-dict {
+  flex: 1 0 100%;
+  order: 3;
+  min-inline-size: 0;
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--c-text-dim);
   text-align: start;
   overflow-wrap: anywhere;
 }

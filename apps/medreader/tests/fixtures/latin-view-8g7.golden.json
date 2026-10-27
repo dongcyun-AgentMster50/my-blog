@@ -1,0 +1,1739 @@
+[
+ {
+  "q": "pulmonary",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 2,
+    "at": 26,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 0,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 10,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 20,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 30,
+    "len": 9,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 5,
+    "rows": [
+     {
+      "pageNo": 2,
+      "count": 1,
+      "at": 26
+     },
+     {
+      "pageNo": 8,
+      "count": 4,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 2,
+    "at": 26,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 0,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 10,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 20,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 30,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "Pulmonary",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 2,
+    "at": 26,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 0,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 10,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 20,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 8,
+    "at": 30,
+    "len": 9,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 5,
+    "rows": [
+     {
+      "pageNo": 2,
+      "count": 1,
+      "at": 26
+     },
+     {
+      "pageNo": 8,
+      "count": 4,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 2,
+    "at": 26,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 0,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 10,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 20,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 8,
+    "at": 30,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "respiratory",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 2,
+    "at": 9,
+    "len": 11,
+    "kind": "head"
+   },
+   {
+    "pageNo": 2,
+    "at": 43,
+    "len": 11,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "head",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 2,
+      "count": 1,
+      "at": 9
+     }
+    ]
+   },
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 2,
+      "count": 1,
+      "at": 43
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 2,
+    "at": 9,
+    "len": 11,
+    "kind": "head",
+    "table": false
+   },
+   {
+    "pageNo": 2,
+    "at": 43,
+    "len": 11,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "lung",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 2,
+    "at": 0,
+    "len": 4,
+    "kind": "head"
+   },
+   {
+    "pageNo": 2,
+    "at": 64,
+    "len": 4,
+    "kind": "body"
+   },
+   {
+    "pageNo": 10,
+    "at": 26,
+    "len": 4,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "head",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 2,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   },
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 2,
+      "count": 1,
+      "at": 64
+     },
+     {
+      "pageNo": 10,
+      "count": 1,
+      "at": 26
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 2,
+    "at": 0,
+    "len": 4,
+    "kind": "head",
+    "table": false
+   },
+   {
+    "pageNo": 2,
+    "at": 64,
+    "len": 4,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 10,
+    "at": 26,
+    "len": 4,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "heart",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 5,
+    "at": 0,
+    "len": 5,
+    "kind": "head"
+   },
+   {
+    "pageNo": 5,
+    "at": 30,
+    "len": 5,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "head",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 5,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   },
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 5,
+      "count": 1,
+      "at": 30
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 5,
+    "at": 0,
+    "len": 5,
+    "kind": "head",
+    "table": false
+   },
+   {
+    "pageNo": 5,
+    "at": 30,
+    "len": 5,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "cardiac",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 5,
+    "at": 14,
+    "len": 7,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 5,
+      "count": 1,
+      "at": 14
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 5,
+    "at": 14,
+    "len": 7,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "kidney",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 7,
+    "at": 0,
+    "len": 6,
+    "kind": "head"
+   },
+   {
+    "pageNo": 7,
+    "at": 33,
+    "len": 6,
+    "kind": "body"
+   },
+   {
+    "pageNo": 3,
+    "at": 0,
+    "len": 6,
+    "kind": "table"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "head",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 7,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   },
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 7,
+      "count": 1,
+      "at": 33
+     }
+    ]
+   },
+   {
+    "kind": "table",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 0,
+    "len": 6,
+    "kind": "table",
+    "table": true
+   },
+   {
+    "pageNo": 7,
+    "at": 0,
+    "len": 6,
+    "kind": "head",
+    "table": false
+   },
+   {
+    "pageNo": 7,
+    "at": 33,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "renal",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 7,
+    "at": 13,
+    "len": 5,
+    "kind": "body"
+   },
+   {
+    "pageNo": 3,
+    "at": 9,
+    "len": 5,
+    "kind": "table"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 7,
+      "count": 1,
+      "at": 13
+     }
+    ]
+   },
+   {
+    "kind": "table",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 1,
+      "at": 9
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 9,
+    "len": 5,
+    "kind": "table",
+    "table": true
+   },
+   {
+    "pageNo": 7,
+    "at": 13,
+    "len": 5,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "liver",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 3,
+    "at": 22,
+    "len": 5,
+    "kind": "table"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "table",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 1,
+      "at": 22
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 22,
+    "len": 5,
+    "kind": "table",
+    "table": true
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "diabetes",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 6,
+    "at": 18,
+    "len": 8,
+    "kind": "body"
+   },
+   {
+    "pageNo": 10,
+    "at": 10,
+    "len": 8,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 6,
+      "count": 1,
+      "at": 18
+     },
+     {
+      "pageNo": 10,
+      "count": 1,
+      "at": 10
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 6,
+    "at": 18,
+    "len": 8,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 10,
+    "at": 10,
+    "len": 8,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "cancer",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 6,
+    "at": 38,
+    "len": 6,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 6,
+      "count": 1,
+      "at": 38
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 6,
+    "at": 38,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "skin",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 4,
+    "at": 0,
+    "len": 4,
+    "kind": "body"
+   },
+   {
+    "pageNo": 11,
+    "at": 25,
+    "len": 4,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 4,
+      "count": 1,
+      "at": 0
+     },
+     {
+      "pageNo": 11,
+      "count": 1,
+      "at": 25
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 4,
+    "at": 0,
+    "len": 4,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 11,
+    "at": 25,
+    "len": 4,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "eye",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 4,
+    "at": 9,
+    "len": 3,
+    "kind": "body"
+   },
+   {
+    "pageNo": 11,
+    "at": 13,
+    "len": 3,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 4,
+      "count": 1,
+      "at": 9
+     },
+     {
+      "pageNo": 11,
+      "count": 1,
+      "at": 13
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 4,
+    "at": 9,
+    "len": 3,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 11,
+    "at": 13,
+    "len": 3,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "pain",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 4,
+    "at": 23,
+    "len": 4,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 4,
+      "count": 1,
+      "at": 23
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 4,
+    "at": 23,
+    "len": 4,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "infection",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 4,
+    "at": 36,
+    "len": 9,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 4,
+      "count": 1,
+      "at": 36
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 4,
+    "at": 36,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "hypertension",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 3,
+    "at": 37,
+    "len": 12,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 1,
+      "at": 37
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 37,
+    "len": 12,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "blood pressure",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 3,
+    "at": 0,
+    "len": 14,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 0,
+    "len": 14,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "blood",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 3,
+    "at": 0,
+    "len": 5,
+    "kind": "body"
+   },
+   {
+    "pageNo": 3,
+    "at": 24,
+    "len": 5,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 2,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 0,
+    "len": 5,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 3,
+    "at": 24,
+    "len": 5,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "thyroid",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 6,
+    "at": 0,
+    "len": 7,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 6,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 6,
+    "at": 0,
+    "len": 7,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "stroke",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 5,
+    "at": 42,
+    "len": 6,
+    "kind": "body"
+   },
+   {
+    "pageNo": 11,
+    "at": 0,
+    "len": 6,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 5,
+      "count": 1,
+      "at": 42
+     },
+     {
+      "pageNo": 11,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 5,
+    "at": 42,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 11,
+    "at": 0,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "MI",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 2,
+    "at": 84,
+    "len": 2,
+    "kind": "body"
+   },
+   {
+    "pageNo": 5,
+    "at": 57,
+    "len": 2,
+    "kind": "body"
+   },
+   {
+    "pageNo": 5,
+    "at": 67,
+    "len": 2,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 3,
+    "rows": [
+     {
+      "pageNo": 2,
+      "count": 1,
+      "at": 84
+     },
+     {
+      "pageNo": 5,
+      "count": 2,
+      "at": 57
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 2,
+    "at": 84,
+    "len": 2,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 5,
+    "at": 57,
+    "len": 2,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 5,
+    "at": 67,
+    "len": 2,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "β-blocker",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 3,
+    "at": 74,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 3,
+    "at": 85,
+    "len": 12,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 2,
+      "at": 74
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 74,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 3,
+    "at": 85,
+    "len": 12,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "beta blocker",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 3,
+    "at": 74,
+    "len": 9,
+    "kind": "body"
+   },
+   {
+    "pageNo": 3,
+    "at": 85,
+    "len": 12,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 2,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 2,
+      "at": 74
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 74,
+    "len": 9,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 3,
+    "at": 85,
+    "len": 12,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "quilar",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 9,
+    "at": 0,
+    "len": 6,
+    "kind": "head"
+   },
+   {
+    "pageNo": 1,
+    "at": 39,
+    "len": 6,
+    "kind": "body"
+   },
+   {
+    "pageNo": 9,
+    "at": 18,
+    "len": 6,
+    "kind": "body"
+   },
+   {
+    "pageNo": 9,
+    "at": 39,
+    "len": 6,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "head",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 9,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   },
+   {
+    "kind": "body",
+    "count": 3,
+    "rows": [
+     {
+      "pageNo": 1,
+      "count": 1,
+      "at": 39
+     },
+     {
+      "pageNo": 9,
+      "count": 2,
+      "at": 18
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 1,
+    "at": 39,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 9,
+    "at": 0,
+    "len": 6,
+    "kind": "head",
+    "table": false
+   },
+   {
+    "pageNo": 9,
+    "at": 18,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 9,
+    "at": 39,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "zorvat",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 9,
+    "at": 7,
+    "len": 6,
+    "kind": "head"
+   },
+   {
+    "pageNo": 1,
+    "at": 50,
+    "len": 6,
+    "kind": "body"
+   },
+   {
+    "pageNo": 9,
+    "at": 31,
+    "len": 6,
+    "kind": "body"
+   },
+   {
+    "pageNo": 10,
+    "at": 0,
+    "len": 6,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "head",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 9,
+      "count": 1,
+      "at": 7
+     }
+    ]
+   },
+   {
+    "kind": "body",
+    "count": 3,
+    "rows": [
+     {
+      "pageNo": 1,
+      "count": 1,
+      "at": 50
+     },
+     {
+      "pageNo": 9,
+      "count": 1,
+      "at": 31
+     },
+     {
+      "pageNo": 10,
+      "count": 1,
+      "at": 0
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 1,
+    "at": 50,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 9,
+    "at": 7,
+    "len": 6,
+    "kind": "head",
+    "table": false
+   },
+   {
+    "pageNo": 9,
+    "at": 31,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   },
+   {
+    "pageNo": 10,
+    "at": 0,
+    "len": 6,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "diseases",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 4,
+    "at": 55,
+    "len": 8,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 4,
+      "count": 1,
+      "at": 55
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 4,
+    "at": 55,
+    "len": 8,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "pneumologie",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 7,
+    "at": 46,
+    "len": 11,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 7,
+      "count": 1,
+      "at": 46
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 7,
+    "at": 46,
+    "len": 11,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "cœur",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 7,
+    "at": 61,
+    "len": 4,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 7,
+      "count": 1,
+      "at": 61
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 7,
+    "at": 61,
+    "len": 4,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "metform",
+  "error": null,
+  "truncated": false,
+  "pageCount": 12,
+  "pagesCovered": 12,
+  "hits": [
+   {
+    "pageNo": 3,
+    "at": 63,
+    "len": 7,
+    "kind": "body"
+   }
+  ],
+  "groups": [
+   {
+    "kind": "body",
+    "count": 1,
+    "rows": [
+     {
+      "pageNo": 3,
+      "count": 1,
+      "at": 63
+     }
+    ]
+   }
+  ],
+  "band": [
+   {
+    "pageNo": 3,
+    "at": 63,
+    "len": 7,
+    "kind": "body",
+    "table": false
+   }
+  ],
+  "outcome": {
+   "type": "ok"
+  },
+  "mismatch": false
+ },
+ {
+  "q": "x",
+  "error": "ERR_SEARCH_SHORT",
+  "truncated": false,
+  "pageCount": 0,
+  "pagesCovered": 0,
+  "hits": [],
+  "groups": [],
+  "band": [],
+  "outcome": {
+   "type": "query",
+   "key": "search.minChars"
+  },
+  "mismatch": false
+ }
+]

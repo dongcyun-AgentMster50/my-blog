@@ -2,6 +2,8 @@
    MedReader — 검색 화면 · 결과 · 결과로 이동 · 검색 띠 (spec 17-8-7 · 17-8-8 · 17-8-12 §4 — 8g-4a)
 
    `[8g-4b]` 목차 탭(이 책 범위 — 개요, 없거나 쓰레기 개요면 heading 폴백 + 머리 문구)도 여기 있다(5b절).
+   `[8g-7]` 글자 체계가 다른 진료과 이름(예: 아랍어)으로 친 검색어 → 내장 사전(`text/specialty.js`) → 결과 맨 위 "장" 묶음,
+   목차 탭 항목 옆 흐린 UI 언어 이름, 글자 체계 안내의 [«الفهرس» 로] 단추(spec 19-1-4 2-4 — 1절 `chapterGate`).
 
    UI 계층이다. 엔진(`search/engine.js`)은 결과·오류 **코드**만 낸다 — 문구는 여기서 i18n 으로 만든다(3-2).
    문서 글자는 전부 `textContent` 다(13절 — `innerHTML` 을 쓰지 않는다). 조각의 `<mark>` 도 글자 조각이다.
@@ -28,7 +30,7 @@
 import * as db from '../db.js';
 import * as settings from '../settings.js';
 import { SEARCH } from '../config.js';
-import { t, formatNumber, onLangChange, applyTranslations, errorKey, getDir } from '../i18n/index.js';
+import { t, formatNumber, onLangChange, applyTranslations, errorKey, getDir, getLang } from '../i18n/index.js';
 import { parseRoute, go, replace, readerHash, searchHash, libraryHash } from '../router.js';
 import * as engine from '../search/engine.js';
 import { printedLabel, tocOf } from '../search/outline.js';
@@ -39,6 +41,9 @@ import { joinPieces } from '../tts/text.js';
 import { docLangOf } from '../text/lang.js';
 // `[8l]` 스캔본·깨짐 문서의 검색 안내 한 줄(17-5-1 3 · 19-1-3 §3-3) — 판정은 순수 `text/scan.js`.
 import { searchNotice } from '../text/scan.js';
+// `[8g-7]` 진료과·장기계 사전(순수 — 19-1-4 2-4) · 문서 `domain`(8p — 값 해석은 `ai/prompts.js` 한 곳)
+import { queryMatches, titleMatches, nameOf } from '../text/specialty.js';
+import { domainOf } from '../ai/prompts.js';
 import * as charhl from './charhl.js';
 import {
   onPageRender, onPageRepaint, onReaderLeave, readingSpot, currentScreen, lineElement,
@@ -251,6 +256,91 @@ export function scriptMismatch(q, docLang) {
   if (SCRIPT_RE[want].test(s)) return false;
   for (const k of ['latin', 'hangul', 'arabic', 'cjk']) if (k !== want && SCRIPT_RE[k].test(s)) return true;
   return false;
+}
+
+/* ── `[8g-7]` 글자 체계가 다른 진료과 이름으로 장 찾기 (spec 19-1-4 2-4 · N-D1 (다) · N-D2 (가)) — 순수 부분 ──
+   검색어 → 사전 개념(`text/specialty.js`) → 목차(`tocOf` — 개요, 없으면 heading 폴백) 항목 중 그 개념 제목 = "장" 묶음.
+   **켜지는 조건**(`chapterGate`): 검색어 글자 체계 ≠ 책 언어(`scriptMismatch`) · 문서 `domain` ≠ `general`(8p) ·
+   검색어가 검색 규칙에 맞음. 그 밖이면 `null` — 라틴 검색어의 화면은 8g 와 같다(DB·`SEARCH.VERSION`·`OUTLINE_V` 무관). */
+
+/** "장" 묶음 줄 상한(폴백 목록이 큰 책에서 묶음이 결과를 밀어내지 않게). */
+export const CHAPTER_MAX = 30;
+
+/** "사전으로 찾음" 줄에 보일 제목 낱말 상한. */
+export const CHAPTER_WORDS_MAX = 4;
+
+/** `[8g-7]` 이 검색어·책에 "장" 묶음을 켜는가. 순수. */
+export function chapterGate(q, docLang, domain) {
+  if (domainOf({ domain: domain }) === 'general') return false;
+  if (!scriptMismatch(q, docLang)) return false;
+  return !parseQuery(q).error;
+}
+
+/**
+ * `[8g-7]` "장" 묶음 모형 — 꺼져 있거나 개념·맞는 항목이 없으면 null. 항목은 목차 순서, 쪽을 못 정한 항목(p:null)은 뺀다.
+ * @param {string} q
+ * @param {{items:Array<{t:string,p:(number|null),d:number}>, source?:string}|null} toc `tocOf` 결과
+ * @param {{docLang:string, domain?:string}} ctx
+ * @returns {null|{ids:string[], words:string[], rows:Array<{i:number,t:string,p:number,d:number,ids:string[]}>, fallback?:true}}
+ *   ids = 검색어가 대응한 개념, words = 맞은 제목 낱말(원래 글자 · 대소문자 무시 중복 없음 · 상한 `CHAPTER_WORDS_MAX`)
+ *   `[8g-7b]` fallback = 목차가 heading 폴백(개요 없는 책)일 때만 true — 묶음 머리에 목차 탭과 같은 "틀릴 수 있음" 한 줄
+ */
+export function chapterGroup(q, toc, ctx) {
+  const c = ctx || {};
+  if (!chapterGate(q, c.docLang, c.domain)) return null;
+  const items = toc && Array.isArray(toc.items) ? toc.items : [];
+  if (!items.length) return null;
+  const ms = queryMatches(q);
+  if (!ms.length) return null;
+  const want = new Set(ms.map((m) => m.id));
+  const rows = [];
+  const words = [];
+  const seenW = new Set();
+  for (let i = 0; i < items.length && rows.length < CHAPTER_MAX; i++) {
+    const it = items[i] || {};
+    const p = Number.isInteger(it.p) && it.p >= 1 ? it.p : null;
+    if (p == null) continue;
+    const hit = titleMatches(it.t, c.docLang).filter((x) => want.has(x.id));
+    if (!hit.length) continue;
+    rows.push({ i: i, t: String(it.t == null ? '' : it.t), p: p, d: Math.max(1, Math.floor(Number(it.d)) || 1), ids: hit.map((x) => x.id) });
+    for (const h of hit) {
+      const k = h.words.toLowerCase();
+      if (seenW.has(k) || words.length >= CHAPTER_WORDS_MAX) continue;
+      seenW.add(k);
+      words.push(h.words);
+    }
+  }
+  if (!rows.length) return null;
+  const out = { ids: [...want], words: words, rows: rows };
+  if (toc.source === 'fallback') out.fallback = true;
+  return out;
+}
+
+/**
+ * `[8g-7]` 이 책 범위 결과 0 일 때의 상태 줄(위에서부터) — `'empty'`("찾지 못했습니다" — "장" 묶음이 **없을 때만**,
+ * 묶음이 있으면 결과가 있는 것이다) · `'hint'`(글자 체계 안내 + [«الفهرس» 로] — 검색어와 책 글자 체계가 다를 때). 순수.
+ */
+export function emptyNotice(hasChapters, mismatch) {
+  const out = [];
+  if (!hasChapters) out.push('empty');
+  if (mismatch) out.push('hint');
+  return out;
+}
+
+/**
+ * `[8g-7 · N-D2 (가)]` 목차 탭 항목 옆 흐린 이름 — UI 언어 ≠ 책 언어일 때만, 그 제목의 개념을 UI 언어 이름으로(3개까지, ' · ').
+ * `domain === 'general'` 이면 없음. 없으면 ''. 순수.
+ */
+export function tocDictName(title, docLang, uiLang, domain) {
+  if (domainOf({ domain: domain }) === 'general') return '';
+  if (!uiLang || uiLang === docLang) return '';
+  const names = [];
+  for (const m of titleMatches(title, docLang)) {
+    const n = nameOf(m.id, uiLang);
+    if (n && names.indexOf(n) < 0) names.push(n);
+    if (names.length >= 3) break;
+  }
+  return names.join(' · ');
 }
 
 /**
@@ -554,7 +644,9 @@ const S = {
   pending: null,           // 리더가 그린 뒤 할 일 {kind:'hit'|'spot', docId, pageNo, ...}
   lastJump: null,          // 마지막으로 간 적중 {docId, pageNo, i} — 다시 그리기(새 판·뷰·언어) 뒤 다시 칠하고 다시 cue
   docRecs: new Map(),      // docId → documents 레코드(서재 범위 제목)
-  snips: new Map(),        // `${docId}|${pageNo}|${kind}` → snippetAt 결과(작다 — 쪽 글자는 들고 있지 않는다)
+  snips: new Map(),        // `snipKey(검색어 키, docId, pageNo, kind)` → snippetAt 결과(작다 — 쪽 글자는 들고 있지 않는다)
+  snipQ: null,             // `[8g-7b]` 지금 조각 캐시가 속한 검색어 키(`snipQueryKey`) — 바뀌면 캐시를 비운다
+  snipQFor: null,          // 그 키를 만든 검색어(원래 글자)
   debounce: null,
   /* `[8g-4b]` 목차 탭 — 이 책 범위에서만(서재 범위엔 없다). 탭·스크롤·펼침은 모듈 메모리(뒤로 = 그 탭 그대로). */
   tab: 'find',             // 'find' | 'toc'
@@ -564,12 +656,14 @@ const S = {
   tocToken: 0,
   curLine: null,           // `[8g-4b F2]` 지금 칠해 둔 고른 적중 줄 {docId, page, id} — 뷰 전환 기준 줄 힌트
   lastView: null,          // `[8g-4b F2]` 마지막으로 처리한 그리기 {docId, page, view} — 뷰 전환을 알아본다
-  cueOwned: false          // `[8g-4b F2]` 다음 [▶] 시작점을 검색이 정했다(▶ 하면 풀린다)
+  cueOwned: false,         // `[8g-4b F2]` 다음 [▶] 시작점을 검색이 정했다(▶ 하면 풀린다)
+  chap: null               // `[8g-7]` "장" 묶음이 쓰는 목차 {docId, data, loading, failed} — 켜지는 검색어일 때만 읽는다
 };
 let run = null;
 let io = null;
 const snipQueue = new Set();
 let snipTimer = null;
+const rowQ = new WeakMap();   // `[8g-7b]` 결과 줄 → 그 줄을 그린 검색어 키(`snipQueryKey`)
 
 /* ════════════════════════════════════════════════════════
    3. 배선
@@ -634,6 +728,13 @@ export function initSearch() {
     submitNow();
   });
   els.results.addEventListener('click', onResultsClick);
+  // `[8g-7]` 글자 체계 안내 줄의 [«الفهرس» 로] — 목차 탭으로
+  els.status.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button.search-to-toc');
+    if (!b) return;
+    setTab('toc');
+    try { els.tabToc.focus({ preventScroll: true }); } catch (e) { /* 초점 실패는 무해 */ }
+  });
   if (els.tabs && els.toc) {
     els.tabs.addEventListener('click', (ev) => {
       const b = ev.target.closest('button[role="tab"]');
@@ -754,6 +855,7 @@ async function showSearch(params) {
     S.tocScrollY = 0;
     S.tocOpen = new Map();
     S.tocToken++;
+    S.chap = null;
   }
   if (!docId) S.scope = 'library';
   paintScope();
@@ -929,6 +1031,11 @@ function runSearch(force) {
 function onRunEvent(ev) {
   if (!S.model) return;
   applyEvent(S.model, ev);
+  // `[8g-7]` 폴백 목차(heading)는 백필이 끝나며 늘 수 있다 — 검색이 끝나면 "장" 묶음의 목차를 한 번 다시 읽는다
+  if (ev.type === 'final' && S.model.scope === 'doc') {
+    const d = chapToc();
+    if (d && d.source === 'fallback' && chapterGate(S.model.query, docLang(S.docId), S.doc && S.doc.domain)) loadChapToc(true);
+  }
   if (ev.type === 'doc' && ev.result) ensureDocRec(ev.result.docId);
   if (ev.type === 'progress' && S.model.scope === 'library') { paintLibProgress(ev.progress); return; }
   if (ev.type === 'progress') { paintModelStatus(); return; }
@@ -995,10 +1102,101 @@ function isolated(key, q) {
   return frag;
 }
 
+/** 언어 이름 — `[8g-7]` UI 언어로(`search.langName.*` — «بلغة English» 가 아니라 «باللغة الإنجليزية»). 표에 없으면 자기 이름, 그것도 없으면 코드. */
 function langName(lang) {
-  const k = 'onboarding.lang.' + lang;
+  const k = 'search.langName.' + lang;
   const v = t(k);
-  return v === k ? String(lang) : v;
+  if (v !== k) return v;
+  const k2 = 'onboarding.lang.' + lang;
+  const v2 = t(k2);
+  return v2 === k2 ? String(lang) : v2;
+}
+
+/** `[8g-7]` 글자 체계 안내 한 줄 — 문구 + (이 책 범위·목차가 있으면) [«الفهرس» 로] 단추. */
+function scriptHintNode(lang, withToc) {
+  const frag = document.createDocumentFragment();
+  frag.appendChild(document.createTextNode(t('search.scriptHint', { lang: langName(lang) })));
+  if (withToc) {
+    frag.appendChild(document.createTextNode(' '));
+    const b = el('button', 'search-to-toc');
+    b.type = 'button';
+    b.textContent = t('search.toToc');
+    frag.appendChild(b);
+  }
+  return frag;
+}
+
+/**
+ * 문구 틀의 자리표시자를 격리된 글자 조각으로(`<bdi>` — 검색어·원서 낱말이 UI 방향과 섞이지 않게). 문구는 `textContent` 뿐.
+ * @param {string} key
+ * @param {Object<string, {text:string, dir:string, lang?:string}>} parts
+ */
+function isolatedParts(key, parts) {
+  const names = Object.keys(parts);
+  const marks = {};
+  names.forEach((n, i) => { marks[n] = String.fromCharCode(0xE000 + i); });
+  const tpl = t(key, marks);
+  const frag = document.createDocumentFragment();
+  let buf = '';
+  for (const ch of tpl) {
+    const n = names.find((x) => marks[x] === ch);
+    if (!n) { buf += ch; continue; }
+    if (buf) { frag.appendChild(document.createTextNode(buf)); buf = ''; }
+    const b = document.createElement('bdi');
+    b.setAttribute('dir', parts[n].dir);
+    if (parts[n].lang) b.setAttribute('lang', parts[n].lang);
+    b.textContent = parts[n].text;
+    frag.appendChild(b);
+  }
+  if (buf) frag.appendChild(document.createTextNode(buf));
+  return frag;
+}
+
+/* ── `[8g-7]` "장" 묶음의 목차 — 켜지는 검색어일 때만 읽는다(라틴 검색어는 읽기 0) ── */
+
+/** "장" 묶음이 쓸 목차 — 이 묶음이 읽은 것, 아직이면 목차 탭이 읽어 둔 것. 없으면 null. */
+function chapToc() {
+  if (S.chap && S.chap.docId === S.docId && S.chap.data) return S.chap.data;
+  return S.toc && S.toc.docId === S.docId && S.toc.data ? S.toc.data : null;
+}
+
+/** 목차를 읽어 둔다(`tocOf` — 저장된 개요, 없으면 heading 폴백). 바뀌었으면 결과를 다시 그린다. `force` = 이미 있어도 다시. */
+function loadChapToc(force) {
+  const docId = S.docId;
+  if (!docId) return;
+  const cur = S.chap && S.chap.docId === docId ? S.chap : null;
+  if (cur && cur.loading) return;
+  if (cur && !force && (cur.data || cur.failed)) return;
+  const my = { docId: docId, data: cur ? cur.data : null, loading: true, failed: false };
+  S.chap = my;
+  const before = tocKey(chapToc());
+  tocOf(docId).then((data) => {
+    if (S.chap !== my) return;
+    my.loading = false;
+    if (!data) { my.failed = true; return; }
+    my.data = data;
+    if (!S.shown || S.docId !== docId || !S.model || S.model.scope !== 'doc') return;
+    if (tocKey(data) === before) return;
+    const y = window.scrollY || 0;
+    paintModel();
+    if (S.tab === 'find') { try { window.scrollTo({ top: y, behavior: 'instant' }); } catch (e) { window.scrollTo(0, y); } }
+  }, () => {
+    if (S.chap !== my) return;
+    my.loading = false;
+    my.failed = true;
+  });
+}
+
+/** 지금 결과 모형의 "장" 묶음(없으면 null). 켜지는 검색어인데 목차가 아직이면 읽기를 시작하고 null(읽으면 다시 그린다). */
+function currentChapters() {
+  const m = S.model;
+  if (!m || m.scope !== 'doc' || !S.docId) return null;
+  const lang = docLang(S.docId);
+  const domain = S.doc && S.doc.domain;
+  if (!chapterGate(m.query, lang, domain)) return null;
+  if (!(S.chap && S.chap.docId === S.docId && (S.chap.data || S.chap.failed))) loadChapToc(false);
+  const data = chapToc();
+  return data ? chapterGroup(m.query, data, { docLang: lang, domain: domain }) : null;
 }
 
 function paintModelStatus() {
@@ -1023,8 +1221,10 @@ function paintModelStatus() {
     if (sn && sn.replace) {
       lines.push({ text: t(sn.key) });
     } else if (m.final && !r.hits.length) {
-      lines.push({ node: isolated('search.empty', m.query) });
-      if (scriptMismatch(m.query, docLang(S.docId))) lines.push({ text: t('search.scriptHint', { lang: langName(docLang(S.docId)) }) });
+      // `[8g-7]` 사전으로 장을 찾았으면 "찾지 못했습니다"는 내지 않는다(결과가 있다) — 안내 줄과 [«الفهرس» 로] 는 그대로
+      for (const k of emptyNotice(!!currentChapters(), scriptMismatch(m.query, docLang(S.docId)))) {
+        lines.push({ node: k === 'empty' ? isolated('search.empty', m.query) : scriptHintNode(docLang(S.docId), tocAllowed()) });
+      }
     }
   } else {
     if (m.queryError) {
@@ -1056,6 +1256,9 @@ function paintModel() {
   els.results.setAttribute('aria-busy', m.final ? 'false' : 'true');
   if (m.error) return;
   if (m.scope === 'doc') {
+    // `[8g-7]` 결과 맨 위 "장" 묶음 — 켜지지 않으면(라틴 검색어 등) 아무것도 더하지 않는다
+    const ch = currentChapters();
+    if (ch) els.results.appendChild(chapterSection(S.docId, m.query, ch));
     const r = m.result;
     if (!r || outcomeOf(r).type === 'query') return;
     paintGroups(els.results, S.docId, r);
@@ -1089,6 +1292,45 @@ function paintGroups(host, docId, r) {
   }
 }
 
+/**
+ * `[8g-7]` "장" 묶음 — 머리(개수) + "사전으로 찾음" 한 줄(검색어 → 맞은 제목 낱말) + 장마다 한 줄(누르면 목차 탭과 같은
+ * `tocJump` — 그 장 첫 쪽 맨 위). 제목은 원서 글자(dir=ltr · lang = 문서 언어). `search-row` 가 아니다(조각 읽기·띠 목록 밖).
+ */
+function chapterSection(docId, q, ch) {
+  const lang = docLang(docId);
+  const sec = el('section', 'search-group search-chapters');
+  sec.setAttribute('data-kind', 'chapters');
+  const h = el('h2', 'search-group-head');
+  h.textContent = t('search.group.chapters', { n: formatNumber(ch.rows.length) });
+  sec.appendChild(h);
+  // `[8g-7b]` 개요 없는 책(heading 폴백 목록)에서 나온 묶음 — 목차 탭 머리와 같은 "틀릴 수 있음" 한 줄(같은 키)
+  if (ch.fallback) appendNote(sec, t('search.toc.fallback'));
+  const note = el('p', 'search-note search-dict');
+  note.appendChild(isolatedParts('search.dictFrom', {
+    q: { text: q, dir: 'auto' },
+    to: { text: ch.words.join(', '), dir: 'ltr', lang: lang }
+  }));
+  sec.appendChild(note);
+  for (const row of ch.rows) {
+    const b = el('button', 'search-chap');
+    b.type = 'button';
+    b.setAttribute('data-page', String(row.p));
+    b.setAttribute('data-toc', String(row.i));
+    const top = el('span', 'search-row-top');
+    const pg = el('span', 'search-row-page');
+    pg.textContent = pageText(docId, row.p);
+    top.appendChild(pg);
+    b.appendChild(top);
+    const tt = el('span', 'search-chap-title');
+    tt.setAttribute('dir', 'ltr');
+    tt.setAttribute('lang', lang);
+    tt.textContent = row.t;
+    b.appendChild(tt);
+    sec.appendChild(b);
+  }
+  return sec;
+}
+
 function pageText(docId, p) {
   const d = S.docRecs.get(docId) || (docId === S.docId ? S.doc : null);
   return pageTextOf(d && d.pageLabels, p);
@@ -1120,7 +1362,9 @@ function rowEl(docId, row) {
   sn.setAttribute('dir', 'ltr');
   sn.setAttribute('lang', docLang(docId));
   b.appendChild(sn);
-  const cached = S.snips.get(snipKey(docId, row.pageNo, row.kind));
+  const qk = curSnipQ();
+  rowQ.set(b, qk);
+  const cached = S.snips.get(snipKey(qk, docId, row.pageNo, row.kind));
   if (cached) fillSnip(sn, cached);
   return b;
 }
@@ -1184,7 +1428,29 @@ function appendNote(host, text, tone) {
 
 /* ── 결과 조각 — 그 줄이 보일 때만 그 쪽 원문 레코드를 읽는다(17-8-5 · 원문을 메모리에 들고 있지 않는다) ── */
 
-function snipKey(docId, pageNo, kind) { return docId + '|' + pageNo + '|' + kind; }
+/**
+ * `[8g-7b]` 조각 캐시 키의 검색어 부분 — 검색어 규칙(`parseQuery`)으로 정규화한 꼴(공백·대소문자·그리스 문자 변형이 같으면
+ * 같은 적중 → 같은 조각). 규칙 밖 검색어는 ''. 순수. (8g 의 옛 키 `docId|pageNo|kind` 는 검색어를 몰라, 같은 책에서
+ * 검색어를 바꾸면 앞 검색어의 조각·`<mark>` 가 남았다 — 8g7R-8.)
+ */
+export function snipQueryKey(q) {
+  const pq = parseQuery(q);
+  return pq.error ? '' : (pq.cs ? 'c' : 'f') + (pq.whole ? 'w' : 'p') + '\n' + pq.variants.join('\n');
+}
+
+/** 조각 캐시 키 — 검색어 키 + 책 + 쪽 + 묶음 종류. 순수. */
+export function snipKey(qk, docId, pageNo, kind) { return String(qk) + '\t' + docId + '|' + pageNo + '|' + kind; }
+
+/** 지금 결과 모형의 검색어 키 — 바뀌면(검색어를 바꿈) 조각 캐시를 비운다(앞 검색어 것은 다시 쓰이지 않는다). */
+function curSnipQ() {
+  const q = S.model ? S.model.query : '';
+  if (S.snipQFor !== q) {
+    const qk = snipQueryKey(q);
+    S.snipQFor = q;
+    if (qk !== S.snipQ) { S.snips.clear(); S.snipQ = qk; }
+  }
+  return S.snipQ;
+}
 
 function observeRows() {
   const rows = els.results.querySelectorAll('button.search-row');
@@ -1236,7 +1502,8 @@ async function flushSnips() {
     for (const row of want.get(keys[i][0] + '|' + keys[i][1])) {
       const kind = row.getAttribute('data-kind');
       const sn = snipOf(kind === 'table' ? rec.table : rec.text, Number(row.getAttribute('data-at')), Number(row.getAttribute('data-len')));
-      S.snips.set(snipKey(keys[i][0], keys[i][1], kind), sn);
+      // 그 줄을 그린 검색어의 키로 둔다 — 읽는 사이 검색어가 바뀌었으면 옛 키라 새 결과 줄에 쓰이지 않는다
+      if (rowQ.get(row) === S.snipQ) S.snips.set(snipKey(S.snipQ, keys[i][0], keys[i][1], kind), sn);
       if (row.isConnected) fillSnip(row.querySelector('.search-snip'), sn);
     }
   }
@@ -1276,6 +1543,15 @@ function onResultsClick(ev) {
   if (prep) {
     prep.disabled = true;
     openDoc(prep.getAttribute('data-prep')).catch(() => { prep.disabled = false; });
+    return;
+  }
+  // `[8g-7]` "장" 묶음 줄 → 목차 탭과 같은 길(그 장 첫 쪽 맨 위)
+  const chap = ev.target.closest('button.search-chap');
+  if (chap) {
+    const p = Number(chap.getAttribute('data-page'));
+    if (!Number.isInteger(p) || p < 1 || !S.docId || !S.model) return;
+    remember(S.model.query);
+    tocJump(p, true);
     return;
   }
   const row = ev.target.closest('button.search-row');
@@ -1643,12 +1919,14 @@ function paintToc() {
   if (!items.length) return;
   const labels = Array.isArray(T.data.pageLabels) ? T.data.pageLabels : (S.doc && S.doc.pageLabels);
   const lang = docLang(S.docId);
+  // `[8g-7 · N-D2 (가)]` 항목 옆 흐린 이름 — UI 언어 ≠ 책 언어일 때만(`tocDictName`), `domain` 이 general 이면 없음
+  const dict = { ui: getLang(), domain: S.doc && S.doc.domain };
   const ol = el('ol', 'toc-list');
-  for (const r of tocRows(items, tocPage(), S.tocOpen)) ol.appendChild(tocRowEl(r, labels, lang));
+  for (const r of tocRows(items, tocPage(), S.tocOpen)) ol.appendChild(tocRowEl(r, labels, lang, dict));
   host.appendChild(ol);
 }
 
-function tocRowEl(r, labels, lang) {
+function tocRowEl(r, labels, lang, dict) {
   const li = el('li', 'toc-item' + (r.current ? ' is-here' : ''));
   li.setAttribute('data-d', String(r.d));
   li.style.setProperty('--toc-indent', String(r.indent));
@@ -1671,6 +1949,15 @@ function tocRowEl(r, labels, lang) {
   tt.setAttribute('lang', lang);
   tt.textContent = r.t;
   b.appendChild(tt);
+  const dn = dict ? tocDictName(r.t, lang, dict.ui, dict.domain) : '';
+  if (dn) {
+    // 사전 이름은 UI 언어 글자 — 제목(원서, LTR) 아래 한 줄, 흐리게(CSS `.toc-dict`)
+    const ds = el('span', 'toc-dict');
+    ds.setAttribute('lang', dict.ui);
+    ds.setAttribute('dir', 'auto');
+    ds.textContent = dn;
+    b.appendChild(ds);
+  }
   const meta = el('span', 'toc-meta');
   if (r.p != null) {
     const pg = el('span', 'toc-page');
@@ -1733,9 +2020,12 @@ function onTocClick(ev) {
   tocJump(p);
 }
 
-/** 목차 항목 → 그 쪽 맨 위. 결과로 가는 길과 같다(`beginJump` — 낭독 중이면 멈춤 → 숨은 리더에 "이동" 표시 → 쌓는 이동). */
-function tocJump(p) {
-  S.tocScrollY = window.scrollY || 0;
+/**
+ * 목차 항목 → 그 쪽 맨 위. 결과로 가는 길과 같다(`beginJump` — 낭독 중이면 멈춤 → 숨은 리더에 "이동" 표시 → 쌓는 이동).
+ * `[8g-7]` `fromFind` = 찾기 탭의 "장" 묶음에서 — 기억할 스크롤은 찾기 탭 것(뒤로 = 결과 목록 그 자리).
+ */
+function tocJump(p, fromFind) {
+  if (fromFind) S.scrollY = window.scrollY || 0; else S.tocScrollY = window.scrollY || 0;
   S.pending = { kind: 'top', docId: S.docId, pageNo: p, paused: false };
   const pend = S.pending;
   const r = beginJump(JUMP_ENV, { docId: S.docId, pageNo: p }, false);

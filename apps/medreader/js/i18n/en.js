@@ -445,6 +445,14 @@ export default {
   'search.toc.unavailable': 'The book’s table of contents has not been read yet',
   'search.toc.empty': 'Could not build a table of contents for this book',
   'search.toc.here': 'Where you are reading',
+  /* `[8g-7]` 19-1-4 2-4 — chapters found with the built-in dictionary · language name in the UI language · [Contents] button */
+  'search.group.chapters': 'Chapters {n}',
+  'search.dictFrom': 'Found with the built-in dictionary: {q} → {to}',
+  'search.toToc': 'Open “Contents”',
+  'search.langName.ar': 'Arabic',
+  'search.langName.en': 'English',
+  'search.langName.fr': 'French',
+  'search.langName.ko': 'Korean',
 
   'storage.persisted': 'Storage is protected from automatic cleanup.',
   'storage.notPersisted': 'The browser may clear stored text if space runs low.'

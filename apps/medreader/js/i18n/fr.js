@@ -443,6 +443,14 @@ export default {
   'search.toc.unavailable': 'Le sommaire du livre n’a pas encore été lu',
   'search.toc.empty': 'Impossible de construire un sommaire pour ce livre',
   'search.toc.here': 'Votre position de lecture',
+  /* `[8g-7]` 19-1-4 2-4 — chapitres trouvés par le dictionnaire intégré · nom de langue dans la langue de l’interface. `[검토 — Nour·운영자]` */
+  'search.group.chapters': 'Chapitres {n}',
+  'search.dictFrom': 'Trouvé par le dictionnaire intégré : {q} → {to}',
+  'search.toToc': 'Ouvrir « Sommaire »',
+  'search.langName.ar': 'arabe',
+  'search.langName.en': 'anglais',
+  'search.langName.fr': 'français',
+  'search.langName.ko': 'coréen',
 
   'storage.persisted': 'Storage is protected from automatic cleanup.',
   'storage.notPersisted': 'The browser may clear stored text if space runs low.'

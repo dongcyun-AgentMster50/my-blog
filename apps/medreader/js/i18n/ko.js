@@ -443,6 +443,14 @@ export default {
   'search.toc.unavailable': '목차를 아직 읽지 못했습니다',
   'search.toc.empty': '이 책에서 목차를 만들지 못했습니다',
   'search.toc.here': '지금 읽는 곳',
+  /* `[8g-7]` 19-1-4 2-4 — 내장 사전으로 찾은 장 · scriptHint 의 언어 이름(UI 언어로) · [«목차» 로] */
+  'search.group.chapters': '장 {n}',
+  'search.dictFrom': '내장 사전으로 찾음: {q} → {to}',
+  'search.toToc': '«목차» 로',
+  'search.langName.ar': '아랍어',
+  'search.langName.en': '영어',
+  'search.langName.fr': '프랑스어',
+  'search.langName.ko': '한국어',
 
   'storage.persisted': 'Storage is protected from automatic cleanup.',
   'storage.notPersisted': 'The browser may clear stored text if space runs low.'

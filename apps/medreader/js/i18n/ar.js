@@ -420,7 +420,7 @@ export default {
   'search.tooLong': 'كلمة البحث طويلة جدًا — 60 حرفًا على الأكثر',
   'search.tooMany': 'النتائج كثيرة جدًا — أضف كلمة أخرى',
   'search.empty': 'لم يُعثر على «{q}»',
-  'search.scriptHint': 'هذا الكتاب بلغة {lang} — جرّب البحث بكلمات بلغة {lang}',
+  'search.scriptHint': 'هذا الكتاب باللغة {lang} — جرّب البحث باللغة {lang}',   // `[8g-7]` {lang} = search.langName.* (الإنجليزية) `[검토 — Nour·운영자]`
   'search.partial': 'جرى البحث في {done} من {total} صفحة — النص قيد التحضير',
   'search.continuePrep': 'متابعة تحضير نص هذا الكتاب',
   'search.preparing': 'تحضير البحث {done}/{total}',
@@ -438,6 +438,14 @@ export default {
   'search.toc.unavailable': 'لم يُقرأ فهرس الكتاب بعد',
   'search.toc.empty': 'تعذّر إنشاء فهرس لهذا الكتاب',
   'search.toc.here': 'موضع القراءة الحالي',
+  /* `[8g-7]` 19-1-4 2-4 — 사전으로 장 찾기 · scriptHint 의 언어 이름(UI 언어로) · [«الفهرس» 로]. `[검토 — Nour·운영자]` */
+  'search.group.chapters': 'الفصول {n}',
+  'search.dictFrom': 'من القاموس المدمج: {q} ← {to}',
+  'search.toToc': 'افتح «الفهرس»',
+  'search.langName.ar': 'العربية',
+  'search.langName.en': 'الإنجليزية',
+  'search.langName.fr': 'الفرنسية',
+  'search.langName.ko': 'الكورية',
 
   'storage.persisted': 'التخزين محمي من التنظيف التلقائي.',
   'storage.notPersisted': 'قد يمسح المتصفح النص المخزَّن إذا قلّت المساحة.'

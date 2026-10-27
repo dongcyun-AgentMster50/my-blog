@@ -578,10 +578,11 @@ test('U10 ★ 13절 — search.js 는 innerHTML·console 을 쓰지 않는다 ·
   assert.ok(!/from '\.\.\/pdf\//.test(s));
 });
 
-test('U10 ★ i18n — 검색 키 40개(8g-4a 34 + 8g-4b 목차 4 + 다듬기 1 탭 이름 2)가 네 언어에 같고(ar 먼저, 영어 복사 아님) · 자리표시자 같음', () => {
+test('U10 ★ i18n — 검색 키 47개(8g-4a 34 + 8g-4b 목차 4 + 다듬기 1 탭 이름 2 + 8g-7 7)가 네 언어에 같고(ar 먼저, 영어 복사 아님) · 자리표시자 같음', () => {
   const keys = (l) => Object.keys(BUNDLES[l]).filter((k) => k.startsWith('search.')).sort();
   const en = keys('en');
-  assert.equal(en.length, 40);
+  // `[8g-7]` + search.group.chapters · search.dictFrom · search.toToc · search.langName.{ar,en,fr,ko}
+  assert.equal(en.length, 47);
   for (const l of ['ar', 'fr', 'ko']) assert.deepEqual(keys(l), en, l);
   for (const k of en) assert.notEqual(BUNDLES.ar[k], BUNDLES.en[k], k);
   assert.deepEqual(en.filter((k) => k.startsWith('search.toc.')), ['search.toc.empty', 'search.toc.fallback', 'search.toc.here', 'search.toc.unavailable'], '`[8g-4b]` 목차 탭 키 4개(spec 4-6)');
