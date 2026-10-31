@@ -16,6 +16,7 @@
     A 버튼 기록   모드 1 낭독만(오디오 없음, 핸들러는 건다) · 모드 2 무음 오디오 + 낭독 · 모드 3 무음 오디오만.
                   액션 8종·keydown·오디오 이벤트·visibilitychange·발화 start/end/error 를 시각(ms)과 함께. 낭독은 액션을 받아도 계속(기록만).
     B 화면 꺼짐   모드 1·2: 화면을 끄고 3분. 숨김 중 끝난 발화·간격(중앙값·최대)·오류·onend 없이 끝난 것(워치독 흉내)·마지막 발화 시각.
+                  3분을 채우고 끝나면 [3분 내내 들렸어요] 표시 단추가 나온다 — 기록은 그 시험의 marks 한 줄(저장 키·형식 그대로).
     C 포커스 다툼 모드 2 로 2분: 우리가 안 부른 오디오 pause · interrupted 외 오류.
     D 알림 모양   setPositionState 없음 / 문장식 전환. 앱이 걸 단추 5개만 건다(seek 3종을 걸면 알림 모양이 앱과 달라진다 — spec 4·5).
     E 기기        UA · mediaSession · MediaMetadata · 화면 크기.
@@ -72,17 +73,6 @@
   <div id="got" aria-live="polite"></div>
 </section>
 
-<h2>시험 · Tests</h2>
-<div class="grid" id="tests"></div>
-<button type="button" id="stop">멈춤 · Stop</button>
-
-<h2>무음 오디오 세기 · Silent audio level</h2>
-<div class="grid">
-  <button type="button" data-amp="zero">완전 무음 (기본)<small>Fully silent (default)</small></button>
-  <button type="button" data-amp="faint">거의 안 들리는 소리<small>Almost inaudible</small></button>
-</div>
-<p class="dim" id="ampNote"></p>
-
 <div id="marks" hidden>
   <h2>누르기 전에 표시 · Mark before you press</h2>
   <div class="grid">
@@ -102,6 +92,23 @@
     <button type="button" class="warn" data-flag="cut">낭독이 끊겼어요!<small>Speech cut off</small></button>
   </div>
 </div>
+
+<div id="heardBox" hidden>
+  <h2>낭독이 들렸나요? · Did you hear the speech?</h2>
+  <button type="button" id="heard" data-heard>3분 내내 들렸어요<small>I heard it the whole 3 minutes</small></button>
+  <p class="dim">끊겼으면 누르지 말고 메시지로 알려 주세요 · If it cut out, do not press — tell us in your message.</p>
+</div>
+
+<h2>시험 · Tests</h2>
+<div class="grid" id="tests"></div>
+<button type="button" id="stop">멈춤 · Stop</button>
+
+<h2>무음 오디오 세기 · Silent audio level</h2>
+<div class="grid">
+  <button type="button" data-amp="zero">완전 무음 (기본)<small>Fully silent (default)</small></button>
+  <button type="button" data-amp="faint">거의 안 들리는 소리<small>Almost inaudible</small></button>
+</div>
+<p class="dim" id="ampNote"></p>
 
 <div id="bar" hidden>
   <h2>D 알림 막대 · Notification bar</h2>
@@ -140,8 +147,9 @@
     'The lungs exchange oxygen.', 'Bones protect the organs.', 'The kidneys remove waste.'];
   var AMPS = { zero: ['완전 무음', 'Fully silent'], faint: ['거의 안 들리는 소리', 'Almost inaudible'] };
   var MODES = { 1: ['낭독만', 'Speech only'], 2: ['무음 오디오 + 낭독', 'Silent audio + speech'], 3: ['무음 오디오만', 'Silent audio only'] };
-  var DO_A = ['이어폰 단추를 한 번·두 번·세 번·길게 눌러 보세요. 누르기 전에 아래 표시를 먼저. 알림창의 ⏮⏯⏭, 잠금 화면 단추도 있으면 눌러 보세요.',
-    'Press the earphone button once, twice, 3 times, long. Mark each below first. Also try notification and lock-screen buttons if you see them.'];
+  var HEARD = '3분 내내 들림';                  // B 끝난 뒤 사람이 누른 표시 — marks 에 넣는 글, runLines 가 따로 적는다
+  var DO_A = ['이어폰 단추를 한 번·두 번·세 번·길게 눌러 보세요. 누르기 전에 아래 표시를 먼저. 알림창의 ⏮⏯⏭, 잠금 화면 단추도 있으면 눌러 보세요. 끝나면 [멈춤]을 누르세요.',
+    'Press the earphone button once, twice, 3 times, long. Mark each below first. Also try notification and lock-screen buttons if you see them. When done, press [Stop].'];
   var DO_B = ['전원 단추로 화면을 끄고 3분 기다린 뒤 켜세요. 낭독이 들리는지도 들어 보세요.',
     'Turn the screen off with the power button, wait 3 minutes, turn it on. Listen whether speech continues.'];
   var TESTS = [
@@ -153,7 +161,7 @@
     { id: 'C', mode: 2, limit: C_MS, name: '2분 듣기', en: 'Listen 2 minutes',
       todo: ['2분 동안 듣기만 하세요. 낭독이 끊기면 [낭독이 끊겼어요!]를 누르세요.', 'Just listen for 2 minutes. If speech cuts off, press [Speech cut off].'] },
     { id: 'D', mode: 2, name: '알림 모양', en: 'Notification look',
-      todo: ['알림창을 내려 캡처 → [문장식 막대] 누르고 다시 캡처. 2장이면 됩니다.', 'Pull down notifications, screenshot. Press [Sentence position], screenshot again. 2 images.'] }
+      todo: ['알림창을 내려 캡처 → [문장식 막대] 누르고 다시 캡처. 2장이면 됩니다. 끝나면 [멈춤]을 누르세요.', 'Pull down notifications, screenshot. Press [Sentence position], screenshot again. 2 images. When done, press [Stop].'] }
   ];
 
   var KO = /^ko/i.test(navigator.language || '');
@@ -238,6 +246,7 @@
       run.done++; run.lastEnd = t; if (span) { span.done++; span.lastEnd = t; }
       touch(); prevEnd = t;
       note('speech', 'end ' + n);
+      paintSum();
       speakNext(my);
     };
     u.onerror = function (e) {
@@ -250,6 +259,7 @@
       if (span) span.err++;
       touch();
       note('speech', 'error ' + n + ' ' + c);
+      paintSum();
       if (++errStreak >= MAX_ERR_STREAK) { note('speech', '연속 오류 ' + MAX_ERR_STREAK + '번 — 사슬을 멈춤'); return; }
       setTimeout(function () { speakNext(my); }, RETRY_MS);
     };
@@ -258,6 +268,7 @@
       utt = null; prevEnd = 0; run.lost++; if (span) span.lost++;
       touch();
       note('watchdog', (started ? 'end' : 'start') + ' 없음 ' + n);
+      paintSum();
       try { synth.cancel(); } catch (e) { /* 무시 */ }
       setTimeout(function () { speakNext(my); }, CANCEL_DELAY_MS);
     }, WATCHDOG_MS);
@@ -413,6 +424,11 @@
     var t = b.getAttribute('data-test');
     if (t) { start(TESTS.filter(function (x) { return x.id === t; })[0]); return; }
     if (b.hasAttribute('data-kind')) { kind = b.getAttribute('data-kind'); paintMarks(); return; }
+    if (b.hasAttribute('data-heard')) {         // 시험이 끝난 뒤의 표시 — 끝난 시험에 붙이고, 사건은 번호를 글에 적는다(note 의 run 은 이미 없음)
+      var fin = lastB();
+      if (fin && !heard(fin)) { fin.marks.push({ l: HEARD, h: [] }); note('mark', '#' + fin.id + ' ' + fin.test + ' ' + HEARD); paint(); }
+      return;
+    }
     if (b.hasAttribute('data-amp')) {
       var amp = b.getAttribute('data-amp');
       if (amp !== st.amp) { st.amp = amp; note('session', '진폭 선택 ' + ampName(amp) + ' — 다음 시작부터'); }
@@ -471,12 +487,14 @@
   function bWord(m) {
     var s = bOf(m);
     if (!s) return 'B 모드 ' + m + ' 안 함';
-    return 'B 모드 ' + m + ' 숨김 ' + mmss(s.to - s.from) + ' · 숨김 중 발화 ' + s.done + ' · 최대 간격 ' + secs(s.maxGap) + (s.done && s.maxQuiet <= QUIET_OK_MS ? ' · 이어짐' : ' · 끊김(최대 공백 ' + secs(s.maxQuiet) + ')');
+    var alive = s.done && s.maxQuiet <= QUIET_OK_MS;
+    return 'B 모드 ' + m + ' 숨김 ' + mmss(s.to - s.from) + ' · 숨김 중 발화 ' + s.done + ' · 최대 간격 ' + secs(s.maxGap) +
+      (!alive ? ' · 끊김(최대 공백 ' + secs(s.maxQuiet) + ')' : s.err ? ' · 오류로 끊김' : ' · 이어짐') + ' · 오류 ' + s.err;
   }
   function cStats() {
     var rs = runsOf(function (r) { return r.test === 'C'; });
     return { any: rs.length > 0, full: rs.some(function (r) { return r.end - r.start >= C_MS - 2000; }),
-      fights: rs.reduce(function (a, r) { return a + r.foreign; }, 0), cuts: rs.reduce(function (a, r) { return a + r.cut + r.lost + r.cutMarks; }, 0) };
+      fights: rs.reduce(function (a, r) { return a + r.foreign + r.foreignHidden; }, 0), cuts: rs.reduce(function (a, r) { return a + r.cut + r.lost + r.cutMarks; }, 0) };
   }
   function summary() {
     var m = (tally(1) ? tally(1).music : 0) + (tally(2) ? tally(2).music : 0) + (tally(3) ? tally(3).music : 0), c = cStats();
@@ -488,13 +506,13 @@
     else if (a.n && !a.music) out.push("모드 1 이 버튼을 받고 음악 앱이 안 켜짐 → SESSION='none' 후보(두 기기 모두일 때만)" + (a.clean ? '' : ' · 주의: 무음 오디오 뒤에만 잰 값'));
     else if (b && b.n) out.push((a.n ? '모드 1 은 음악 앱이 켜짐' : '모드 2 만 버튼을 받음') + ' → (나) 확정');
     else if (!b) out.push('모드 2 를 안 해서 (나) 판정 불가');
-    else out.push('모드 1·2 모두 버튼 없음 → 운영자에게');
+    else out.push((a.n ? '모드 1 은 버튼을 받았지만 음악 앱이 켜졌고 모드 2 는 버튼 없음' : '모드 1·2 모두 버튼 없음') + ' → 운영자에게');
     if (!c.any) out.push('C 안 함');
     else if (c.fights || c.cuts) out.push('C 포커스 다툼 ' + c.fights + ' · 발화 끊김 ' + c.cuts + ' → (나) 보류, 운영자에게(대안: (가) + 화면 버튼만)');
     else out.push(c.full ? 'C 2분 다툼 0 · 끊김 0 → (나)의 위험 안 보임' : 'C 2분을 못 채움');
     if (!s) out.push('B 모드 2 안 함');
     else if (s.to - s.from < B_ENOUGH_MS) out.push('B 모드 2 숨김이 3분에 못 미침');
-    else if (s.done && s.maxQuiet <= QUIET_OK_MS && s.maxGap <= GAP_OK_MS) out.push('B 모드 2 3분 내내 이어지고 최대 간격 ≤ 3초 → 9a-2 (다) Plan 근거(두 기기 결과가 모두 온 뒤)');
+    else if (s.done && !s.err && s.maxQuiet <= QUIET_OK_MS && s.maxGap <= GAP_OK_MS) out.push('B 모드 2 3분 내내 이어지고 최대 간격 ≤ 3초 → 9a-2 (다) Plan 근거(두 기기 결과가 모두 온 뒤)');
     else out.push('B 모드 2 → 9a-2 (다) 근거 아님');
     if (Object.keys(ampUsed()).length > 1) out.push('주의: 두 진폭의 결과가 섞여 있다 — 위 줄은 합친 값이니 시험별 줄을 볼 것');
     return out;
@@ -510,7 +528,8 @@
       '   버튼 ' + acts + ' · key ' + r.keys + ' · 발화 끝 ' + r.done + ' · 오류 ' + JSON.stringify(r.errs) + ' · onend 없음 ' + r.lost + ' · 늦은 end ' + r.late +
       ' · 안 부른 pause ' + r.foreign + '(숨김 중 ' + r.foreignHidden + ') · play 거부 ' + r.playFail + ' · 음악 앱 ' + r.music + ' · 끊김 표시 ' + r.cutMarks,
       '   간격 중앙값 ' + secs(median(r.gaps)) + ' · 최대 ' + secs(r.maxGap) + (r.lastEnd ? ' · 마지막 발화 ' + fmt(r.lastEnd) : '')];
-    r.marks.forEach(function (m) { out.push('   표시 ' + m.l + ' → ' + (m.h.join(', ') || '받은 것 없음')); });
+    r.marks.forEach(function (m) { if (m.l !== HEARD) out.push('   표시 ' + m.l + ' → ' + (m.h.join(', ') || '받은 것 없음')); });
+    if (r.test.charAt(0) === 'B') out.push('   들렸나: ' + (heard(r) ? HEARD + '(사람이 표시)' : '표시 없음'));
     r.spans.forEach(function (s) {
       out.push('   숨김 ' + mmss(s.to - s.from) + ' (' + fmt(s.from) + '–' + fmt(s.to) + '): 끝난 발화 ' + s.done + ' · 오류 ' + s.err + ' · onend 없음 ' + s.lost + ' · 간격 중앙값 ' + secs(median(s.gaps)) +
         ' · 최대 ' + secs(s.maxGap) + ' · 최대 공백 ' + secs(s.maxQuiet) + (s.lastEnd ? ' · 마지막 발화 ' + fmt(s.lastEnd) : ''));
@@ -537,6 +556,12 @@
     });
   }
   function nextTest() { return TESTS.filter(function (t) { return !isDone(t); })[0] || null; }
+  function heard(r) { return r.marks.some(function (m) { return m.l === HEARD; }); }
+  function lastB() {                            // 방금 3분을 채우고 끝난 B — 저장된 기록에서 읽으므로 새로고침해도 단추가 남는다
+    var r = st.runs[st.runs.length - 1], s = !run && r && r.test.charAt(0) === 'B' && longest(r);
+    return s && s.to - s.from >= B_ENOUGH_MS ? r : null;
+  }
+  function paintSum() { $('sum').textContent = summary(); }
   function paintMarks() {
     document.querySelectorAll('[data-kind]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-kind') === kind); });
     document.querySelectorAll('[data-bar]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-bar') === barMode); });
@@ -572,7 +597,10 @@
     $('marks').hidden = !run;
     $('bar').hidden = !(run && test.id === 'D');
     $('stop').disabled = !run;
-    $('sum').textContent = summary();
+    var fin = lastB();
+    $('heardBox').hidden = !fin;
+    $('heard').classList.toggle('on', !!fin && heard(fin));
+    paintSum();
     paintClock();
     paintMarks();
   }
