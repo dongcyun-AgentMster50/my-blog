@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedReader 핸즈프리 진단</title>
+<link rel="icon" href="data:,">
+<!--
+  ============================================================
+  MedReader 핸즈프리 진단 — 개발 페이지 (9a-0 · spec 17-1-1 7절)
+
+  앱 본체와 무관하다. 앱 파일을 바꾸지 않고, 앱 DB·설정을 읽거나 쓰지 않고, 앱 모듈을 import 하지 않는다.
+  외부 자원 0 · 이 파일 밖 요청 0(아이콘도 data:). 저장은 이 페이지 전용 localStorage 키 하나뿐.
+
+  ★ 무엇을 보나 (Fold 7 → Nour 순서 — 결과를 복사해 보낸다)
+    A 버튼 기록   모드 1 낭독만(오디오 없음, 핸들러는 건다) · 모드 2 무음 오디오 + 낭독 · 모드 3 무음 오디오만.
+                  액션 8종·keydown·오디오 이벤트·visibilitychange·발화 start/end/error 를 시각(ms)과 함께. 낭독은 액션을 받아도 계속(기록만).
+    B 화면 꺼짐   모드 1·2: 화면을 끄고 3분. 숨김 중 끝난 발화·간격(중앙값·최대)·오류·onend 없이 끝난 것(워치독 흉내)·마지막 발화 시각.
+    C 포커스 다툼 모드 2 로 2분: 우리가 안 부른 오디오 pause · interrupted 외 오류.
+    D 알림 모양   setPositionState 없음 / 문장식 전환. 앱이 걸 단추 5개만 건다(seek 3종을 걸면 알림 모양이 앱과 달라진다 — spec 4·5).
+    E 기기        UA · mediaSession · MediaMetadata · 화면 크기.
+  판정 규칙(spec 7)은 [결과 복사]의 머리에 후보로만 적는다. 결정은 사람이 한다.
+
+  모드를 바꿀 때마다 오디오 요소를 버려 세션을 없앤다 — 앞 시험의 세션이 "모드 1(오디오 없음)"을 오염시키지 않게.
+  그래도 Android 는 "마지막으로 소리 낸 앱"을 기억하므로 모드 1 을 먼저 잰다(순서 안내·afterAudio 표시).
+  낭독·Wake Lock·무음 오디오의 순서는 앱 설계와 같다: audio.play → speak → wakeLock(spec 5, speaker.play).
+  진폭 선택: 기본 "완전 무음"(바이트 128 고정 — spec 6). "거의 안 들리는 소리"는 완전 무음이 알림을 막는지 가리려는 것(128±1 잡음).
+  고른 값은 다음 시작부터 — 모드 2·3 의 모든 시험(A2·A3·B2·C·D)에 같이 쓰고, 시험마다 기록해 [결과 복사] 머리에 적는다.
+  ============================================================
+-->
+<style>
+  :root { color-scheme: light dark; --bg: #faf7f0; --fg: #222; --dim: #666; --line: #d8d2c4; --ok: #1f7a4d; --no: #a32d2d; --panel: #f0e9da; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --dim: #aaa; --line: #333; --ok: #6cc89a; --no: #ef8b8b; --panel: #232220; } }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; padding: 16px; max-width: 720px; overflow-wrap: anywhere; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  h2 { font-size: 17px; margin: 20px 0 4px; }
+  p { margin: 6px 0; }
+  .dim { color: var(--dim); font-size: 14px; }
+  #now { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+  .big { font-size: 22px; font-weight: 700; line-height: 1.3; }
+  .next { font-size: 19px; font-weight: 600; line-height: 1.35; margin-top: 8px; }
+  #clock { font-size: 22px; font-variant-numeric: tabular-nums; }
+  #got { font-size: 18px; font-weight: 700; color: var(--ok); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-block: 8px; }
+  .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  button { font: inherit; min-height: 48px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; touch-action: manipulation; width: 100%; }
+  button.on { border: 2px solid var(--ok); font-weight: 700; }
+  button.up { border: 2px dashed var(--ok); }
+  button.warn { color: var(--no); font-weight: 700; }
+  button small { display: block; color: var(--dim); font-size: 13px; font-weight: 400; }
+  input, textarea { font: inherit; width: 100%; min-height: 48px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; }
+  textarea { height: 180px; font-size: 13px; }
+  pre { white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 13px; }
+  #sum { font-weight: 600; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1>MedReader 핸즈프리 진단 <span class="dim">· Hands-free check</span></h1>
+<p>Chrome으로 열어 주세요. 아래 큰 글씨를 따라 위에서부터 차례로 하고, 끝나면 [결과 복사]로 보내 주세요.<br>
+<span class="dim">Open in Chrome. Follow the large text step by step, then press [Copy results] and send it.</span></p>
+<!-- [검토 — 운영자] 아랍어 안내 한 줄 — 원어민 확인 전 -->
+<p lang="ar" dir="rtl">افتح هذه الصفحة في Chrome، واتبع النص الكبير خطوة بخطوة، ثم اضغط «Copy results» وأرسل النتيجة.</p>
+
+<section id="now">
+  <div class="big" id="what"></div>
+  <div class="dim" id="what2"></div>
+  <div id="clock"></div>
+  <div class="next" id="next"></div>
+  <div class="dim" id="next2"></div>
+  <div id="got" aria-live="polite"></div>
+</section>
+
+<h2>시험 · Tests</h2>
+<div class="grid" id="tests"></div>
+<button type="button" id="stop">멈춤 · Stop</button>
+
+<h2>무음 오디오 세기 · Silent audio level</h2>
+<div class="grid">
+  <button type="button" data-amp="zero">완전 무음 (기본)<small>Fully silent (default)</small></button>
+  <button type="button" data-amp="faint">거의 안 들리는 소리<small>Almost inaudible</small></button>
+</div>
+<p class="dim" id="ampNote"></p>
+
+<div id="marks" hidden>
+  <h2>누르기 전에 표시 · Mark before you press</h2>
+  <div class="grid">
+    <button type="button" data-kind="유선">유선 이어폰<small>Wired earphones</small></button>
+    <button type="button" data-kind="블루투스">블루투스 이어폰<small>Bluetooth earphones</small></button>
+  </div>
+  <div class="grid three">
+    <button type="button" data-mark="한 번">한 번<small>Once</small></button>
+    <button type="button" data-mark="두 번">두 번<small>Twice</small></button>
+    <button type="button" data-mark="세 번">세 번<small>3 times</small></button>
+    <button type="button" data-mark="길게">길게<small>Long press</small></button>
+    <button type="button" data-mark="알림창">알림창<small>Notification</small></button>
+    <button type="button" data-mark="잠금 화면">잠금 화면<small>Lock screen</small></button>
+  </div>
+  <div class="grid">
+    <button type="button" class="warn" data-flag="music">음악 앱이 켜졌어요!<small>A music app started</small></button>
+    <button type="button" class="warn" data-flag="cut">낭독이 끊겼어요!<small>Speech cut off</small></button>
+  </div>
+</div>
+
+<div id="bar" hidden>
+  <h2>D 알림 막대 · Notification bar</h2>
+  <div class="grid">
+    <button type="button" data-bar="none">위치 막대 없음<small>No position bar</small></button>
+    <button type="button" data-bar="sentence">문장식 막대<small>Sentence position</small></button>
+  </div>
+</div>
+
+<h2>이어폰 이름 · Earphones</h2>
+<input id="phones" maxlength="80" autocomplete="off" placeholder="예: 갤럭시 버즈 3 · e.g. Galaxy Buds 3">
+
+<h2>결과 · Results</h2>
+<p id="sum"></p>
+<div class="grid">
+  <button type="button" id="copy">결과 복사 · Copy results</button>
+  <button type="button" id="clear">기록 지우기 · Clear log</button>
+</div>
+<textarea id="box" readonly hidden></textarea>
+<p class="dim" id="warn"></p>
+
+<h2>기록 · Log <span class="dim" id="count"></span></h2>
+<pre id="log"></pre>
+
+<script>
+(function () {
+  'use strict';
+  var KEY = 'medreader.dev.handsfree.v1';       // 이 페이지 전용 — 앱 키(`medreader.voiceTest.*` 등)와 겹치지 않는다
+  var MAX_EVENTS = 1500, MAX_RUNS = 30, MAX_GAPS = 400, MAX_MARKS = 60, MAX_HITS = 30;
+  var WAV_SECONDS = 10, WAV_RATE = 8000;        // spec 6 — 8 kHz·8비트·모노, 80,044 바이트. 5초 넘어야 알림이 생긴다(W1)
+  var WATCHDOG_MS = 12000, CANCEL_DELAY_MS = 60, RETRY_MS = 500, MAX_ERR_STREAK = 5;
+  var B_ENOUGH_MS = 170000, C_MS = 120000, GAP_OK_MS = 3000, QUIET_OK_MS = 10000, BAR_SENTENCES = 40;
+  var ACTIONS = ['play', 'pause', 'previoustrack', 'nexttrack', 'stop', 'seekbackward', 'seekforward', 'seekto'];
+  var APP_ACTIONS = ['play', 'pause', 'previoustrack', 'nexttrack', 'stop'];   // 9a 가 실제로 걸 단추(spec 4)
+  var LINES = ['The heart has four chambers.', 'The liver filters the blood.', 'Nerves carry signals to the brain.',
+    'The lungs exchange oxygen.', 'Bones protect the organs.', 'The kidneys remove waste.'];
+  var AMPS = { zero: ['완전 무음', 'Fully silent'], faint: ['거의 안 들리는 소리', 'Almost inaudible'] };
+  var MODES = { 1: ['낭독만', 'Speech only'], 2: ['무음 오디오 + 낭독', 'Silent audio + speech'], 3: ['무음 오디오만', 'Silent audio only'] };
+  var DO_A = ['이어폰 단추를 한 번·두 번·세 번·길게 눌러 보세요. 누르기 전에 아래 표시를 먼저. 알림창의 ⏮⏯⏭, 잠금 화면 단추도 있으면 눌러 보세요.',
+    'Press the earphone button once, twice, 3 times, long. Mark each below first. Also try notification and lock-screen buttons if you see them.'];
+  var DO_B = ['전원 단추로 화면을 끄고 3분 기다린 뒤 켜세요. 낭독이 들리는지도 들어 보세요.',
+    'Turn the screen off with the power button, wait 3 minutes, turn it on. Listen whether speech continues.'];
+  var TESTS = [
+    { id: 'A1', mode: 1, name: '낭독만 — 먼저', en: 'Speech only — first', todo: DO_A },
+    { id: 'A2', mode: 2, name: '무음 오디오 + 낭독', en: 'Silent audio + speech', todo: DO_A },
+    { id: 'A3', mode: 3, name: '무음 오디오만', en: 'Silent audio only', todo: ['소리는 나지 않습니다. ' + DO_A[0], 'No sound here. ' + DO_A[1]] },
+    { id: 'B1', mode: 1, name: '화면 끄기 · 낭독만', en: 'Screen off · speech only', todo: DO_B },
+    { id: 'B2', mode: 2, name: '화면 끄기 · 오디오 + 낭독', en: 'Screen off · audio + speech', todo: DO_B },
+    { id: 'C', mode: 2, limit: C_MS, name: '2분 듣기', en: 'Listen 2 minutes',
+      todo: ['2분 동안 듣기만 하세요. 낭독이 끊기면 [낭독이 끊겼어요!]를 누르세요.', 'Just listen for 2 minutes. If speech cuts off, press [Speech cut off].'] },
+    { id: 'D', mode: 2, name: '알림 모양', en: 'Notification look',
+      todo: ['알림창을 내려 캡처 → [문장식 막대] 누르고 다시 캡처. 2장이면 됩니다.', 'Pull down notifications, screenshot. Press [Sentence position], screenshot again. 2 images.'] }
+  ];
+
+  var KO = /^ko/i.test(navigator.language || '');
+  var synth = window.speechSynthesis;
+  var ms = ('mediaSession' in navigator) ? navigator.mediaSession : null;
+  var st = load(), run = null, test = null, span = null, msg = null, doneMsg = null, got = null;
+  var gen = 0, utt = null, wd = 0, seq = 0, prevEnd = 0, errStreak = 0;
+  var audio = null, wavUrls = {}, audioUsed = false, lock = null, barMode = 'none', kind = '', storeFail = false;
+
+  function $(id) { return document.getElementById(id); }
+  function pad(n, w) { return String(n).padStart(w, '0'); }
+  function fmt(t) { var d = new Date(t); return pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2) + ':' + pad(d.getSeconds(), 2) + '.' + pad(d.getMilliseconds(), 3); }
+  function mmss(v) { var s = Math.max(0, Math.round(v / 1000)); return Math.floor(s / 60) + ':' + pad(s % 60, 2); }
+  function secs(v) { return (v / 1000).toFixed(1) + 's'; }
+  function median(a) { if (!a.length) return 0; var b = a.slice().sort(function (x, y) { return x - y; }); return b[Math.floor(b.length / 2)]; }
+  function two(p) { return KO ? p : [p[1], p[0]]; }
+  function put(a, b, p) { var q = two(p); $(a).textContent = q[0]; $(b).textContent = q[1]; }
+
+  /* ── 저장: 사건마다 쓴다 — 화면이 꺼진 채 페이지가 얼거나 버려져도 그때까지는 남게 ── */
+
+  function fresh() { return { v: 1, seq: 0, events: [], dropped: 0, runs: [], phones: '', amp: 'zero' }; }
+  function load() {
+    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1 && s.events && s.runs) return s; } catch (e) { /* 새로 시작 */ }
+    return fresh();
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(st)); storeFail = false; }
+    catch (e) { if (!storeFail) { storeFail = true; $('warn').textContent = '기록을 저장하지 못했습니다 — 이 화면을 닫지 말고 복사하세요 · Could not save: copy before closing.'; } }
+  }
+  function note(k, text) {
+    st.events.push([Date.now(), k + (document.hidden ? '*' : ''), String(text || '').slice(0, 160), run ? run.id : 0]);
+    if (st.events.length > MAX_EVENTS) { var over = st.events.length - MAX_EVENTS; st.events.splice(0, over); st.dropped += over; }
+    save();
+    paintLog();
+  }
+  function line(e) { return fmt(e[0]) + ' #' + e[3] + ' ' + e[1] + ' ' + e[2]; }
+  function paintLog() {
+    $('log').textContent = st.events.slice(-40).reverse().map(line).join('\n');
+    $('count').textContent = '(' + st.events.length + ')';
+  }
+
+  /* ── 시험 하나의 기록 ──────────────────────────────── */
+
+  function newRun(t) {
+    st.seq += 1;
+    var r = { id: st.seq, test: t.id, mode: t.mode, amp: t.mode >= 2 ? st.amp : null, start: Date.now(), end: 0, why: '', afterAudio: audioUsed, acts: {}, nAct: 0, keys: 0,
+      music: 0, cutMarks: 0, cut: 0, foreign: 0, foreignHidden: 0, playFail: 0, done: 0, errs: {}, lost: 0, late: 0, lastEnd: 0, gaps: [], maxGap: 0, spans: [], marks: [] };
+    st.runs.push(r);
+    if (st.runs.length > MAX_RUNS) st.runs.shift();
+    return r;
+  }
+  function hit(x) { var m = run && run.marks[run.marks.length - 1]; if (m && m.h.length < MAX_HITS) m.h.push(x); }
+  function addGap(g) {
+    run.maxGap = Math.max(run.maxGap, g); if (run.gaps.length < MAX_GAPS) run.gaps.push(g);
+    if (span) { span.maxGap = Math.max(span.maxGap, g); if (span.gaps.length < MAX_GAPS) span.gaps.push(g); }
+  }
+  function openSpan() { if (!run) return; var n = Date.now(); span = { from: n, to: 0, done: 0, err: 0, lost: 0, gaps: [], maxGap: 0, maxQuiet: 0, last: n, lastEnd: 0 }; run.spans.push(span); }
+  function touch() { if (span) { var n = Date.now(); span.maxQuiet = Math.max(span.maxQuiet, n - span.last); span.last = n; } }
+  function closeSpan() { if (!span) return; touch(); span.to = span.last; span = null; }
+  function longest(r) { var b = null; r.spans.forEach(function (s) { if (!b || s.to - s.from > b.to - b.from) b = s; }); return b; }
+
+  /* ── 낭독: onend 안에서 곧장 다음 speak — 앱의 사슬과 같다(6-4) ── */
+
+  function speakNext(my) {
+    if (my !== gen || !run) return;
+    var n = ++seq, u = new SpeechSynthesisUtterance('Sentence ' + n + '. ' + LINES[n % LINES.length]);
+    var started = false;
+    u.lang = 'en-US';
+    utt = u;                                    // 참조를 잡아 두어 onend 가 GC 로 사라지지 않게(6-4)
+    u.onstart = function () {
+      if (my !== gen || u !== utt) return;
+      started = true; touch();
+      if (prevEnd) addGap(Date.now() - prevEnd);
+      showBar(n);
+      note('speech', 'start ' + n);
+    };
+    u.onend = function () {
+      if (my !== gen) return;
+      if (u !== utt) { run.late++; note('speech', '늦은 end ' + n); return; }
+      clearTimeout(wd); errStreak = 0;
+      var t = Date.now();
+      run.done++; run.lastEnd = t; if (span) { span.done++; span.lastEnd = t; }
+      touch(); prevEnd = t;
+      note('speech', 'end ' + n);
+      speakNext(my);
+    };
+    u.onerror = function (e) {
+      if (my !== gen) return;
+      var c = (e && e.error) || '?';
+      if (u !== utt) { note('speech', '지난 발화 error ' + n + ' ' + c); return; }
+      clearTimeout(wd); utt = null; prevEnd = 0;
+      run.errs[c] = (run.errs[c] || 0) + 1;
+      if (c !== 'interrupted') run.cut++;
+      if (span) span.err++;
+      touch();
+      note('speech', 'error ' + n + ' ' + c);
+      if (++errStreak >= MAX_ERR_STREAK) { note('speech', '연속 오류 ' + MAX_ERR_STREAK + '번 — 사슬을 멈춤'); return; }
+      setTimeout(function () { speakNext(my); }, RETRY_MS);
+    };
+    wd = setTimeout(function () {               // 워치독 흉내 — end·error 없이 사라진 발화를 세고 사슬을 잇는다
+      if (my !== gen || u !== utt) return;
+      utt = null; prevEnd = 0; run.lost++; if (span) span.lost++;
+      touch();
+      note('watchdog', (started ? 'end' : 'start') + ' 없음 ' + n);
+      try { synth.cancel(); } catch (e) { /* 무시 */ }
+      setTimeout(function () { speakNext(my); }, CANCEL_DELAY_MS);
+    }, WATCHDOG_MS);
+    try { synth.speak(u); } catch (e) { note('speech', 'speak 예외 ' + e.message); }
+  }
+
+  /* ── 무음 오디오 (spec 6): 파일 없이 JS 로 — 무음 = 바이트 128, volume 1 ── */
+
+  function silentWav(seconds, rate, amp) {
+    var n = seconds * rate, b = new Uint8Array(44 + n), d = new DataView(b.buffer);
+    function str(o, s) { for (var i = 0; i < s.length; i++) b[o + i] = s.charCodeAt(i); }
+    str(0, 'RIFF'); d.setUint32(4, 36 + n, true); str(8, 'WAVE'); str(12, 'fmt '); d.setUint32(16, 16, true);
+    d.setUint16(20, 1, true); d.setUint16(22, 1, true); d.setUint32(24, rate, true); d.setUint32(28, rate, true);
+    d.setUint16(32, 1, true); d.setUint16(34, 8, true); str(36, 'data'); d.setUint32(40, n, true);
+    b.fill(128, 44);
+    if (amp === 'faint') {                      // 8샘플에 1번꼴로 128±1 — 규칙적으로 흔들면 음이 되므로 잡음 꼴로(씨앗 고정, 평균 128)
+      for (var i = 44, x = 9; i < b.length; i++) {
+        x = (Math.imul(x, 1103515245) + 12345) | 0;
+        var r = (x >>> 16) & 15;
+        if (r === 0) b[i] = 127; else if (r === 1) b[i] = 129;
+      }
+    }
+    return b;
+  }
+  function onAudio(a, k) {
+    if (k === 'pause') {
+      if (a.ours > 0) { a.ours--; note('audio', 'pause (우리가 부름)'); return; }
+      if (a === audio && run) { if (document.hidden) run.foreignHidden++; else run.foreign++; note('audio', 'pause (우리가 안 부름)'); paint(); return; }
+    }
+    note('audio', k + (k === 'error' && a.error ? ' ' + a.error.code : ''));
+  }
+  function startAudio() {
+    var amp = run.amp;                          // 시험을 시작할 때 고정된 값 — 도중에 골라도 이 시험은 그대로
+    if (!wavUrls[amp]) wavUrls[amp] = URL.createObjectURL(new Blob([silentWav(WAV_SECONDS, WAV_RATE, amp)], { type: 'audio/wav' }));
+    var a = new Audio(wavUrls[amp]);
+    a.loop = true; a.volume = 1; a.preload = 'auto'; a.ours = 0;
+    ['play', 'pause', 'ended', 'error'].forEach(function (k) { a.addEventListener(k, function () { onAudio(a, k); }); });
+    a.addEventListener('loadedmetadata', function () { note('audio', 'duration ' + a.duration.toFixed(2) + 's'); });
+    audio = a; audioUsed = true;
+    var p = a.play();
+    if (p && p.catch) p.catch(function (e) { if (a === audio && run) { run.playFail++; note('audio', 'play 거부 ' + e.name); paint(); } });
+  }
+  function stopAudio() {                        // src 를 지워 세션을 없앤다(spec 5) — 다음 시험에 남지 않게
+    var a = audio; audio = null;
+    if (!a) return;
+    if (!a.paused) { a.ours++; a.pause(); }
+    a.removeAttribute('src'); a.load();
+  }
+
+  /* ── Media Session · Wake Lock ─────────────────────── */
+
+  function onAction(name, d) {
+    var extra = d && d.seekTime != null ? ' seekTime=' + d.seekTime : d && d.seekOffset != null ? ' seekOffset=' + d.seekOffset : '';
+    if (run) { run.nAct++; run.acts[name] = (run.acts[name] || 0) + 1; hit(name); }
+    got = name;
+    note('action', name + extra);
+    paint();
+  }
+  function arm(list) {
+    if (!ms) return;
+    ACTIONS.forEach(function (a) {
+      try { ms.setActionHandler(a, list.indexOf(a) < 0 ? null : function (d) { onAction(a, d); }); }
+      catch (e) { note('session', a + ' 미지원'); }
+    });
+  }
+  function showBar(n) {
+    if (!ms || !ms.setPositionState || !test || test.id !== 'D') return;
+    try {
+      if (barMode === 'sentence') ms.setPositionState({ duration: BAR_SENTENCES, position: (Math.max(n, 1) - 1) % BAR_SENTENCES, playbackRate: 1 });
+      else ms.setPositionState(null);
+    } catch (e) { note('session', 'setPositionState 예외 ' + e.message); }
+  }
+  function holdScreen() {                       // 앱도 낭독 중 Wake Lock 을 쥔다 — A·C 중 화면 시간 제한으로 숨겨지지 않게
+    if (!run || lock || document.hidden || !navigator.wakeLock) return;
+    navigator.wakeLock.request('screen').then(function (l) {
+      if (!run) { l.release(); return; }
+      lock = l; note('wakelock', '얻음');
+      l.addEventListener('release', function () { lock = null; note('wakelock', '풀림'); });
+    }, function (e) { note('wakelock', '거부 ' + e.name); });
+  }
+
+  /* ── 시작·끝 — 시작은 사용자 누름으로만 ─────────────── */
+
+  function start(t) {
+    stopRun('다음 시험으로 바뀜');
+    doneMsg = null; msg = null; got = null;
+    run = newRun(t); test = t; seq = 0; prevEnd = 0; errStreak = 0; barMode = 'none';
+    var my = ++gen;
+    arm(t.id === 'D' ? APP_ACTIONS : ACTIONS);
+    if (ms) {
+      if (window.MediaMetadata) ms.metadata = new MediaMetadata({ title: 'MedReader ' + t.id, artist: 'Mode ' + t.mode, album: 'MedReader' });
+      ms.playbackState = 'playing';
+    }
+    note('run', '시작 ' + t.id + ' 모드 ' + t.mode + (run.amp ? ' · 진폭 ' + ampName(run.amp) : '') + (run.afterAudio ? ' (이 페이지에서 무음 오디오 뒤)' : ''));
+    if (t.mode >= 2) startAudio();              // 앱과 같은 순서 — 오디오 → speak → Wake Lock, 모두 탭 안에서 동기로
+    if (t.mode <= 2) { if (synth) speakNext(my); else note('speech', 'speechSynthesis 없음'); }
+    holdScreen();
+    showBar(0);
+    paint();
+  }
+  function stopRun(why) {
+    if (!run) return;
+    gen++;
+    clearTimeout(wd);
+    closeSpan();
+    try { if (synth && (synth.speaking || synth.pending)) synth.cancel(); } catch (e) { /* 무시 */ }
+    stopAudio();
+    if (lock) { try { lock.release(); } catch (e) { /* 이미 풀림 */ } }
+    if (ms) {
+      try { if (ms.setPositionState) ms.setPositionState(null); ms.metadata = null; ms.playbackState = 'none'; } catch (e) { /* 무시 */ }
+    }
+    run.end = Date.now(); run.why = why;
+    note('run', '끝 ' + run.test + ' — ' + why);
+    run = null; test = null; utt = null;
+    paint();
+  }
+  function bEnded(r) {
+    var s = longest(r);
+    if (!s) return;
+    var t = mmss(s.to - s.from);
+    if (s.to - s.from >= B_ENOUGH_MS) {
+      var txt = ' · 끝난 발화 ' + s.done + ' · 최대 간격 ' + secs(s.maxGap);
+      doneMsg = [r.test + ' 끝 — 숨김 ' + t + txt, r.test + ' done — hidden ' + t + ', sentences ' + s.done + ', max gap ' + secs(s.maxGap)];
+      stopRun('화면 켜짐 — 3분 채움');
+    } else {
+      msg = ['아직 3분이 안 됐어요(' + t + '). 화면을 다시 끄고 3분 기다리세요.', 'Not 3 minutes yet (' + t + '). Turn the screen off again and wait.'];
+    }
+  }
+
+  /* ── 페이지 사건 ──────────────────────────────────── */
+
+  document.addEventListener('visibilitychange', function () {
+    var h = document.hidden;
+    if (h) openSpan(); else closeSpan();
+    note('visible', h ? 'hidden' : 'visible');
+    if (!h) {
+      holdScreen();
+      if (run && run.test.charAt(0) === 'B') bEnded(run);
+    }
+    paint();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.target === $('phones')) return;
+    if (run) { run.keys++; hit('key:' + e.key); }
+    note('key', e.key + ' / ' + e.code + (e.repeat ? ' repeat' : ''));
+  }, true);
+  ['freeze', 'resume'].forEach(function (k) { document.addEventListener(k, function () { note('page', k); }); });
+  ['pagehide', 'pageshow'].forEach(function (k) { window.addEventListener(k, function () { note('page', k); }); });
+
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button');
+    if (!b) return;
+    var t = b.getAttribute('data-test');
+    if (t) { start(TESTS.filter(function (x) { return x.id === t; })[0]); return; }
+    if (b.hasAttribute('data-kind')) { kind = b.getAttribute('data-kind'); paintMarks(); return; }
+    if (b.hasAttribute('data-amp')) {
+      var amp = b.getAttribute('data-amp');
+      if (amp !== st.amp) { st.amp = amp; note('session', '진폭 선택 ' + ampName(amp) + ' — 다음 시작부터'); }
+      paintMarks();
+      return;
+    }
+    if (!run) return;
+    if (b.hasAttribute('data-mark')) {
+      var label = b.getAttribute('data-mark');
+      if (label === '한 번' || label === '두 번' || label === '세 번' || label === '길게') label = (kind || '이어폰') + '·' + label;
+      if (run.marks.length < MAX_MARKS) run.marks.push({ l: label, h: [] });
+      note('mark', label);
+    } else if (b.hasAttribute('data-flag')) {
+      var f = b.getAttribute('data-flag');
+      if (f === 'music') run.music++; else run.cutMarks++;
+      note('mark', f === 'music' ? '음악 앱이 켜짐' : '낭독 끊김');
+      paint();
+    } else if (b.hasAttribute('data-bar')) {
+      barMode = b.getAttribute('data-bar');
+      note('session', '위치 막대 ' + barMode);
+      showBar(seq);
+      paintMarks();
+    }
+  });
+  $('stop').addEventListener('click', function () { stopRun('멈춤 단추'); });
+  if (!AMPS[st.amp]) st.amp = 'zero';
+  $('phones').value = st.phones || '';
+  $('phones').addEventListener('input', function () { st.phones = this.value.slice(0, 80); save(); });
+
+  /* ── 요약·판정 — 규칙(spec 7)을 적용한 후보만 적는다 ───── */
+
+  function runsOf(f) { return st.runs.filter(f); }
+  function ampName(k) { return AMPS[k] ? AMPS[k][0] : '기록 없음'; }
+  function ampUsed() {                          // 무음 오디오를 쓴 시험의 진폭별 횟수
+    var c = {};
+    runsOf(function (r) { return r.mode >= 2; }).forEach(function (r) { c[r.amp] = (c[r.amp] || 0) + 1; });
+    return c;
+  }
+  function ampHead() {
+    var c = ampUsed(), used = Object.keys(c).map(function (k) { return ampName(k) + ' ' + c[k] + '회'; }).join(' · ');
+    return '무음 오디오 진폭: 지금 선택 ' + ampName(st.amp) + ' · 잰 시험 ' + (used || '없음');
+  }
+  function tally(m) {
+    var rs = runsOf(function (r) { return r.mode === m; });
+    if (!rs.length) return null;
+    return { n: rs.reduce(function (a, r) { return a + r.nAct; }, 0), music: rs.reduce(function (a, r) { return a + r.music; }, 0), clean: rs.some(function (r) { return !r.afterAudio; }) };
+  }
+  function word(m) { var x = tally(m); return '모드 ' + m + ' ' + (!x ? '안 함' : x.n ? '버튼 받음 ' + x.n : '버튼 못 받음'); }
+  function bOf(m) {
+    var s = null;
+    runsOf(function (r) { return r.test.charAt(0) === 'B' && r.mode === m; }).forEach(function (r) {
+      var c = longest(r); if (c && (!s || c.to - c.from > s.to - s.from)) s = c;
+    });
+    return s;
+  }
+  function bWord(m) {
+    var s = bOf(m);
+    if (!s) return 'B 모드 ' + m + ' 안 함';
+    return 'B 모드 ' + m + ' 숨김 ' + mmss(s.to - s.from) + ' · 숨김 중 발화 ' + s.done + ' · 최대 간격 ' + secs(s.maxGap) + (s.done && s.maxQuiet <= QUIET_OK_MS ? ' · 이어짐' : ' · 끊김(최대 공백 ' + secs(s.maxQuiet) + ')');
+  }
+  function cStats() {
+    var rs = runsOf(function (r) { return r.test === 'C'; });
+    return { any: rs.length > 0, full: rs.some(function (r) { return r.end - r.start >= C_MS - 2000; }),
+      fights: rs.reduce(function (a, r) { return a + r.foreign; }, 0), cuts: rs.reduce(function (a, r) { return a + r.cut + r.lost + r.cutMarks; }, 0) };
+  }
+  function summary() {
+    var m = (tally(1) ? tally(1).music : 0) + (tally(2) ? tally(2).music : 0) + (tally(3) ? tally(3).music : 0), c = cStats();
+    return [word(1), word(2), word(3), '음악 앱 켜짐 ' + m, c.any ? '포커스 다툼 ' + c.fights + ' · 발화 끊김 ' + c.cuts : 'C 안 함', bWord(1), bWord(2)].join(' · ');
+  }
+  function verdict() {
+    var out = [], a = tally(1), b = tally(2), c = cStats(), s = bOf(2);
+    if (!a) out.push('모드 1 을 안 해서 SESSION 판정 불가');
+    else if (a.n && !a.music) out.push("모드 1 이 버튼을 받고 음악 앱이 안 켜짐 → SESSION='none' 후보(두 기기 모두일 때만)" + (a.clean ? '' : ' · 주의: 무음 오디오 뒤에만 잰 값'));
+    else if (b && b.n) out.push((a.n ? '모드 1 은 음악 앱이 켜짐' : '모드 2 만 버튼을 받음') + ' → (나) 확정');
+    else if (!b) out.push('모드 2 를 안 해서 (나) 판정 불가');
+    else out.push('모드 1·2 모두 버튼 없음 → 운영자에게');
+    if (!c.any) out.push('C 안 함');
+    else if (c.fights || c.cuts) out.push('C 포커스 다툼 ' + c.fights + ' · 발화 끊김 ' + c.cuts + ' → (나) 보류, 운영자에게(대안: (가) + 화면 버튼만)');
+    else out.push(c.full ? 'C 2분 다툼 0 · 끊김 0 → (나)의 위험 안 보임' : 'C 2분을 못 채움');
+    if (!s) out.push('B 모드 2 안 함');
+    else if (s.to - s.from < B_ENOUGH_MS) out.push('B 모드 2 숨김이 3분에 못 미침');
+    else if (s.done && s.maxQuiet <= QUIET_OK_MS && s.maxGap <= GAP_OK_MS) out.push('B 모드 2 3분 내내 이어지고 최대 간격 ≤ 3초 → 9a-2 (다) Plan 근거(두 기기 결과가 모두 온 뒤)');
+    else out.push('B 모드 2 → 9a-2 (다) 근거 아님');
+    if (Object.keys(ampUsed()).length > 1) out.push('주의: 두 진폭의 결과가 섞여 있다 — 위 줄은 합친 값이니 시험별 줄을 볼 것');
+    return out;
+  }
+  function deviceLines() {
+    return ['UA: ' + navigator.userAgent, "'mediaSession' in navigator: " + !!ms + ' · MediaMetadata: ' + !!window.MediaMetadata + ' · setPositionState: ' + !!(ms && ms.setPositionState) +
+      ' · speechSynthesis: ' + !!synth + ' · wakeLock: ' + !!navigator.wakeLock + ' · secure: ' + !!window.isSecureContext,
+      '화면: ' + screen.width + '×' + screen.height + ' · 창: ' + innerWidth + '×' + innerHeight + ' · dpr ' + devicePixelRatio, '주소: ' + location.href.replace(/[?#].*$/, '')];
+  }
+  function runLines(r) {
+    var acts = Object.keys(r.acts).map(function (k) { return k + '×' + r.acts[k]; }).join(' ') || '없음';
+    var out = ['#' + r.id + ' ' + r.test + ' 모드 ' + r.mode + (r.mode >= 2 ? ' · 진폭 ' + ampName(r.amp) : '') + ' · ' + mmss((r.end || Date.now()) - r.start) + ' · ' + (r.why || '진행 중') + (r.afterAudio ? ' · 무음 오디오 뒤' : ''),
+      '   버튼 ' + acts + ' · key ' + r.keys + ' · 발화 끝 ' + r.done + ' · 오류 ' + JSON.stringify(r.errs) + ' · onend 없음 ' + r.lost + ' · 늦은 end ' + r.late +
+      ' · 안 부른 pause ' + r.foreign + '(숨김 중 ' + r.foreignHidden + ') · play 거부 ' + r.playFail + ' · 음악 앱 ' + r.music + ' · 끊김 표시 ' + r.cutMarks,
+      '   간격 중앙값 ' + secs(median(r.gaps)) + ' · 최대 ' + secs(r.maxGap) + (r.lastEnd ? ' · 마지막 발화 ' + fmt(r.lastEnd) : '')];
+    r.marks.forEach(function (m) { out.push('   표시 ' + m.l + ' → ' + (m.h.join(', ') || '받은 것 없음')); });
+    r.spans.forEach(function (s) {
+      out.push('   숨김 ' + mmss(s.to - s.from) + ' (' + fmt(s.from) + '–' + fmt(s.to) + '): 끝난 발화 ' + s.done + ' · 오류 ' + s.err + ' · onend 없음 ' + s.lost + ' · 간격 중앙값 ' + secs(median(s.gaps)) +
+        ' · 최대 ' + secs(s.maxGap) + ' · 최대 공백 ' + secs(s.maxQuiet) + (s.lastEnd ? ' · 마지막 발화 ' + fmt(s.lastEnd) : ''));
+    });
+    return out;
+  }
+  function report() {
+    var out = ['MedReader 핸즈프리 진단 — ' + new Date().toISOString(), ampHead(), '요약: ' + summary(), '규칙 적용(후보 — 결정은 사람이 한다):'];
+    verdict().forEach(function (v) { out.push(' · ' + v); });
+    out.push('이어폰: ' + (st.phones || '(안 적음)'), '--- 기기 ---');
+    out = out.concat(deviceLines(), ['--- 시험 ' + st.runs.length + '회 ---']);
+    st.runs.forEach(function (r) { out = out.concat(runLines(r)); });
+    out.push('--- 기록 ' + st.events.length + '줄' + (st.dropped ? ' (앞의 ' + st.dropped + '줄은 상한으로 버림)' : '') + ' · * = 숨김 중 ---');
+    return out.concat(st.events.map(line)).join('\n');
+  }
+
+  /* ── 화면 ─────────────────────────────────────────── */
+
+  function isDone(t) {
+    return st.runs.some(function (r) {
+      if (r.test !== t.id || !r.end) return false;
+      if (t.id.charAt(0) === 'B') { var s = longest(r); return !!s && s.to - s.from >= B_ENOUGH_MS; }
+      return r.end - r.start >= (t.limit ? t.limit - 2000 : 10000);
+    });
+  }
+  function nextTest() { return TESTS.filter(function (t) { return !isDone(t); })[0] || null; }
+  function paintMarks() {
+    document.querySelectorAll('[data-kind]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-kind') === kind); });
+    document.querySelectorAll('[data-bar]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-bar') === barMode); });
+    document.querySelectorAll('[data-amp]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-amp') === st.amp); });
+    var busy = run && run.amp && run.amp !== st.amp;
+    var line2 = two(busy ? ['고른 값은 다음 시작부터 적용됩니다. 지금 시험은 ' + AMPS[run.amp][0] + '(으)로 도는 중입니다.', 'Applies from the next start. This test keeps running as: ' + AMPS[run.amp][1] + '.']
+      : ['고른 값은 다음 시작부터 적용됩니다(A2·A3·B2·C·D). A2 에서 알림이 안 생길 때만 바꾸세요.', 'Applies from the next start (A2, A3, B2, C, D). Change only if no notification appears in A2.']);
+    $('ampNote').textContent = line2[0] + ' · ' + line2[1];
+  }
+  function paintClock() {
+    if (!run) { $('clock').textContent = ''; return; }
+    var el = Date.now() - run.start;
+    $('clock').textContent = test.limit ? mmss(el) + ' / ' + mmss(test.limit) : mmss(el);
+  }
+  function paint() {
+    var n = nextTest();
+    if (run) {
+      put('what', 'what2', ['지금: 모드 ' + test.mode + ' · ' + MODES[test.mode][0] + ' (' + test.id + ')', 'Now: mode ' + test.mode + ' · ' + MODES[test.mode][1] + ' (' + test.id + ')']);
+      put('next', 'next2', msg || test.todo);
+      $('got').textContent = '받은 버튼 · Buttons received: ' + run.nAct + (got ? ' · ' + got : '');
+    } else {
+      put('what', 'what2', doneMsg || ['지금: 멈춤', 'Now: stopped']);
+      put('next', 'next2', n ? ['다음 할 일: [' + n.id + '] 단추를 누르세요', 'Next: press [' + n.id + ']'] : ['모두 끝 — [결과 복사]를 눌러 보내 주세요', 'All done — press [Copy results] and send']);
+      $('got').textContent = '';
+    }
+    document.querySelectorAll('[data-test]').forEach(function (b) {
+      var t = b.getAttribute('data-test');
+      b.classList.toggle('on', !!(test && test.id === t));
+      b.classList.toggle('up', !run && !!n && n.id === t);
+      var x = TESTS.filter(function (y) { return y.id === t; })[0];
+      b.firstChild.textContent = (isDone(x) ? '✓ ' : '') + x.id + ' · ' + x.name;
+    });
+    $('marks').hidden = !run;
+    $('bar').hidden = !(run && test.id === 'D');
+    $('stop').disabled = !run;
+    $('sum').textContent = summary();
+    paintClock();
+    paintMarks();
+  }
+
+  $('copy').addEventListener('click', function () {
+    var text = report(), b = this;
+    function shown() { b.textContent = '복사됨 · Copied'; setTimeout(function () { b.textContent = '결과 복사 · Copy results'; }, 1500); }
+    function selectBox() {                      // HTTP·권한 거부 대비 — 글상자에서 사람이 복사한다
+      var t = $('box');
+      t.hidden = false; t.value = text; t.focus(); t.select();
+      b.textContent = '선택됨 — 길게 눌러 복사 · Selected, long-press to copy';
+    }
+    try { navigator.clipboard.writeText(text).then(shown, selectBox); } catch (e) { selectBox(); }
+  });
+  $('clear').addEventListener('click', function () {
+    if (!window.confirm('기록을 모두 지울까요? · Clear all records?')) return;
+    stopRun('기록 지우기');
+    try { localStorage.removeItem(KEY); } catch (e) { /* 무시 */ }
+    st = fresh(); doneMsg = null; got = null;
+    $('phones').value = ''; $('box').hidden = true; $('warn').textContent = '';
+    paintLog(); paint();
+  });
+
+  /* ── 처음 ─────────────────────────────────────────── */
+
+  if (!KO) document.documentElement.lang = 'en';
+  TESTS.forEach(function (t) {
+    var b = document.createElement('button'), s = document.createElement('small');
+    b.type = 'button'; b.setAttribute('data-test', t.id);
+    b.appendChild(document.createTextNode(t.id + ' · ' + t.name));
+    s.textContent = 'Mode ' + t.mode + ' · ' + t.en;
+    b.appendChild(s);
+    $('tests').appendChild(b);
+  });
+  st.runs.forEach(function (r) {                // 도중에 페이지가 버려졌으면 그 시험을 닫아 둔다
+    r.spans.forEach(function (s) { if (!s.to) s.to = s.last; });
+    if (!r.end) { r.end = st.events.length ? st.events[st.events.length - 1][0] : r.start; r.why = '끊김 — 페이지가 다시 열림'; }
+  });
+  setInterval(function () {
+    if (run && test.limit && Date.now() - run.start >= test.limit) { doneMsg = [test.id + ' 끝', test.id + ' done']; stopRun('2분 채움'); }
+    paintClock();
+  }, 1000);
+  note('page', '열림 · mediaSession ' + !!ms + ' · speechSynthesis ' + !!synth);
+  paint();
+})();
+</script>
+</body>
+</html>
