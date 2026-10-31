@@ -3164,6 +3164,180 @@ article.reflow[dir=ltr][lang=en]
 - 실패 시: 인식 불가·오프라인이면 "음성 명령을 쓸 수 없습니다 — 이어폰 버튼은 계속 됩니다"를 한 번 안내(상태 바, 14-2 방식). 확인: Nour 기기에서 VPN 켬/끔 각각 기록.
 - 파일(안): `voice/commands.js`(순수: 정규화 + 매칭, `node --test`), `voice/listen.js`(`SpeechRecognition` 래퍼), `ui/handsfree.js`(Media Session·마이크 버튼). 3-2 의 import 방향을 지킨다. 고지는 13절 "음성 명령".
 
+#### 17-1-1. 9a Build 설계 — 이어폰·잠금 화면 버튼 `[신설 2026-10-27 — 9a Plan]` `[운영자 결정 2026-10-31: 9-D1–9-D9 권장안 승인 — 9a-0 진단부터]`
+
+위 (1)의 경계를 Build 가 바로 쓸 수 있게 좁힌다. 코드는 `b52ee00` 기준. 표기: `[코드]` 파일:행 · `[출처]` 웹 문서(아래 2) · `[가정 — 실기기]` 웹으로 확인하지 못해 9a-0(아래 7)에서 잴 것. 호출 0 · DB 무관 · `algoVersion` 무관.
+
+##### 1. 지금 코드의 사실
+
+| 무엇 | 사실 | 위치 |
+|---|---|---|
+| Media Session | **사용 0** — `js/`·`index.html` 에 `mediaSession`·`MediaMetadata`·`<audio>`·`new Audio` 가 없다(grep). 이어폰 버튼은 지금 페이지에 아무 일도 하지 않는다 | — |
+| 재생 상태 | `SpeakerState` 5값 `'idle'·'speaking'·'paused'·'waiting-page'·'error'`. 바뀌면 `statechange` | `tts/speaker.js` 61·166·233–237 |
+| 발화 단계 | `phase` = `'src'·'tr-wait'·'tr'`(상태와 별개 변수, `getPhase()`) | speaker 188·1200 |
+| [▶] 버튼 | speaking 이면 `pause()`, 스캔본이면 안내만(8l), 아니면 `syncReadalong()` 뒤 **동기로** `speaker.play()` — `await` 없음(6-4 사용자 제스처) | `ui/controls.js` 148–153 |
+| [이전]·[다음] | `speaker.prev()`·`next()` → `step(∓1)`. 낭독 중이면 그 문장 처음부터(`restart`), 멈춤이면 **하이라이트만** 옮김. 단계는 늘 `src` 로 — **번역 단계(`tr`·`tr-wait`) 중 [다음] = 그 번역을 건너뛰고 다음 문장 원문**. 쪽 끝에서 [다음]은 낭독 중일 때만 `advancePage(0)`(멈춤이면 아무 일 없음). 쪽 처음에서 [이전]은 첫 문장 다시(쪽을 거슬러 가지 않는다) | controls 154–155 · speaker 932–946 |
+| 쪽 넘김 | `advancePage` → `'waiting-page'` → `view.goToPage` = `goToPageForSpeech` — **8i-3**: 그 쪽 렌더 끝 알림을 상한 `TTS.PAGE_WAIT_MS`(5000)까지 기다리고, 넘으면 `'paused'` + `PAGE_TIMEOUT` | speaker 756–782 · `ui/reader.js` 2093–2110 · `config.js` 374 |
+| 멈춤 | `pause()` = `cancel()` + Wake Lock 풀기 + `'paused'`(`speechSynthesis.pause()` 안 씀) | speaker 899–904 |
+| Wake Lock | `play()` 끝에서 `requestWakeLock()`(speak 뒤 — 제스처를 잃지 않게), 실패·미지원이면 `TTS_WAKELOCK_UNAVAILABLE` → 배너 `reader.tts.wakeLock`. 설정 `tts.wakeLock`(기본 켬) | speaker 793–809·816–861 · controls 608–611·785 |
+| 6-4 hidden 규칙 | `visibilitychange` → hidden 이고 speaking 이면 `pause()`. 다시 보이면 **자동 재개하지 않는다**(speaking 이면 Wake Lock 만 다시). **이유**(6-4 표 4행): 백그라운드·화면 꺼짐에서 합성이 멈추거나 `onend` 가 유실된다 → 상태를 분명히 하고, 사용자가 어디까지 들었는지 보고 다시 누르게 | controls 253–263 |
+| hidden 규칙의 빈틈 | 규칙은 **visible → hidden 바뀔 때 한 번**만 돈다. 이미 hidden 인 동안 누가 `play()` 를 부르면 그대로 읽는다(지금은 부를 길이 없다 — 9a 가 처음으로 그 길을 연다). 그때 `requestWakeLock()` 은 hidden 문서에서 거부되어 배너가 뜬다 | 위 두 곳 |
+| 화면 꺼짐 실측 | 6-4 의 "멈추거나 유실"은 **설계 때의 알려진 제약**이고, 이 앱으로 화면을 끈 채 잰 기록은 없다. 숨김 창에서 **원본 보기 그리기가 끝나지 않아 `notifyPage` 가 안 온다**는 관찰은 있다(review.md 3629 — 데스크톱 미리보기 창, rAF 정지) → 숨김 중 원본 보기 쪽 넘김은 5초 상한에 걸릴 것이다 `[추정]`. 점검표 19-1-1 5 의 5(화면 두고 듣기)는 답이 아직 없다 | review.md 3629 · spec 19-1-1 5 |
+| 리더 떠남 | `leaveControls()` → `speaker.stop()`(큐·반복 초기화) · 띠·문장 아래 번역 정리 | controls 380–388 |
+| 다른 speaker | 퀴즈 해설 [읽기] 는 **자기 speaker** 를 따로 만든다 — 9a 는 리더 speaker 에만 붙인다 | `ui/quiz.js` 31·853–855 |
+| 아이콘 | 8j PNG `icons/icon-192.png`·`icon-512.png`(manifest 11–12행) | — |
+| 문서 제목 | 리더 머리 `state.doc.title || fileName` — controls 는 지금 이 값을 받을 함수가 없다(`currentPage()` 는 docId·page·pageCount 만) | reader.js 782·827·1732 |
+
+- **8d·8i-3·8m·readalong 과의 관계**: 9a 는 speaker 의 **공개 함수만** 부른다(`play`·`pause`·`next`·`prev`). 그래서 8d(문장 아래 번역 — `view.show` 경로)·8i-3(쪽 넘김 렌더 알림)·8m(문장별 음성 전환)·readalong(`statechange` → `setActive`, `linechange` → `onProgress`)은 화면 버튼을 눌렀을 때와 **바이트 하나 다르지 않게** 돈다. 새 재생 경로를 만들지 않는다(6-2 원칙).
+
+##### 2. 웹 문서로 확인한 것 · 못 한 것
+
+| # | 질문 | 답 | 근거 |
+|---|---|---|---|
+| W1 | Android Chrome 은 어떤 소리에 미디어 알림·세션을 만드나 | `<audio>`/`<video>` 요소가 재생 중일 때. **5초 넘는 미디어만**(5초 이상이어야 Chrome 이 "full" 오디오 포커스를 요청). Web Audio 는 `<audio>` 를 거치지 않으면 알림 없음. 알림은 잠금 화면에도 나온다 | `[출처]` A·B·C |
+| W2 | `speechSynthesis` 만으로 세션·알림·버튼 이벤트가 오나 | **문서에 없다.** Chromium 오디오 포커스 문서는 미디어 요소·Pepper 만 이름을 든다 — Web Speech 는 언급 없음. 미디어 세션 없는 앱의 미디어 버튼은 Android 8+ 에서 **"마지막으로 소리를 낸 MediaSession 앱"** 으로 간다(세션이 없거나 비활성이면 그 앱이 깨어나거나 버려짐) → **이어폰 버튼이 Nour 의 음악 앱을 틀 수 있다** `[가정 — 실기기]` | `[출처]` D·E |
+| W3 | 액션 목록 | `play`·`pause`·`previoustrack`·`nexttrack`·`stop`·`seekbackward`·`seekforward`·`seekto`(+ 화상회의·슬라이드 액션). **핸들러를 건 액션만 알림에 단추가 생긴다**. play/pause 는 늘 보이고, 핸들러를 걸면 브라우저 기본 동작(요소 재생·멈춤)을 덮는다 | `[출처]` B |
+| W4 | `setPositionState` | `duration` 양수 필수, `position` ≤ duration, `playbackRate` > 0. `null` 로 지운다 | `[출처]` B |
+| W5 | 이어폰 한 번·두 번·세 번 | Android 프레임워크(SDK 27+)가 play/pause·헤드셋 훅 키의 **두 번 누름을 "다음"(`onSkipToNext`)** 으로 바꾼다 — Chrome 에서는 `nexttrack` 으로 올 것 `[가정 — 실기기]`. 세 번 누름은 문서에 없다(블루투스 이어폰은 펌웨어가 이전/다음 키를 직접 보내는 경우가 많다). 길게 누름은 보통 시스템이 음성 비서로 가져간다 `[가정 — 실기기]` | `[출처]` F |
+| W6 | 화면이 꺼지면 `speechSynthesis` 가 계속되나 | **문서·이슈로 확인 못 함**(검색 결과 0 — Android 에서 숨김·화면 꺼짐 시 Web Speech 의 동작을 적은 공식 문서·Chromium 이슈를 찾지 못했다) `[가정 — 실기기]` | — |
+| W7 | 숨은 페이지의 타이머 | 숨은 지 5분 + 30초 이상 무소리 + 연쇄 타이머 5회 이상이면 분당 1회로 강한 스로틀. **무음 오디오 트랙은 "소리"로 치지 않는다.** 그 전에도 숨은 페이지 타이머는 초 단위로 묶인다 → 6-4 의 cancel 뒤 60ms 대기(`CANCEL_DELAY_MS`)·워치독이 숨김 중에는 느려진다 | `[출처]` G |
+| W8 | 숨은 페이지가 버려지나 | 숨김 중 소리를 내는 페이지는 극단적 자원 부족이 아니면 버리지 않는다. 얼리기(freeze)의 오디오 예외는 문서에 명시 없음 | `[출처]` H |
+
+출처: A `developer.chrome.com/blog/media-notifications`(2015, Chrome 45 — 오래됨) · B `web.dev/articles/media-session` · C `developer.chrome.com/blog/media-session`(2017) · D `chromium.googlesource.com/…/docs/media/audio_focus.md` · E `developer.android.com/media/legacy/media-buttons` · F `developer.android.com/reference/android/support/v4/media/session/MediaSessionCompat.Callback`(두 번 누름 → onSkipToNext, SDK 27+ 는 프레임워크가 처리) + `github.com/androidx/media/issues/1493`(헤드셋 훅 두 번 누름 버그, 2024-07 수정) · G `developer.chrome.com/blog/timer-throttling-in-chrome-88` · H `developer.chrome.com/docs/web-platform/page-lifecycle-api`. **A·C 는 오래된 글**이라 Chrome 143 에서 5초 규칙 등이 그대로인지 `[가정 — 실기기]`.
+
+##### 3. 핵심 쟁점 — 잠금 화면 (선택지 · 권장)
+
+hidden 규칙을 그대로 두면 잠금 화면 단추·화면 꺼진 뒤 이어폰 단추는 "멈춤 상태를 보여 줄" 뿐이다. 세 갈래:
+
+| | 내용 | 세션 잡기 | 6-4 | 되는 것 | 위험 · 모르는 것 |
+|---|---|---|---|---|---|
+| (가) 화면 켜짐 전제 — 이어폰만 | `setActionHandler` 만 건다. 무음 오디오 없음 | 없음 | 그대로 | W2 가 "온다"면 화면이 켜진 동안 이어폰 단추 | **W2 가 "안 온다"면 아무것도 안 된다** — 게다가 단추가 Nour 의 음악 앱을 틀 수 있다(W2). 알림·잠금 화면 단추 없음 |
+| **(나) 무음 오디오로 세션 잡고 hidden 규칙 유지** | 낭독 중 무음 `<audio loop>` 를 함께 재생 → Chrome 미디어 세션·알림이 생기고 버튼이 이 페이지로 온다. 숨겨지면 지금처럼 멈춤(오디오도 멈춤, 알림은 "멈춤"으로 남음) | 무음 오디오 | **그대로** | 화면이 켜진 동안 이어폰 한 번(재생↔멈춤)·두 번(다음)·알림의 ⏮⏯⏭. 이어폰으로 멈추면 화면을 5분 더 켜 둔다(아래 4 "멈춤 유지") — 그동안 이어폰으로 다시 재생 | 무음 오디오와 TTS 가 **오디오 포커스를 다투는지**(TTS 엔진이 포커스를 잡으면 Chrome 이 오디오를 멈춰 알림 상태가 어긋난다) `[가정 — 실기기]` · 다른 음악 앱은 낭독을 시작하면 멈춘다(포커스 — 기대한 동작) · 블루투스 연결이 낭독 내내 "재생 중"(배터리 조금) |
+| (다) hidden 규칙을 바꿔 잠금 중 계속 읽기 | (나) + 숨겨져도 멈추지 않는다(설정으로 켤 때만). 잠금 화면 알림·이어폰으로 재생·멈춤·다음 | 무음 오디오 | **다시 연다** | 주머니에 넣고 듣기 — 요구 1 에 가장 가깝다 | W6(합성이 계속되나)·W7(타이머 스로틀로 문장 사이가 1초~1분)·숨김 중 Wake Lock 거부 배너·**원본 보기 쪽 넘김이 숨김 중 그리기를 못 끝내 5초 뒤 멈춤**(1 의 실측 관찰)·리플로우 쪽 넘김도 렌더 알림을 기다린다(숨김 중 미측정)·`onend` 유실 시 워치독이 스로틀된 타이머에 걸림. **9a-0 없이 설계할 수 없다** |
+
+**권장: 9a 는 (나). (다)는 9a-0 의 "화면 꺼짐 시험"(7 의 B) 결과를 보고 따로 9a-2 로 정한다**(설정 "화면이 꺼져도 계속 읽기", 기본 끔 — 결정 9-D1). 이유: (1) (가)는 W2 가 문서로 뒷받침되지 않아 "아무것도 안 되는" 배포가 될 수 있다. (2) (나)는 6-4 를 건드리지 않으므로 지금까지 실기기로 확인된 낭독 사슬(onend 안에서 곧장 speak)을 바꾸지 않는다 — 위험이 오디오 포커스 하나로 좁다. (3) (다)의 모르는 것 다섯 가지는 전부 실기기 숫자로만 답이 나오고, (나)의 세션 코드는 (다)에서도 그대로 쓴다 — 버리는 일이 없다.
+
+##### 4. 버튼 대응
+
+판정의 기준은 **speaker 상태**다(알림·오디오 요소 상태가 아니다). `speaking`·`waiting-page` = "읽는 중".
+
+| 액션 | 읽는 중 | 멈춤·idle·error | 숨김(hidden) 중 — (나) |
+|---|---|---|---|
+| `play` | **멈춤**(토글로 본다 — 아래 근거) | [▶] 와 **같은 함수** `pressPlay()`: 스캔본이면 안내만 · 아니면 `syncReadalong()` 후 동기 `speaker.play()` | 무시(재생하지 않는다 — 6-4) |
+| `pause` | `speaker.pause()` | 재생(토글) — `pressPlay()` | 무시(이미 멈춤) |
+| `nexttrack` | `speaker.next()` — 다음 문장 원문부터. 번역 단계 중이면 그 번역을 건너뛴다(화면 [다음]과 같다). 쪽 끝이면 다음 쪽(8i-3 렌더 알림 대기 그대로) | `speaker.next()` — 하이라이트만 이동. **쪽 끝에서는 아무 일 없음**(화면 버튼과 같다 — 결정 9-D5) | 무시 |
+| `previoustrack` | `speaker.prev()` — 이전 문장 처음부터(쪽 첫 문장이면 그 문장 다시) | 하이라이트만 이동 | 무시 |
+| `stop` | `speaker.pause()`(stop() 은 큐·반복을 지우는 "리더 떠남"용이라 쓰지 않는다) | 아무 일 없음 | 무시 |
+| `seekforward`·`seekbackward`·`seekto` | **걸지 않는다** — 걸면 알림에 ±10초·진행 막대 단추가 생기는데 문장 낭독에 "초"가 없다 | | |
+
+- **play/pause 를 토글로 받는 근거**: 이어폰 단추는 하나이고 Android/Chrome 이 **자기 세션 상태**(무음 오디오가 재생 중인가)로 `play` 냐 `pause` 냐를 고른다. 무음 오디오와 speaker 상태가 한 번이라도 어긋나면(포커스 다툼·`play()` 거부) 엄격한 대응은 "눌러도 안 되는" 단추를 만든다. Nour 에게 단추의 뜻은 늘 "누르면 바뀐다"다. 대가: 어긋난 순간 알림의 ⏯ 그림이 실제와 반대일 수 있다 — 아래 5 의 재동기화로 줄인다(결정 9-D4).
+- **핸들러 안에서 동기로**: [▶] 와 같다 — `pressPlay()` 앞에 `await` 를 두지 않는다. 미디어 세션 액션이 사용자 활성화로 쳐지는지는 문서에 없다 `[가정 — 실기기]`. 다만 Chrome 의 `speak()`·`audio.play()` 는 **한 번이라도 탭한 페이지**(sticky activation)면 허용되므로, 첫 재생은 늘 화면 [▶] 다(리더에 들어와 처음엔 세션이 없다 — 알림·이어폰 단추가 생기는 것 자체가 첫 [▶] 뒤).
+- **멈춤 유지(Wake Lock)**: 이어폰·알림으로 멈췄을 때만 Wake Lock 을 `HANDSFREE.PAUSE_HOLD_MS`(기본 5분) 더 쥔다 — 화면이 꺼지면 (나)에서는 이어폰 [재생]이 무시되기 때문이다. 화면 [⏸] 로 멈추면 지금처럼 곧바로 푼다(화면을 보고 있다). 5분 안에 재생하면 그대로 이어지고, 지나면 풀어 화면 시간 제한을 따른다. 설정 `tts.wakeLock = false` 면 쥐지 않는다(결정 9-D3). 유지용 잠금은 **handsfree 가 자기 sentinel 로** 쥔다(controls 의 `requestWakeLock()` 을 그대로 부름) — speaker 의 `wakeLock` 변수와 섞지 않는다(`play()` 가 새로 잡으며 옛 것을 풀지 않고 덮어쓰게 되므로). 재생·만료·리더 떠남·hidden 에서 푼다. 숨김 중에는 잡으려 하지 않는다(거부 → 배너).
+- **숨김 중 무시의 표시**: 알림은 "멈춤"으로 남는다(무음 오디오를 멈추므로 Chrome 이 상태를 맞춘다 `[가정 — 실기기]`). 무시한 횟수만 디버그 훅에 센다.
+
+##### 5. 알림 화면 메타데이터 · 상태
+
+| 항목 | 값 | 갱신 때 |
+|---|---|---|
+| `title` | 문서 제목(`doc.title || fileName` — reader.js 에 읽기 함수 하나 `docTitle()` 추가) | 리더 들어옴·문서 바뀜 |
+| `artist` | `t('handsfree.pageOf', {page, count})` — "쪽 12 / 1967"(UI 언어, `formatNumber`) | 쪽이 그려질 때(`onPageRender`)·UI 언어 바뀜. **문장마다 바꾸지 않는다**(알림을 문장마다 다시 그리면 잠금 화면이 깜박이고 배터리를 쓴다) |
+| `album` | `'MedReader'`(고정 — 번역하지 않는 이름) | — |
+| `artwork` | `icons/icon-192.png`(192×192)·`icons/icon-512.png`(512×512), `type:'image/png'` — 상대 경로는 브라우저가 문서 기준으로 푼다 | 한 번 |
+| `playbackState` | 읽는 중 → `'playing'`, 멈춤·error → `'paused'`, idle·리더 밖 → `'none'` | `statechange` |
+| 무음 오디오 | 읽는 중 → `audio.play()`(거부되면 조용히 — 낭독을 막지 않는다), 그 밖 → `audio.pause()`. 리더를 떠나면 `pause()` + `src` 제거 → 알림이 사라진다(`[출처]` C "`audio.src=''` 로 알림을 없앤다") | `statechange` — `setState` 가 `play()` 안에서 동기로 내므로 [▶] 탭 제스처 안에서 `audio.play()` 가 나간다 |
+| 재동기화 | 오디오 요소 `pause` 이벤트가 **우리가 부르지 않았는데** 오고 speaker 가 읽는 중이면 `audio.play()` 를 **한 번** 다시(포커스 다툼 대비). 같은 문장 안에서 두 번째면 포기하고 센다(디버그 훅 `focusFights`) | 오디오 이벤트 |
+| `setPositionState` | **9a-0 결과로 정한다**(결정 9-D7): 10초 무음 반복이 알림에 "0:00–0:10 되풀이 막대"로 보이면 `setPositionState({duration: 쪽 문장 수, position: index, playbackRate: 1})` 로 덮어 "이 쪽에서 어디쯤"을 보인다(`seekto` 는 걸지 않는다 — 막대를 끌어도 아무 일 없게). 막대가 안 보이거나 무해하면 `setPositionState(null)` 만 | 쪽 큐(`queue`)·`linechange` |
+
+##### 6. 세션 잡기 — 무음 오디오
+
+- **파일 없이 JS 로 만든다**: `silentWav(seconds, rate)` → 8 kHz·8비트·모노 PCM WAV(무음 = 바이트 128), 10초 = **80,044 바이트**. `Blob` → `URL.createObjectURL` → `new Audio(url)`, `loop = true`, `volume = 1`(음소거·볼륨 0 은 Chrome 이 세션을 안 만들 수 있다 `[가정 — 실기기]`), `preload='auto'`. 이유: 앱 폴더에 바이너리를 더하지 않는다 · 오프라인 ○ · 순수 함수라 `node --test` 로 헤더 바이트를 잰다. 5초 규칙(W1) 때문에 **10초**(여유).
+- **켜는 스위치** `HANDSFREE.SESSION = 'audio' | 'none'`(config) — 9a-0 에서 두 기기 모두 "오디오 없이도 이어폰·알림이 온다"면 `'none'` 으로 값만 바꿔 배포한다(코드 경로는 둘 다 테스트). 설정 `tts.mediaKeys`(기본 켬, 낭독 탭 한 줄) — 끄면 핸들러·메타데이터·무음 오디오 전부 없음 = 지금 동작(무음 오디오가 다른 앱 소리를 끊는 게 싫을 때의 비상구, 결정 9-D8).
+
+##### 7. 9a-0 — 실기기 진단 페이지 `dev/handsfree.html` (먼저 배포)
+
+**필요하다.** 위 W2·W5·W6·포커스 다툼·위치 막대는 문서로 답이 안 나오고, 답에 따라 (가)/(나)/(다)·`SESSION` 값·9-D7 이 갈린다. 8k-0(`dev/voices.html`)과 같은 꼴: 앱 무변, 앱 DB·설정을 읽지도 쓰지도 않음, 외부 자원·네트워크 0, [결과 복사], ko/en 문구(+ 아랍어 한 줄 안내). 결과는 이 페이지 전용 `localStorage` 키 하나에만(화면을 끄고 돌아와도 기록이 남게 — 앱 키와 겹치지 않는 이름).
+
+| 묶음 | 하는 일 | 사용자가 할 일 | 답하는 질문 |
+|---|---|---|---|
+| A 버튼 기록 | 모드 3개: [1 낭독만](짧은 영어 문장을 `onend` 사슬로 계속, 오디오 없음, 핸들러는 건다) · [2 무음 오디오 + 낭독] · [3 무음 오디오만]. 모든 액션(`play`·`pause`·`nexttrack`·`previoustrack`·`stop`·`seekforward`·`seekbackward`·`seekto`)에 기록 핸들러, `keydown`(key·code), 오디오 요소 이벤트(play·pause·ended·error), `visibilitychange`, 발화 start·end·error 를 시각(ms)과 함께 기록. 낭독은 액션을 받아도 계속(기록만) | 모드마다: 유선·블루투스 이어폰 각각 한 번·두 번·세 번·길게 / 알림창의 ⏮⏯⏭ / 잠금 화면의 단추. **다른 음악 앱이 켜지면 적기** | W2(오디오 없이 오나 — 1), W5(누름 → 액션), 알림·잠금 화면 단추가 생기나, 길게 누름이 오나(9b) |
+| B 화면 꺼짐 | 모드 1·2 각각: [시작] → 번호 붙인 문장 계속 → 사용자가 전원 단추로 화면 끄고 **3분** → 켜기. 숨김 동안 끝난 발화 수·발화 사이 간격(중앙값·최대)·오류·`onend` 없이 끝난 것(워치독 흉내)·마지막 발화 시각 | 화면 끄고 3분 기다렸다 켜서 [결과 복사] | W6(계속되나), W7(간격), (다)의 가능성 |
+| C 포커스 다툼 | 모드 2 로 2분: 오디오 `pause` 이벤트(우리가 안 부른 것) 횟수, 발화 끊김(`interrupted` 외 오류) 횟수 | 그냥 듣기 — 낭독이 끊기면 적기 | (나)의 단 하나 위험 |
+| D 알림 모양 | [위치 막대 없음] / [`setPositionState` 문장식] 전환 | 알림창 캡처 2장 | 9-D7 |
+| E 기기 | `navigator.userAgent`, `'mediaSession' in navigator`, `MediaMetadata` 유무, 화면 크기 | — | 기록 |
+
+- **순서**: 운영자 Galaxy Z Fold 7 에서 먼저(당일) → 이상 없으면 Nour(Realme GT 7, Chrome 143)에게 점검표로. **9a Build 는 Nour 결과를 기다리지 않는다** — Fold 7 결과로 `SESSION` 기본값을 정해 만들고, Nour 결과가 다르면 값·9-D7 만 바꿔 재배포. (다)(9a-2)는 **두 기기의 B 결과가 모두 온 뒤에만** Plan 한다.
+- **Nour 점검표(운영자 전달용 뼈대)**: (1) Chrome 으로 `…/apps/medreader/dev/handsfree.html` (2) 모드 2 [시작] → 이어폰을 한 번·두 번·세 번 누르고 화면의 기록이 늘어나는지 (3) 알림창을 내려 단추가 보이면 캡처 (4) 묶음 B: 화면을 끄고 3분 뒤 켜기 (5) [결과 복사] 를 보내기. 쓰는 이어폰 종류(유선/블루투스, 이름)도.
+- **판정 규칙(미리 정함)**: A 에서 모드 1 이 버튼을 받고 음악 앱이 안 켜지면 → `SESSION='none'` 후보(두 기기 모두일 때만). 모드 2 만 받으면 → (나) 확정. C 에서 2분에 포커스 다툼 ≥ 1 이거나 발화 끊김 ≥ 1 → (나) 보류, 결과를 들고 운영자에게(대안: (가) + 화면 버튼만). B 에서 모드 2 의 숨김 중 발화가 3분 내내 이어지고 최대 간격 ≤ 3초 → 9a-2 (다) Plan 을 열 근거.
+
+##### 8. Build 설계 뼈대 (9a)
+
+| 항목 | 내용 |
+|---|---|
+| 새 파일 | `js/ui/handsfree.js` — `createHandsfree(deps)`(주입: `mediaSession`·`MediaMetadata`·`makeAudio`·`isHidden`·`speaker`·`pressPlay`·`meta()`·`t`·`holdWakeLock(ms)`·`timers`) + 순수 도우미 `silentWav`·`actionFor(state, action, hidden)`(4 의 표를 함수 하나로)·`playbackStateOf(state)`. 반환: `arm()`(리더 들어옴 — 핸들러·메타데이터) · `disarm()`(떠남 — 핸들러 `null`, `metadata = null`, `'none'`, 오디오 정리) · `refreshMeta()` · `debug()`. 기능 감지(`'mediaSession' in navigator`)는 여기서만 — 없으면 전부 no-op |
+| 고치는 파일 | `ui/controls.js` — [▶] 핸들러 본문을 `pressPlay()` 로 빼서 버튼·handsfree 가 같이 부름, `createHandsfree` 배선(약 20줄), `leaveControls` 에서 `disarm()`, 디버그 훅에 `handsfree` 한 줄 · `ui/reader.js` — `docTitle()` export 1개 · `config.js` — `HANDSFREE = { SESSION:'audio', SILENT_SECONDS:10, SILENT_RATE:8000, PAUSE_HOLD_MS:300000 }` · `settings.js` — `tts.mediaKeys: true` · 설정 낭독 탭 한 줄 · i18n 4개 언어 × 키 3개(`handsfree.pageOf`·`settings.tts.mediaKeys`·`settings.tts.mediaKeysHint`) |
+| 고치지 않는 것 | `tts/speaker.js`(공개 함수만 부른다 — 0줄), 6-4 hidden 핸들러(controls 253–263, 0줄), 퀴즈 speaker, readalong·trband·inlinetr |
+| import 방향(3-2) | `ui/handsfree.js` → `config`·`i18n` 만. speaker 는 주입(import 하지 않음 — 테스트에서 진짜 `createSpeaker` 를 넣는다) |
+| DB·버전 | DB 무관 · `algoVersion` 무관 · 호출 0 · 오프라인 ○ |
+| 고지(13절) | 새 권한·새 전송 없음 — 고지 변경 없음. 잠금 화면 알림에 **책 제목**이 보인다는 것만 설정 줄 설명(`mediaKeysHint`)에 한 줄 |
+
+##### 9. 수용 기준
+
+- [ ] `[N]` H1 `actionFor` 표 전수: 상태 5 × 액션 5(+seek 3 은 "걸지 않음") × hidden 2 → 4 의 표와 같다.
+- [ ] `[N]` H2 가짜 `mediaSession` 에 진짜 `createSpeaker`(가짜 synth·타이머)를 붙여: `play` 핸들러를 부르고 **돌아온 직후**(타이머를 감기 전) `getState() === 'speaking'` 이고 `pressPlay` 가 1번 불렸다(동기 — `await` 를 넣는 변이가 실패해야 한다).
+- [ ] `[N]` H3 `nexttrack` 을 `phase === 'tr'` 에서 → 다음 인덱스, `phase === 'src'`. 쪽 끝 + 읽는 중 → `waiting-page`(`view.goToPage` 1회). 쪽 끝 + 멈춤 → 인덱스·상태 그대로.
+- [ ] `[N]` H4 hidden 중 `play`·`nexttrack`·`previoustrack` → speaker 호출 0, 무시 카운터 +1.
+- [ ] `[N]` H5 `playbackState`·무음 오디오가 `statechange` 를 따른다: speaking/waiting-page → `'playing'`·`audio.play` 1회, paused → `'paused'`·`audio.pause`, `disarm()` → 핸들러 전부 `null`·`metadata === null`·`'none'`·`src` 없음.
+- [ ] `[N]` H6 재동기화: 읽는 중 우리가 부르지 않은 오디오 `pause` → `audio.play` 1회, 같은 문장에서 두 번째 → 다시 부르지 않고 `focusFights` +1.
+- [ ] `[N]` H7 멈춤 유지: 액션으로 멈춤 → `holdWakeLock(300000)` 1회, 화면 [⏸] 로 멈춤 → 0회, `tts.wakeLock=false` → 0회, 5분 안에 재생 → 유지 타이머 취소.
+- [ ] `[N]` H8 `silentWav(10, 8000)`: 길이 80,044, `RIFF`·`WAVE`·`fmt `·`data` 위치·샘플률·비트 수, 데이터 바이트 전부 128.
+- [ ] `[N]` H9 메타데이터: 제목·"쪽 n / m"(4개 언어 키 존재)·아트워크 2개. `linechange` 만으로는 `metadata` 를 다시 만들지 않는다(쪽 바뀜·언어 바뀜만).
+- [ ] `[N]` H10 `'mediaSession' in navigator` 가 거짓이거나 `tts.mediaKeys=false` → 예외 0, 핸들러·오디오 0. `SESSION='none'` → 핸들러는 걸고 오디오 0.
+- [ ] `[N]` 기존 테스트 전부 통과(특히 `tts-speaker`·`speaker-tr`·`search-ui-8g`·`pageturn-8i3`) — speaker 0줄 변경의 확인.
+- [ ] `[D]` 데스크톱 Chrome: [▶] 뒤 툴바의 미디어 컨트롤(글로벌 미디어 컨트롤)에 제목·"쪽 n / m"·아이콘이 보이고 ⏭ 가 다음 문장, ⏯ 가 멈춤·재생. 키보드 미디어 키가 있으면 같다. 탭을 숨기면 지금처럼 멈춘다(6-4 무변). 서재로 나가면 컨트롤이 사라진다.
+- [ ] `[D]` 콘솔 오류 0, `__medreader.tts.handsfree()` 가 상태·무시 수·`focusFights` 를 보인다(키·원문 없음).
+- [ ] `[M]` 운영자 Fold 7(9a 배포본): 유선/블루투스 이어폰 한 번 = 멈춤↔재생, 두 번 = 다음 문장, 알림의 ⏮⏯⏭, **다른 음악 앱이 켜지지 않는다**, 10분 낭독 중 끊김 0, 번역 낭독(speak 모드) 중 ⏭ 가 번역을 건너뛴다, 원본 보기 쪽 끝 ⏭ 가 다음 쪽 첫 문장을 한 번만 읽는다(8i-3), 이어폰으로 멈춘 뒤 4분 지나 이어폰으로 재생된다, 화면을 끄면 멈춤으로 남는다.
+- [ ] `[M]` Nour 기기: 위 첫 세 항목 + 화면 넘김·띠·문장 아래 번역이 화면 버튼과 똑같이 움직인다.
+
+##### 10. 테스트 방법 (headless)
+
+- `tests/handsfree-9a.test.mjs`(새): 가짜 `mediaSession`(`{metadata, playbackState, handlers:{}, setActionHandler(a, f){…}, setPositionState(){…}}`), 가짜 `MediaMetadata`(받은 객체를 그대로 담는 클래스), 가짜 오디오(`play()` 는 Promise — 거부 갈래도, `pause()`·`addEventListener`·`loop`·`src`), `isHidden` 은 바꿀 수 있는 값, 타이머는 `tests/tts-speaker.test.mjs` 의 가짜 시계. speaker 는 **진짜** `createSpeaker`(가짜 synth) — `search-ui-8g` 처럼. 브라우저 전역(`navigator`·`document`)을 만지지 않는다(주입만).
+- **변이**(Review 가 돌린다): (a) hidden 검사 삭제 → H4 실패 (b) next/prev 핸들러 맞바꿈 → H3 실패 (c) `pressPlay` 앞 `await` → H2 실패 (d) 재동기화 횟수 상한 삭제 → H6 실패 (e) 메타데이터를 `linechange` 에서 갱신 → H9 실패 (f) `disarm` 에서 `setActionHandler(…, null)` 하나 빼기 → H5 실패.
+- 9a-0 페이지는 앱 무변이라 테스트 없음 — Review 는 데스크톱 Chrome 에서 열어 모드 2 의 툴바 미디어 컨트롤·[결과 복사] 텍스트 모양·외부 요청 0(네트워크 탭)·앱 `localStorage` 키를 건드리지 않음만 본다.
+
+##### 11. 나누기 · 크기 · 시간 `[추정]`
+
+| 단계 | 내용 | 크기 | 시간 |
+|---|---|---|---|
+| **9a-0** | `dev/handsfree.html` 하나(약 350–400줄, 앱 무변) + 가벼운 Review + 배포 | 작음 | Build 1–1.5시간 + Review 0.5시간 |
+| (기다림) | 운영자 Fold 7 확인 — 당일. Nour 결과 — 9a 를 막지 않는다 | — | — |
+| **9a** | `ui/handsfree.js`(약 200–250줄) · controls 약 25줄 · reader 1 export · config·settings·i18n 3키×4 · 설정 한 줄 · 테스트 약 300줄 | 중간 | Build 2–2.5시간 + Review 1–1.5시간 |
+| 합 | | | **약 5–5.5시간** + 실기기 왕복 |
+| (9a-2, 조건부) | (다) 잠금 중 계속 읽기 — 9a-0 B 결과 뒤 Plan | 중간 `[추정]` | Plan 1 + Build 2 + Review 1.5 시간 |
+
+되돌림: `tts.mediaKeys=false`(사용자) 또는 `HANDSFREE.SESSION='none'`(배포) — 둘 다 코드 되돌림 없이 지금 동작에 가깝게.
+
+##### 12. 운영자 결정 (선택지 · 권장)
+
+| # | 결정 | 선택지 | 권장 · 이유 |
+|---|---|---|---|
+| 9-D1 | 잠금 화면 범위 | (가) 화면 켜짐·이어폰만(오디오 없음) · (나) 무음 오디오 + hidden 규칙 유지 · (다) hidden 규칙을 바꿔 잠금 중 계속 | **(나), (다)는 9a-0 B 뒤 9a-2 로** — (가)는 W2 가 뒷받침 없어 아무것도 안 될 수 있다. (나)는 6-4 를 안 건드리고 (다)에서도 그대로 쓰인다. (다)의 모르는 것 다섯은 실기기 숫자로만 풀린다 |
+| 9-D2 | 9a-0 진단 먼저 | (가) **9a-0 을 먼저 배포**(Fold 7 당일 → Nour) · (나) 바로 9a, 실기기는 9a 배포본으로 | **(가)** — 값 하나(`SESSION`)·9-D7·(다)의 가부가 결과에 달렸다. 1.5–2시간이고 9a Build 를 Nour 답에 묶지 않는다 |
+| 9-D3 | 이어폰으로 멈춘 뒤 화면 | (가) **5분 더 켜 둠**(이어폰·알림으로 멈췄을 때만) · (나) 지금처럼 곧바로 풀기 · (다) 시간 상한 없이 | **(가)** — (나)면 멈추고 30초 뒤 화면이 꺼져 이어폰 [재생]이 무시된다(9-D1 (나)의 가장 흔한 막힘). (다)는 배터리 |
+| 9-D4 | play/pause 해석 | (가) **둘 다 speaker 상태 기준 토글** · (나) 액션 이름 그대로(엄격) | **(가)** — 이어폰 단추가 하나고 Chrome 은 자기 세션 상태로 이름을 고른다. 어긋나면 (나)는 "눌러도 안 되는" 단추 |
+| 9-D5 | 멈춤 중 쪽 끝 ⏭ | (가) **아무 일 없음(화면 버튼과 같음)** · (나) 다음 쪽으로 넘겨 첫 문장 하이라이트 | **(가)** — speaker 0줄. 화면 버튼과 다르게 움직이면 9b 음성 명령 "다음"과도 세 갈래가 된다. 바꾸려면 화면 버튼과 함께 따로 |
+| 9-D6 | 잠금 화면에 보이는 제목 | (가) **책 제목 + "쪽 n / m"** · (나) "MedReader" 만 | **(가)** — 교과서 제목은 개인정보가 아니고, 여러 권을 오갈 때 알림만 보고 무엇을 듣는지 안다. 설정 줄 설명에 한 줄 |
+| 9-D7 | 알림 위치 막대 | (가) **9a-0 D 로 정함**: 10초 반복 막대가 보이면 쪽 문장 진행으로 덮기, 아니면 `null` · (나) 늘 쓰지 않음 · (다) 늘 문장 진행 | **(가)** — 모양을 보지 않고 정하면 둘 다 틀릴 수 있다 |
+| 9-D8 | 끄는 설정 | (가) **`tts.mediaKeys` 설정 한 줄(기본 켬)** · (나) 설정 없음 | **(가)** — 낭독을 시작하면 다른 앱 음악이 멈춘다(포커스). 원치 않는 사람의 비상구 |
+| 9-D9 | 9a 의 자리 | (가) **19-1-4 6 권장대로**(8e 답이 없으면 9a 먼저) · (나) 9a-0 만 지금, 9a 는 8e 뒤 | **(가)** — Nour 필수(요구 1). 9a-0 은 8e 와 파일이 겹치지 않아 아무 때나 |
+
+##### 13. 이번엔 못 함 · 9b 에 넘길 것
+
+- 잠금 중 계속 읽기(다) — 9a-2, 9a-0 B 뒤.
+- 길게 누름 → "듣기"(9b): Media Session 에 길게 누름 액션이 없다(W3). 9a-0 A 의 "길게" 기록이 0 이면 9b 의 시작 단추는 화면 마이크 단추만 — 17-1 (2)의 `[가정]`을 9a-0 이 미리 답한다.
+- 쪽을 거슬러 가는 ⏮(쪽 첫 문장에서 이전 쪽 마지막 문장): 화면 [이전]도 안 한다. 바꾸려면 둘 다.
+- 퀴즈 해설 [읽기] 의 이어폰 대응 — 리더만.
+- 블루투스 이어폰 터치 제스처의 기기별 차이 — 9a-0 기록을 모아 안내 문구로만(앱 분기 없음).
+
 ### 17-2. 설명·요약 — 결정: 설명 먼저, 부를 때만 `[신설 2026-10-03]` `[결정 2026-10-03 — 사용자: 권장안대로]`
 
 2026-09-28 에 요약은 NotebookLM 과 겹친다는 이유로 후순위가 됐다(18절). 요구 2 는 앱 안에서의 **설명**과 **요약**을 명시한다. **결정은 사용자가 한다** — 정하기 전까지 후순위가 유효하다. 비용은 17절 머리 원칙의 환산(호출 1회 ≈ 낭독 번역 약 5,900자)으로 적는다.
@@ -4233,7 +4407,7 @@ Nour 의 추가 요구(2026-10-03)로 8c 뒤의 순서를 다시 짠다. **7b·7
 | **8d** 문장 아래 번역(대역) `[신설 2026-10-12]` | `readalong.display = 'inline'`, `ui/inlinetr.js`, 삽입 계약 I1~I7, 캐시에서 다시 그리기(7-7-1), 편안 영역 잣대 확장(6-5) | Nour 요청 1 | **쓰지 않음**(캐시 재사용, 창 규칙 불변) | ○(캐시된 번역) | 리플로우 전용. 원본 뷰는 띠. Nour 공개 직후 — 띠에 대한 반응을 보고 세부 조정 |
 | **8e** 가로 화면 읽기 `[신설 2026-10-12]` `[위치 미정 — Nour 자동 회전 답 대기]` | 높이 ≤ 520px compact: 쪽 이동 바 합치기·상단바 자동 숨김·띠 2줄(12-8), 선택: 전체 화면 | Nour 요청 3 | 쓰지 않음 | ○ | **먼저 자동 회전이 켜져 있는지 확인**(꺼져 있으면 가이드만). 수용 기준 = 12-8 수치(800×360 본문 ≥ 270px 등) |
 | **8c + 8f** 탭 번역·사용량 + 단어장 `[신설 2026-10-12 — 8f]` | 8c(위 표) + 17-7 전부: 선택 동작 줄, 단어 번역(단어장 → 문장 번역에서 찾기 → 부를 때만 요청·묶음), `cards kind:'term'`, 단어장 화면, CSV/Anki 내보내기, CSV 가져오기, 문서 삭제 시 보존 | Nour 요청 2 | 쓴다 — **부를 때만**, 호출 0 경로 먼저, 묶음 최대 20 | 단어장 보기·편집·내보내기 ○ / AI 번역 ✗ | 9b 뒤. 한 단계가 크면 8c 와 8f 를 두 Build 로 나누되 손짓 체계(17-7-1)는 8c 가 먼저 만든다 |
-| **9a** 이어폰·잠금 화면 버튼 | Media Session `play/pause/nexttrack/previoustrack` → 재생·멈춤·다음·이전, 필요하면 무음 오디오로 세션 잡기(17-1) | 1 | 쓰지 않음 | ○ | 말하지 않아도 되는 가장 싼 핸즈프리. `[가정]` 무음 오디오 필요 여부·버튼 이벤트 도달은 **Nour 기기 실기기 확인**. 6-4 "hidden → 일시정지" 규칙은 이번에 바꾸지 않는다 |
+| **9a** 이어폰·잠금 화면 버튼 `[수정 2026-10-27 — 9a Plan]` | Media Session `play/pause/nexttrack/previoustrack` → 재생·멈춤·다음·이전, 필요하면 무음 오디오로 세션 잡기(17-1). 설계 17-1-1(운영자 결정 대기) — 권장: 9a-0 진단 페이지 먼저 → 9a (나) | 1 | 쓰지 않음 | ○ | 말하지 않아도 되는 가장 싼 핸즈프리. `[가정]` 무음 오디오 필요 여부·버튼 이벤트 도달은 **Nour 기기 실기기 확인**. 6-4 "hidden → 일시정지" 규칙은 이번에 바꾸지 않는다 |
 | **9b** 음성 명령 | 한 번 누르고 말하기, 고정 명령 9개(+나중 "여기 설명"), 아랍어·영어 로컬 매칭(17-1) | 1 | **쓰지 않음**(AI 의도 해석 없음) | ✗ — Android 인식은 서버 인식(6-4) `[가정]` | 9a 위에 얹는다. Nour 기기에서 VPN 켬/끔 각각 확인. 실패해도 9a 버튼은 계속 된다 |
 | **9c** 백업·옮기기 | 내보내기/가져오기, 담는 범위·키 제외(17-4) | 7, 새 휴대폰 | 쓰지 않음(오히려 이미 쓴 한도를 지킨다) | ○ | 9a·9b 와 독립 — 순서를 바꿔도 된다. 8b 부터 번역 캐시가 쌓이므로 늦을수록 잃을 것이 커진다 |
 | **10** 다른 무료 프로바이더 이어 쓰기 | 나머지 어댑터(`openai-compat` 계열 — OpenRouter `:free`·Mistral, 무료 티어가 있으면 xAI) + 사용자가 정한 순서로 소진 시 넘어가기(17절 표) | 5·6 | 한도를 **늘린다** | ✗ | 옛 10단계(나머지 어댑터)의 **목적을 "무료 한도 이어 쓰기"로** 명시. 같은 프로바이더 키 돌려쓰기 없음. 7b 결과가 `REGION` 이면 위 표대로 8a 전으로 당겨진다. 무료 티어가 없는 프로바이더(anthropic·openai 등 `[가정]`)는 1년간 넣지 않는다. `[신설 2026-10-04]` **선택지: 운영자 유료 키(17-6 B)** — 무료 한도가 모자라면 이 목록에 넣는다. 키 제한·월 예산 상한 필수 |
