@@ -202,7 +202,11 @@ test('P8-4b medical·없음 요청 본문은 바이트까지 같다 · keyFor �
   for (const m of pl.match(/keyFor\([^)]*\)/g) || []) assert.ok(!/domain/.test(m), 'pipeline 의 keyFor 호출에 domain: ' + m);
   const ra = src('js/ai/readalong.js');
   for (const m of ra.match(/keyFor\([^)]*\)/g) || []) assert.ok(!/domain/.test(m), 'readalong 의 keyFor 호출에 domain: ' + m);
-  assert.ok(!/domain/.test(src('js/ai/cache.js')), 'cache.js 는 domain 을 모른다(키 불변)');
+  // `[다듬기 2]` 키에는 domain 없음 · 값에는 있음 — 키 함수(cacheKindOf·keyFor)는 domain 을 모른다
+  const cs = src('js/ai/cache.js');
+  const keyPart = cs.slice(cs.indexOf('export function cacheKindOf'), cs.indexOf('export function sizeOf'));
+  assert.ok(keyPart.length > 50 && !/domain/.test(keyPart), 'cache.js 의 키 함수는 domain 을 모른다(키 불변)');
+  assert.match(cs, /if \(typeof e\.domain === 'string' && e\.domain\) rec\.domain = e\.domain;/, 'putMany 는 값에 domain 을 남긴다');
 });
 
 /* ══ readalong — 부르는 곳 ═══════════════════════════════ */
@@ -325,6 +329,9 @@ test('P8-7 ★ setDocDomain — domain 만 쓴다(끼어든 쓰기를 덮지 않
   idb.delayReadonlyComplete('documents', 0);
   await db.put('documents', seedDoc('m1'));
   assert.equal(domainOf(idb.peek('medreader', 'documents', 'm1')), 'medical', '필드 없음 = 의학');
+  // `[다듬기 2 — 8pR-8 L2]` 필드 없는 문서에서 [의학] — 정규화한 값이 같으니 쓰지 않는다(알림도 없다: wrote false)
+  assert.equal((await setDocDomain('m1', 'medical')).wrote, false);
+  assert.equal('domain' in idb.peek('medreader', 'documents', 'm1'), false, '필드를 새로 만들지 않는다');
   // 경합: 쓰는 동안 다른 필드를 전부 바꾸는 쓰기가 끼어든다
   idb.delayReadonlyComplete('documents', 150);
   const p = setDocDomain('m1', 'general');
@@ -386,4 +393,97 @@ test('P8-8 서재 [⋯] "번역 문체: 의학 / 일반" — 원문 언어 줄 �
   assert.match(controls, /readalong\.setDoc\(\{[^}]*domain: docDomain\(\)/);
   // CSS 자리
   assert.match(src('css/screens.css'), /\.doc-domain \{/);
+});
+
+/* ══ `[다듬기 2]` 8pR-9 남은 문제 1 · 8pR-8 L3 ═══════════════ */
+
+function capCache() {
+  const puts = [];
+  const store = new Map();
+  return {
+    puts: puts,
+    getMany: async (keys) => { const m = new Map(); for (const k of keys) if (store.has(k)) m.set(k, store.get(k)); return m; },
+    putMany: async (entries) => { for (const e of entries) { puts.push(Object.assign({}, e)); store.set(e.key, e); } return { put: entries.length, evicted: 0 }; }
+  };
+}
+function capPipeline(cache, fetch, extra) {
+  return createPipeline(Object.assign({
+    fetch: fetch, db: memDb(), cache: cache, getKey: () => FAKE_KEY,
+    getSetting: settingsOf({ 'ai.useOnDevice': false }), now: () => 0, isOnline: () => true,
+    setTimer: manualTimers().set, clearTimer: () => {}, listen: false
+  }, extra || {}));
+}
+
+test('P8-9 `[다듬기 2]` 캐시 값에 domain(진단용) — 기록 항목에 정규화한 문체 · 키·요청 본문 불변 · 옛 값(필드 없음)도 그대로 읽힌다', async () => {
+  const want = (await Promise.all([A, B].map((t) => keyFor('d', t, 'ar', 'translate')))).sort();
+  const bodies = {};
+  for (const [d, norm] of [[undefined, 'medical'], ['medical', 'medical'], ['xx', 'medical'], ['general', 'general']]) {
+    const c = capCache();
+    const f = stubFetch(echoTranslate());
+    await capPipeline(c, f).translate([{ text: A }, { text: B }], { src: 'en', target: 'ar', kind: 'readalong', docId: 'd', domain: d });
+    assert.equal(c.puts.length, 2, String(d));
+    for (const e of c.puts) {
+      assert.equal(e.domain, norm, 'domain=' + String(d) + ' → 값에 ' + norm);
+      assert.equal(e.promptVersion, 3);
+    }
+    assert.deepEqual(c.puts.map((e) => e.key).sort(), want, '키는 domain 을 모른다(7-5)');
+    bodies[String(d)] = String(f.calls[0].init.body);
+  }
+  assert.equal(bodies.medical, bodies.undefined, '요청 본문은 그대로(값만 다르다)');
+  assert.equal(bodies.xx, bodies.undefined);
+  // 기기 내 번역 경로도 같은 값(그때 문서 문체)
+  const c2 = capCache();
+  const f2 = stubFetch(echoTranslate());
+  await capPipeline(c2, f2, { getSetting: settingsOf({ 'ai.useOnDevice': true }), ondevice: async (list) => list.map((s) => 'OD ' + s) })
+    .translate([{ text: A }], { src: 'en', target: 'ar', kind: 'readalong', docId: 'd', domain: 'general' });
+  assert.equal(f2.calls.length, 0);
+  assert.deepEqual(c2.puts.map((e) => [e.provider, e.domain]), [['ondevice', 'general']]);
+  // 옛 캐시 값(필드 없음 · 판 2) — 일반 문체로 읽어도 적중, 재요청 0
+  const dbx = memDb();
+  await createCache({ db: dbx, now: () => 0 }).putMany([{ key: want[0], docId: 'd', kind: 'translate', targetLang: 'ar', result: 'OLD', provider: 'gemini', model: 'm', promptVersion: 2 }]);
+  const oldKeyText = (await keyFor('d', A, 'ar', 'translate')) === want[0] ? A : B;
+  const f3 = stubFetch(echoTranslate());
+  const r3 = await mkPipeline(dbx, f3).translate([{ text: oldKeyText }], { src: 'en', target: 'ar', kind: 'readalong', docId: 'd', domain: 'general' });
+  assert.equal(f3.calls.length, 0);
+  assert.deepEqual(r3.results.map((x) => [x.state, x.text]), [['ready', 'OLD']]);
+  assert.equal('domain' in dbx.stores.get('aiCache').get(want[0]), false, '옛 레코드는 고치지 않는다(필드 없음 그대로)');
+  // 실제 cache.js 로 저장 — IndexedDB 레코드 **값**에 domain 이 남고 키는 그대로
+  const other = oldKeyText === A ? B : A;
+  await mkPipeline(dbx, stubFetch(echoTranslate())).translate([{ text: other }], { src: 'en', target: 'ar', kind: 'readalong', docId: 'd', domain: 'general' });
+  assert.deepEqual(Array.from(dbx.stores.get('aiCache').keys()).sort(), want, '키 불변');
+  const rec = dbx.stores.get('aiCache').get(await keyFor('d', other, 'ar', 'translate'));
+  assert.equal(rec.domain, 'general');
+  const dbm = memDb();
+  await mkPipeline(dbm, stubFetch(echoTranslate())).translate([{ text: A }], { src: 'en', target: 'ar', kind: 'readalong', docId: 'd' });
+  assert.equal(Array.from(dbm.stores.get('aiCache').values())[0].domain, 'medical', '필드 없는 문서(Nour) = medical 로 기록');
+  // domain 을 주지 않은 기록(다른 kind 등)은 필드를 만들지 않는다
+  const dbq = memDb();
+  await createCache({ db: dbq, now: () => 0 }).putMany([{ key: 'q|x', docId: 'd', kind: 'quiz', targetLang: 'ar', result: 'R', promptVersion: 3 }]);
+  assert.equal('domain' in dbq.stores.get('aiCache').get('q|x'), false);
+});
+
+test('P8-10 `[다듬기 2 — 8pR-8 L3]` 리더 onDocDomain 의 효과 — 열린 문서 값이 바뀌고(docDomain) 다음 요청이 그 문체', async () => {
+  const { docAfterDomainChange } = await import('../js/ui/reader.js');
+  const open = { id: 'doc1', lang: 'en', title: 'T' };                // 필드 없음 = 의학(Nour 문서)
+  assert.equal(docAfterDomainChange(open, 'doc1', { docId: 'other', domain: 'general' }), null, '다른 문서의 알림은 무시');
+  assert.equal(docAfterDomainChange(null, 'doc1', { docId: 'doc1', domain: 'general' }), null, '열린 문서 없음');
+  assert.equal(docAfterDomainChange(open, 'doc1', null), null);
+  const next = docAfterDomainChange(open, 'doc1', { docId: 'doc1', domain: 'general' });
+  assert.equal(domainOf(next), 'general');
+  assert.deepEqual([next.id, next.lang, next.title], ['doc1', 'en', 'T'], '다른 필드는 그대로');
+  assert.equal(open.domain, undefined, '옛 객체를 고치지 않는다(새 객체)');
+  assert.equal(domainOf(docAfterDomainChange(next, 'doc1', { docId: 'doc1', domain: 'weird' })), 'medical', '모르는 값 = 의학');
+  // 그 값이 controls → readalong.setDoc 으로 가면 다음 요청이 일반 문체다
+  const g = rig(domainOf(next));
+  const u1 = buildUnits(g.pages[1], 'sentence');
+  g.ra.onQueue(1, u1, sentencesOf(u1)[0].seg);
+  await until(() => g.pl.calls.length >= 1);
+  assert.ok(g.pl.calls.length >= 1);
+  for (const c of g.pl.calls) assert.equal(c.ctx.domain, 'general');
+  // 배선 — 리더의 알림 처리기가 이 함수로 `state.doc` 을 바꾼다(R4: 고치지 않으면 빨강)
+  const reader = src('js/ui/reader.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const body = reader.slice(reader.indexOf('function onDocDomain('), reader.indexOf('function onAnyScroll('));
+  assert.match(body, /const next = docAfterDomainChange\(state\.doc, state\.docId, d\);/);
+  assert.match(body, /if \(next\) state\.doc = next;/);
+  assert.match(reader, /export function docDomain\(\) \{ return domainOf\(state\.doc\); \}/);
 });

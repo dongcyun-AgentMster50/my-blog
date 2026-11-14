@@ -200,6 +200,16 @@ test('D1 ★ I2 — 한 줄에서 두 문장이 끝나면 그 줄이 둘의 앵�
   const p = art.querySelector('p.para');
   const order = p.childNodes.map((n) => (n.classList.contains('line') ? 'L' + n.getAttribute('data-line-id') : 'B' + n.getAttribute('data-ra-seg')));
   assert.deepEqual(order, ['L9:1', 'L9:2', 'B1', 'B2', 'L9:3']);
+  // `[다듬기 2 — 8dR-8 L2]` 실제 흐름(읽는 순서)은 **오름차순**이다 — 그래도 seg 순서(쌓기 루프가 앞 블록을 건너뛴다).
+  const art2 = renderPage(doc, 9, [PARA]);
+  const find2 = lineFinder(art2);
+  for (const it of [a[1], a[2]]) {
+    const b = IT.makeBlock(doc, it.seg, 'ar');
+    IT.renderReady(b, 'ترجمة ' + it.seg, 'ar');
+    assert.equal(IT.placeBlock(find2(it.anchor), b), true);
+  }
+  const order2 = art2.querySelector('p.para').childNodes.map((n) => (n.classList.contains('line') ? 'L' + n.getAttribute('data-line-id') : 'B' + n.getAttribute('data-ra-seg')));
+  assert.deepEqual(order2, ['L9:1', 'L9:2', 'B1', 'B2', 'L9:3'], '오름차순으로 넣어도 seg 순서');
 });
 
 test('D1b 행 표 이름표의 쪽 번호(span.rt-ref — 줄 아님)는 줄에 붙어 있고 블록은 그 뒤에', () => {
@@ -456,7 +466,8 @@ test('D8 ★ grep — inlinetr 는 pipeline 을 (간접으로도) import 하지 
   assert.ok(clo.some((f) => /\/ui\/inlinetr\.js$/.test(f)));
   assert.equal(clo.filter((f) => /\/ai\/(pipeline|readalong|cache)\.js$/.test(f)).length, 0, clo.join('\n'));
   assert.match(src, /import \{ appendBidiText \} from '\.\/bididom\.js'/);
-  assert.match(src, /import \{ noteKeyFor \} from '\.\/trband\.js'/);
+  // `[다듬기 2 — M1]` 막힘 사유 이름(코드)까지 보려고 같은 규칙의 `bandView` 를 함께 — 문구 규칙은 여전히 한 벌(trband)
+  assert.match(src, /import \{ noteKeyFor, bandView \} from '\.\/trband\.js'/);
   assert.match(src, /appendBidiText\(tx, text, a\.dir\)/);
   // 요청 없는 서비스 메서드만 쓴다
   const used = new Set((src.match(/\bra\.([a-zA-Z]+)\(/g) || []).map((x) => x.slice(3, -1)));
@@ -468,7 +479,8 @@ test('D8 ★ grep — inlinetr 는 pipeline 을 (간접으로도) import 하지 
 
 test('D9 배선 — controls 는 showSpoken **앞에서** willShow · syncReadalong 끝에 sync · leave · 표시 방식 줄 클릭도 sync', () => {
   const c = strip(read('../js/ui/controls.js'));
-  assert.match(c, /show: function \(u\) \{ lastShown = u \|\| null; if \(inlinetr\) inlinetr\.willShow\(u\); return showSpoken\(u\); \}/);
+  // `[다듬기 2 — 8dR-8 L3]` willShow 는 try 안 — 보조 화면 오류가 showSpoken(하이라이트·스크롤)을 막지 않는다
+  assert.match(c, /show: function \(u\) \{ lastShown = u \|\| null; if \(inlinetr\) \{ try \{ inlinetr\.willShow\(u\); \} catch \(e\) \{\s*\} \} return showSpoken\(u\); \}/);
   const sr = c.slice(c.indexOf('function syncReadalong'));
   assert.ok(sr.indexOf('inlinetr.sync()') > sr.indexOf('readalong.setDoc('), '문서·대상 언어를 맞춘 뒤');
   assert.ok(sr.indexOf('inlinetr.sync()') > sr.indexOf('readalong.setContext('), '유효 모드를 맞춘 뒤');
@@ -497,6 +509,14 @@ test('D10 설정 — readalong.display 기본 band · 모르는 값 band · 줄�
   const build = ui.slice(ui.indexOf('function buildReadalongRow'), ui.indexOf('function paintReadalongRow'));
   assert.match(build, /data-readalong-display/);
   assert.ok(build.indexOf('data-readalong-display') > build.indexOf('data-readalong-source'), '"번역 따라가기" 줄(원문 읽기 스위치) 아래');
+  // `[다듬기 2 — 8dR-9 (2) ②]` 머리글과 두 단추가 한 줄(같은 그릇) — 팝오버·설정 AI 탭 모두 이 함수
+  assert.match(build, /dRow\.className = 'readalong-display-line'/);
+  assert.match(build, /dRow\.appendChild\(dLabel\)/);
+  assert.match(build, /dRow\.appendChild\(dGroup\)/);
+  assert.doesNotMatch(build, /readalong-display-head/, '따로 선 머리글 줄이 없다');
+  const sc = read('../css/screens.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const line = sc.slice(sc.indexOf('.readalong-row .readalong-display-line {'));
+  assert.match(line.slice(0, line.indexOf('}')), /display:\s*flex/);
   assert.match(ui, /medreader:readalong-display/);
   for (const l of LANGS) {
     for (const k of ['readalong.display.label', 'readalong.display.band', 'readalong.display.inline', 'readalong.inline.arrived']) {
@@ -626,7 +646,9 @@ test('D11 ★ 화면 흐름 — 쪽 그림(I4 i) · 현재가 될 때(ii) · 지
     settings._setCacheForTest(new Map([['readalong.display', 'inline'], ['ai.translationLang', 'ko']]));
     ra.setDoc({ docId: 'DOC', lang: 'en', target: 'ko', pageCount: 9 });
     view.sync(); await flush();
-    assert.equal(mount.querySelectorAll('.ra-tr[lang="ar"]').length, 0, '옛 대상 언어 블록이 남지 않는다');
+    // `[다듬기 2 — L1]` 상태 줄 블록은 UI 언어(여기 기본 ar)를 단다 — 옛 대상 언어의 **번역문** 블록이 없는지를 본다
+    assert.equal(mount.querySelectorAll('.ra-tr[data-state="ready"][lang="ar"]').length, 0, '옛 대상 언어 블록이 남지 않는다');
+    assert.ok(mount.querySelectorAll('.ra-tr').every((b) => b.getAttribute('data-state') !== 'ready' || b.getAttribute('lang') === 'ko'));
     // 유효 모드 off → 지운다
     ra.setContext({ mode: 'off' });
     view.sync();
@@ -685,4 +707,194 @@ test('D12 ★ `[8m]` 화면 — 대상 언어와 같은 단위가 현재가 되�
     if (saved === undefined) delete globalThis.document;
     settings._setCacheForTest(new Map());
   }
+});
+
+/* ════════════════════════════════════════════════════════
+   5. `[다듬기 2]` 8dR-8 L2(테스트 빈틈) · M1(막힘 줄 쌓임) · L1(상태 줄 테두리 쪽)
+      서비스는 손으로 만든 가짜(상태·캐시·원격 상태를 테스트가 정한다) — 화면 규칙만 본다.
+   ════════════════════════════════════════════════════════ */
+
+function fakeRa() {
+  const mem = new Map();          // src → {state, text?, code?}
+  const cache = new Map();        // seg → text (cachedFor 만 본다)
+  const fns = new Map();
+  const bus = new EventTarget();
+  const r = {
+    mem, cache, remote: 'ready',
+    get: (src) => (mem.has(src) ? Object.assign({}, mem.get(src)) : { state: 'none' }),
+    onChange: (src, fn) => { const k = String(src); if (!fns.has(k)) fns.set(k, new Set()); fns.get(k).add(fn); return () => { const s = fns.get(k); if (s) s.delete(fn); }; },
+    set: (src, rec) => { mem.set(src, rec); for (const fn of Array.from(fns.get(String(src)) || [])) fn(); },
+    listeners: (src) => (fns.get(String(src)) || new Set()).size,
+    translatable: (u) => !!u && Number.isInteger(u.seg),
+    readyNow: (units) => { const out = new Map(); for (const u of units || []) { const x = mem.get(u.src); if (Number.isInteger(u.seg) && x && x.state === 'ready') out.set(u.seg, { src: u.src, text: x.text }); } return out; },
+    cachedFor: async (units) => { const out = r.readyNow(units); for (const u of units || []) if (Number.isInteger(u.seg) && !out.has(u.seg) && cache.has(u.seg)) out.set(u.seg, { src: u.src, text: cache.get(u.seg) }); return out; },
+    mode: () => ({ mode: 'show', reason: null }),
+    remoteState: () => r.remote,
+    addEventListener: bus.addEventListener.bind(bus),
+    retry: async () => ({ state: r.remote, resent: 0 })
+  };
+  return r;
+}
+
+const PAGE9 = [PARA, { id: 'p2', kind: 'body', lines: [ln('9:4', 'A later line ends.'), ln('9:5', 'Then the last one.')] }];
+const PAGE10 = [{ id: 'q1', kind: 'body', lines: [ln('10:1', 'Another page starts. It has two'), ln('10:2', 'sentences and one more. The end.')] }];
+
+/** 새 모듈 인스턴스(화면 상태가 모듈 하나에 있다) + 가짜 DOM·서비스. */
+async function rigView(tag, display) {
+  const doc = makeDoc();
+  const saved = globalThis.document;
+  globalThis.document = doc;
+  settings._setCacheForTest(new Map([['readalong.display', display || 'inline'], ['ai.translationLang', 'ar']]));
+  const M = await import('../js/ui/inlinetr.js?polish2=' + tag);
+  const mount = doc.documentElement.appendChild(doc.createElement('div'));
+  const ra = fakeRa();
+  const sp = makeBus();
+  const out = { doc, M, mount, ra, sp, art: null, units: null, rechecks: 0 };
+  out.view = M.initInlineTr({ readalong: ra, speaker: sp, mount: mount, lineElement: lineFinder(mount), recheck: () => { out.rechecks++; } });
+  out.show = (pageNo, paras) => {
+    if (out.art) mount.removeChild(out.art);
+    out.art = renderPage(doc, pageNo, paras);
+    mount.appendChild(out.art);
+    out.units = buildUnits(paras, 'sentence');
+    sp.emit('queue', { page: pageNo, units: out.units, index: 0, seg: 0 });
+    out.view.sync();
+  };
+  out.u = (seg) => out.units.find((x) => x.seg === seg);
+  out.blocks = () => mount.querySelectorAll('.ra-tr').map((b) => b.getAttribute('data-ra-seg') + ':' + b.getAttribute('data-state'));
+  out.done = () => {
+    out.view.leave();
+    globalThis.document = saved;
+    if (saved === undefined) delete globalThis.document;
+    settings._setCacheForTest(new Map());
+  };
+  return out;
+}
+const flush6 = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)); };
+
+test('D11b ★ L2 — 늦은 캐시는 현재 seg 보다 위에 넣지 않는다 · 다른 쪽을 그리면 "지금 문장"을 잊는다 · band 에서 기억한 문장은 inline 으로 바꾸면 블록', async () => {
+  // ① 현재 seg 보다 작은 캐시 적중을 넣지 않는다(7-7-1 권장 근거 1 — 넣으면 지금 문장이 내려간다)
+  {
+    const r = await rigView('a');
+    try {
+      r.show(9, PAGE9);
+      await flush6();
+      r.view.willShow(r.u(3));                                     // 지금 문장 = seg 3 → "번역 중…"
+      assert.deepEqual(r.blocks(), ['3:pending']);
+      for (const s of [0, 1, 2, 3, 4]) r.ra.cache.set(s, 'ترجمة ' + s);
+      r.show(9, PAGE9);                                            // 같은 쪽을 다시 그림(새 DOM) — 캐시는 늦게 읽힌다
+      assert.deepEqual(r.blocks(), ['3:pending'], '동기 단계 — 메모리 적중 없음, 지금 문장 상태 줄만');
+      await flush6();
+      assert.deepEqual(r.blocks(), ['3:ready', '4:ready'], '현재(3) 보다 작은 seg 0·1·2 는 넣지 않는다');
+      assert.ok(r.mount.querySelector('.ra-tr[data-ra-seg="3"]').hasAttribute('data-ra-current'));
+    } finally { r.done(); }
+  }
+  // ② 다른 쪽 큐로 다시 그리면 현재 표시가 없다 — 돌아온 쪽의 엉뚱한 seg 에 "번역 중…" 이 붙지 않는다
+  {
+    const r = await rigView('b');
+    try {
+      r.show(9, PAGE9);
+      await flush6();
+      r.view.willShow(r.u(2));
+      assert.deepEqual(r.blocks(), ['2:pending']);
+      r.show(10, PAGE10);
+      await flush6();
+      assert.equal(r.mount.querySelector('.ra-tr[data-ra-current]'), null, '10쪽 — 현재 표시 없음');
+      assert.deepEqual(r.blocks(), []);
+      r.show(9, PAGE9);                                            // 9쪽으로 돌아옴(낭독은 그 문장에 있지 않다)
+      await flush6();
+      assert.equal(r.mount.querySelector('.ra-tr[data-ra-current]'), null, '돌아온 9쪽 — 현재 표시 없음');
+      assert.deepEqual(r.blocks(), [], '지난 "지금 문장"(seg 2)에 상태 줄을 다시 달지 않는다');
+    } finally { r.done(); }
+  }
+  // ③ band 에서 willShow 뒤 inline 으로 바꾸면 그 문장 블록(낭독 중 전환 — 그 문장부터)
+  {
+    const r = await rigView('c', 'band');
+    try {
+      r.show(9, PAGE9);
+      await flush6();
+      r.view.willShow(r.u(1));
+      assert.deepEqual(r.blocks(), [], 'band — 블록 없음');
+      assert.equal(r.doc.documentElement.hasAttribute('data-tr-inline'), false);
+      settings._setCacheForTest(new Map([['readalong.display', 'inline'], ['ai.translationLang', 'ar']]));
+      r.doc.dispatchEvent({ type: 'medreader:readalong-display' });
+      assert.deepEqual(r.blocks(), ['1:pending'], '띠 모드에서 기억한 지금 문장(seg 1)에 블록');
+      assert.ok(r.mount.querySelector('.ra-tr[data-ra-seg="1"]').hasAttribute('data-ra-current'));
+    } finally { r.done(); }
+  }
+});
+
+test('D13 ★ M1 — 막힘(offline·exhausted·…·model)이면 새 문장에 상태 줄을 쌓지 않는다 · 한 줄은 남는다 · 풀리면 지금 문장에 단다', async () => {
+  for (const code of ['offline', 'exhausted', 'no-key', 'capped', 'cooldown', 'region', 'model']) {   // `model` — 운영자 결정 2026-11-15
+    const r = await rigView('m1-' + code);
+    try {
+      r.show(9, PAGE9);
+      await flush6();
+      r.ra.remote = code;                                          // 원격 상태가 막힘 — 모든 새 문장이 blocked
+      r.view.willShow(r.u(0));
+      assert.deepEqual(r.blocks(), ['0:blocked'], code + ' — 첫 문장에는 한 줄(무엇이 막혔는지 알린다)');
+      for (const s of [1, 2, 3, 4]) r.view.willShow(r.u(s));
+      assert.deepEqual(r.blocks(), ['0:blocked'], code + ' — 문장 4개를 더 읽어도 새 줄 0 · 지나간 한 줄은 그대로(I4)');
+      assert.equal(r.mount.querySelector('.ra-tr[data-ra-current]'), null);
+    } finally { r.done(); }
+  }
+  // 이미 있던 "번역 중…" 이 막힘으로 바뀐 뒤(현재 문장의 것) — 다음 문장부터 새 줄 없음 · 풀리면 지금 문장에 단다
+  const r = await rigView('m1-flow');
+  try {
+    r.show(9, PAGE9);
+    await flush6();
+    r.view.willShow(r.u(0));
+    assert.deepEqual(r.blocks(), ['0:pending']);
+    r.ra.remote = 'offline';
+    r.ra.set(r.u(0).src, { state: 'blocked', code: 'offline' });   // refill 이 창 안 문장을 blocked 로
+    assert.deepEqual(r.blocks(), ['0:blocked']);
+    r.view.willShow(r.u(1));
+    r.view.willShow(r.u(2));
+    assert.deepEqual(r.blocks(), ['0:blocked'], '새 문장에 상태 블록을 만들지 않는다');
+    assert.equal(r.ra.listeners(r.u(1).src), 0, '지나간 문장의 대기 구독은 거뒀다');
+    assert.equal(r.ra.listeners(r.u(2).src), 1, '지금 문장은 풀리기를 기다린다');
+    // 연결됨 — refill 이 지금 문장을 보낸다(pending) → 그 문장 아래 한 줄 + 편안 영역 다시 보기
+    const before = r.rechecks;
+    r.ra.remote = 'ready';
+    r.ra.set(r.u(2).src, { state: 'pending' });
+    assert.deepEqual(r.blocks(), ['0:blocked', '2:pending'], '풀리면 지금 문장(2)에 단다 · 지나간 1 에는 달지 않는다');
+    assert.ok(r.mount.querySelector('.ra-tr[data-ra-seg="2"]').hasAttribute('data-ra-current'));
+    assert.ok(r.rechecks > before, '지금 문장 아래 한 줄이 생겼다 — 6-5 다시 보기');
+    assert.equal(r.ra.listeners(r.u(2).src), 1, '이제는 블록의 구독 하나뿐');
+    r.ra.set(r.u(2).src, { state: 'ready', text: 'ترجمة' });
+    assert.deepEqual(r.blocks(), ['0:blocked', '2:ready']);
+  } finally { r.done(); }
+  // 막힘이 아닌 상태("번역 중…")는 이 규칙 밖 — 문장마다 그대로
+  const q = await rigView('m1-pending');
+  try {
+    q.show(9, PAGE9);
+    await flush6();
+    q.view.willShow(q.u(0));
+    q.view.willShow(q.u(1));
+    assert.deepEqual(q.blocks(), ['0:pending', '1:pending']);
+  } finally { q.done(); }
+});
+
+test('D14 L1 — 상태 줄일 때만 블록 방향·언어가 UI(ko·ltr) · 번역문 블록은 대상 언어(ar·rtl)', async () => {
+  const { setLang, getLang } = await import('../js/i18n/index.js');
+  const was = getLang();
+  setLang('ko');
+  try {
+    const doc = makeDoc();
+    const b = IT.makeBlock(doc, 3, 'ar');
+    assert.equal(b.getAttribute('dir'), 'rtl', '빈 블록은 대상 언어');
+    IT.renderNote(b, noteKeyFor({ state: 'blocked', code: 'offline' }, { hasSentence: true }));
+    assert.deepEqual([b.getAttribute('dir'), b.getAttribute('lang')], ['ltr', 'ko'], '막힘 줄 — 테두리가 글과 같은 쪽(왼쪽)');
+    IT.renderNote(b, noteKeyFor({ state: 'pending' }, { hasSentence: true }));
+    assert.equal(b.getAttribute('dir'), 'ltr', '"번역 중…"');
+    IT.renderNote(b, noteKeyFor({ state: 'failed' }, { hasSentence: true }));
+    assert.equal(b.getAttribute('dir'), 'ltr', '"번역 실패"');
+    IT.renderArrived(b);
+    assert.equal(b.getAttribute('dir'), 'ltr', '"눌러서 보기"');
+    IT.renderReady(b, 'ترجمة', 'ar');
+    assert.deepEqual([b.getAttribute('dir'), b.getAttribute('lang')], ['rtl', 'ar'], '번역문 블록은 대상 언어 그대로');
+    // ar UI 이면 상태 줄도 rtl(UI 방향)
+    setLang('ar');
+    IT.renderNote(b, noteKeyFor({ state: 'pending' }, { hasSentence: true }));
+    assert.deepEqual([b.getAttribute('dir'), b.getAttribute('lang')], ['rtl', 'ar']);
+  } finally { setLang(was); }
 });

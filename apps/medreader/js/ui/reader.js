@@ -696,10 +696,19 @@ export function sourceLang() { return docLangOf(state.doc); }
  */
 export function docDomain() { return domainOf(state.doc); }
 
+/**
+ * `[8p]` 번역 문체 변경 알림(`medreader:docdomain`)을 받은 뒤의 문서 레코드 값. 열린 문서가 아니면 null. 순수 함수.
+ * `[다듬기 2 — 8pR-8 L3]` 효과(→ `docDomain()` → 다음 요청 문체)를 테스트가 행동으로 본다(`tests/domain-8p` P8-9).
+ */
+export function docAfterDomainChange(doc, docId, d) {
+  if (!d || d.docId == null || String(d.docId) !== String(docId) || !doc) return null;
+  return Object.assign({}, doc, { domain: domainOf(d) });
+}
+
 /** `[8p]` 번역 문체 변경 — 레코드 값만. 쪽을 다시 그리거나 큐를 갈지 않는다(글자·낭독 단위는 그대로다). */
 function onDocDomain(d) {
-  if (!d || d.docId == null || String(d.docId) !== String(state.docId) || !state.doc) return;
-  state.doc = Object.assign({}, state.doc, { domain: domainOf(d) });
+  const next = docAfterDomainChange(state.doc, state.docId, d);
+  if (next) state.doc = next;
 }
 
 function onAnyScroll() {

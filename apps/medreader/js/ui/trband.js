@@ -85,7 +85,7 @@ export function noteKeyFor(rec, ctx) {
 }
 
 /**
- * 7-7 경과 비율 스크롤 —`(경과 − 1s) / 예상 시간` 을 0~1 로 자른다. 순수 함수.
+ * 7-7 경과 비율 스크롤 — `(경과 − 1s) / 예상 시간` 을 0~1 로 자른다. 순수 함수.
  * @returns {number}
  */
 export function scrollRatio(elapsedMs, expectedMs) {

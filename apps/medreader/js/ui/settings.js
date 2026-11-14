@@ -549,15 +549,16 @@ function buildReadalongRow(host) {
   host.appendChild(sw);
 
   // `[8d — spec 7-7-1]` "번역 위치: 아래 띠 / 문장 아래" — "번역 따라가기" 줄 아래 한 줄. 같은 키·같은 그리기 함수(12-3).
+  // `[다듬기 2 — 8dR-9 (2) ②]` 머리글과 두 단추를 **한 줄**(≈48px)로 — 머리글 줄만큼 팝오버가 짧아져, 412×915 띠 모드에서
+  // 처음 열었을 때 단추가 sticky 닫기 줄 밑에 가려지지 않는다. 설정 AI 탭도 이 함수 그대로라 같은 모양이다.
   const dLabelId = 'readalongDisplayLabel' + rowSeq;
-  const dHead = document.createElement('div');
-  dHead.className = 'typeset-head readalong-display-head';
+  const dRow = document.createElement('div');
+  dRow.className = 'readalong-display-line';
   const dLabel = document.createElement('span');
   dLabel.className = 'readalong-label';
   dLabel.id = dLabelId;
   dLabel.setAttribute('data-i18n', 'readalong.display.label');
-  dHead.appendChild(dLabel);
-  host.appendChild(dHead);
+  dRow.appendChild(dLabel);
   const dGroup = document.createElement('div');
   dGroup.className = 'typeset-choices readalong-modes readalong-displays';
   dGroup.setAttribute('role', 'group');
@@ -570,7 +571,8 @@ function buildReadalongRow(host) {
     b.setAttribute('aria-pressed', 'false');
     dGroup.appendChild(b);
   }
-  host.appendChild(dGroup);
+  dRow.appendChild(dGroup);
+  host.appendChild(dRow);
 
   host.addEventListener('click', onReadalongClick);
   host.setAttribute('data-readalong-built', '1');

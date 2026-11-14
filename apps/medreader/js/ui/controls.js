@@ -116,7 +116,8 @@ export function initControls() {
       page: function () { const p = currentPage(); return { page: p.page, pageCount: p.pageCount }; },
       goToPage: goToPageForSpeech,
       // `[8d]` 문장 아래 표시면 지금 문장의 블록을 **먼저** 넣는다 — 6-5 편안 영역 판정이 그 블록까지 본다(7-7-1).
-      show: function (u) { lastShown = u || null; if (inlinetr) inlinetr.willShow(u); return showSpoken(u); },
+      // `[다듬기 2 — 8dR-8 L3]` 보조 화면(블록)의 오류가 하이라이트·스크롤(`showSpoken`)을 막지 않게 감싼다.
+      show: function (u) { lastShown = u || null; if (inlinetr) { try { inlinetr.willShow(u); } catch (e) { /* 블록 없이 읽기는 계속 */ } } return showSpoken(u); },
       markDone: function (u) {
         const ids = u.lineIds || [];
         for (let i = 0; i < ids.length; i++) markDone(ids[i], true);

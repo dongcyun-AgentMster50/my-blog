@@ -27,7 +27,7 @@ import * as settings from '../settings.js';
 import { t, getDir, getLang, onLangChange } from '../i18n/index.js';
 import { normalizeTranslationLang, translationBlockAttrs, normalizeReadalongDisplay } from './settings.js';
 import { appendBidiText } from './bididom.js';
-import { noteKeyFor } from './trband.js';
+import { noteKeyFor, bandView } from './trband.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — `tests/inlinetr-8d.test.mjs` 가 고정한다
@@ -138,11 +138,17 @@ export function renderReady(block, text, lang) {
   block.appendChild(tx);
 }
 
-/** 상태 한 줄 그릇 — UI 언어·UI 방향. 높이는 CSS 가 `--tap` 하나로 고정한다(I4 (iii) "같은 높이"). */
+/**
+ * 상태 한 줄 그릇 — UI 언어·UI 방향. 높이는 CSS 가 `--tap` 하나로 고정한다(I4 (iii) "같은 높이").
+ * `[다듬기 2 — 8dR-8 L1]` 상태 줄일 때는 **블록**의 방향·언어도 UI 로 둔다 — 테두리(`inline-start`)가 글과 같은 쪽에 붙는다
+ * (ar 대상 + ko UI 에서 글은 왼쪽, 테두리는 오른쪽 끝이던 것). 번역문 블록은 `renderReady` 가 대상 언어로 되돌린다.
+ */
 function statusLine(block, state) {
   const doc = block.ownerDocument;
   clearNode(block);
   block.setAttribute('data-state', state);
+  block.setAttribute('dir', getDir());
+  block.setAttribute('lang', getLang());
   const line = doc.createElement('span');
   line.className = 'ra-line';
   line.setAttribute('dir', getDir());
@@ -205,6 +211,8 @@ let gen = 0;
 const watchers = new Map();
 /** 블록 → 문장 원문(DOM 에 원문을 적지 않는다). */
 let srcOf = new WeakMap();
+/** `[다듬기 2 — M1]` 막힘이라 블록을 달지 않은 지금 문장의 상태 구독 `{seg, page, src, off}`. */
+let curWatch = null;
 
 /**
  * @param {{readalong:Object, speaker:Object, mount:Element, root?:Element,
@@ -292,6 +300,7 @@ function anyBlock() { return !!(els && els.mount && els.mount.querySelector('.' 
 /** I7 — `els.mount` 안의 `.ra-tr` 전부와 구독을 지운다. */
 function clearAll() {
   gen++;
+  unwatchCurrent();
   watchers.forEach((off) => { try { off(); } catch (e) { /* 이미 풀림 */ } });
   watchers.clear();
   srcOf = new WeakMap();
@@ -381,6 +390,7 @@ export function willShow(u) {
   const seg = ra.translatable(u) ? u.seg : null;
   const same = seg !== null && seg === cur.seg && page === cur.page;
   if (!same) {
+    unwatchCurrent();
     cur = { seg: seg, page: page, src: seg === null ? null : String(u.src == null ? '' : u.src) };
     phase = 'src';
   }
@@ -391,7 +401,13 @@ export function willShow(u) {
   return b;
 }
 
-/** 지금 문장의 블록 — 없으면 앵커 줄 다음에 만들고, 상태대로 채운다. */
+/**
+ * 지금 문장의 블록 — 없으면 앵커 줄 다음에 만들고, 상태대로 채운다.
+ * `[다듬기 2 — 8dR-8 M1 안 (가)]` 막힘(`offline`·`exhausted`·`no-key`·`capped`·`cooldown`·`region`·`model` — 원격 상태라 그동안
+ * **모든** 새 문장이 막힌다)이면, 이 쪽에 막힘 줄이 이미 하나 있을 때 새 문장에는 상태 블록을 만들지 않는다 —
+ * 같은 안내가 문장마다 쌓이지 않게(띠 모드의 띠 한 줄과 같은 몫). 이미 있는 줄(지나간 한 줄)은 그대로 둔다(I4 — 위에서 빼지 않음).
+ * 그 문장이 풀리면(연결됨 → pending/ready) 그때 블록을 단다(`watchCurrent`).
+ */
 function ensureCurrentBlock(art, u) {
   let b = blockOf(art, cur.seg);
   const rec = ra.get(cur.src);
@@ -400,6 +416,7 @@ function ensureCurrentBlock(art, u) {
     const id = anchorFor(cur.seg, u);
     const anchor = id != null ? findLine(id) : null;
     if (!anchor || !art.contains(anchor)) return null;
+    if (quietBlocked(art, rec)) { watchCurrent(art, u); return null; }
     b = makeBlock(art.ownerDocument, cur.seg, target);
     srcOf.set(b, cur.src);
     fill(b, rec, target);
@@ -409,6 +426,41 @@ function ensureCurrentBlock(art, u) {
   const st = b.getAttribute('data-state');
   if (st !== 'ready') fill(b, rec, target);                         // 상태 줄·"눌러서 보기" → 지금 문장이니 펼친다
   return b;
+}
+
+/** 막힘 사유 중 "새 문장에 줄을 더 달지 않는" 것(M1 — 원격 상태라 모든 문장이 같은 안내). */
+const QUIET_BLOCKED = Object.freeze(['offline', 'exhausted', 'no-key', 'capped', 'cooldown', 'region', 'model']);   // `model` — 운영자 결정 2026-11-15
+
+/** M1 — 이 문장이 막혔고(띠와 같은 규칙 `bandView` — 사유 이름까지 본다), 이 쪽에 이미 막힘 줄이 있다 → 새 블록을 만들지 않는다. */
+function quietBlocked(art, rec) {
+  if (rec && rec.state === 'ready') return false;
+  const v = bandView(rec, { hasSentence: true, isNotice: false, remote: safeRemote() });
+  if (v.state !== 'blocked' || QUIET_BLOCKED.indexOf(v.code) < 0) return false;
+  return !!art.querySelector('.' + BLOCK_CLASS + '[data-state="blocked"]');
+}
+
+/** 블록을 달지 않은 지금 문장 — 상태가 풀리면(막힘이 아니게 되면) 그때 단다. 지금 문장이 바뀌면 거둔다. */
+function unwatchCurrent() {
+  if (!curWatch) return;
+  const off = curWatch.off;
+  curWatch = null;
+  try { off(); } catch (e) { /* 이미 풀림 */ }
+}
+function watchCurrent(art, u) {
+  unwatchCurrent();
+  const me = { seg: cur.seg, page: cur.page, src: cur.src, off: null };
+  me.off = ra.onChange(cur.src, () => {
+    if (curWatch !== me) return;
+    const here = article();
+    if (!active || here !== art || cur.seg !== me.seg || cur.page !== me.page || cur.src !== me.src) { unwatchCurrent(); return; }
+    if (quietBlocked(art, ra.get(me.src))) return;                 // 아직 막혀 있다
+    unwatchCurrent();
+    const b = ensureCurrentBlock(art, u);
+    markCurrent(art);
+    // 지금 문장 **아래**에 한 줄이 생겼다 — 끝이 본문 영역 밖이면 6-5 가 다시 굴린다(프로그램 스크롤).
+    if (b && recheck) { try { recheck(); } catch (e) { /* 스크롤 실패가 읽기를 막지 않는다 */ } }
+  });
+  curWatch = me;
 }
 
 /** 이 문장의 앵커 — 큐에서(마지막 조각까지 보고), 큐가 다른 쪽 것이면 이 단위만으로. */
@@ -517,7 +569,7 @@ function attachDebugHook() {
       const list = els && els.mount ? els.mount.querySelectorAll('.' + BLOCK_CLASS) : [];
       const states = {};
       for (let i = 0; i < list.length; i++) { const s = list[i].getAttribute('data-state') || '?'; states[s] = (states[s] || 0) + 1; }
-      return { active: active, blocks: list.length, states: states, cur: { seg: cur.seg, page: cur.page }, watchers: watchers.size,
+      return { active: active, blocks: list.length, states: states, cur: { seg: cur.seg, page: cur.page }, watchers: watchers.size, quiet: !!curWatch,
         rootAttr: document.documentElement.getAttribute('data-tr-inline') };
     },
     /** 지금 큐의 문장 번호·단위 언어(`[8m]` 예외만)·번역 대상 여부 — 글자는 담지 않는다. */

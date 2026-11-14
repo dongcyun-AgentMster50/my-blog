@@ -395,7 +395,8 @@ export function createPipeline(deps) {
         out.push({ state: SEG.READY, text: it.t });
         entries.push({
           key: chunk[i].key, docId: ctx.docId, kind: ctx.kind, targetLang: ctx.target, result: it.t,
-          provider: r.provider, model: r.model, promptVersion: PROMPT_VERSION, repaired: !!parsed.repaired
+          provider: r.provider, model: r.model, promptVersion: PROMPT_VERSION, repaired: !!parsed.repaired,
+          domain: ctx.domain              // `[다듬기 2 — 8pR-9 ①]` 진단용 — 캐시 **값**에만(키 불변 · 7-5)
         });
       } else {
         const code = it.reason === 'ratio' ? FAIL.RATIO : it.reason === 'digits' ? FAIL.DIGITS : FAIL.MISSING;
@@ -425,7 +426,8 @@ export function createPipeline(deps) {
           result.set(odItems[i].key, { state: SEG.READY, text: out[i].trim(), ondevice: true });
           entries.push({
             key: odItems[i].key, docId: ctx.docId, kind: ctx.kind, targetLang: ctx.target, result: out[i].trim(),
-            provider: 'ondevice', model: null, promptVersion: PROMPT_VERSION
+            provider: 'ondevice', model: null, promptVersion: PROMPT_VERSION,
+            domain: ctx.domain            // `[다듬기 2]` 진단용 — 값에만(기기 내 번역은 문체를 쓰지 않지만 그때 문서 문체를 남긴다)
           });
         }
         try { await cache.putMany(entries); } catch (e) { /* 무시 */ }

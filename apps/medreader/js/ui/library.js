@@ -54,7 +54,7 @@ import {
   imageOpIds, textOpIds, countOps, SCAN_FIELDS
 } from '../text/scan.js';
 // `[8p — spec 19-1-3 §7]` 번역 문체(`documents.domain`) — 값 해석은 순수 `ai/prompts.js` 한 곳.
-import { DOMAINS, domainOf } from '../ai/prompts.js';
+import { DOMAINS, domainOf, normalizeDomain } from '../ai/prompts.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -792,7 +792,8 @@ export async function setDocDomain(docId, domain, dbx) {
   const d = dbx || db;
   if (DOMAINS.indexOf(domain) < 0) return { wrote: false, rec: null };
   return d.patch('documents', docId, (cur) => {
-    if (cur.domain === domain) return null;
+    // `[다듬기 2 — 8pR-8 L2]` 정규화한 값으로 비교 — 필드 없는 문서(= 의학)에서 [의학]을 눌러도 쓰지 않고 알림도 없다.
+    if (normalizeDomain(cur.domain) === domain) return null;
     const part = {};
     for (const f of DOMAIN_FIELDS) part[f] = domain;
     return part;

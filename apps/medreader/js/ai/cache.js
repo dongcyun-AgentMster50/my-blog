@@ -125,6 +125,8 @@ export function createCache(deps) {
           hits: 0,
           sizeBytes: 0
         };
+        // `[다듬기 2 — 8pR-9 ①]` 번역 문체(진단용) — **값에만**, 준 때만(키는 위 `keyFor` 그대로 · 7-5). 옛 레코드는 필드 없음 = 의학.
+        if (typeof e.domain === 'string' && e.domain) rec.domain = e.domain;
         rec.sizeBytes = sizeOf(rec);
         rows.push(rec);
       }

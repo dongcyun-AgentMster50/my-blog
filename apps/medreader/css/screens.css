@@ -651,6 +651,26 @@
   border-end-end-radius: var(--radius-sm);
 }
 
+/* `[다듬기 2 — 8dR-9 (2) ②]` "번역 위치" — 머리글과 두 단추가 **한 줄**(48px). 머리글은 짧게 접히고(두 줄까지),
+   단추가 남은 폭을 나눠 갖는다. 낱말이 길면 단추 **안에서** 줄을 바꾼다(높이 48 유지 — 위 분절 컨트롤과 같다). */
+.readalong-row .readalong-display-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-2);
+}
+
+.readalong-row .readalong-display-line .readalong-label {
+  flex: 0 1 auto;
+  max-inline-size: 38%;
+  line-height: 1.25;
+}
+
+.readalong-row .readalong-display-line .readalong-displays {
+  flex: 1 1 0;
+  min-inline-size: 0;
+}
+
 .switch {
   display: flex;
   align-items: center;
