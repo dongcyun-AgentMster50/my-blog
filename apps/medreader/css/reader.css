@@ -724,10 +724,17 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
 }
 
 /* 5b — 한 줄에 6개(속도)·4개(횟수)가 들어가야 한다. 기본 96px 은 너무 넓어
-   접은 화면에서 3줄이 된다. 48px 터치 높이(16-G)는 그대로 지킨다. */
+   접은 화면에서 3줄이 된다. 48px 터치 높이(16-G)는 그대로 지킨다.
+   `[다듬기 3 — 중1 (나)]` 최소 폭 64 → 52px · 단추 안 여백·단추 사이 8 → 4px. 412px 폭(팝오버 안 362px)에서
+   여섯 개가 **한 줄**이다(실측 headless Edge ko: 52 × 6 + 사이 4 × 5 = 332px, 남는 30px 는 기기 글꼴·글자 크기 몫).
+   최소 폭만 52 로 줄이면 366.7px(ar 364.6 — `0.75×`·`1.25×` 가 글자 41px + 여백 18 = 59px)로 넘쳐, 64px 때처럼
+   `1.8×` 가 둘째 줄로 접혀 세로 56px 를 더 먹는다("번역 위치" 줄이 sticky 닫기 줄 밑에 가렸다). 360px 폭(310px)은
+   여전히 두 줄(5 + 1). */
+.tts-rate-panel .tts-steps { gap: var(--sp-1); }
+
 .tts-rate-panel .tts-steps button {
-  min-inline-size: 64px;
-  padding-inline: var(--sp-2);
+  min-inline-size: 52px;
+  padding-inline: var(--sp-1);
   font-variant-numeric: tabular-nums;
 }
 

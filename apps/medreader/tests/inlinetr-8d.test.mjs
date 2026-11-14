@@ -863,6 +863,20 @@ test('D13 ★ M1 — 막힘(offline·exhausted·…·model)이면 새 문장에 
     r.ra.set(r.u(2).src, { state: 'ready', text: 'ترجمة' });
     assert.deepEqual(r.blocks(), ['0:blocked', '2:ready']);
   } finally { r.done(); }
+  // `[다듬기 3 — 하4]` 막힘(구독 중) → 이미 번역된 문장(ready)으로 넘어가면 옛 문장 구독을 거둔다(willShow 가 문장이 바뀔 때 — Review R4)
+  const w = await rigView('m1-unwatch');
+  try {
+    w.show(9, PAGE9);
+    await flush6();
+    w.ra.remote = 'offline';
+    w.view.willShow(w.u(0));
+    w.view.willShow(w.u(1));
+    assert.equal(w.ra.listeners(w.u(1).src), 1, '막힌 지금 문장(1)은 풀리기를 기다린다');
+    w.ra.mem.set(w.u(2).src, { state: 'ready', text: 'ترجمة' });   // 전에 받아 둔 문장(메모리)
+    w.view.willShow(w.u(2));
+    assert.deepEqual(w.blocks(), ['0:blocked', '2:ready']);
+    assert.equal(w.ra.listeners(w.u(1).src), 0, '문장이 바뀌면 옛 문장(1)의 구독은 0');
+  } finally { w.done(); }
   // 막힘이 아닌 상태("번역 중…")는 이 규칙 밖 — 문장마다 그대로
   const q = await rigView('m1-pending');
   try {
@@ -897,4 +911,72 @@ test('D14 L1 — 상태 줄일 때만 블록 방향·언어가 UI(ko·ltr) · �
     IT.renderNote(b, noteKeyFor({ state: 'pending' }, { hasSentence: true }));
     assert.deepEqual([b.getAttribute('dir'), b.getAttribute('lang')], ['rtl', 'ar']);
   } finally { setLang(was); }
+});
+
+/* ════════════════════════════════════════════════════════
+   6. `[다듬기 3]` 하1 — M1 의 "이미 막힘 줄이 있다" 는 **같은 사유**일 때만
+   ════════════════════════════════════════════════════════ */
+
+test('D15 ★ 하1 — 지난 "오프라인" 줄이 남은 쪽에서 한도가 다 되면(exhausted) 새 사유 줄 하나 · 같은 사유는 다시 쌓지 않는다 · 위에서 빼지 않는다', async () => {
+  const r = await rigView('p3-reason');
+  try {
+    r.show(9, PAGE9);
+    await flush6();
+    const codes = () => r.mount.querySelectorAll('.ra-tr').map((b) => b.getAttribute('data-ra-seg') + ':' + (b.getAttribute(IT.CODE_ATTR) || '-'));
+    r.ra.remote = 'offline';
+    r.view.willShow(r.u(0));
+    r.view.willShow(r.u(1));
+    assert.deepEqual(codes(), ['0:offline'], '오프라인 — 한 줄(사유 offline)');
+    // 연결됐다가 곧 한도 — 지금 문장(2)부터 exhausted. 지난 줄(0)은 "오프라인" 그대로(다시 보내지 않으면 바뀌지 않는다)
+    r.ra.remote = 'exhausted';
+    r.view.willShow(r.u(2));
+    assert.deepEqual(codes(), ['0:offline', '2:exhausted'], '사유가 다르면 새 사유 줄 하나(지금 문장 아래)');
+    assert.ok(r.mount.querySelector('.ra-tr[data-ra-seg="2"]').hasAttribute('data-ra-current'));
+    assert.equal(lineFinder(r.mount)('9:2').nextSibling, r.mount.querySelector('.ra-tr[data-ra-seg="2"]'), '문장 2 가 끝나는 줄(9:2) 다음');
+    r.view.willShow(r.u(3));
+    r.view.willShow(r.u(4));
+    assert.deepEqual(codes(), ['0:offline', '2:exhausted'], '같은 사유(exhausted)는 다시 쌓지 않는다 · 0 은 빼지 않는다(I4)');
+    assert.deepEqual(r.blocks(), ['0:blocked', '2:blocked']);
+  } finally { r.done(); }
+  // 오프라인 → 한도 → 다시 오프라인: 이 쪽에 오프라인 줄(0)이 이미 있으니 새 줄 없음
+  const q = await rigView('p3-reason-back');
+  try {
+    q.show(9, PAGE9);
+    await flush6();
+    const codes = () => q.mount.querySelectorAll('.ra-tr').map((b) => b.getAttribute('data-ra-seg') + ':' + (b.getAttribute(IT.CODE_ATTR) || '-'));
+    q.ra.remote = 'offline';
+    q.view.willShow(q.u(0));
+    q.ra.remote = 'exhausted';
+    q.view.willShow(q.u(1));
+    q.ra.remote = 'offline';
+    q.view.willShow(q.u(2));
+    assert.deepEqual(codes(), ['0:offline', '1:exhausted']);
+    // 막힌 지금 문장의 사유가 바뀌면(구독 중 — 오프라인 → 한도) 그 사유 줄이 없으니 그때 단다
+    q.ra.set(q.u(2).src, { state: 'blocked', code: 'model' });
+    assert.deepEqual(codes(), ['0:offline', '1:exhausted', '2:model'], '구독 중 사유가 바뀌어 새 사유 — 지금 문장에 한 줄');
+  } finally { q.done(); }
+  // 블록의 사유 표시 — 막힘 줄에만 있고, 다른 상태·번역문으로 바뀌면 걷힌다
+  const doc = makeDoc();
+  const b = IT.makeBlock(doc, 3, 'ar');
+  IT.renderNote(b, { state: 'blocked', noteKey: 'readalong.none', retry: false, code: 'exhausted' });
+  assert.equal(b.getAttribute(IT.CODE_ATTR), 'exhausted');
+  IT.renderNote(b, noteKeyFor({ state: 'pending' }, { hasSentence: true }));
+  assert.equal(b.hasAttribute(IT.CODE_ATTR), false, '"번역 중…" 줄에는 사유가 없다');
+  IT.renderNote(b, { state: 'blocked', noteKey: 'readalong.none', retry: false, code: 'offline' });
+  IT.renderReady(b, 'ترجمة', 'ar');
+  assert.equal(b.hasAttribute(IT.CODE_ATTR), false, '번역문 블록에는 사유가 없다');
+  assert.equal(IT.CODE_ATTR, 'data-ra-code');
+});
+
+test('D16 `[다듬기 3 — 중1]` 속도 팝오버 — "번역 위치" 줄 위 여백 0 · 속도 단추 최소 폭 52px·사이 4px(412px 한 줄) · 높이는 --tap 그대로', () => {
+  const sc = read('../css/screens.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rc = read('../css/reader.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rule = (css, sel) => { const i = css.indexOf(sel + ' {'); assert.ok(i >= 0, sel); return css.slice(i, css.indexOf('}', i)); };
+  assert.match(rule(sc, '.readalong-row .readalong-display-line'), /margin-block-start:\s*0;/);
+  const btn = rule(rc, '.tts-rate-panel .tts-steps button');
+  assert.match(btn, /min-inline-size:\s*52px/);
+  assert.match(btn, /padding-inline:\s*var\(--sp-1\)/);
+  assert.doesNotMatch(btn, /min-block-size|block-size|height/, '높이는 .typeset-choices button 의 --tap(48) 그대로');
+  assert.match(rule(rc, '.tts-rate-panel .tts-steps'), /gap:\s*var\(--sp-1\)/);
+  assert.match(rule(rc, '.typeset-choices button'), /min-block-size:\s*var\(--tap\)/);
 });

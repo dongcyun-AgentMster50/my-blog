@@ -624,7 +624,8 @@
 .readalong-row .readalong-label { font-size: var(--fs-sm); color: var(--c-text-dim); }
 
 /* 7b Review R2 — 모드 세 개는 **한 줄짜리 분절 컨트롤**이다. 360px 팝오버에서 두 줄로
-   접히면 세로 56px 를 더 먹었다. 낱말이 길면 버튼 **안에서** 줄을 바꾼다(높이 48 유지). */
+   접히면 세로 56px 를 더 먹었다. 낱말이 길면 버튼 **안에서** 줄을 바꾼다(높이 48 이상 — `[정정 2026-11-15 — 다듬기 3: 하3]`
+   글자가 두 줄이면 50.5px: 실측 en 412·360, ar 360. 단추 줄로 따로 접히는 56px 보다 작다). */
 .readalong-row .readalong-modes {
   flex-wrap: nowrap;
   gap: 0;
@@ -651,13 +652,17 @@
   border-end-end-radius: var(--radius-sm);
 }
 
-/* `[다듬기 2 — 8dR-9 (2) ②]` "번역 위치" — 머리글과 두 단추가 **한 줄**(48px). 머리글은 짧게 접히고(두 줄까지),
-   단추가 남은 폭을 나눠 갖는다. 낱말이 길면 단추 **안에서** 줄을 바꾼다(높이 48 유지 — 위 분절 컨트롤과 같다). */
+/* `[다듬기 2 — 8dR-9 (2) ②]` "번역 위치" — 머리글과 두 단추가 **한 줄**. 머리글은 짧게 접히고(두 줄까지),
+   단추가 남은 폭을 나눠 갖는다. 낱말이 길면 단추 **안에서** 줄을 바꾼다 — 높이는 48 **이상**이다
+   `[정정 2026-11-15 — 다듬기 3: 하3]` "높이 48 유지" 가 아니었다. ko·ar 는 48px, en·fr 은 단추 글자가 두 줄이라 50.5px
+   (360px 설정 화면 fr 은 세 줄 66.8px). 터치 크기 48 이상은 그대로다.
+   `[다듬기 3 — 중1 (가)]` 위 여백 8 → 0 — 속도 팝오버를 처음 열었을 때 이 줄이 sticky 닫기 줄 밑에 가렸다(운영자 결정
+   "가리면 위 여백 0"). 위 스위치(48px 누를 곳)와 바로 붙는다. 설정 AI 탭도 같은 함수·같은 규칙이다. */
 .readalong-row .readalong-display-line {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  margin-block-start: var(--sp-2);
+  margin-block-start: 0;
 }
 
 .readalong-row .readalong-display-line .readalong-label {

@@ -130,6 +130,7 @@ export function renderReady(block, text, lang) {
   const doc = block.ownerDocument;
   clearNode(block);
   block.setAttribute('data-state', 'ready');
+  block.removeAttribute(CODE_ATTR);
   block.setAttribute('dir', a.dir);
   block.setAttribute('lang', a.lang);
   const tx = doc.createElement('span');
@@ -147,6 +148,7 @@ function statusLine(block, state) {
   const doc = block.ownerDocument;
   clearNode(block);
   block.setAttribute('data-state', state);
+  block.removeAttribute(CODE_ATTR);
   block.setAttribute('dir', getDir());
   block.setAttribute('lang', getLang());
   const line = doc.createElement('span');
@@ -158,11 +160,18 @@ function statusLine(block, state) {
 }
 
 /**
+ * `[다듬기 3 — 하1]` 막힘 줄의 사유 이름(`offline`·`exhausted`·…) — M1 이 "같은 사유 줄이 이미 있는가" 를 본다.
+ * 막힘이 아닌 줄·번역문 블록에는 없다. 사유 이름만 적는다(원문·번역문 아님 — 16-K).
+ */
+export const CODE_ATTR = 'data-ra-code';
+
+/**
  * I5 — "번역 중…" · "번역 실패" + [다시 시도] · 막힘 사유 한 줄. 문구는 띠와 같은 규칙(`noteKeyFor`).
- * @param {{state:string, noteKey:string|null, retry:boolean}} v
+ * @param {{state:string, noteKey:string|null, retry:boolean, code?:string|null}} v  `code` — 막힘 사유(`noteFor` 가 단다)
  */
 export function renderNote(block, v) {
   const line = statusLine(block, v.state);
+  if (v.state === 'blocked' && v.code) block.setAttribute(CODE_ATTR, String(v.code));
   const doc = block.ownerDocument;
   const note = doc.createElement('span');
   note.className = 'ra-note';
@@ -404,7 +413,7 @@ export function willShow(u) {
 /**
  * 지금 문장의 블록 — 없으면 앵커 줄 다음에 만들고, 상태대로 채운다.
  * `[다듬기 2 — 8dR-8 M1 안 (가)]` 막힘(`offline`·`exhausted`·`no-key`·`capped`·`cooldown`·`region`·`model` — 원격 상태라 그동안
- * **모든** 새 문장이 막힌다)이면, 이 쪽에 막힘 줄이 이미 하나 있을 때 새 문장에는 상태 블록을 만들지 않는다 —
+ * **모든** 새 문장이 막힌다)이면, 이 쪽에 (같은 사유의 — 다듬기 3) 막힘 줄이 이미 하나 있을 때 새 문장에는 상태 블록을 만들지 않는다 —
  * 같은 안내가 문장마다 쌓이지 않게(띠 모드의 띠 한 줄과 같은 몫). 이미 있는 줄(지나간 한 줄)은 그대로 둔다(I4 — 위에서 빼지 않음).
  * 그 문장이 풀리면(연결됨 → pending/ready) 그때 블록을 단다(`watchCurrent`).
  */
@@ -431,12 +440,16 @@ function ensureCurrentBlock(art, u) {
 /** 막힘 사유 중 "새 문장에 줄을 더 달지 않는" 것(M1 — 원격 상태라 모든 문장이 같은 안내). */
 const QUIET_BLOCKED = Object.freeze(['offline', 'exhausted', 'no-key', 'capped', 'cooldown', 'region', 'model']);   // `model` — 운영자 결정 2026-11-15
 
-/** M1 — 이 문장이 막혔고(띠와 같은 규칙 `bandView` — 사유 이름까지 본다), 이 쪽에 이미 막힘 줄이 있다 → 새 블록을 만들지 않는다. */
+/**
+ * M1 — 이 문장이 막혔고(띠와 같은 규칙 `bandView` — 사유 이름까지 본다), 이 쪽에 **같은 사유**의 막힘 줄이 이미 있다 → 새 블록을 만들지 않는다.
+ * `[다듬기 3 — 하1]` 사유가 다르면(지난 "오프라인" 줄이 남은 쪽에서 한도가 다 됨 등) 새 사유 줄 하나를 단다 — 남은 줄은 옛 사유를 말한다.
+ * 이미 있는 줄은 그대로 둔다(I4 — 현재 문장 위에서 빼지 않음).
+ */
 function quietBlocked(art, rec) {
   if (rec && rec.state === 'ready') return false;
   const v = bandView(rec, { hasSentence: true, isNotice: false, remote: safeRemote() });
   if (v.state !== 'blocked' || QUIET_BLOCKED.indexOf(v.code) < 0) return false;
-  return !!art.querySelector('.' + BLOCK_CLASS + '[data-state="blocked"]');
+  return !!art.querySelector('.' + BLOCK_CLASS + '[data-state="blocked"][' + CODE_ATTR + '="' + v.code + '"]');
 }
 
 /** 블록을 달지 않은 지금 문장 — 상태가 풀리면(막힘이 아니게 되면) 그때 단다. 지금 문장이 바뀌면 거둔다. */
@@ -476,12 +489,19 @@ function anchorFor(seg, u) {
 function fill(b, rec, target) {
   const r = rec || { state: 'none' };
   if (r.state === 'ready') { renderReady(b, r.text, target); unwatch(b); return; }
-  renderNote(b, noteKeyFor(r, { hasSentence: true, isNotice: false, remote: safeRemote() }));
+  renderNote(b, noteFor(r));
   watch(b);
 }
 
 function safeRemote() {
   try { return ra.remoteState(); } catch (e) { return null; }
+}
+
+/** 상태 줄 문구(띠와 한 벌 — `noteKeyFor`) + `[다듬기 3 — 하1]` 막힘이면 그 사유 이름(같은 규칙 `bandView`). */
+function noteFor(rec) {
+  const ctx = { hasSentence: true, isNotice: false, remote: safeRemote() };
+  const v = noteKeyFor(rec, ctx);
+  return { state: v.state, noteKey: v.noteKey, retry: v.retry, code: v.state === 'blocked' ? bandView(rec, ctx).code : null };
 }
 
 function watch(b) {
@@ -516,7 +536,7 @@ function onRec(b) {
     return;
   }
   // 지나간 블록도 상태 줄은 같은 높이다(pending ↔ failed ↔ blocked).
-  renderNote(b, noteKeyFor(rec, { hasSentence: true, isNotice: false, remote: safeRemote() }));
+  renderNote(b, noteFor(rec));
 }
 
 function setPhase(ph) {

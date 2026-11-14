@@ -549,8 +549,10 @@ function buildReadalongRow(host) {
   host.appendChild(sw);
 
   // `[8d — spec 7-7-1]` "번역 위치: 아래 띠 / 문장 아래" — "번역 따라가기" 줄 아래 한 줄. 같은 키·같은 그리기 함수(12-3).
-  // `[다듬기 2 — 8dR-9 (2) ②]` 머리글과 두 단추를 **한 줄**(≈48px)로 — 머리글 줄만큼 팝오버가 짧아져, 412×915 띠 모드에서
-  // 처음 열었을 때 단추가 sticky 닫기 줄 밑에 가려지지 않는다. 설정 AI 탭도 이 함수 그대로라 같은 모양이다.
+  // `[다듬기 2 — 8dR-9 (2) ②]` 머리글과 두 단추를 **한 줄**(ko·ar 48px, en·fr 50.5px)로 — 머리글 줄만큼(16px) 팝오버가 짧아진다.
+  // `[정정 2026-11-15 — 다듬기 3]` 그것만으로는 412×915 띠 모드에서 처음 열 때 단추가 sticky 닫기 줄 밑에 19.5px(en 24.5)
+  // 가렸다(Review p2R-5). 이 줄 위 여백 0 · 속도 단추 한 줄(reader.css)을 더해 가림 0 이다(ko·ar·en·fr 실측). 360×740 은
+  // 여전히 팝오버 안 스크롤이 필요하다. 설정 AI 탭도 이 함수 그대로라 같은 모양이다.
   const dLabelId = 'readalongDisplayLabel' + rowSeq;
   const dRow = document.createElement('div');
   dRow.className = 'readalong-display-line';
