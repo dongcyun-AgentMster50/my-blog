@@ -2417,6 +2417,7 @@ reader.view ('reflow'|'original')  reader.fontSize (px, 16~40)  reader.lineHeigh
 reader.font ('system'|'serif'|'sans')   reader.showDone (bool)   reader.autoScroll (bool)
 tts.rate (0.5~2.0)  tts.unit ('line'|'sentence')  tts.voice.en / .ar / .fr / .ko (voiceURI)  tts.autoSummarize (bool, 기본 false)
 tts.wakeLock (bool)  tts.repeat.count
+tts.mediaKeys (bool, 기본 true)                              [신설 2026-11-15 — 9a, 17-1-1 6 · 9-D8] 이어폰·잠금 화면 버튼(Media Session). 끄면 핸들러·알림 메타데이터·무음 오디오 없음 = 9a 전 동작
 readalong.mode ('off'|'show'|'speak', 기본 'speak')          [신설 2026-09-28] 7-8-1
 readalong.speakSource (bool, 기본 true)                      [신설 2026-09-28] speak 모드에서 원문도 소리 내어 읽는가
 readalong.display ('band'|'inline', 기본 'band')              [신설 2026-10-12] 7-7-1 — 리플로우에서 번역을 띠에 / 문장 아래에. 원본 뷰는 늘 띠
@@ -3340,6 +3341,243 @@ hidden 규칙을 그대로 두면 잠금 화면 단추·화면 꺼진 뒤 이어
 - 쪽을 거슬러 가는 ⏮(쪽 첫 문장에서 이전 쪽 마지막 문장): 화면 [이전]도 안 한다. 바꾸려면 둘 다.
 - 퀴즈 해설 [읽기] 의 이어폰 대응 — 리더만.
 - 블루투스 이어폰 터치 제스처의 기기별 차이 — 9a-0 기록을 모아 안내 문구로만(앱 분기 없음).
+
+`[정정 2026-11-15 — 9a Build]` 설계와 달라진 것·더한 것: (1) **운영자 방침(2026-11-15)으로 9a-0 결과 없이 기본값**: `SESSION='audio'`(9-D1 (나)) · 9-D7 은 `setPositionState` 를 부르지 않는 갈래(아래 (2)) · 무음 진폭 128 고정. 실기기에서만 답이 나오는 것은 Build 보고서 "마지막 실기기 점검 묶음". (2) `HANDSFREE` 에 두 값을 더했다 — `SILENT_LEVEL:128`(진폭 한 곳), `POSITION:'off'|'sentence'`(9-D7 한 곳: 'off' = 부르지 않음, 'sentence' = `{duration: 쪽 문장 수, position: index, playbackRate:1}` — `queue`·`linechange` 때, `disarm` 에서 `null`). (3) `createHandsfree` 주입에 `getSetting`(`tts.mediaKeys`·`tts.wakeLock`)·`formatNumber`·`config`(테스트 덮어쓰기)를 더했고, 반환에 `onHidden()` 을 더했다 — 숨겨지면 유지 잠금만 푼다. 6-4 핸들러를 고치지 않으려고 controls 에 **별개의** `visibilitychange` 한 줄로 부른다. (4) `arm()` 은 `onPageRender` 마다 부른다(처음 한 번만 걸고, 그 뒤는 메타데이터만) — 같은 제목·"쪽 n / m"·언어면 `MediaMetadata` 를 다시 만들지 않는다. UI 언어는 `onLangChange → refreshMeta()`. 쪽 수를 모르면 "쪽 n / …". (5) 재동기화의 수는 둘로 센다 — 한 번 다시 튼 것 `resyncs`, 같은 문장에서 포기한 것 `focusFights`. 오디오 `play()` 거부는 `audioRejects`. (6) `stop` 액션의 멈춤도 "액션 멈춤"이라 유지 잠금을 쥔다. (7) 무음 오디오 blob 주소는 탭 동안 하나를 같이 쓴다(80 KB, 해제하지 않음). `disarm` 은 `removeAttribute('src')` + `load()`(`src=''` 는 문서 주소로 풀려 오류 요청이 난다). 첫 오디오는 리더 진입이 아니라 첫 읽기(`statechange`)에서 만든다. (8) 설정 줄은 정적 HTML 이 아니라 `ui/settings.js` 의 `buildMediaKeysRow` 가 낭독 목소리 카드(`#settingsVoices`)의 글자 체계 줄 설명 뒤에 만든다(8h 인용 줄과 같은 방식 — index.html 은 도장만). (9) `tests/scan-8l` SC15 는 [▶] 클릭 본문 대신 `pressPlay()` 본문을 본다. (10) 크기: `ui/handsfree.js` 392줄(추정 200–250 초과 — 주석·`positionOf` 갈래·`debug`), 테스트 19개(1391 → 1410).
+
+#### 17-1-2. 9b Build 설계 — 음성 명령 `[신설 2026-11-15 — 9b Plan]` `[운영자 결정 2026-11-15: 9b-D1–9b-D14 권장안 승인 — 9b-1 은 9a Build 와 동시에]`
+
+위 17-1 (2)의 경계를 Build 가 바로 쓸 수 있게 좁힌다. 코드는 `63b62c2` 기준(9a Build 전 — 9a 가 만들 `ui/handsfree.js`·`pressPlay()` 는 17-1-1 8 의 설계를 전제로 쓴다). 표기는 17-1-1 과 같다: `[코드]` 파일:행 · `[출처]` 아래 2 · `[가정 — 실기기]` 문서로 답이 안 나와 **마지막 실기기 점검 묶음**(아래 9)에서 볼 것. 호출 0 · DB 무관 · `algoVersion` 무관.
+
+**운영자 방침(2026-11-15) 반영**: "Nour 확인은 나중으로 미루고 앱을 먼저 완성한다." 그래서 이 설계는 **실기기 진단을 Build 의 앞 조건으로 두지 않는다**(9b-0 진단 단계 없음). 실기기에서만 답이 나오는 값은 전부 **문서로 가장 안전한 기본값 + 자동 폴백 + 실패 시 안내**로 먼저 만들고, 확인 항목은 9 의 묶음 하나로 모아 9a-0 시험과 한 자리에서 한다.
+
+##### 1. 지금 코드의 사실
+
+| 무엇 | 사실 | 위치 |
+|---|---|---|
+| 음성 인식 | **사용 0** — `js/`·`index.html` 에 `SpeechRecognition`·`webkitSpeechRecognition`·`getUserMedia`·`mediaDevices`·`navigator.permissions` 가 없다(grep). 마이크 권한을 묻는 코드도 없다. `dev/handsfree.html`(9a-0)도 인식은 쓰지 않는다 | — |
+| 6-4 의 인식 규칙 | 표 마지막 행: Android Chrome 은 서버 인식 → 네트워크 필수, `webkitSpeechRecognition` 접두사, 연속 인식 불안정. "Phase 1 에서는 쓰지 않는다", 기능 감지 `('SpeechRecognition' in window) \|\| ('webkitSpeechRecognition' in window)`, 오프라인이면 버튼 비활성 + 안내 — **이 Plan 이 마지막 것을 바꾼다**(아래 5 "오프라인에서도 막지 않고 시도") | spec 6-4 |
+| 재생·멈춤 | [▶] = speaking 이면 `pause()`, 스캔본이면 안내, 아니면 `syncReadalong()` 후 **동기** `speaker.play()`. 9a 가 이 본문을 `pressPlay()` 로 뺀다(17-1-1 8) | `ui/controls.js` 149–153 |
+| 다음·이전 | `speaker.next()`·`prev()` = `step(±1)`. 낭독 중이면 그 문장 처음부터, 멈춤이면 하이라이트만. 단계는 늘 `src`(번역 중 [다음] = 번역 건너뜀). 쪽 끝 [다음]은 낭독 중일 때만 다음 쪽 | controls 155–156 · `tts/speaker.js` 932–946 |
+| 다시(지금 문장) | **공개 함수가 없다.** 낭독 중 `play()` 는 `restart(index)` 로 지금 문장 원문부터 다시 읽는다(820–868). 그러나 **멈춤 + 번역 단계(`tr`·`tr-wait`)** 에서 `play()` 는 번역문을 이어 읽는다(`resumeTr`, 822–823) — "다시 = 원문부터"가 아니다. `play(lineId)` 는 큐를 다시 만들고 `indexAtOrAfterLine` 으로 찾는다(줄 가운데서 시작한 문장은 앞 문장이 걸릴 수 있다) | speaker 816–868 |
+| 속도 | `setRate(r)` → `snapRate` 로 계단 `TTS.RATE_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.8]` 에 맞춤, 낭독 중이면 즉시 적용(번역 중이면 그 조각 처음부터). 화면은 `paintRate()` 한 곳, 저장은 `settings.set('tts.rate', speaker.getRate())` | speaker 96–110·948–959 · `config.js` 346 · controls 163–169 |
+| 번역 켜기·끄기 | 설정 `readalong.mode` = `'off'·'show'·'speak'`(기본 `speak`). 바꾸는 길은 `ui/settings.js` 의 위임 `onReadalongClick` → `settings.set('readalong.mode', …)` + `paintAllReadalongRows()`(둘 다 **export 없음**) → 리더는 팝오버 버블 단계에서 `syncReadalong()`(controls, **export 없음**). "끄기 전 모드"를 기억하는 키는 없다 | `ui/settings.js` 58·137–149·601–615 · controls 273–276·573–607 · `settings.js` 70 |
+| 8m·8d·8i-3·readalong | 9b 도 speaker **공개 함수**(+ 아래 7 의 `again()` 하나)만 부른다 → 8m 문장별 목소리 전환·8d 문장 아래 블록(`view.show`)·8i-3 쪽 넘김 렌더 대기·readalong(`statechange` → `setActive`, `linechange` → `onProgress`)은 화면 버튼을 눌렀을 때와 같은 길로 돈다. 듣는 동안의 멈춤은 `pause()` 라 `readalong.setActive(false)`(요청 멈춤)까지 간다 — 의도한 동작 | controls 205–221 |
+| hidden 규칙 | `visibilitychange` → hidden 이고 speaking 이면 `pause()`, 다시 보여도 자동 재개 없음 | controls 257–264 |
+| 본문 제스처 | 리플로우 줄 **`pointerup`** = 탭(낭독 중이면 그 줄부터, 구독자에게 알림). 길게 누르기는 지금 잡지 않지만 12-3·17-7-1 이 선택·단어장(8c+8f)용으로 예약. 띠는 `pointerdown`·`touchstart` 로 "누르고 있기" | `ui/reader.js` 587–602 · `ui/trband.js` 204–205 |
+| 하단 바 | `[이전] [▶] [다음] [속도] 진행` — `.tts-play` 는 `--tap-play` **56px**(10b 에서 64 → 56), 바 높이 `--tts-h` 61px. 375px 접은 화면에서 넘치지 않게 반복 조작은 팝오버로 옮겨 둔 상태(마크업 주석) | `index.html` 477–488·490–495 · `css/reader.css` 610–660 · `css/tokens.css` 32–37·65 |
+| 버튼 이름(ar) | `reader.tts.play` «تشغيل» · `pause` «إيقاف مؤقت» · `prev` «للخلف» · `next` «للأمام» · `rate` «السرعة» · `readalong.mode.off` «إيقاف» — Nour 가 화면에서 보는 낱말이라 동의어 표에 넣는다 | `i18n/ar.js` 168–172·335–338 |
+| 아랍어 접기 | 순수 함수 `foldArabic(s)` = NFKC · 타슈킬·타트윌 제거 · `أإآٱ→ا` · `ة→ه` · `ى→ي` 가 이미 있다(8g-7) — **9b 는 이것을 재사용한다**(정규화 한 벌) | `text/specialty.js` 123–126 |
+
+##### 2. Android Chrome `SpeechRecognition` — 문서로 확인한 것 · 못 한 것
+
+| # | 질문 | 답 | 근거 |
+|---|---|---|---|
+| S1 | Android Chrome 은 무엇으로 인식하나 | Chrome 이 **Android 의 `SpeechRecognizer`** 를 부른다. **Android 12(S) 이상은 제공자 `com.google.android.tts`("Google 음성 서비스")**, 그 아래는 Google 앱(AGSA, 최소 버전 있음). 제공자가 없거나 `isRecognitionAvailable()` 이 거짓이면 시작하지 못한다. Realme GT 7 은 Android 15 출시 기종이라 S 이상 `[가정 — 기종 사양]` | `[출처]` A |
+| S2 | 서버 인식인가 · 오프라인 | MDN: Chrome 의 인식은 "서버 기반 엔진 — 소리가 웹 서비스로 보내져 오프라인에서 안 된다". Chrome 은 `EXTRA_PREFER_OFFLINE` 을 **넣지 않는다** → Google 음성 서비스가 기기에 언어 팩을 갖고 있으면 기기에서 처리할 여지는 있으나 문서로 확인 못 함 `[가정 — 실기기]` | `[출처]` A·B |
+| S3 | `processLocally`(온디바이스) | 표준에 `processLocally` 와 정적 `SpeechRecognition.available()`·`install()` 이 있다(실험적). **Chrome 팀: "Android 와 ChromeOS 는 지금 온디바이스 Web Speech 를 지원하지 않는다"**(M150 blink-dev, 데스크톱만) → 9b 는 `processLocally` 를 쓰지 않는다. `available()` 은 있으면 **언어 확인에만** 쓴다(아래 4) | `[출처]` B·C·D |
+| S4 | `ar-SY` | Google Cloud Speech-to-Text 언어표에 `ar-SY`(아랍어·시리아)가 있다. Android 음성 서비스가 같은 목록을 받는지는 문서 없음 `[가정 — 실기기]`. 지원하지 않는 태그면 Android `ERROR_LANGUAGE_NOT_SUPPORTED`/`UNAVAILABLE` → 웹 `language-not-supported`(S7). 지원하지 않는 태그를 **조용히 기기 언어로 바꿔 인식**할 수도 있다 — 그러면 오류 없이 엉뚱한 글자가 온다 `[가정 — 실기기]` | `[출처]` A·E |
+| S5 | 첫 사용 권한 | 첫 `start()` 에 Chrome 이 마이크 권한을 묻고, 허락해야 `onstart`. Chrome 앱 자체의 Android 마이크 권한도 필요할 수 있다. 거부 → `not-allowed`. `start()` 는 **탭 핸들러 안에서 동기로** 부르는 것이 안전(사용자 제스처 요구 — 공식 문서는 못 찾음, 여러 보고) | `[출처]` F·G |
+| S6 | 무음 시간 초과 | 단발(`continuous=false`)이면 Android 가 말 끝을 스스로 판단해 끝낸다. Chrome 은 무음 길이 extra 를 넣지 않는다 → 시스템 기본값. 말이 없으면 `ERROR_SPEECH_TIMEOUT` → `no-speech`. 몇 초인지는 문서 없음 `[가정 — 실기기]` → 앱이 **자기 상한**(아래 4 `LISTEN_MAX_MS`)을 따로 둔다 | `[출처]` A |
+| S7 | 오류 대응표 | Android → 웹: `AUDIO` → `audio-capture` · `CLIENT` → `aborted` · `RECOGNIZER_BUSY`·`INSUFFICIENT_PERMISSIONS`·`TOO_MANY_REQUESTS` → `not-allowed` · `NETWORK_TIMEOUT`·`NETWORK`·`SERVER`·`SERVER_DISCONNECTED` → `network` · `NO_MATCH` → `no-match` · `SPEECH_TIMEOUT` → `no-speech` · `LANGUAGE_NOT_SUPPORTED`·`LANGUAGE_UNAVAILABLE` → `language-not-supported` · `CANNOT_CHECK_SUPPORT` 등 → `service-not-allowed`. **`not-allowed` 는 권한 거부만이 아니다**(인식기 바쁨·요청 과다도) | `[출처]` A·E |
+| S8 | 대안(alternatives)·확신도 | Chrome 은 Android 결과 목록 **전부**를 대안으로 넘긴다. 확신도가 쓸 만하지 않으면(개수 불일치·범위 밖·전부 0) **모두 1.0 으로 채운다** → 확신도 문턱은 믿을 수 없다. `maxAlternatives` 는 이 Java 파일에 없다(브라우저 쪽에서 자르는지는 미확인) | `[출처]` A |
+| S9 | 낭독(TTS)과의 충돌 | Java 쪽에 오디오 포커스 처리는 없다. 낭독이 나오는 중에 들으면 **낭독 소리가 마이크로 들어간다**(17-1 (2) 가) — 그래서 **듣기 전에 낭독을 멈춘다**(아래 3). 같은 "Google 음성 서비스"가 TTS 엔진이자 인식기일 수 있어(Nour 기기 8k-0: 기본 엔진 Google) 둘을 겹치면 어느 쪽이 끊길지 모른다 `[가정 — 실기기]` | `[출처]` A |
+| S10 | 이어폰 마이크 | 인식 입력 경로(폰 마이크 / 블루투스 헤드셋 마이크)는 Android 가 고른다. 블루투스 마이크는 통화 모드(SCO) 전환이 필요해 웹 쪽에서 고를 수 없다 `[가정 — 실기기]` | — |
+| S11 | 9a 무음 오디오와 | 듣기 전에 낭독을 멈추면 9a 설계상 `statechange` → 무음 오디오도 `pause()`(17-1-1 5) → 듣는 동안 재생 중인 미디어가 없다. 9a 의 재동기화(H6)는 "speaker 가 읽는 중"일 때만 돌므로 듣는 동안 돌지 않는다 → **설계상 다툼 없음**. 다만 인식기가 오디오 포커스를 잡았다 놓은 뒤 Chrome 미디어 세션·알림 상태가 그대로인지는 `[가정 — 실기기]` | 17-1-1 5 |
+| S12 | 시리아·VPN | 인식 서버는 Google 이다. Gemini API 는 Nour 기기에서 VPN 끔 = `REGION`(16-D0 실측). 미국 제재 완화(2025) 뒤 Google 서비스가 시리아에 단계적으로 돌아오는 중이라는 보도는 있으나 **음성 인식(받아쓰기) 서비스 자체의 시리아 가용성 자료는 없다** `[가정 — 실기기, VPN 켬/끔]`. 막히면 대개 `network` 로 올 것 `[추정]` | `[출처]` H |
+
+출처: A `chromium.googlesource.com/chromium/src/+/main/content/public/android/java/src/org/chromium/content/browser/SpeechRecognitionImpl.java`(제공자 선택·intent extra·오류 대응·결과 변환) · B `developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition`(서버 인식 고지·`processLocally`·`available()`·`install()`) · C `groups.google.com/a/chromium.org/g/blink-dev/c/P8P-x7AnC6I`(Intent to Ship: On-Device Recognition Quality, M150 — "Android & ChromeOS currently do not support on-device Web Speech") · D `developer.mozilla.org/docs/Web/API/SpeechRecognition/available_static` · E `developer.mozilla.org/en-US/docs/Web/API/SpeechRecognitionErrorEvent/error`(오류 값 목록) + `cloud.google.com/speech-to-text/docs/languages`(`ar-SY`) · F `developer.chrome.com/blog/voice-driven-web-apps-introduction-to-the-web-speech-api`(첫 사용 권한) · G 탭 핸들러 요구는 비공식 보고 여럿(공식 문서 없음 — 6-4 의 `speak()` 규칙과 같게 다룬다) · H `eff.org/deeplinks/2025/06/new-digital-dawn-syrian-tech-users` · `dailysabah.com/business/tech/google-services-start-resuming-in-syria-after-years-long-ban`.
+
+##### 3. 듣기 시작 방법 (선택지 · 권장)
+
+| | 방법 | 겹침 | 실기기 전 쓸 수 있나 | 판정 |
+|---|---|---|---|---|
+| **(가)** | **하단 바 마이크 단추** — 한 번 탭 = 듣기 시작, 듣는 중 다시 탭 = 취소 | 없음(새 단추) | **○** | **기본** |
+| (나) | 이어폰 **길게** 누름 | Media Session 에 길게 액션이 없다(17-1-1 W3). 시스템이 음성 비서로 가져갈 가능성 `[가정]`. 온다면 어떤 이벤트(`keydown`? `play`+`pause` 짝?)인지는 9a-0 A 의 "길게" 기록이 답한다. 또 미디어 액션 안에서 `start()` 가 허용되는지(S5 제스처) 모른다 | ✗ | **설정(기본 끔) — 9 의 점검 뒤 9b-3 에서 켠다** |
+| (다) | 이어폰 세 번 누름 | 블루투스 이어폰은 펌웨어가 세 번 = 이전 곡(`previoustrack`)을 보내는 일이 많다 → 9a 의 [이전]과 겹친다(17-1-1 W5) | ✗ | 넣지 않음 |
+| (라) | 화면 아무 곳 — 두 손가락 탭·본문 길게 누르기 | 본문 탭 = 줄 이동(`pointerup`), 길게 = 선택·단어장(17-7-1 예약), 두 손가락 = 핀치 확대, 띠 누르고 있기(8b-2) | ○ | 넣지 않음 — 모든 후보가 기존·예약 손짓과 겹친다 |
+| (마) | 볼륨 단추 | 웹 페이지로 오지 않는다 | ✗ | 넣지 않음 |
+
+- **누르는 방식**: "탭 한 번 → 말 → 저절로 끝" (한 번 누르고 말하기). 누르고 있는 동안만 듣는 방식(무전기)은 피로한 손에 어렵고 손을 떼는 순간 말끝이 잘린다 → 넣지 않음(결정 9b-D2).
+- **마이크 단추의 크기·자리**: 17-1 (2)는 "64px 이상"이라 적었지만 10b 가 [▶] 를 64 → 56 으로 줄여 바 높이를 61px 로 맞췄다. 마이크를 64 로 하면 바가 69px 로 커지고 가로 화면(12-8) 세로 예산을 깎는다 → **권장: `--tap-play`(56px), 원형, [속도] 뒤(논리 순서 끝 — 아랍어에서는 저절로 왼쪽 끝)**. 아이콘은 마이크 그림(방향 아이콘이 아니므로 16-H 무관) — `ui/dom.js` 정적 템플릿의 인라인 SVG, `aria-label` 은 i18n. **375px 이하에서 넘치면** 진행 표시(`.tts-progress`)를 시각적으로만 숨긴다(`aria-live` 는 남김) — Build 가 360·375·412px 에서 잰다(결정 9b-D3).
+- **보이는 조건**: 기능 감지(`SpeechRecognition` 또는 `webkitSpeechRecognition`)가 참이고 설정 `voice.enabled`(기본 켬)일 때만. 리더 화면만(퀴즈 해설 [읽기] 제외 — 17-1-1 13 과 같은 경계). 원본 보기에서도 같은 바라 그대로 보인다.
+- **9a 단추와의 관계**: 듣는 동안 이어폰·알림 단추나 화면 [▶]·[이전]·[다음]이 눌리면 **듣기를 먼저 취소**(`abort()`)하고 그 단추는 평소대로 처리한다 — 손이 이긴다. 9a 의 `handsfree` 에는 `voice.isListening()`·`voice.cancel()` 를 주입받는 줄 몇 개만 더한다(9b-2 에서, 9a 머지 뒤).
+
+**듣기 한 번의 흐름**(`ui/voice.js`, 탭 핸들러 안에서 동기):
+1. 첫 사용이면 고지 카드(아래 8)부터 — 카드의 [시작] 탭이 이 흐름을 다시 부른다(제스처 유지).
+2. `was = speaker.getState()` 기억 → 읽는 중(`speaking`·`waiting-page`)이면 `speaker.pause()`(= `cancel()`, 꼬리 소리 즉시 끊김).
+3. 같은 핸들러 안에서 `listen.start()` — `await` 없음(S5). 단추는 "듣는 중" 상태(`aria-pressed=true`, 맥박 테두리 — `prefers-reduced-motion` 이면 정지 테두리), 상태 줄 "말하세요…", `navigator.vibrate?.(20)`(있을 때만).
+4. 결과 → 매칭(아래 4) → 명령 실행(아래 표의 "뒤 상태") → 상태 줄에 들은 말·명령 이름 2초.
+5. 실패·못 맞춤 → 아래 5 안내 + **`was` 로 되돌림**(읽던 중이었으면 같은 문장부터 다시 읽기).
+6. 듣는 중 문서가 숨겨지면(`visibilitychange`) `abort()` — 6-4 와 같은 태도, 되돌림 없이 멈춤.
+
+##### 4. 명령 표 · 정규화 · 매칭
+
+**인식 언어(`lang`)**: 설정 `voice.cmdLang` = `'auto'`(기본) · `'ar'` · `'en'`. `auto` = UI 언어가 `ar` 면 `ar`, 그 밖(en·fr·ko)은 `en`(운영자 Fold 7 한국어 UI 는 영어 명령으로 시험한다). 인식은 한 번에 한 언어다.
+- **아랍어 태그 사다리**: `ar-SY` → `ar-JO`(같은 레반트 구어권) → `ar`. 처음 쓰는 태그가 `language-not-supported` 로 끝나면 **같은 누름 안에서** 다음 태그로 곧장 다시 `start()`(이 오류는 듣기 전에 온다 `[가정 — 실기기]` — 말한 소리를 잃을 수 있어 상태 줄에 "다시 말해 주세요"가 뜬다). 된 태그는 `voice.tag` 에 기억해 다음부터 그 태그로 시작. `SpeechRecognition.available` 이 함수로 있으면 리더 진입 때(제스처 밖, 비동기) `available({langs:[tag]})` 로 미리 사다리를 내려간다 — `'unavailable'` 만 건너뛴다(`'downloadable'`·`'available'` 은 쓴다). 영어는 `en-US` 하나.
+- 사다리가 끝까지 실패하면 안내 `voice.err.lang`("이 언어로는 음성 명령을 알아듣지 못합니다 — 설정에서 명령 언어를 English 로 바꿀 수 있습니다").
+- 태그가 조용히 기기 언어로 바뀌어 인식되는 경우(S4)는 감지할 수 없다 — 점검 묶음 V1.
+
+**정규화** `normalizeUtterance(s)`(순수): `foldArabic`(NFKC · 타슈킬·타트윌 제거 · `أإآٱ→ا` · `ة→ه` · `ى→ي`) → 더해서 `ؤ→و` · `ئ→ي` · 아랍·페르시아 숫자 → ASCII · 라틴 소문자 · 문장부호(`.,!?؟،؛…"'«»-`) → 공백 · 공백 접기 · 앞뒤 자르기. 그다음 **군말 떼기**: 앞뒤의 `من فضلك`·`لو سمحت`·`رجاء`·`يا`·`طيب`·`please`·`ok`·`okay`·`hey` — 떼고 남는 낱말이 1개 이상일 때만.
+
+**매칭** `matchCommand(alternatives, lang)`(순수):
+1. 대안을 순서대로 본다(`maxAlternatives = 5`). 각 대안에 대해:
+   - **전체 일치**: 정규화된 말 = 어떤 동의어(정규화한 꼴)와 같으면 그 명령.
+   - **포함 일치**: 동의어가 말 안에 **낱말 경계로 이어진 구**로 들어 있으면 후보. 후보가 여럿이면 **가장 긴 동의어**가 이긴다(«وقف الترجمة» 가 «وقف» 를 이긴다). 가장 긴 것끼리 서로 다른 명령이면(«التالي والسابق») **모호 → 이 대안은 무효**.
+   - 낱말 일부 일치(접두·어근)는 하지 않는다 — «وقف» 를 접속사 و + «قف» 로 떼면 뜻이 바뀐다.
+2. 첫 대안에서 맞으면 끝. 맞는 것이 없으면 다음 대안. **확신도 문턱은 두지 않는다**(S8 — Android 에서 1.0 으로 채워질 수 있다). 대신 대안이 몇 번째에서 맞았는지를 디버그 기록에 남긴다.
+3. 다섯 개 모두 실패 → `nomatch`(들은 첫 대안 글자와 함께).
+4. **숫자는 받지 않는다**("두 번 뒤로"·"세 문장 앞으로" 없음 — 명령을 되풀이한다). 숫자가 붙어 있으면 숫자를 떼고 명령만 본다(«التالي ٢» → 다음 한 번). 이유: 고정 명령 원칙(17-1), 동의어 표가 두 배로 커지고 "두"가 동사로 잘못 들릴 수 있다(결정 9b-D6).
+
+**명령 표 초안** — 아랍어는 전부 `[검토 — Nour·운영자]`(표준 + 시리아·레반트 구어; 영어 차용어의 아랍 문자 꼴 포함). 동의어는 `voice/commands.js` 의 표 하나(`VOICE_COMMANDS`)에만 둔다.
+
+| id | 동작 · 뒤 상태 | 아랍어 동의어(초안) | 영어 동의어 |
+|---|---|---|---|
+| `play` | `pressPlay()`(9a — 스캔본 안내 포함). 이미 읽던 중이었으면(`was`) 그 문장부터 다시 읽기 | تشغيل · شغل · شغّل · ابدأ · ابدا · اقرأ · اقرا · استمر · تابع · كمل · كمّل · كفي · كفّي(레반트 "계속") · يلا · بلاي | play · start · read · resume · continue · go |
+| `pause` | 멈춤 유지(`was` 와 무관하게 되돌리지 않는다) | قف · توقف · وقف · وقّف · إيقاف · إيقاف مؤقت · اسكت · خلص · بس · استنى · لحظة · ستوب | stop · pause · wait · hold on · quiet |
+| `next` | `speaker.next()` → `was` 가 읽는 중이면 `play()`(다음 문장부터), 멈춤이었으면 하이라이트만(9-D5 와 같음 — 쪽 끝 멈춤 = 아무 일 없음) | التالي · التالية · للأمام · بعده · بعدها · اللي بعده · قدام · تخطى · الجملة التالية · نكست | next · forward · skip |
+| `prev` | `speaker.prev()` → 위와 같은 규칙 | السابق · السابقة · للخلف · قبله · قبلها · اللي قبله · ورا · ارجع · رجوع · الجملة السابقة · باك | previous · back · go back |
+| `again` | `speaker.again()`(아래 7) → `was` 가 읽는 중이면 `play()`(지금 문장 **원문부터**), 멈춤이었으면 하이라이트만 그 문장 처음 | أعد · اعد · عيد · إعادة · كرر · كرّر · مرة ثانية · مرة تانية · كمان مرة · من جديد · ريبيت | again · repeat · replay · once more |
+| `trOn` | `readalong.mode` = 끄기 전 모드(`readalong.lastOn`, 기본 `speak`) → 줄 다시 그리기 + `syncReadalong()` → `was` 로 되돌림. 이미 켜져 있으면 바꾸지 않고 되돌림만 | ترجم · ترجمة · شغل الترجمة · افتح الترجمة · مع الترجمة · الترجمة | translate · translation on · with translation |
+| `trOff` | `readalong.mode = 'off'` → 같은 길 → 되돌림 | بلا ترجمة · بدون ترجمة · وقف الترجمة · سكر الترجمة · سكّر الترجمة · طفي الترجمة · اطفي الترجمة · إيقاف الترجمة · إلغاء الترجمة | no translation · translation off · stop translation |
+| `slower` | 계단 한 칸 아래(`RATE_STEPS`), 저장 + `paintRate()` → 되돌림. 이미 0.5 면 안내 `voice.rate.min` | أبطأ · ابطأ · أبطئ · ببطء · بشويش · على مهل · شوي شوي · خفف · بطيء | slower · slow down · slow |
+| `faster` | 계단 한 칸 위, 이미 1.8 이면 `voice.rate.max` | أسرع · اسرع · بسرعة · سرع · سرّع · أسرع شوي | faster · speed up · quicker |
+| `explain` `(나중)` | 표에 자리만(`enabled:false`) — 11a 설명이 정해지면 켠다(17-2). 꺼진 동안 이 말은 `nomatch` 가 아니라 "아직 없는 기능" 안내 | اشرح · شرح · فسر · وضح · اشرح هنا | explain · explain this |
+
+- **겹침 점검(테스트 C3)**: 같은 정규화 꼴이 두 명령에 들어가면 테스트가 실패한다. «إيقاف»(멈춤)과 «إيقاف الترجمة»(번역 끄기)는 꼴이 달라 괜찮고 가장 긴 것 규칙으로 갈린다. «بس»(레반트 "그만" / "그러나")·«يلا»·«الترجمة» 처럼 짧거나 뜻이 둘인 낱말은 **전체 일치에서만** 쓴다(표에 `exact:true`) — 문장 속에 섞여 나오면 무시.
+- **영어 모드에서**: 영어 표만. **아랍어 모드에서**: 아랍어 표 + 아랍 문자로 적힌 영어 차용어(«نكست»·«ستوب»·«بلاي»·«باك»·«ريبيت»). 아랍어 인식기가 라틴 글자로 돌려준 경우(«next»)도 받도록 아랍어 모드는 영어 표를 **두 번째로** 본다(결정 9b-D5).
+
+##### 5. 실패와 안내
+
+원칙: 안내는 **상태 줄**(14-2 방식 — 상태가 바뀔 때 한 번, 같은 것 반복 안 함) + **짧은 음성 한 마디**(UI 언어 — 화면을 안 보는 사용 때문에, 결정 9b-D8) 뒤 `was` 로 되돌린다. 인프라 실패는 끝에 늘 "**이어폰 버튼과 화면 버튼은 그대로 됩니다**"(17-1 (2)). VPN·우회는 말하지 않는다(13절).
+
+| 경우 | 감지 | 화면(상태 줄) | 소리 | 단추 |
+|---|---|---|---|---|
+| 미지원 브라우저 | 생성자 없음 | 단추 없음. 설정 줄에 `voice.unsupported` 한 줄 | — | 숨김 |
+| 권한 거부 | `not-allowed`, 또는 `navigator.permissions.query({name:'microphone'})` 가 `'denied'`(있을 때만, try/catch) | `voice.err.permission`: 마이크 권한이 꺼져 있다 — Chrome 사이트 설정에서 허용하는 법 한 줄 + 이어폰 문구 | 한 마디 | 남김(누르면 다시 시도 — 설정에서 켰을 수 있다) |
+| 인식 서비스 없음 | `service-not-allowed`, 또는 `start()` 예외 | `voice.err.service`: 이 휴대폰의 음성 인식 서비스를 쓸 수 없다 + 이어폰 문구 | 한 마디 | 남김 |
+| 서버 불가·오프라인 | `network` | `navigator.onLine === false` 면 `voice.err.offline`("오프라인이라…"), 아니면 `voice.err.network`("음성 인식 서버에 연결하지 못했습니다 — 네트워크 위치 때문일 수 있습니다", 14-2 `REGION` 과 같은 결) + 이어폰 문구 | 한 마디 | 남김 |
+| 마이크 없음·사용 중 | `audio-capture` | `voice.err.mic` + 이어폰 문구 | 한 마디 | 남김 |
+| 언어 불가 | 사다리 끝까지 `language-not-supported` | `voice.err.lang`(위 4) | 한 마디 | 남김 |
+| 말 없음 | `no-speech`, 또는 앱 상한 `VOICE.LISTEN_MAX_MS`(8000) 지남 → `abort()` | `voice.noSpeech`("아무 말도 듣지 못했습니다") | 없음(되돌림 소리로 충분 — 낭독이 다시 시작된다) | — |
+| 못 맞춤·모호 | `nomatch` | `voice.noMatch`: «들은 말» + [명령 보기](설정 음성 줄로) | 한 마디(`voice.noMatch.say` "다시 말해 주세요") | — |
+| 사용자 취소 | 단추 다시 탭·9a 단추·hidden | 없음 | 없음 | — |
+
+- **오프라인에서도 단추를 막지 않는다** — 6-4 의 "오프라인이면 버튼 비활성"을 9b 에서는 바꾼다. 이유: Google 음성 서비스가 기기 언어 팩으로 처리할 여지가 있고(S2), `navigator.onLine` 은 믿을 수 없다(14-3). 실패하면 그때 안내한다(결정 9b-D9).
+- **음성 한 마디**: `ui/voice.js` 가 speaker 와 같은 `speechSynthesis` 로 UI 언어 문장 하나를 말한다(목소리는 8k 의 `langSpeechOf(uiLang)` — 표 안내 목소리 `setNoticeVoice` 와 같은 해석). 말이 끝나면(`onend` 또는 상한 4초) `was` 로 되돌림. speaker 는 이때 이미 `paused` 라 겹치지 않는다. 설정 `voice.sayErrors`(기본 켬)로 끌 수 있다.
+- **같은 인프라 실패가 이어지면**: 두 번째부터는 음성 없이 상태 줄만(세션 동안) — 매번 같은 말을 듣지 않게.
+- 인식된 글자는 **메모리에만**(마지막 10번 — 아래 9 의 "말해 보기"·디버그 훅). 저장·전송하지 않는다.
+
+##### 6. 실기기 확인 도구 — 9b-0 진단 단계를 두지 않는다
+
+| | 방법 | Build 앞 조건? | 실기기 왕복 | 판정 |
+|---|---|---|---|---|
+| (가) 9b-0 별도 진단 페이지 `dev/voice.html` 먼저 | 9a-0 처럼 앱 무변 페이지를 먼저 배포하고 결과로 기본값 결정 | **예** | 1회 더(9a-0 과 별개) | 넣지 않음 — 운영자 방침(앱 먼저) 위반, 기본값은 폴백으로 해결 |
+| (나) `dev/handsfree.html` 에 F 묶음(인식) 추가 | 9a-0 페이지 하나로 | 아니오 | 9a-0 과 같은 자리 | 보류 — 이미 배포된 9a-0 페이지를 다시 Build·Review·배포해야 하고, 운영자 Fold 7 시험이 그 사이 늦어진다. 앱이 아닌 페이지의 결과로는 앱 동작(정규화·되돌림·9a 와의 겹침)을 못 본다 |
+| **(다) 앱 안 "말해 보기" + 마지막 실기기 점검 묶음** | 9b 배포본의 설정 음성 줄에 [말해 보기]: 한 번 듣고 **들은 대안 전부·맞은 명령·몇 번째 대안·쓴 태그·걸린 ms·오류**를 보여 주고(실행은 안 함), 최근 10번을 [결과 복사] | 아니오 | **9a-0 + 9a 배포본 + 9b 배포본을 한 자리에서**(아래 9) | **권장**(결정 9b-D12) |
+
+- (다)가 실기기 왕복을 가장 줄인다: 운영자는 Fold 7 로 9a-0 페이지를 아직 돌리지 않았다 — 9a·9b 를 배포한 뒤 **한 번 앉아서** 9a-0 페이지 → 9a 배포본 → 9b 배포본 "말해 보기" 순으로 하면 된다. Nour 점검도 같은 묶음 하나로(아랍어 점검표).
+- [말해 보기]는 Nour 에게도 쓸모가 있다: 동의어 표를 그녀의 실제 발화로 다듬는 재료(17-1 (2) "동의어 표는 Nour 의 실제 발화로 다듬는다")가 [결과 복사] 한 번으로 온다.
+
+##### 7. Build 설계 뼈대 — 파일 경계 · 순서
+
+| 항목 | 내용 |
+|---|---|
+| 새 파일 | `js/voice/commands.js`(**순수** — `normalizeUtterance`·`matchCommand`·`VOICE_COMMANDS`·`stepRate(current, dir)`; `text/specialty.js` 의 `foldArabic` 만 import) · `js/voice/listen.js`(**서비스** — `createListener({Recognition, timers, available})`: `start(lang)`·`abort()`·`isListening()`, 이벤트 `result{alternatives, tag, ms}`·`error{code}`·`end`. 태그 사다리·앱 상한·한 번에 하나(듣는 중 `start` 는 무시)·오류 분류 `classify(code, onLine)`. `window` 를 직접 읽지 않고 생성자를 주입받는다) · `js/ui/voice.js`(**UI** — 마이크 단추·상태·고지 카드·흐름 3 의 1–6·명령 실행·음성 한 마디·"말해 보기"·디버그 훅 `__medreader.voice()`) |
+| 고치는 파일 | `ui/controls.js` — `createVoice(...)` 배선 약 15줄(speaker·`pressPlay`·`syncReadalong`·`paintRate` 주입), `leaveControls` 에서 `voice.cancel()`, [▶]·[이전]·[다음] 핸들러 첫 줄에 `voice.cancel()` · `ui/handsfree.js`(9a) — 주입 2개(`isListening`·`cancel`), 액션 핸들러 첫 줄에 취소 · `tts/speaker.js` — **`again()` 하나**(약 8줄: 큐가 있으면 `phase='src'`·`trPart=0`·`audibleIdx=-1`, 읽는 중이면 `restart(index)`, 아니면 `show(units[index])`) · `ui/settings.js` — `setReadalongMode(mode)` export(저장 + `lastOn` 기억 + `paintAllReadalongRows()`), 설정 낭독 탭에 "음성 명령" 묶음(켜기·명령 언어·실패 음성·[말해 보기]·명령 목록) · `index.html` — 바에 단추 1개·고지 카드 자리 · `css/reader.css` — 단추·듣는 중·좁은 폭 진행 숨김 · `settings.js` 기본값 · `config.js` `VOICE` · i18n 4개 언어 |
+| 고치지 않는 것 | `ai/readalong.js`·`ui/trband.js`·`ui/inlinetr.js`·`ui/reader.js`(제스처 무변)·퀴즈·6-4 hidden 핸들러 |
+| `config.js` | `VOICE = { LISTEN_MAX_MS: 8000, SAY_MAX_MS: 4000, MAX_ALTS: 5, AR_TAGS: ['ar-SY','ar-JO','ar'], EN_TAG: 'en-US', HISTORY: 10, CONFIRM_MS: 2000 }` |
+| 설정 키(9-3) | `voice.enabled: true` · `voice.cmdLang: 'auto'` · `voice.tag: ''`(된 아랍어 태그 기억) · `voice.noticeAt: 0`(고지 본 시각) · `voice.sayErrors: true` · `readalong.lastOn: 'speak'` · (9b-3) `voice.earLong: false` |
+| i18n | 약 22키 × 4개 언어: 단추 이름·듣는 중·들은 말·명령 이름 9개(확인 줄용)·오류 7·고지 카드 3·설정 줄 5. 아랍어 문구 `[검토 — Nour·운영자]` |
+| import 방향(3-2) | `voice/commands.js` = 순수 계층 행(`config`·`text/*` 만) · `voice/listen.js` = 서비스 행(`config` 만) · `ui/voice.js` = ui 행. 3-2 표에 `voice/*` 두 줄을 더한다(Build) |
+| DB·버전·호출 | DB 무관(설정 키만) · `algoVersion` 무관 · **AI 호출 0** |
+
+- **순서 · 9a 와의 경계**: 9a Build 가 지금 같은 작업 트리에서 `controls.js`·`config.js`·`settings.js` 등을 고친다. 그래서 9b 는 둘로 나눈다.
+  - **9b-1 (순수·서비스, 9a 와 병행 가능)**: `voice/commands.js`·`voice/listen.js`·테스트 두 개. 기존 파일을 **하나도 건드리지 않는다**(config 상수는 9b-1 동안 파일 안 기본값으로 두고 9b-2 에서 `VOICE` 로 옮김). 화면 변화 0 — 배포해도 무해.
+  - **9b-2 (화면·배선, 9a 머지 뒤)**: 위 "고치는 파일" 전부. `pressPlay()`·`handsfree` 가 있어야 한다.
+  - **9b-3 (조건부)**: 이어폰 길게 = 듣기 — 9 의 점검에서 길게 누름이 페이지에 오고 그 안에서 `start()` 가 되면만. 설정 `voice.earLong`(기본 끔).
+
+##### 8. 고지 (13절 "음성 명령") — 갱신안
+
+- 13절 행의 `[가정]` 을 사실로 바꾼다: "Android Chrome 은 휴대폰의 음성 인식 서비스(Android 12 이상은 'Google 음성 서비스')로 인식한다 — **말한 소리가 Google 서버로 갈 수 있다**(S1·S2). Android 에서는 온디바이스 강제(`processLocally`)를 쓸 수 없다(S3). 듣기는 **사용자가 누를 때 한 번만**, 인식된 글자는 기기 메모리에만 있고 저장·AI 전송하지 않는다(AI 호출 0)."
+- **첫 사용 고지 카드**(마이크 단추를 처음 누를 때 한 번, `voice.noticeAt`): 제목 "음성 명령" · 본문 두 줄(위 굵은 문장 + "누를 때마다 한 번만 듣습니다") · [시작] [취소]. [시작] = 탭 제스처 → 그 안에서 흐름 3 을 바로 시작(권한 대화가 이어서 뜬다). 설정 음성 줄에도 같은 두 줄.
+- 12-2 온보딩·동의(번역 동의)와는 별개다 — 번역 동의가 없어도 음성 명령은 쓸 수 있다(데이터가 가는 곳이 다르다).
+
+##### 9. 수용 기준 · 마지막 실기기 점검 묶음
+
+- [ ] `[N]` V1 정규화: 타슈킬·타트윌·`أإآٱ/ى/ة/ؤ/ئ`·아랍 숫자·문장부호·군말 → 표의 꼴과 같다. `foldArabic` 를 재사용한다(같은 입력에 같은 결과 — `text/specialty.js` 와 한 벌).
+- [ ] `[N]` V2 명령 표 전수: 모든 동의어가 자기 명령으로 전체 일치, 정규화 꼴이 두 명령에 겹치지 않음(C3), `exact:true` 낱말은 문장 속에서 무시.
+- [ ] `[N]` V3 포함 일치: 가장 긴 구가 이김(«وقف الترجمة» → `trOff`, «شغل الترجمة» → `trOn`), 서로 다른 명령의 같은 길이 구 → 모호(무효), 숫자 떼기(«التالي ٣» → `next`).
+- [ ] `[N]` V4 대안: 첫 대안 실패 + 셋째 대안 일치 → 그 명령과 `altIndex 2`, 다섯 모두 실패 → `nomatch`(첫 대안 글자), 확신도 값과 무관.
+- [ ] `[N]` V5 listen 태그 사다리: `ar-SY` 가 `language-not-supported` → 같은 누름에서 `ar-JO` 로 `start` 1회 → 성공 시 `tag` 이벤트 = `ar-JO`; 끝까지 실패 → `error{code:'lang'}`. `available()` 이 `'unavailable'` 을 주면 그 태그로 `start` 하지 않음.
+- [ ] `[N]` V6 listen 오류 분류: 웹 오류 9종 + 상한 초과 + `start()` 예외 → 5 의 표 갈래, `network` 는 `onLine` 에 따라 offline/network.
+- [ ] `[N]` V7 흐름(진짜 `createSpeaker` + 가짜 synth·인식기): speaking 에서 마이크 탭 → **같은 동기 호출 안에서** `speaker.pause()` 다음 `recognition.start()`(순서·`await` 없음 — 변이가 실패해야 함). 결과 `next` → 인덱스 +1 이고 다시 `speaking`. 멈춤에서 `next` → 하이라이트만·`paused`.
+- [ ] `[N]` V8 되돌림: speaking 중 `nomatch`·`no-speech`·`network` → 안내 뒤 같은 인덱스에서 `speaking`. `pause` 명령 → `paused` 유지. hidden → `abort`·되돌림 없음.
+- [ ] `[N]` V9 `again`: 멈춤 + `phase='tr'` 에서 → `phase='src'`, 같은 인덱스; 읽는 중이었으면 원문부터 다시(번역문 이어 읽기가 아니다).
+- [ ] `[N]` V10 번역: `trOff` → `readalong.mode='off'`·`lastOn` 보존, `trOn` → `lastOn` 복원(기본 `speak`), `syncReadalong` 1회. 속도: 1.0 → `faster` → 1.25 저장, 1.8 에서 `faster` → 그대로 + `voice.rate.max`.
+- [ ] `[N]` V11 겹침: 듣는 중 [▶]·9a `play` 액션 → `abort` 1회 후 평소 처리. 듣는 중 두 번째 마이크 탭 → 취소. 듣는 중 `start` 재호출 무시(인식기 1개).
+- [ ] `[N]` V12 안내 반복 금지: 같은 인프라 오류 두 번째 → 음성 0·상태 줄만. 미지원(생성자 없음) → 단추 0·예외 0.
+- [ ] `[N]` 기존 테스트 전부 통과(특히 `tts-speaker`·`speaker-tr`·`pageturn-8i3`·9a `handsfree-9a`) — speaker 는 `again()` 추가 외 무변.
+- [ ] `[D]` 데스크톱 Chrome(서버 인식이 된다): 영어 모드 "next"·"slower"·"translation off" 가 화면과 같게 동작, 첫 사용 카드 → 권한 대화 → 시작, 권한 차단 뒤 안내, 오프라인(DevTools) → `network`/offline 안내, 콘솔 오류 0, `__medreader.voice()` 가 최근 기록(글자·명령·태그·ms)을 보인다(키 없음). 360·375·412px 에서 바가 한 줄(넘치면 진행 표시 숨김), 아랍어 UI 에서 단추가 거울 자리.
+- [ ] `[M]` **마지막 실기기 점검 묶음** — 9a·9b 배포 뒤 운영자 Fold 7 로 9a-0 페이지와 **한 자리에서**, 이어서 Nour 에게 아랍어 점검표 하나로:
+
+| # | 볼 것 | 어디서 | 답이 바꾸는 것 |
+|---|---|---|---|
+| V-1 | 실제로 쓰인 태그(`ar-SY` 가 됐나 / 사다리 어디까지) · 아랍어로 말했는데 엉뚱한 언어 글자로 오는가(S4 조용한 바뀜) | [말해 보기] | `AR_TAGS` 순서 |
+| V-2 | **VPN 켬/끔** 각각 성공 / `network` (Nour) | [말해 보기] | 안내 문구만(앱은 VPN 을 말하지 않는다) |
+| V-3 | 누름 → 결과까지 ms(중앙값), 말 끝을 기다리는 시간 | [말해 보기] | `LISTEN_MAX_MS` |
+| V-4 | 9개 명령 × 2번씩 — 맞은 비율, 몇 번째 대안에서 맞았나, 못 맞춘 말 그대로 | [말해 보기] [결과 복사] | 동의어 표(아랍어 `[검토]` 해제) |
+| V-5 | 낭독 중 탭 → 낭독 꼬리가 인식 글자에 섞이지 않나, 명령 뒤 이어 읽기가 자연스러운가 | 9b 배포본 리더 | 멈춤 뒤 `start` 지연이 필요한지 |
+| V-6 | 블루투스 이어폰을 낀 채 폰을 멀리 두고 말해도 되나(이어폰 마이크를 쓰나) | 리더 | 안내 문구 |
+| V-7 | 9a 무음 오디오가 켜진 상태에서 듣기 → 끝난 뒤 알림·이어폰 단추가 그대로인가 | 리더 | 9a 재동기화와의 경계 |
+| V-8 | 첫 권한 대화 모양 · 거부 뒤 안내 · 비행기 모드에서 되는가(S2 오프라인 팩) | 리더 | 6-4 갱신 확인 |
+| V-9 | 이어폰 **길게** 누름이 페이지에 오나 — 9a-0 A "길게" 기록 그대로 쓰기 + 9b 배포본에서 그때 `start()` 가 되나 | 9a-0 페이지 · 리더 | 9b-3 을 할지 |
+| V-10 | 듣는 중 화면을 끄면 조용히 취소되나 | 리더 | — |
+
+##### 10. 테스트 방법 (headless)
+
+- `tests/voice-commands-9b.test.mjs`(새, 순수): V1–V4. 표를 순회하는 전수 검사 + 레반트 변이·차용어·모호 사례 목록.
+- `tests/voice-listen-9b.test.mjs`(새): **가짜 인식기 클래스** — `lang`·`continuous`·`interimResults`·`maxAlternatives` 를 받아 두고 `start()`·`stop()`·`abort()` 를 기록, 시험이 `fire('result', [[{transcript, confidence}, …]])`(배열의 배열 — `results[0][k].transcript`, `results[0].isFinal = true`)·`fire('error', {error})`·`fire('end')` 를 부른다. 가짜 `available`, 가짜 시계(`tests/tts-speaker.test.mjs` 의 것). V5·V6.
+- `tests/voice-ui-9b.test.mjs`(새): `ui/voice.js` 의 흐름 함수를 DOM 없이(단추·상태 줄은 주입한 가짜) — 진짜 `createSpeaker`(가짜 synth) + 가짜 인식기 + 가짜 `settings` + 가짜 `handsfree`. V7–V12. 브라우저 전역을 만지지 않는다(주입만, 9a 와 같은 방식).
+- **변이**(Review 가 돌린다): (a) 흐름에서 `pause()` 와 `start()` 순서 바꾸기 → V7 (b) `start()` 앞 `await` → V7 (c) 가장 긴 구 규칙 끄기 → V3 (d) 사다리 한 칸 빼기 → V5 (e) `exact:true` 무시 → V2 (f) 되돌림 삭제 → V8 (g) `again()` 에서 `phase='src'` 삭제 → V9 (h) 안내 반복 금지 삭제 → V12 (i) `foldArabic` 대신 따로 만든 접기 → V1 의 한 벌 검사.
+
+##### 11. 나누기 · 크기 · 시간 `[추정]`
+
+| 단계 | 내용 | 크기 | 시간 |
+|---|---|---|---|
+| **9b-1** | `voice/commands.js`(약 220줄 — 표 약 90줄) · `voice/listen.js`(약 160줄) · 테스트 2개(약 350줄). 기존 파일 0 — **9a Build 와 병행 가능** | 중간 | Build 1.5–2시간 + Review 1시간 |
+| **9b-2** | `ui/voice.js`(약 260줄) · controls 약 20줄 · handsfree 약 8줄 · speaker `again()` 약 8줄 · settings(export 1 + 음성 묶음 약 70줄) · index·css 약 40줄 · i18n 22키×4 · 테스트 1개(약 300줄) | 중간 | Build 2–2.5시간 + Review 1.5시간 |
+| 합 | | | **약 6–7시간** + 실기기 점검 한 번(9a 와 같은 자리) |
+| (9b-3, 조건부) | 이어폰 길게 = 듣기 — V-9 뒤 | 작음 | Build 0.5–1 + Review 0.5시간 |
+
+되돌림: 설정 `voice.enabled=false`(사용자 — 단추가 사라진다) 또는 기본값을 `false` 로 바꿔 배포. speaker `again()` 은 다른 길에서 부르지 않으므로 남겨도 무해.
+
+##### 12. 운영자 결정 (선택지 · 권장)
+
+| # | 결정 | 선택지 | 권장 · 이유 |
+|---|---|---|---|
+| 9b-D1 | 듣기 시작 방법 | (가) **화면 마이크 단추만, 이어폰 길게는 점검 뒤 9b-3 설정(기본 끔)** · (나) 마이크 + 이어폰 길게를 지금 같이 · (다) 화면 아무 곳 손짓 추가 | **(가)** — 실기기 없이 확실히 되는 길은 단추뿐. 길게 누름은 오는지·그 안에서 `start()` 가 되는지 둘 다 모른다. (다)는 모든 후보 손짓이 기존·예약 손짓과 겹친다 |
+| 9b-D2 | 누르는 방식 | (가) **탭 한 번 → 말 → 저절로 끝(다시 탭 = 취소)** · (나) 누르고 있는 동안만 | **(가)** — 피로한 손, 손을 떼면 말끝이 잘림. Android 가 말 끝을 스스로 판단한다(S6) |
+| 9b-D3 | 마이크 단추 크기·자리 | (가) **56px(`--tap-play`), [속도] 뒤, 좁으면 진행 표시를 시각적으로 숨김** · (나) 64px(17-1 원안, 바 +8px) · (다) 바 위에 떠 있는 단추 | **(가)** — 10b 바 높이·12-8 가로 예산을 지킨다. 56 은 [▶] 와 같은 "가장 큰 단추" 급. (다)는 본문·띠를 가린다 |
+| 9b-D4 | 인식 언어 | (가) **`voice.cmdLang` auto(UI ar → 아랍어, 그 밖 → 영어) + 아랍어 사다리 `ar-SY → ar-JO → ar`, 된 태그 기억, `available()` 있으면 미리 확인** · (나) `ar` 고정 · (다) 사용자가 태그를 고름 | **(가)** — 실기기 없이 가장 안전: 되면 시리아 구어에 가까운 모델, 안 되면 저절로 내려간다. (다)는 Nour 에게 태그를 묻는 일 |
+| 9b-D5 | 영어 명령 | (가) **설정 하나(`auto`/`ar`/`en`) + 아랍어 모드에서 아랍 문자 차용어·라틴 글자 영어도 받음** · (나) 아랍어 모드는 아랍어만 | **(가)** — 시리아 의사의 일상어에 «نكست»·«ستوب» 같은 차용어가 섞인다 `[검토 — Nour]`. 표가 겹치지 않음은 테스트가 지킨다 |
+| 9b-D6 | 숫자·부분 일치 | (가) **숫자 받지 않음(떼고 한 번), 낱말 일부 일치 없음, 가장 긴 구 우선·모호하면 무효** · (나) "두 번 뒤로"까지 받음 | **(가)** — 고정 명령 원칙, 오작동 쪽이 덜 위험(아무 일 안 함 + 안내) |
+| 9b-D7 | 확신도 | (가) **문턱 없음, 대안 순서만** · (나) 확신도 < 0.5 면 버림 | **(가)** — Android 에서 확신도가 1.0 으로 채워질 수 있다(S8, Chromium 소스). 문턱은 V-4 자료로 다시 본다 |
+| 9b-D8 | 실패 안내 | (가) **상태 줄 + 짧은 음성 한 마디(UI 언어) + 원래 상태로 되돌림, 같은 인프라 실패는 두 번째부터 음성 없음** · (나) 화면만 · (다) 되돌리지 않고 멈춤 | **(가)** — 화면을 보지 않는 사용이 목적(요구 1). 되돌림이 없으면 실패할 때마다 [▶] 를 눌러야 한다. 설정 `voice.sayErrors` 로 끔 |
+| 9b-D9 | 오프라인에서 단추 | (가) **막지 않고 시도 → 실패 시 안내**(6-4 를 바꿈) · (나) 6-4 그대로 비활성 | **(가)** — 기기 언어 팩으로 될 여지(S2), `onLine` 은 믿을 수 없음(14-3). V-8 로 확인 |
+| 9b-D10 | "다시" | (가) **speaker 에 `again()` 하나(약 8줄)** · (나) speaker 0줄 — `play(lineId)` 우회 | **(가)** — (나)는 멈춤+번역 단계에서 번역문을 이어 읽거나 줄 가운데 시작 문장에서 앞 문장을 고를 수 있다(1 표). 9a 가 speaker 를 안 고치므로 파일이 겹치지 않는다 |
+| 9b-D11 | "번역 켜기" | (가) **끄기 전 모드 복원(`readalong.lastOn`, 기본 표시+낭독)** · (나) 늘 표시+낭독 | **(가)** — "표시만"을 쓰던 사람이 끄고 켰는데 낭독이 붙으면 놀란다 |
+| 9b-D12 | 실기기 진단 | (가) 9b-0 페이지 먼저 · (나) 9a-0 페이지에 F 묶음 · (다) **진단 단계 없음 — 앱 안 [말해 보기] + 마지막 실기기 점검 묶음(9 — 9a-0 과 한 자리)** | **(다)** — 운영자 방침(앱 먼저, 확인은 나중 한 번). 기본값은 폴백으로 실기기 없이 안전. 왕복이 가장 적고 Nour 의 발화가 동의어 표 재료로 온다 |
+| 9b-D13 | 나누기 | (가) **9b-1(순수·서비스, 9a 와 병행) → 9b-2(화면, 9a 뒤) → 9b-3(조건부)** · (나) 9a 뒤 한 번에 | **(가)** — 9b-1 은 기존 파일 0 이라 9a Build 와 같은 작업 트리에서도 겹치지 않는다. 9a 를 기다리는 시간을 쓴다 |
+| 9b-D14 | "여기 설명" | (가) **표에 자리만(꺼짐), 11a 결정 뒤 켬** · (나) 지금 표에서 뺌 | **(가)** — 꺼진 동안 "아직 없는 기능" 안내라 `nomatch` 와 구별된다 |
+
+##### 13. 이번엔 못 함
+
+- 상시 듣기·깨우기 낱말("يا قارئ") — 17-1 (2) 그대로 없음.
+- 숫자 붙은 명령·자유 문장 이해·AI 의도 해석 — 없음(18절).
+- 단어장(8f) "이 낱말 저장" 같은 명령 — 17 #16 의 "기억" 표시와 함께 명령을 늘릴 때(8c+8f 뒤) 검토.
+- 퀴즈·서재·검색 화면의 음성 명령 — 리더만.
+- 한국어·프랑스어 명령 표 — `cmdLang` 에 값만 더하면 되는 꼴로 둔다(표 형식 같음). 운영자가 원하면 작은 단계.
+- 인식 결과의 화면 받아쓰기(중간 결과 `interimResults`) — 단발·`false`. "말해 보기"에서만 최종 대안을 보인다.
 
 ### 17-2. 설명·요약 — 결정: 설명 먼저, 부를 때만 `[신설 2026-10-03]` `[결정 2026-10-03 — 사용자: 권장안대로]`
 
@@ -4411,7 +4649,7 @@ Nour 의 추가 요구(2026-10-03)로 8c 뒤의 순서를 다시 짠다. **7b·7
 | **8e** 가로 화면 읽기 `[신설 2026-10-12]` `[위치 미정 — Nour 자동 회전 답 대기]` | 높이 ≤ 520px compact: 쪽 이동 바 합치기·상단바 자동 숨김·띠 2줄(12-8), 선택: 전체 화면 | Nour 요청 3 | 쓰지 않음 | ○ | **먼저 자동 회전이 켜져 있는지 확인**(꺼져 있으면 가이드만). 수용 기준 = 12-8 수치(800×360 본문 ≥ 270px 등) |
 | **8c + 8f** 탭 번역·사용량 + 단어장 `[신설 2026-10-12 — 8f]` | 8c(위 표) + 17-7 전부: 선택 동작 줄, 단어 번역(단어장 → 문장 번역에서 찾기 → 부를 때만 요청·묶음), `cards kind:'term'`, 단어장 화면, CSV/Anki 내보내기, CSV 가져오기, 문서 삭제 시 보존 | Nour 요청 2 | 쓴다 — **부를 때만**, 호출 0 경로 먼저, 묶음 최대 20 | 단어장 보기·편집·내보내기 ○ / AI 번역 ✗ | 9b 뒤. 한 단계가 크면 8c 와 8f 를 두 Build 로 나누되 손짓 체계(17-7-1)는 8c 가 먼저 만든다 |
 | **9a** 이어폰·잠금 화면 버튼 `[수정 2026-10-27 — 9a Plan]` | Media Session `play/pause/nexttrack/previoustrack` → 재생·멈춤·다음·이전, 필요하면 무음 오디오로 세션 잡기(17-1). 설계 17-1-1(운영자 결정 대기) — 권장: 9a-0 진단 페이지 먼저 → 9a (나) | 1 | 쓰지 않음 | ○ | 말하지 않아도 되는 가장 싼 핸즈프리. `[가정]` 무음 오디오 필요 여부·버튼 이벤트 도달은 **Nour 기기 실기기 확인**. 6-4 "hidden → 일시정지" 규칙은 이번에 바꾸지 않는다 |
-| **9b** 음성 명령 | 한 번 누르고 말하기, 고정 명령 9개(+나중 "여기 설명"), 아랍어·영어 로컬 매칭(17-1) | 1 | **쓰지 않음**(AI 의도 해석 없음) | ✗ — Android 인식은 서버 인식(6-4) `[가정]` | 9a 위에 얹는다. Nour 기기에서 VPN 켬/끔 각각 확인. 실패해도 9a 버튼은 계속 된다 |
+| **9b** 음성 명령 `[수정 2026-11-15 — 9b Plan]` | 한 번 누르고 말하기, 고정 명령 9개(+나중 "여기 설명"), 아랍어·영어 로컬 매칭(17-1). 설계 17-1-2(운영자 결정 대기) — 권장: 진단 단계 없이 9b-1(순수·서비스, 9a 와 병행) → 9b-2(화면, 9a 뒤) → 9b-3(이어폰 길게, 조건부), 실기기는 9a 와 같은 마지막 점검 묶음 | 1 | **쓰지 않음**(AI 의도 해석 없음) | ✗ — Android 인식은 서버 인식(6-4) `[가정]` | 9a 위에 얹는다. Nour 기기에서 VPN 켬/끔 각각 확인. 실패해도 9a 버튼은 계속 된다 |
 | **9c** 백업·옮기기 | 내보내기/가져오기, 담는 범위·키 제외(17-4) | 7, 새 휴대폰 | 쓰지 않음(오히려 이미 쓴 한도를 지킨다) | ○ | 9a·9b 와 독립 — 순서를 바꿔도 된다. 8b 부터 번역 캐시가 쌓이므로 늦을수록 잃을 것이 커진다 |
 | **10** 다른 무료 프로바이더 이어 쓰기 | 나머지 어댑터(`openai-compat` 계열 — OpenRouter `:free`·Mistral, 무료 티어가 있으면 xAI) + 사용자가 정한 순서로 소진 시 넘어가기(17절 표) | 5·6 | 한도를 **늘린다** | ✗ | 옛 10단계(나머지 어댑터)의 **목적을 "무료 한도 이어 쓰기"로** 명시. 같은 프로바이더 키 돌려쓰기 없음. 7b 결과가 `REGION` 이면 위 표대로 8a 전으로 당겨진다. 무료 티어가 없는 프로바이더(anthropic·openai 등 `[가정]`)는 1년간 넣지 않는다. `[신설 2026-10-04]` **선택지: 운영자 유료 키(17-6 B)** — 무료 한도가 모자라면 이 목록에 넣는다. 키 제한·월 예산 상한 필수 |
 | **11a** 이 문장/문단 설명 `[결정 2026-10-03]` | 버튼·음성 명령 "설명해줘"로 부를 때만, 결과를 띠 + 낭독(17-2 나) | 2 | **쓴다** — 1회 ≈ 낭독 번역 5,900자분 | ✗(캐시된 설명은 ○) | **사용자가 17-2 에서 정하기 전에는 시작하지 않는다.** 정해지면 9b 의 "여기 설명" 명령을 켠다 |

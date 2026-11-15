@@ -314,6 +314,10 @@ export default {
   // `[8m — spec 19-1-2 2-5]` 글자 체계로 문장마다 목소리 바꾸기
   'settings.tts.scriptSwitch': "Changer de voix selon l’écriture, phrase par phrase",
   'settings.tts.scriptSwitch.help': "Les phrases dans une autre écriture, comme le coréen ou l’arabe, sont lues avec la voix de cette langue. Les phrases mixtes utilisent la langue du livre, et celles déjà dans votre langue de traduction ne sont pas traduites.",
+  /* `[9a — spec 17-1-1]` boutons des écouteurs et de l’écran de verrouillage [검토 — Nour·운영자] */
+  'settings.tts.mediaKeys': "Boutons des écouteurs et de l’écran de verrouillage",
+  'settings.tts.mediaKeysHint': "Lecture, pause et phrase suivante avec le bouton des écouteurs ou la notification. Le titre du livre et la page s’affichent dans la notification et sur l’écran de verrouillage. Quand la lecture commence, la musique des autres applications s’arrête.",
+  'handsfree.pageOf': "Page {page} / {count}",
   /* `[8k — spec 19-1-2 3절]` 설정 > 낭독 목소리(언어 → 억양 → 이름). 성별은 표시하지 않는다(O-D7). */
   'settings.tts.voice.title': "Voix de lecture",
   'settings.tts.voice.phone': "Suivre les réglages du téléphone (par défaut)",

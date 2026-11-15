@@ -384,6 +384,26 @@ export const TTS = Object.freeze({
   USER_SCROLL_MS: 800
 });
 
+/* ────────────────────────────────────────────────────────
+   `[9a — spec 17-1-1]` 이어폰·잠금 화면 버튼(Media Session). 화면은 `ui/handsfree.js`, 배선은 `ui/controls.js`.
+   DB·algoVersion·캐시 키 무관 · 호출 0 · 오프라인 ○.
+   ──────────────────────────────────────────────────────── */
+export const HANDSFREE = Object.freeze({
+  /* 세션 잡기(6절 · 결정 9-D1 (나)) — 'audio' = 낭독 중 무음 `<audio loop>` 를 함께 틀어 Chrome 미디어 세션·알림을 만든다.
+     'none' = 핸들러·메타데이터만(오디오 0). 9a-0 실기기에서 두 기기 모두 "오디오 없이도 이어폰·알림이 온다"면 값만 'none'. */
+  SESSION: 'audio',
+  /* 무음 WAV — 8 kHz·8비트·모노, 10초 = 80,044 바이트. 5초 넘는 미디어만 "full" 포커스를 받는다(W1) → 여유 있게 10초. */
+  SILENT_SECONDS: 10,
+  SILENT_RATE: 8000,
+  /* 무음 진폭 — 8비트 PCM 의 0 은 128. 9a-0 의 "거의 안 들리는 소리"는 넣지 않았다 — 바꿀 때는 이 값(또는 생성기)만. */
+  SILENT_LEVEL: 128,
+  /* 이어폰·알림으로 멈췄을 때 화면을 더 켜 두는 시간(결정 9-D3). 화면 [⏸] 로 멈추면 쥐지 않는다. */
+  PAUSE_HOLD_MS: 300000,
+  /* 알림 위치 막대(결정 9-D7) — 'off' = `setPositionState` 를 부르지 않는다(기본 — 10초 반복 막대 위험은 실기기 점검 묶음).
+     'sentence' = 쪽 문장 진행(`{duration: 문장 수, position: index, playbackRate: 1}`). `seekto` 는 어느 쪽이든 걸지 않는다. */
+  POSITION: 'off'
+});
+
 /* 6-1 — 기호 소수(少數)만 읽기 쉬운 낱말로. 연속 대문자 약어는 건드리지 않는다.
  * 키는 **한 글자**이거나 짧은 기호 문자열이고, 치환은 앞뒤에 공백을 붙여 들어간다
  * ("≥4" → "greater than or equal to 4"). 원서 텍스트 자체는 바뀌지 않는다 —

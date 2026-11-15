@@ -316,6 +316,10 @@ export default {
   // `[8m — spec 19-1-2 2-5]` 글자 체계로 문장마다 목소리 바꾸기
   'settings.tts.scriptSwitch': "Switch voice by script, sentence by sentence",
   'settings.tts.scriptSwitch.help': "Sentences in a different script, such as Korean or Arabic, are read in that language's voice. Mixed sentences use the book's language, and sentences already in your translation language are not translated.",
+  /* `[9a — spec 17-1-1]` 이어폰·잠금 화면 버튼 — 알림 "쪽 n / m" · 설정 낭독 줄 */
+  'settings.tts.mediaKeys': "Earphone and lock-screen buttons",
+  'settings.tts.mediaKeysHint': "Play, pause and skip to the next sentence with your earphone button or the notification. The book title and page are shown in the notification and on the lock screen. When reading starts, music in other apps stops.",
+  'handsfree.pageOf': "Page {page} / {count}",
   /* `[8k — spec 19-1-2 3절]` 설정 > 낭독 목소리(언어 → 억양 → 이름). 성별은 표시하지 않는다(O-D7). */
   'settings.tts.voice.title': "Reading voice",
   'settings.tts.voice.phone': "Follow phone settings (default)",

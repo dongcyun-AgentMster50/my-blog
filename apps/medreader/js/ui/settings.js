@@ -695,7 +695,8 @@ export function initSettingsScreen() {
     howToBody: q('aiVoiceHowToBody'),
     voiceLangs: q('ttsVoiceLangs'),   // `[8k]` 낭독 목소리 — 없으면(반쪽 캐시) 그리지 않는다
     readCitations: null,     // `[8h-1]` 아래 buildCitationsRow 가 만든다(정적 HTML 은 import map 만 고친다)
-    scriptSwitch: q('ttsScriptSwitch')   // `[8m]` 글자 체계로 문장마다 목소리 — 없으면(반쪽 캐시) 그리지 않는다
+    scriptSwitch: q('ttsScriptSwitch'),  // `[8m]` 글자 체계로 문장마다 목소리 — 없으면(반쪽 캐시) 그리지 않는다
+    mediaKeys: null          // `[9a]` 아래 buildMediaKeysRow 가 만든다(정적 HTML 은 import map 만 고친다)
   };
   // 반쪽 캐시(옛 index.html + 새 JS) — 그릇이 없으면 조용히 물러난다. 던지지 않는다.
   if (!els.keyInput || !els.verifyBtn || !els.testBtn) { els = null; return; }
@@ -732,6 +733,13 @@ export function initSettingsScreen() {
       settings.set('tts.scriptSwitch', !!els.scriptSwitch.checked).catch(() => { });
     });
   }
+  // `[9a — spec 17-1-1 6 · 결정 9-D8]` 이어폰·잠금 화면 버튼. 리더에 들어올 때 읽는다(설정 화면은 리더 밖 — 돌아가면 따른다).
+  els.mediaKeys = buildMediaKeysRow(root.querySelector('#settingsVoices'));
+  if (els.mediaKeys) {
+    els.mediaKeys.addEventListener('change', () => {
+      settings.set('tts.mediaKeys', !!els.mediaKeys.checked).catch(() => { });
+    });
+  }
   if (els.voiceLangs) { els.voiceLangs.addEventListener('change', onVoicePick); els.voiceLangs.addEventListener('click', onVoicePick); }
   els.keyInput.addEventListener('input', paintFormatWarning);
   els.consentCheck.addEventListener('change', () => { if (els.consentCheck.checked) els.consentHint.hidden = true; });
@@ -764,6 +772,36 @@ function buildCitationsRow(card) {
   help.setAttribute('data-i18n', 'settings.tts.readCitations.help');
   card.appendChild(row);
   card.appendChild(help);
+  applyTranslations(card);
+  return box;
+}
+
+/**
+ * `[9a — spec 17-1-1 6 · 8]` 낭독 목소리 카드에 "이어폰·잠금 화면 버튼" 한 줄(기본 켬)과 설명(잠금 화면에 책 제목이 보인다)을 만든다.
+ * 글자 체계 줄(`[8m]`) 설명 바로 뒤 — 없으면(반쪽 캐시) 목소리 목록 앞, 그것도 없으면 카드 끝. 카드가 없으면 만들지 않는다.
+ * @returns {HTMLInputElement|null}
+ */
+function buildMediaKeysRow(card) {
+  if (!card) return null;
+  const old = card.querySelector('#ttsMediaKeys');
+  if (old) return old;
+  const row = document.createElement('div');
+  row.className = 'consent-row';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.id = 'ttsMediaKeys';
+  const label = document.createElement('label');
+  label.setAttribute('for', 'ttsMediaKeys');
+  label.setAttribute('data-i18n', 'settings.tts.mediaKeys');
+  row.appendChild(box);
+  row.appendChild(label);
+  const help = document.createElement('p');
+  help.className = 'muted';
+  help.setAttribute('data-i18n', 'settings.tts.mediaKeysHint');
+  const after = card.querySelector('[data-i18n="settings.tts.scriptSwitch.help"]');
+  const before = after ? after.nextSibling : card.querySelector('#ttsVoiceLangs');
+  card.insertBefore(row, before || null);
+  card.insertBefore(help, row.nextSibling);
   applyTranslations(card);
   return box;
 }
@@ -844,6 +882,7 @@ function paintAll() {
   els.onDevice.checked = settings.get('ai.useOnDevice') !== false;
   if (els.readCitations) els.readCitations.checked = settings.get('tts.readCitations') === true;
   if (els.scriptSwitch) els.scriptSwitch.checked = settings.get('tts.scriptSwitch') !== false;
+  if (els.mediaKeys) els.mediaKeys.checked = settings.get('tts.mediaKeys') !== false;
   renderReadalongRow(els.readalongHost);
   paintTarget();
   paintVoiceText();

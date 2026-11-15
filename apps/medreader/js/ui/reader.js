@@ -1740,6 +1740,9 @@ export function markDone(lineId, on) {
 
 export function currentPage() { return { docId: state.docId, page: state.page, pageCount: state.pageCount }; }
 
+/** `[9a — spec 17-1-1 5]` 지금 열린 문서의 제목(리더 머리와 같은 값 — `title || fileName`). 이어폰·잠금 화면 알림이 읽는다. */
+export function docTitle() { return (state.doc && (state.doc.title || state.doc.fileName)) || ''; }
+
 /* ────────────────────────────────────────────────────────
    `[8g-4a — spec 17-8-12 §4-3 · §4-5]` 검색이 쓰는 계약 — 읽던 자리 · 지금 화면 · 결과로 굴리기
    ──────────────────────────────────────────────────────── */

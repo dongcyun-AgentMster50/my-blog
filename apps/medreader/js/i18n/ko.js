@@ -314,6 +314,10 @@ export default {
   // `[8m — spec 19-1-2 2-5]` 글자 체계로 문장마다 목소리 바꾸기
   'settings.tts.scriptSwitch': "글자를 보고 문장마다 목소리 바꾸기",
   'settings.tts.scriptSwitch.help': "한국어·아랍어처럼 글자가 다른 문장은 그 언어 목소리로 읽습니다. 섞인 문장은 원서 언어로 읽고, 번역 언어와 같은 문장은 번역하지 않습니다.",
+  /* `[9a — spec 17-1-1]` 이어폰·잠금 화면 버튼 — 알림 "쪽 n / m" · 설정 낭독 줄 */
+  'settings.tts.mediaKeys': "이어폰·잠금 화면 버튼으로 조작",
+  'settings.tts.mediaKeysHint': "이어폰 단추나 알림으로 재생·멈춤·다음 문장을 조작합니다. 알림과 잠금 화면에 책 제목과 쪽이 보입니다. 낭독을 시작하면 다른 앱의 음악이 멈춥니다.",
+  'handsfree.pageOf': "쪽 {page} / {count}",
   /* `[8k — spec 19-1-2 3절]` 설정 > 낭독 목소리(언어 → 억양 → 이름). 성별은 표시하지 않는다(O-D7). */
   'settings.tts.voice.title': "낭독 목소리",
   'settings.tts.voice.phone': "휴대폰 설정 따름 (기본)",

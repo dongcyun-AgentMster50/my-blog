@@ -29,7 +29,9 @@ import {
   // `[8l]` 스캔본 문서의 ▶ 갈래(spec 17-5-1 3)
   docScanVerdict,
   // `[8d]` 문장 아래 번역(spec 7-7-1) — 줄 찾기·DOM 을 새로 붙인 알림
-  lineElement, onPageRepaint
+  lineElement, onPageRepaint,
+  // `[9a]` 이어폰·잠금 화면 알림의 제목(spec 17-1-1 5)
+  docTitle
 } from './reader.js';
 import { blocksPlay } from '../text/scan.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
@@ -46,6 +48,8 @@ import { SUPPORTED_SRC } from '../text/lang.js';
 import { initTrBand } from './trband.js';
 // `[8d]` 문장 아래 번역(7-7-1) — 같은 readalong·speaker 를 넘긴다(요청하지 않는 화면 — pipeline 을 모른다).
 import { initInlineTr } from './inlinetr.js';
+// `[9a]` 이어폰·잠금 화면 버튼(Media Session — spec 17-1-1). speaker 공개 함수와 `pressPlay()` 만 부른다.
+import { createHandsfree } from './handsfree.js';
 
 let els = null;
 let speaker = null;
@@ -57,6 +61,8 @@ let readalong = null;
 let trband = null;
 /** `[8d]` 문장 아래 번역 — `sync()` · `willShow(u)`(보이기 직전) · `leave()`. */
 let inlinetr = null;
+/** `[9a]` 이어폰·잠금 화면 버튼 — `arm()`(쪽이 그려질 때) · `disarm()`(리더를 떠남) · `refreshMeta()` · `debug()`. */
+let handsfree = null;
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -145,13 +151,9 @@ export function initControls() {
 
   /* ── 버튼 ──────────────────────────────────────────
      ★ 6-4 (5) — 재생은 **핸들러 안에서 동기적으로** `speak()` 까지 간다.
-     `play()` 앞에 `await` 를 두면 안드로이드에서 소리가 나지 않는다. */
-  els.play.addEventListener('click', () => {
-    const s = speaker.getState();
-    if (s === 'speaking') speaker.pause();
-    else if (scanPlayBlocked(speaker, docScanVerdict())) noReadNotice();   // `[8l]` 스캔본 — 넘기지 않고 안내, idle 그대로
-    else { syncReadalong(); speaker.play(); }     // 8b-1 — 설정값을 동기적으로 다시 읽고(await 없음) 곧장 재생
-  });
+     `play()` 앞에 `await` 를 두면 안드로이드에서 소리가 나지 않는다.
+     `[9a]` 본문은 `pressPlay()` — 이어폰·알림의 재생도 같은 함수를 부른다(spec 17-1-1 4). */
+  els.play.addEventListener('click', pressPlay);
   els.prev.addEventListener('click', () => speaker.prev());
   els.next.addEventListener('click', () => speaker.next());
 
@@ -262,6 +264,26 @@ export function initControls() {
     }
   });
 
+  /* ── `[9a — spec 17-1-1]` 이어폰·잠금 화면 버튼 ─────────────
+     기능 감지(`'mediaSession' in navigator`)는 여기 한 번 — 없으면 handsfree 가 전부 no-op. 위 6-4 hidden 핸들러는
+     그대로다(바꾸지 않는다). 숨김 중 액션은 handsfree 가 무시하고, 숨겨지면 멈춤 유지 잠금만 푼다(아래 줄).
+     걸기는 쪽이 그려질 때(리더 들어옴·쪽·문서 바뀜 — 메타데이터 "쪽 n / m"), 풀기는 `leaveControls()`. */
+  handsfree = createHandsfree({
+    mediaSession: (typeof navigator !== 'undefined' && 'mediaSession' in navigator) ? navigator.mediaSession : null,
+    MediaMetadata: (typeof window !== 'undefined' && typeof window.MediaMetadata === 'function') ? window.MediaMetadata : null,
+    makeAudio: makeSilentAudio,
+    isHidden: function () { return document.visibilityState === 'hidden'; },
+    speaker: speaker,
+    pressPlay: pressPlay,
+    meta: function () { const p = currentPage(); return { title: docTitle(), page: p.page, pageCount: p.pageCount }; },
+    // 멈춤 유지(9-D3) — handsfree 가 **자기 sentinel** 로 쥔다(speaker 의 wakeLock 과 섞지 않는다). `tts.wakeLock` 검사는 양쪽에.
+    holdWakeLock: function () { return requestWakeLock(); },
+    getSetting: settings.get
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') handsfree.onHidden(); });
+  onPageRender(() => { handsfree.arm(); });
+  onLangChange(() => { handsfree.refreshMeta(); });
+
   onLangChange(() => { paintBar(); paintRatePanel(); paintProgress(lastProgress.index, lastProgress.total); syncNoticeVoice(); });
   // `[8k]` 설정 > 낭독 목소리를 바꿨다 — 세 경로를 다시 고른다(settings.js 가 저장한 뒤 보낸다).
   document.addEventListener('medreader:voicepref', onVoicePref);
@@ -309,7 +331,9 @@ function attachDebugHook() {
     readalong: function () {
       const st = readalong.stats();
       return { mode: readalong.mode(), remote: readalong.remoteState(), calls: st.calls, chars: st.chars, maxInflight: st.maxInflight };
-    }
+    },
+    // `[9a]` 이어폰·잠금 화면 버튼 — 걸림·상태·무시 수·focusFights(키·원문·제목 없음).
+    handsfree: function () { return handsfree ? handsfree.debug() : null; }
   };
 }
 
@@ -372,6 +396,17 @@ export function scanPlayBlocked(sp, verdict) {
   return blocksPlay(verdict, { state: sp.getState(), empty: typeof sp.isQueueEmptyHere === 'function' && sp.isQueueEmptyHere() });
 }
 
+/**
+ * `[9a — spec 17-1-1 4]` [▶] 의 본문 — 화면 버튼과 이어폰·알림(`ui/handsfree.js` 의 `play`·`pause` 토글)이 **같은 함수**를 부른다.
+ * ★ 6-4 (5) — **동기**로 `speaker.play()` 까지 간다(앞에 `await` 없음).
+ */
+function pressPlay() {
+  const s = speaker.getState();
+  if (s === 'speaking') speaker.pause();
+  else if (scanPlayBlocked(speaker, docScanVerdict())) noReadNotice();   // `[8l]` 스캔본 — 넘기지 않고 안내, idle 그대로
+  else { syncReadalong(); speaker.play(); }     // 8b-1 — 설정값을 동기적으로 다시 읽고(await 없음) 곧장 재생
+}
+
 /** `reader.scan.noRead` 한 번 — 누를 때마다(닫은 뒤 다시 누르면 다시). 세션당 1회 규칙(`notice`)을 타지 않는다. */
 function noReadNotice() {
   document.dispatchEvent(new CustomEvent('medreader:banner', { detail: { key: 'reader.scan.noRead', tone: 'warn' } }));
@@ -381,6 +416,7 @@ function noReadNotice() {
 export function leaveControls() {
   if (!speaker) return;
   speaker.stop();
+  if (handsfree) handsfree.disarm();     // `[9a]` 핸들러·알림·무음 오디오·멈춤 유지 잠금을 거둔다
   if (readalong) readalong.setActive(false);
   if (trband) trband.leave();
   if (inlinetr) inlinetr.leave();
@@ -610,6 +646,17 @@ function requestWakeLock() {
   if (typeof navigator === 'undefined' || !navigator.wakeLock) return Promise.resolve(null);
   if (settings.get('tts.wakeLock') === false) return Promise.resolve(null);
   return navigator.wakeLock.request('screen');
+}
+
+/**
+ * `[9a — spec 17-1-1 6]` 세션 잡기용 무음 오디오. 바이트는 handsfree 의 `silentWav` — 파일 없이, 외부 요청 없이.
+ * 주소(`blob:`)는 이 탭 동안 하나를 같이 쓴다(80 KB — 리더를 오갈 때마다 다시 만들지 않는다).
+ */
+let silentUrl = null;
+function makeSilentAudio(bytes) {
+  if (typeof Audio !== 'function' || typeof Blob !== 'function' || typeof URL === 'undefined' || !URL.createObjectURL) return null;
+  if (!silentUrl) silentUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+  return new Audio(silentUrl);
 }
 
 function makeUtterance(text) {

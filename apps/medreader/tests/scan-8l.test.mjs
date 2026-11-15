@@ -391,9 +391,12 @@ test('SC14 ★ ▶ — 스캔본 빈 쪽이면 막는다(쪽이 움직이지 않
 test('SC15 배선 — controls ▶ 는 scanPlayBlocked 뒤에 play · library attach 다음 판정 · 서재 배지 · reader 띠·빈 쪽 안내 · search 한 줄', () => {
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const c = strip(read('../js/ui/controls.js'));
+  // `[9a — spec 17-1-1 4]` [▶] 본문은 `pressPlay()` 로 빠졌다(이어폰·알림도 같은 함수) — 버튼은 그 함수를 그대로 건다.
   const click = c.slice(c.indexOf("els.play.addEventListener('click'"), c.indexOf("els.prev.addEventListener('click'"));
+  assert.match(click, /els\.play\.addEventListener\('click', pressPlay\);/);
+  const body = c.slice(c.indexOf('function pressPlay()'), c.indexOf('function noReadNotice()'));
   // 줄 끝 주석을 지우고 본다
-  const code = click.replace(/\/\/[^\n]*/g, '');
+  const code = body.replace(/\/\/[^\n]*/g, '');
   assert.match(code, /if \(s === 'speaking'\) speaker\.pause\(\);\s*else if \(scanPlayBlocked\(speaker, docScanVerdict\(\)\)\) noReadNotice\(\);\s*else \{ syncReadalong\(\); speaker\.play\(\); \}/);
   assert.match(c, /key: 'reader\.scan\.noRead'/);
   const l = strip(read('../js/ui/library.js'));

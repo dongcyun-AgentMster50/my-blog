@@ -8826,3 +8826,219 @@ Build 숫자를 쓰지 않았다. `r9a0/` 의 t1·t2·t3 은 고치지 않고 �
    - 글자 크기 설정이 글자만 키우는지, 페이지 전체를 확대하는지.
    - 그 설정에서 속도 단추가 한 줄로 남는지, 팝오버 가림이 얼마인지.
    - 4px 사이에서 엄지로 잘못 누르는지.
+
+# 9a Review — 이어폰·잠금 화면 버튼 · 배포 판정 (2026-11-15)
+
+> Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-9a-handsfree.md`. 기준 `63b62c2`. **커밋하지 않았다.** 앱·테스트·spec 은 고치지 않았다(변이는 되돌림 — 9aR-6).
+> 같은 작업 트리에서 9b-1 Build 가 돌고 있었다. `js/voice/*`·`tests/voice-*-9b.test.mjs` 는 열지도 고치지도 않았다. 그 파일 탓 실패는 따로 적고 판정에 넣지 않았다.
+> 운영자 방침(2026-11-15)대로 9a-0 결과 없이 기본값(`SESSION='audio'`·`POSITION:'off'`·진폭 128)을 전제로 봤다.
+
+## 9aR-1. 기존 동작 무변 (따질 것 1)
+
+- `tts/speaker.js` **0줄**(`git diff 63b62c2 --stat` 에 없음). `dev/`·이전 `review.md` 도 0줄.
+- 6-4 hidden 핸들러(controls 259–265)는 글자 그대로다. W1 이 그 블록 전체를 정규식으로 고정한다.
+- 9a 가 더한 `visibilitychange` 는 **별개의 한 줄**이고, 6-4 핸들러 **뒤에** 등록된다.
+  - 숨겨지면 6-4 가 먼저 `pause()` 한다. 그 `statechange` 로 무음 오디오가 멈춘다. 그다음 `onHidden()` 이 유지 잠금만 푼다.
+  - 순서가 다투지 않는다. headless 7b·7d 로 확인했다.
+- [▶] 본문을 `pressPlay()` 로 옮긴 것은 글자 그대로의 이동이다(`if speaking → pause / 스캔본 → 안내 / 아니면 syncReadalong + play`).
+  - 버튼은 `addEventListener('click', pressPlay)` 다. `pressPlay` 안에 `await`·`.then` 이 없다(W1).
+  - headless 에서 화면 [▶]·[⏸]·⏭·⏮·쪽 끝 8i-3·번역 단계·8d 가 모두 예전처럼 움직였다(9aR-4).
+- `index.html` 의 변경은 import map 도장뿐이다. 정적 HTML 은 0줄이다(설정 줄은 JS 가 만든다).
+- `tts.mediaKeys=false` 일 때(headless 16b):
+  - 새 `setActionHandler(…, fn)` 0번 · 메타데이터 없음 · `playbackState 'none'` · 새 `Audio` 0개.
+  - 낭독은 그대로 `speaking` 이다. 9a 전과 같다.
+  - handsfree 의 `statechange` 구독은 남지만 `armed=false` 라 곧장 돌아간다.
+
+## 9aR-2. 숨김 검사 · 무음 오디오 (따질 것 2·3)
+
+**숨김**
+- `actionFor(…, hidden=true)` 는 거는 액션 5개 모두 `'ignore'` 다. 핸들러는 speaker 를 부르지 않고 `ignored` 만 센다.
+- 1절의 빈틈(숨김 중 `play()` 가 그대로 읽음)을 이 파일이 막는다.
+- headless 결과:
+  - 7a: 숨김 상태지만 6-4 이벤트가 아직 오기 전에 ⏭·⏸·stop → 3번 모두 무시, 인덱스 그대로. 낭독은 6-4 이벤트가 올 때까지 계속된다(설계대로).
+  - 7b: 6-4 가 멈춘 뒤 ▶·⏭·⏮·⏸ → 상태 `paused` 그대로, 인덱스 그대로, 새 발화 0, `ignored` +4.
+  - 7c: 다시 보여도 자동 재개 0, 새 발화 0.
+
+**무음 오디오**
+- 첫 읽기에서만 만든다. 리더에 들어온 것만으로는 `Audio` 0개다(headless 1 · H5).
+- `disarm` 은 `removeAttribute('src')` + `load()` 를 한다. headless 13 에서 `src` 가 남은 요소 0, 오류 이벤트 0이었다.
+  - 요청 중 문서 주소를 다시 부른 것 0, 미디어 요청 0, `requestfailed` 0, ≥400 응답 0.
+- blob 주소는 하나를 다시 쓴다. headless 14: 서재로 나갔다 다시 들어와 재생하면 `Audio` 2개 · `createObjectURL(audio/wav)` **1번**.
+- 재동기화 상한(H6 · 변이 (d)):
+  - 같은 문장(쪽:인덱스)에서는 한 번만 다시 튼다(`resyncs`). 두 번째는 `focusFights` 로 센다.
+  - 거부는 `audioRejects` 로만 센다. headless 전 과정에서 셋 다 0이었다.
+
+## 9aR-3. H1–H10 내용 검토 · SC15 (따질 것 4·5)
+
+| # | 수용 기준과 맞나 | 약한 단언 |
+|---|---|---|
+| H1 | 상태 5 × 액션 5 × hidden 2 = 50칸 전수 + seek 3 `null` + `playbackStateOf` 5값 | 없음 |
+| H2 | 핸들러가 돌아온 **직후**(시계를 감기 전) `speaking`·`pressPlay` 1·`speak` 1·`audio.play` 1. pause 토글도 본다 | 테스트의 `pressPlay` 는 하네스 함수다. 진짜 controls `pressPlay` 의 동기성은 W1(본문에 `await`·`.then` 없음)·SC15 정규식이 맡는다. 둘을 합치면 충분하다 |
+| H3 | `tr` 단계 ⏭ → 다음 인덱스·`src`·다음 문장 원문 · 쪽 끝+읽는 중 → `waiting-page`·`goToPage` 1회·다음 쪽 첫 문장 · 쪽 끝+멈춤 → 인덱스·상태·`gotos 0` | 없음 |
+| H4 | 숨김 중 play·⏭·⏮(+⏸·stop) → speaker 호출 객체가 그대로·발화 수 그대로·`ignored` 3→5·유지 잠금 새로 0 | 없음 |
+| H5 | `none`→`playing`·play 1 → `waiting-page` 중 다시 안 틂 → `paused` → disarm: 핸들러 5개 `null`·`metadata null`·`none`·`src` 속성 없음·`load` 1 | 없음 |
+| H6 | 1회 다시 → 같은 문장 두 번째 `focusFights` 1 → 다음 문장 다시 1회 → 우리가 부른 pause 는 안 셈 | 가짜 오디오가 `pause` 이벤트를 **동기**로 낸다. 그래서 `selfPauses`(실제 브라우저의 늦은 이벤트용)를 지워도 통과한다 — 9aR-6 변이 h |
+| H7 | 액션 멈춤 `[300000]` 1회 · 5분−1ms 에는 안 풀림, 5분에 풀림 · 화면 [⏸] 0 · stop 액션도 1 · `tts.wakeLock=false` 0 · 1분 뒤 재생 → 풀림, 5분 더 감아도 두 번 안 풂 · 숨김·떠남에서 풀림 · 늦게 온 잠금도 풂 | 없음 |
+| H8 | 80,044 · 헤더 위치 6곳 · 8000 · 8비트 · 모노 · 데이터 전부 128 · 진폭 상수 · `HANDSFREE` 기본값·freeze | 없음 |
+| H9 | 제목·"Page 1 / 1967"·`MedReader`·아트워크 2 · linechange 두 번에 생성 0·`meta()` 호출 0 · 같은 쪽 다시 그림 0 · 쪽 바뀜·ar·ko 에만 새로 | 없음 |
+| H10 | mediaSession 없음 → 예외 0·오디오 0 · `mediaKeys=false` → `setActionHandler` 0 · 걸린 뒤 끄면 거둠 · `SESSION='none'` → 핸들러 5·오디오 0 · `MediaMetadata` 없음 → 메타만 생략 | 없음 |
+
+- **SC15**(`scan-8l`): 예전과 **같은 정규식**을 `pressPlay()` 본문에 건다. 여기에 "버튼이 `pressPlay` 를 그대로 건다" 단언을 하나 **더했다**. 약해지지 않았다.
+- **i18n 3키 × 4언어**
+  - fr·ko 는 실제 번역이다(영어 그대로가 아님 — H9 i18n 이 고정한다).
+  - ko 는 "이어폰·잠금 화면 버튼으로 조작", fr 는 "Boutons des écouteurs et de l’écran de verrouillage" 다.
+  - 네 언어 모두 설명에 "잠금 화면에 책 제목이 보인다"가 있다(13절 고지 대신).
+  - ar·fr 은 키 바로 위 주석에 `[검토 — Nour·운영자]` 가 있다. Build 보고는 "머리 주석"이라 했지만 실제 자리는 키 묶음 주석이다. 테스트도 그 자리를 본다.
+  - `handsfree.pageOf`: en·fr "Page {page} / {count}", ko "쪽 …", ar "صفحة …".
+
+## 9aR-4. headless Edge (확인 6)
+
+조건: 412×915 · ko → ar UI · ar 대상 · 가짜 키 · 흉내 음성 · 흉내 Gemini(OPTIONS 204) · 새 프로필 `r9a/p1` · 포트 9487 · CMDT 2026 150–155쪽.
+- 진짜 `navigator.mediaSession` 의 `setActionHandler` 를 감싸 핸들러를 잡고 직접 불렀다.
+- 숨김은 `visibilityState` 를 흉내 내고 `visibilitychange` 를 쐈다.
+- 스크립트 `r9a/hf.mjs`·`ar.mjs`, 출력 `r9a/hf-out3.txt`.
+- 첫 실행은 새 프로필의 추출이 150쪽까지 오기 전에 시험 쪽 대기(180초)가 넘었다. 프로필에 문서가 찬 뒤 다시 돌린 값만 적는다.
+
+| 단계 | 결과 |
+|---|---|
+| 1 리더 들어옴([▶] 전) | 핸들러 5개(play·pause·previoustrack·nexttrack·stop) · seek 0 · 메타 "쪽 150 / 1,967"·MedReader·아이콘 2(`icons/icon-192.png`·`512`) · `none` · 오디오 none · `metaBuilds` 1 |
+| 2 화면 [▶] | `speaking` · `playing` · 무음 오디오 playing · blob 1 |
+| 3 pause 핸들러 | `paused` · `paused` · 오디오 paused · 유지 잠금 holding |
+| 4 play 핸들러 | `speaking` · 유지 잠금 풀림 |
+| 5 ⏭ / ⏮ | 인덱스 1 → 2 → 1 |
+| 6 화면 [⏸] | `paused` · 오디오 paused · 유지 잠금 **0**(holds 증가 0) |
+| 7 숨김 | 9aR-2. 7d: 액션 멈춤으로 쥔 유지 잠금이 숨김에 풀림(true → false) |
+| 8 쪽 끝 ⏭ (8i-3) | 59문장 끝에서 ⏭ → 151쪽 · `speaking` · 넘김 뒤 첫 문장 발화 **1번**(두 번 읽지 않음) · 메타 "쪽 151 / 1,967"(`metaBuilds` 2 — 쪽마다 1) |
+| 9 띠(8b-2) | `<html data-tr-band="on">` · 띠 글자 181자 · 흉내 Gemini 호출 2 |
+| 10 번역 낭독(speak) | `tr` 단계에서 ⏭ → 인덱스 1→2 · `src` · `speaking` |
+| 11 8d 문장 아래 | `data-tr-inline=on` · 블록 56 · 현재 블록 1 |
+| 12 UI ar | artist "صفحة 151 / 1,967" |
+| 13 서재로 나감 | 핸들러 0 · metadata null · `none` · 오디오 none · `src` 남은 요소 0 · armed false · 유지 잠금 false |
+| 14 다시 들어와 [▶] | `playing` · Audio 2 · blob **1** · 핸들러 5 |
+| 15 늦은 쪽 그리기 | 리더로 가자마자 0·30·120·300ms 뒤 서재로 나감 → 4번 모두 4초 뒤 armed false·핸들러 0·메타 없음 |
+| 16 설정 줄 | `#settingsVoices` 안 · 글자 체계 설명 바로 뒤 · 체크(켬) · 라벨 "이어폰·잠금 화면 버튼으로 조작" · 설명 83자 · 1개 · 가로 넘침 0 → 끄기 → 리더 [▶]: 9aR-1 → 다시 켜기 → 핸들러 5 |
+| ar 설정 줄 | `dir=rtl` · 줄·설명 오른쪽 끝 379px(카드 안) · 넘침 0 · 리더 [▶] `playing`·"صفحة 150 / 1,967" (캡처 `r9a/shots/settings-mediakeys-412-ar.png`) |
+| 17 디버그 훅 | 키 16개(actions·armed·audio·…·supported) — 제목·원문·키 없음 |
+| setPositionState | 0회(9-D7 기본 `'off'`) |
+| 콘솔 오류 · 페이지 오류 | 0 · 0 |
+| 바깥 요청 | pdf.js CDN 2개(기존)와 가로챈 Gemini 뿐 |
+
+- **데스크톱 툴바 글로벌 미디어 컨트롤**(제목·"쪽 n / m"·아이콘 모양, 키보드 미디어 키, 탭 숨김, 서재로 나가면 사라짐)은 headless 라 **못 봄**. 실기기 묶음 보완 2 에 넣었다.
+- 실제 화면 Wake Lock 유지 여부도 headless 로는 못 본다. 본 것은 `holding` 기록뿐이다.
+
+## 9aR-5. 코드 검토 메모
+
+- import 방향: `ui/handsfree.js` → `config`·`i18n` 만 가져온다. 전역·`await` 0(W2). speaker 공개 함수만 부른다(`play` 는 `pressPlay`).
+- `leaveControls` 순서: `speaker.stop()` → `disarm()`. `stop` 의 `statechange` 로 `none`·오디오 멈춤, 그 뒤 `src` 제거.
+- 늦은 렌더 이론: `leaveReaderNow()` 는 `renderToken` 을 올리지 않는다. 그래서 떠난 뒤 끝난 렌더가 `notifyPage` → `arm()` 을 부를 이론상 길이 있다(이 길은 9a 전부터 있었고, `speaker.reload` 도 같다).
+  - headless 4가지 타이밍에서는 재현 0이었다(9aR-4 15).
+  - 걸려도 오디오가 없어 세션이 활성화되지 않는다. 기록만 해 둔다.
+- `selfPauses` 는 "우리가 부른 pause 의 이벤트가 늦게 오는" 실제 브라우저 경쟁을 막는 줄이다. 대부분은 `isReading` 검사가 덮는다(9aR-6 h).
+
+## 9aR-6. 내 변이 7개 (`r9a/mutate.mjs`, Build (a)–(f) 와 다른 것)
+
+- 실행 범위: `handsfree-9a` + `scan-8l`(35개).
+- 복원: 원본 바이트를 읽어 백업 `r9a/bak/{handsfree,controls}.js` 에 둔 뒤 그대로 써서 되돌렸다.
+  - 스크립트 안 `Buffer.compare` 2/2 같음, 따로 `cmp` 2/2 같음.
+  - `git diff --stat` 도 변이 전과 같다(controls 65줄, handsfree 미추적 그대로).
+  - 변이 구간은 약 3.5초다. 그동안 9b-1 쪽 실행과 겹쳤다면 잠깐 빨강을 봤을 수 있다.
+
+| # | 변이 | 결과 |
+|---|---|---|
+| g | 재생(`statechange` 읽는 중)에서 유지 잠금을 풀지 않음 | 빨강 H7 |
+| h | `pauseAudio` 의 `selfPauses++` 삭제 | **살아남음** — 발견 2 |
+| i | `disarm` 의 `removeAttribute('src')` → `src=''` | 빨강 H5·H10 |
+| j | `isReading` 에서 `waiting-page` 를 뺌 | 빨강 H1·H3·H5 |
+| k | `arm()` 의 `tts.mediaKeys` 검사 삭제 | 빨강 H10 |
+| l | controls `makeSilentAudio` 의 blob 주소 재사용 삭제 | **살아남음** — 발견 3(headless 14 가 동작은 확인) |
+| m | controls 의 숨김 → `onHidden()` 줄 삭제 | 빨강 W1(소스 정규식). 동작은 H7 이 `onHidden()` 직접 호출로 본다 |
+
+## 9aR-7. 발견 사항
+
+### 상 · 중 — 없음
+
+### 하 (3건)
+
+1. **데스크톱 Chrome 툴바 미디어 컨트롤 `[D]` 는 Build·Review 모두 못 봤다**(headless).
+   - 9절 `[D]` 첫 줄이 미확인 상태로 남는다.
+   - 운영자 데스크톱에서 1분이면 된다(보완 2).
+2. **변이 h 가 살아남는다** — H6 의 가짜 오디오가 `pause` 이벤트를 동기로 낸다.
+   - 실제 브라우저의 늦은 이벤트(액션 멈춤 직후 곧바로 재생)를 흉내 내지 못한다.
+   - 실해는 낮다(`isReading` 검사가 대부분을 덮는다).
+   - 다음에 테스트를 고칠 때: 가짜 오디오에 "이벤트를 나중에" 갈래를 두고, "액션 ⏸ → 같은 틱 ▶ → 늦은 pause 이벤트" 에서 `resyncs` 0 을 단언한다.
+3. **변이 l 이 살아남는다** — blob 재사용(지침의 "blob 한 개 재사용")을 node 테스트가 보지 않는다.
+   - headless 14 로 동작은 확인했다.
+   - W1 에 `if (!silentUrl)` 정규식 한 줄이면 고정된다.
+
+### 정보
+
+- 숨김 상태인데 6-4 이벤트가 아직 오지 않은 사이의 액션은 무시된다. 낭독은 그 이벤트가 멈춘다(7a) — 설계대로.
+- 늦은 렌더로 다시 걸릴 이론상 길(9aR-5) — 재현 0, 해 낮음.
+- `handsfree.js` 392줄(추정 200–250)은 Build 정정 (10)에 이미 적혀 있다.
+
+## 9aR-8. 실기기 점검 묶음 보완 (확인 8)
+
+Build 보고서 7절(1–13)을 17-1-1 9절 `[M]`·7절 9a-0 판정 규칙과 맞춰 봤다.
+- `[M]` Fold 7 의 9항목과 Nour 의 4항목은 모두 들어 있다(3–9·13).
+- 9a-0 로 먼저 볼 두 값(1 W2·`SESSION`, 2 9-D7 위치 막대)도 들어 있다.
+- 포커스 다툼(9a-0 C)은 6, 진폭은 10 이다.
+
+**더할 것:**
+
+1. **9a-0 판정 규칙을 그대로 적용** — 1(W2)은 "두 기기 **모두**" 일 때만 `'none'` 후보다. Nour 의 모드 1(A1) 결과가 필요하다(9a-0 정정 (6)).
+   - 9a-0 C(2분)에서 포커스 다툼 ≥ 1 이나 발화 끊김 ≥ 1 이면 (나) 보류 → 운영자. 지금 묶음 6 의 "10분 끊김 0" 앞에 이 기준을 붙인다.
+2. **데스크톱 Chrome `[D]`**: [▶] 뒤 툴바 미디어 컨트롤에 제목·"쪽 n / m"·아이콘 · ⏭ = 다음 문장 · ⏯ = 멈춤/재생 · 키보드 미디어 키 · 탭을 숨기면 멈춤 · 서재로 나가면 컨트롤이 사라짐.
+3. **서재로 나가면 Android 알림이 사라지는가** — `removeAttribute('src')`+`load()` 가 실기기에서 알림을 거두는지는 `[가정]`(출처 C).
+4. **리더에 들어와 [▶] 전**(세션 없음) 이어폰 단추 → 음악 앱이 켜지는지 기록한다(W2). 켜지면 안내 문구 거리다(첫 재생은 화면 [▶]).
+5. **알림 ⏯ 그림이 실제와 반대인 순간이 있나**(9-D4 토글의 대가) — 특히 쪽 넘김(`waiting-page`)·번역 대기(`tr-wait`) 중.
+6. **다른 소리가 끼어든 뒤** — 메신저 알림음·전화가 끝난 뒤 낭독·무음 오디오·알림 상태. 원격 디버깅이 되면 `resyncs`·`focusFights`·`audioRejects`.
+7. **퀴즈 해설 [읽기] 중 이어폰 단추**가 리더 낭독을 건드리지 않는가(리더만 — 13절).
+8. 블루투스 연결이 낭독 내내 "재생 중"인 것의 배터리 체감(3절 (나)의 대가) — 메모만.
+
+## 9aR-9. 전체 테스트 · stamp · 정리 (확인 9)
+
+**작업 트리 그대로(9b-1 진행 중)**
+- 전체 `node --test apps/medreader/tests/*.test.mjs` 2회:
+  - 1회차(변이 전): **1404/1410**, fail 6.
+  - 2회차(변이·복원 뒤): **1430/1435**, fail 5. 9b-1 이 테스트를 더해 수가 늘었다.
+- 실패는 모두 9b-1 탓이다.
+  - `importmap` IM1·IM2·IM5·IM6·IM7b: 표에 없는 모듈이 `js/voice/commands.js`·`js/voice/listen.js` **둘뿐**이다. IM2 의 해시 불일치도 그 둘뿐이라 9a 모듈 해시는 맞다.
+  - 1회차의 `srclang-wiring-7c` W1(`voice/listen.js 'en-US'`)은 2회차에 사라졌다.
+  - 9a 테스트 19개와 SC15 는 두 번 모두 통과했다.
+- `stamp-importmap --check` 종료 1이다. 원인은 위 9b-1 모듈 둘(import map 밖)이다.
+
+**배포 범위(9a 파일만)로 확인**
+- `git archive 63b62c2 apps/medreader` 를 `r9a/tree` 에 풀고, 9a 파일 13개(앱 11 + 테스트 2)만 얹었다.
+- 결과: `--check` "그대로다(모듈 62개 · CSS 4개)" 종료 0 · 전체 테스트 **1410/1410**, fail 0.
+- 9b-1 새 모듈은 9a 배포에 영향이 없다.
+
+**그 밖**
+- `git diff --check` 종료 0. `.nojekyll` 있음(0바이트, 무변).
+
+**정리**
+- 8000번 python 은 그대로 썼고 끄지 않았다. 8123·8124·8125 는 건드리지 않았다. **프로세스 조회·디버깅 포트 찌르기는 하지 않았다.**
+- Edge 는 새 프로필 `r9a/p1` · 포트 9487 로 띄웠다. 모든 실행이 `finally` 의 `browser.close()` 를 지났고 상한은 `timeout` + 스크립트 안 5–9분이다.
+- 프로필 `r9a/p1`·트리 `r9a/tree` 는 `rm -rf` 금지라 남겼다.
+- 막힌 명령 0. C: 남은 공간 136GB. 원서 문장은 기록하지 않았다(길이·개수만). 캡처에는 앱 화면만 보인다.
+
+## 9aR-10. 배포 판정 · 운영자 몫
+
+1. **배포해도 된다(9a 파일만).**
+   - 기존 동작이 무변이다: speaker 0줄, 6-4 0줄, [▶] 이동이 글자 그대로다.
+   - 숨김 빈틈을 막았다. 무음 오디오는 정리·재사용·오류 요청 0이다.
+   - H1–H10 이 수용 기준과 맞고, 배포 범위 트리에서 1410/1410 · `--check` 0 이다.
+   - 하 3건은 테스트 보강·미확인 기록이다. 배포를 막지 않는다.
+2. 커밋할 것(9a)
+   - 앱: `index.html`·`js/config.js`·`js/settings.js`·`js/i18n/{ar,en,fr,ko}.js`·`js/ui/{controls,reader,settings,handsfree}.js`
+   - 테스트: `tests/handsfree-9a.test.mjs`·`tests/scan-8l.test.mjs`
+   - 이 review.md
+   - `.claude/tasks/medreader-{build-9a-handsfree,build-9a-report,review-9a-handsfree}.md`
+   - `spec.md`: 지금 diff 에는 9a 정정 외에 9b Plan 변경도 섞여 있다. 함께 넣을지는 오케스트레이터가 정한다.
+3. 커밋하지 않을 것
+   - 9b-1: `js/voice/`·`tests/voice-*-9b.test.mjs`·9b 지침·보고.
+   - `.codex/`·`AGENTS.md`·`medreader-status-2026-11-02.html`(`git add -A` 금지). `.nojekyll` 그대로.
+   - ★ **지금 작업 트리에서 `stamp-importmap` 을 다시 돌리지 말 것** — `js/voice/*` 가 표에 들어간다. 9a 커밋은 지금 `index.html` 그대로가 맞다(배포 범위 트리에서 `--check` 0).
+4. 운영자 몫
+   - 데스크톱 `[D]` 확인(보완 2).
+   - 9a-0 두 값(W2·9-D7)을 먼저 본다 — 결과에 따라 `HANDSFREE.SESSION`·`POSITION` 값만 바꾼다.
+   - 그다음 실기기 묶음(Build 7절 1–13 + 9aR-8 1–8).
