@@ -156,6 +156,11 @@ export default {
   'reader.typeset.aa': 'Aa',
   'reader.typeset.open': 'Text settings',
   'reader.typeset.title': 'Reading display',
+  /* `[8e — spec 12-8-1]` 낮은 화면(가로) 상단바 [≡] · Aa 팝오버 전체 화면 */
+  'reader.chrome.open': 'Show menu',
+  'reader.chrome.close': 'Hide menu',
+  'reader.fullscreen.on': 'Full screen',
+  'reader.fullscreen.off': 'Exit full screen',
   'reader.typeset.fontSize': 'Text size',
   'reader.typeset.lineHeight': 'Line spacing',
   'reader.typeset.letterSpacing': 'Letter spacing',

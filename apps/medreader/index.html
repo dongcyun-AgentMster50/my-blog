@@ -51,10 +51,10 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/icon-maskable-192.png">
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
-<link rel="stylesheet" href="css/tokens.css?v=184b4c8ac4">
+<link rel="stylesheet" href="css/tokens.css?v=7ff71180ec">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
 <link rel="stylesheet" href="css/screens.css?v=492dcd0b3d">
-<link rel="stylesheet" href="css/reader.css?v=3e452bb213">
+<link rel="stylesheet" href="css/reader.css?v=a393b17f3d">
 <script type="importmap">
 {
   "imports": {
@@ -67,14 +67,14 @@
     "./js/ai/provider.js": "./js/ai/provider.js?v=48d1929564",
     "./js/ai/readalong.js": "./js/ai/readalong.js?v=d8b1511ad4",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
-    "./js/config.js": "./js/config.js?v=7759fdb95e",
+    "./js/config.js": "./js/config.js?v=1795c8a7e8",
     "./js/db.js": "./js/db.js?v=726d46e5c0",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=38a69264d9",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=8b37c21a55",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=54ee424bee",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=d2c8a2fd13",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=4aad60297c",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=2e95fd3a7e",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=3b387df65e",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=a725f2f7e6",
     "./js/main.js": "./js/main.js?v=4397e74713",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -107,6 +107,7 @@
     "./js/tts/voices.js": "./js/tts/voices.js?v=67fb29c15a",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
+    "./js/ui/chrome.js": "./js/ui/chrome.js?v=ebc3657eb9",
     "./js/ui/controls.js": "./js/ui/controls.js?v=8019c7c1b5",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
     "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=d7e7d7ad7f",
@@ -115,11 +116,11 @@
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=a9b1f7c3f5",
     "./js/ui/quiz.js": "./js/ui/quiz.js?v=f9cfebd1cf",
-    "./js/ui/reader.js": "./js/ui/reader.js?v=5d13897341",
+    "./js/ui/reader.js": "./js/ui/reader.js?v=a0e95174ea",
     "./js/ui/search.js": "./js/ui/search.js?v=201f6e6458",
     "./js/ui/settings.js": "./js/ui/settings.js?v=8d4344a5d6",
     "./js/ui/trband.js": "./js/ui/trband.js?v=102dcbf169",
-    "./js/ui/typeset.js": "./js/ui/typeset.js?v=9df6aeb8cd",
+    "./js/ui/typeset.js": "./js/ui/typeset.js?v=2ccd2e6cd1",
     "./js/ui/voice.js": "./js/ui/voice.js?v=4e91faa4bd",
     "./js/voice/commands.js": "./js/voice/commands.js?v=a5507bc3f4",
     "./js/voice/listen.js": "./js/voice/listen.js?v=194d4c7d9c"
@@ -450,6 +451,14 @@
         </div>
       </div>
 
+      <!-- `[8e — spec 12-8-1 (6) · 8e-D8]` 전체 화면 — 세로·가로 모두, 사용자 탭 안에서만 들어간다. 저장하지 않는다
+           (다음 실행에 저절로 들어가지 않는다). API 가 없으면 줄이 숨는다. 글자·aria-pressed 는 `ui/typeset.js` 가 맞춘다. -->
+      <div class="typeset-row fullscreen-row" id="tsFullscreenRow" hidden>
+        <div class="typeset-choices">
+          <button type="button" id="tsFullscreen" aria-pressed="false" data-i18n="reader.fullscreen.on"></button>
+        </div>
+      </div>
+
       <button type="button" class="primary" id="tsClose" data-i18n="common.close"></button>
     </div>
 
@@ -475,6 +484,13 @@
       </div>
     </div>
 
+    <!-- `[8e — spec 12-8-1 (2) · 8e-D2]` 하단 두 바의 공통 상자. 고지 바로 위에 fixed 로 앉는다.
+         보통(세로·폴드 펼침)은 세로 흐름 — 낭독 바 위, 쪽 이동 바 아래, 사이 `--tts-gap` — 이라 예전과 픽셀이 같다.
+         낮은 화면(compact, 높이 ≤ 520)에서만 한 줄: `[≡]` · 낭독 무리 · 쪽 무리(논리 순서 — 아랍어에서 저절로 거울).
+         id·`data-nav`·리스너는 그대로다(장치 하나 — 배치만 CSS 가 바꾼다). [≡] 는 compact 에서만 보인다(`ui/chrome.js`). -->
+    <div class="reader-dock" id="readerDock">
+    <button type="button" class="chrome-toggle" id="chromeToggle" aria-expanded="false"
+            data-i18n-aria="reader.chrome.open"><span aria-hidden="true">≡</span></button>
     <!-- 12-3 하단 컨트롤 바. 쪽 이동 바 바로 위에 앉는다(겹치지 않는다).
          ★ 방향을 가리키는 아이콘을 쓰지 않는다 — RTL 에서 뒤집을 수 없다(16-H).
          낱말은 전부 i18n 이고 순서는 논리 순서라 아랍어에서 저절로 거울이 된다. -->
@@ -489,6 +505,16 @@
               aria-controls="ttsRatePanel" data-i18n-aria="reader.tts.rate"></button>
       <!-- 12-3 — 본문을 다시 읽지 않는다. "줄 12/58" 만 알린다. -->
       <span class="tts-progress" id="ttsProgress" role="status" aria-live="polite"></span>
+    </div>
+
+    <!-- 쪽 이동 — 라우트가 정본이라 뒤로가기가 그대로 동작한다(12-1). -->
+    <nav class="pager" id="readerPager" data-i18n-aria="reader.page.nav">
+      <button type="button" id="pagePrev" data-i18n="reader.page.prev" data-i18n-aria="reader.page.prev"></button>
+      <input type="number" class="page-input" id="pageInput" inputmode="numeric"
+             data-i18n-aria="reader.page.input" value="1" min="1" step="1">
+      <span class="page-total" id="pageTotal"></span>
+      <button type="button" id="pageNext" data-i18n="reader.page.next" data-i18n-aria="reader.page.next"></button>
+    </nav>
     </div>
 
     <!-- 속도·낭독 단위·반복 팝오버 (12-3 · 5b)
@@ -556,15 +582,6 @@
         <button type="button" class="primary" id="ttsRateClose" data-i18n="common.close"></button>
       </div>
     </div>
-
-    <!-- 쪽 이동 — 라우트가 정본이라 뒤로가기가 그대로 동작한다(12-1). -->
-    <nav class="pager" id="readerPager" data-i18n-aria="reader.page.nav">
-      <button type="button" id="pagePrev" data-i18n="reader.page.prev" data-i18n-aria="reader.page.prev"></button>
-      <input type="number" class="page-input" id="pageInput" inputmode="numeric"
-             data-i18n-aria="reader.page.input" value="1" min="1" step="1">
-      <span class="page-total" id="pageTotal"></span>
-      <button type="button" id="pageNext" data-i18n="reader.page.next" data-i18n-aria="reader.page.next"></button>
-    </nav>
   </section>
 
   <!-- ════ 검색 (17-8-7 · 17-8-12 §4) — 8g-4a ══════════════

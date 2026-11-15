@@ -453,7 +453,9 @@ body[data-reader-view="original"] .scan-notice { flex: 0 0 auto; }
   /* `[10b]` 위아래 --sp-3(12) → --bar-pad(2). 안의 버튼·입력칸이 16-G 의
      48px 를 그대로 지키므로 바는 48 + 4 + 테두리 1 = --pager-h(53px). */
   padding-block: var(--bar-pad);
-  padding-inline: var(--sp-4);
+  /* `[8e — 8e-D10 정정]` --sp-4 → --sp-2. ko 쪽 이동 문구("이전 쪽"·"다음 쪽")가 360px 에서 4.4px 넘쳐 바가 두 줄(113px)이
+     됐다. 안의 무리는 가운데 정렬이라 한 줄에 들어가는 동안은 좌우 여백을 줄여도 픽셀이 같다(en·ar 전후 비교 0). */
+  padding-inline: var(--sp-2);
   border-block-start: 1px solid var(--c-border);
   background: var(--c-surface);
 
@@ -626,6 +628,16 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
   inset-block-end: calc(var(--notice-total) + var(--pager-h) + var(--tts-gap) + env(safe-area-inset-bottom, 0px));
   z-index: 30;
 }
+
+/* ── `[8e — spec 12-8-1 (2) · 8e-D2]` 하단 두 바의 공통 상자 `.reader-dock` ─────────────
+   보통(세로·폴드 펼침)은 **상자를 만들지 않는다**(`display: contents`) — 두 바가 위의 제 fixed 규칙 그대로라 8e 전과
+   픽셀이 같다. `[8e Build 정정]` 12-8-1 의 "dock 이 fixed + 세로 흐름" 으로 먼저 지었더니 CSS px 좌표는 같아도
+   글자 안티에일리어싱(배율 1 — 상자가 불투명하지 않아 LCD → 회색조)과 기기 픽셀 반올림(배율 2.625 — 테두리 한 줄)이
+   달라졌다. 낮은 화면(compact)에서만 상자가 생겨 한 줄로 눕는다 — 파일 끝 compact 블록. */
+.reader-dock { display: contents; }
+
+/* [≡] 상단바 토글 — compact 에서만 보인다(아래 compact 블록). 글리프 ≡ 는 방향이 없다(16-H). */
+.chrome-toggle { display: none; }
 
 /* 16-G — 모든 조작 버튼이 48×48 이상. */
 .tts-bar .tts-btn {
@@ -1289,4 +1301,137 @@ body[data-reader-view="original"] .original-scroll {
 .reflow figure.search-cur-fig {
   outline: 3px solid var(--c-accent);
   outline-offset: 2px;
+}
+
+/* ════ `[8e — spec 12-8-1]` 낮은 화면(compact) — 가로로 돌린 휴대폰·폴드 접은 화면 가로 ════════════
+   ★ 판정은 **높이 하나** `(max-height: 520px)`(8e-D1 — tokens.css 의 토큰 블록과 같은 조건). 세로·폴드 펼침은 이 블록 밖이라
+     픽셀이 예전 그대로다.
+   ★ 세로 예산은 토큰이 정한다(tokens.css — 아래 크롬 83, 숨김이면 --bar-top 0). 여기는 **배치**만 바꾼다.
+   ★ 논리 속성만(16-H). 상단바를 위로 밀어 숨기는 translateY 는 방향이 아니라 세로 이동이다. */
+@media (max-height: 520px) {
+  /* ── 합친 바(8e-D2 · 8e-D3) — `[≡]` · 낭독 무리 · 쪽 무리 한 줄. 손은 양 끝 아래에 있다: 낭독은 시작 쪽, 쪽 넘김은 끝 쪽.
+     높이 = --bar-pad × 2 + 가장 큰 조각(▶·🎤 56) + 위 테두리 1 = --tts-h(61). 무리 둘의 여백·테두리는 걷고 상자가 갖는다. */
+  .reader-dock {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-2);
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: calc(var(--notice-total) + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    box-sizing: border-box;
+    min-block-size: var(--tts-h);
+    padding-block: var(--bar-pad);
+    padding-inline: var(--sp-2);
+    background: var(--c-surface);
+    border-block-start: 1px solid var(--c-border);
+  }
+  /* 두 바는 상자 안의 흐름 항목이 된다 — 제 fixed 자리(inset)를 걷는다. relative 는 좁은 바의 시각 숨김 진행 표시
+     (`position: absolute`)가 기댈 자리다. */
+  .reader-dock > .tts-bar,
+  .reader-dock > .pager {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    flex-wrap: nowrap;
+  }
+  .reader-dock > .pager { flex: 0 0 auto; margin-inline-start: auto; }
+  /* 진행 표시는 9b 의 좁은 바 속성(`data-bar-tight="on"` — 판정 `barTight()`·`VOICE.BAR_TIGHT_MEDIA` 에 compact 조건을 더했다)이
+     시각적으로만 숨긴다. 여기서 새 장치를 만들지 않는다. */
+
+  .reader-dock > .chrome-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    inline-size: var(--tap);
+    min-inline-size: var(--tap);
+    min-block-size: var(--tap);
+    padding: 0;
+    font: inherit;
+    font-size: var(--fs-xl);
+    line-height: 1;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-sm);
+    background: var(--c-surface-2);
+    color: var(--c-text);
+    touch-action: manipulation;
+  }
+  .reader-dock > .chrome-toggle[aria-expanded="true"] {
+    border-color: var(--c-accent);
+    box-shadow: inset 0 0 0 1px var(--c-accent);
+  }
+
+  /* ── 상단바(8e-D4) — 리플로우에서는 fixed 겹침. 리플로우 위 여백은 상단바 높이(49 = --tap + 테두리 1)로 **고정**해
+     숨김·보임 때 본문이 움직이지 않는다(쪽 맨 위에서만 보이는 여백). 숨김 표식은 `<html data-chrome="hidden">`(ui/chrome.js).
+     원본 보기는 아래 블록 — 상단바가 flex 항목으로 남는다(10b 스크롤 소유권). */
+  body:not([data-reader-view="original"]):not(:has(.original)) .screen[data-screen="reader"] {
+    padding-block-start: calc(var(--tap) + 1px);
+  }
+  body:not([data-reader-view="original"]):not(:has(.original)) .screen[data-screen="reader"] > .topbar {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline: 0;
+    z-index: 20;
+    transition: transform 160ms ease, visibility 160ms;
+  }
+  /* 숨김 — visibility 가 포커스·Tab 에서 뺀다. 움직임 줄이기는 base.css 가 전이를 끈다. */
+  :root[data-chrome="hidden"] body:not([data-reader-view="original"]):not(:has(.original)) .screen[data-screen="reader"] > .topbar {
+    visibility: hidden;
+    transform: translateY(-100%);
+  }
+
+  /* ── 원본 보기(8e-D5) — 상단바와 함께 줌 막대·추출 진행 띠도 숨고 위 여백이 0 이다(같은 표식 하나).
+     남는 높이는 10b 의 세로 flex 가 저절로 `.original-scroll` 에 준다 = 100dvh − 아래 크롬. */
+  :root[data-chrome="hidden"] body:has(.original) .screen[data-screen="reader"] > .topbar,
+  :root[data-chrome="hidden"] body[data-reader-view="original"] .screen[data-screen="reader"] > .topbar,
+  :root[data-chrome="hidden"] body:has(.original) .original-bar,
+  :root[data-chrome="hidden"] body[data-reader-view="original"] .original-bar,
+  :root[data-chrome="hidden"] body:has(.original) .reader-progress,
+  :root[data-chrome="hidden"] body[data-reader-view="original"] .reader-progress { display: none; }
+  :root[data-chrome="hidden"] body:has(.original) .screen[data-screen="reader"],
+  :root[data-chrome="hidden"] body[data-reader-view="original"] .screen[data-screen="reader"],
+  :root[data-chrome="hidden"] body:has(.original) .original,
+  :root[data-chrome="hidden"] body[data-reader-view="original"] .original { padding-block-start: 0; }
+
+  /* ── 팝오버(8e-D7) — 2단 격자 · 폭 880 · 상단바를 덮어도 된다(위 경계에서 --bar-top 을 빼지 않는다 — 팝오버를 연 동안
+     상단바는 쓰지 않는다). 하한 48 × 3 · 아래 붙은 [닫기] 는 그대로. */
+  .typeset-panel,
+  .tts-rate-panel {
+    max-inline-size: 880px;
+    max-block-size: max(calc(var(--tap) * 3), calc(100dvh - var(--banners-h, 0px) - var(--reader-chrome-bottom) - var(--sp-6)));
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--sp-4);
+    align-content: start;
+    /* 옆 칸이 길어도(번역 따라가기 줄 176px) 짧은 줄은 제 높이 — 위쪽이 온전히 보인다. */
+    align-items: start;
+  }
+  .typeset-panel > .typeset-row,
+  .tts-rate-panel > .typeset-row { min-inline-size: 0; }
+  .typeset-panel > .primary,
+  .tts-rate-panel > .tts-rate-foot { grid-column: 1 / -1; }
+}
+
+/* 760px 미만 compact(작은 폰 가로 — 667×375): 무리 사이·단추 사이 4px, 쪽 입력칸 4em, `/총` 은 시각적으로만 숨긴다
+   (읽기 순서에는 남는다 — 화면 낭독기는 입력칸 다음에 총 쪽수를 읽는다). 단추 48×48(▶·🎤 56)은 줄이지 않는다. */
+@media (max-height: 520px) and (max-width: 759px) {
+  .reader-dock { gap: var(--sp-1); padding-inline: var(--sp-1); }
+  .reader-dock > .tts-bar,
+  .reader-dock > .pager { gap: var(--sp-1); }
+  .reader-dock .page-input { inline-size: 4em; }
+  .reader-dock .page-total {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }

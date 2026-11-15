@@ -150,6 +150,11 @@ export default {
   'reader.typeset.aa': 'أا',
   'reader.typeset.open': 'إعدادات النص',
   'reader.typeset.title': 'إعدادات العرض',
+  /* `[8e — spec 12-8-1]` شريط الأعلى [≡] في الوضع الأفقي · ملء الشاشة [검토 — Nour·운영자] */
+  'reader.chrome.open': 'إظهار القائمة',
+  'reader.chrome.close': 'إخفاء القائمة',
+  'reader.fullscreen.on': 'ملء الشاشة',
+  'reader.fullscreen.off': 'الخروج من ملء الشاشة',
   'reader.typeset.fontSize': 'حجم النص',
   'reader.typeset.lineHeight': 'تباعد الأسطر',
   'reader.typeset.letterSpacing': 'تباعد الحروف',

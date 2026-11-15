@@ -122,10 +122,10 @@ export default {
   /* ── 리더 (12-3 · 12-4 · 16-F) — 4단계 ───────────── */
   'reader.pageLabel': 'p. {page}',
   'reader.page.nav': 'Page navigation',
-  'reader.page.prev': 'Previous',
-  'reader.page.next': 'Next',
+  'reader.page.prev': '이전 쪽',   // `[8e-D10]` 영어 값이었다
+  'reader.page.next': '다음 쪽',   // `[8e-D10]` 영어 값이었다
   'reader.page.input': 'Page number',
-  'reader.page.of': 'of {total}',
+  'reader.page.of': '/ {total}',   // `[8e-D10]` 영어 값이었다
   'reader.page.empty': 'No text was found on this page.',
   /* `[8l]` 빈 쪽 안내(모든 문서)·스캔본·깨짐 안내 — `reader.page.empty` 는 남겨 두고 쓰지 않는다(10단계 정리) */
   'reader.page.noText': '이 쪽에는 읽을 글자가 없습니다 — 그림이나 스캔한 쪽일 수 있습니다.',
@@ -155,6 +155,11 @@ export default {
   'reader.typeset.aa': 'Aa',
   'reader.typeset.open': 'Text settings',
   'reader.typeset.title': 'Reading display',
+  /* `[8e — spec 12-8-1]` 낮은 화면(가로) 상단바 [≡] · Aa 팝오버 전체 화면 */
+  'reader.chrome.open': '메뉴 열기',
+  'reader.chrome.close': '메뉴 닫기',
+  'reader.fullscreen.on': '전체 화면',
+  'reader.fullscreen.off': '전체 화면 끝내기',
   'reader.typeset.fontSize': 'Text size',
   'reader.typeset.lineHeight': 'Line spacing',
   'reader.typeset.letterSpacing': 'Letter spacing',

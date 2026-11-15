@@ -129,6 +129,20 @@
 }
 :root[data-tr-inline="on"] { --tr-band-h: 0px; }
 
+/* ── `[8e — spec 12-8-1]` 낮은 화면(compact) — 가로로 돌린 휴대폰·폴드 접은 화면 가로 ──────────
+   ★ 판정은 **높이 하나**(8e-D1). 방향(가로·세로)으로 가르면 폴드 펼침(정사각에 가깝다)이 잘못 걸린다.
+     폴드 펼침·세로 화면(높이 > 520)에서는 이 블록이 빠져 위 값(138 · 49) 그대로다 — 픽셀 무변.
+   ★ 토큰 값만 바꾼다. 아래 크롬 합·띠·팝오버·`scroll-padding`·편안 영역 탐침은 이미 이 토큰을 읽는다.
+     - 쪽 이동 바는 낭독 바와 **한 줄**(공통 상자 `.reader-dock` — reader.css)이라 따로 높이를 갖지 않는다 → 0,
+       바 사이 틈도 없다 → 0. 아래 크롬 = 고지 22 + 합친 바 61 = **83**(띠 켜짐이면 + 띠).
+     - 띠는 2줄(8e-D6) — 상한 22dvh 는 그대로. 412 높이에서 띠 켬 본문 240px 기준을 맞추는 6px 이다.
+     - 상단바 숨김(`<html data-chrome="hidden">` — `ui/chrome.js` 가 리더 화면에서만 건다)이면 --bar-top 0.
+       세로로 돌리면 이 블록이 빠지므로 표식이 남아 있어도 효과 0. */
+@media (max-height: 520px) {
+  :root { --pager-h: 0px; --tts-gap: 0px; --tr-lines: 2; }
+  :root[data-chrome="hidden"] { --bar-top: 0px; }
+}
+
 /* system 테마 — 사용자가 명시적으로 고르지 않았을 때만 OS 를 따른다. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

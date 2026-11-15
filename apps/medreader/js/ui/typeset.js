@@ -17,6 +17,7 @@
    ============================================================ */
 
 import * as settings from '../settings.js';
+import { t } from '../i18n/index.js';
 
 /** 9-3 `reader.font` 의 값 → CSS 폰트 스택(tokens.css 의 변수). */
 export const FONT_STACKS = Object.freeze({
@@ -163,6 +164,7 @@ export function initTypeset() {
     if (ev.key === 'Escape') { setOpen(false); els.btn.focus(); }
   });
 
+  initFullscreen();
   syncControls();
   applyTypeset();
 }
@@ -240,4 +242,49 @@ function press(row, attr, value) {
   for (let i = 0; i < btns.length; i++) {
     btns[i].setAttribute('aria-pressed', btns[i].getAttribute(attr) === value ? 'true' : 'false');
   }
+}
+
+/* ────────────────────────────────────────────────────────
+   `[8e — spec 12-8-1 (6) · 결정 8e-D8]` 전체 화면 — Aa 팝오버 맨 아래 줄 하나(세로·가로 모두)
+   가로 휴대폰에서 주소창·시스템 바(약 56–80px `[가정]`)를 되찾는다.
+   · 들어가기는 **사용자 탭 안에서만**(`requestFullscreen` 은 사용자 동작이 있어야 된다). 나가기는 같은 단추·뒤로 가기·Esc.
+   · **저장하지 않는다** — 다음 실행에 저절로 들어가지 않는다. `screen.orientation.lock` 은 쓰지 않는다.
+   · `fullscreenchange` 로 단추 글자·`aria-pressed` 만 맞춘다. API 가 없으면(`fullscreenEnabled` 거짓) 줄을 숨긴다.
+   ──────────────────────────────────────────────────────── */
+
+/** 단추 글자 키 — 전체 화면이면 "끝내기", 아니면 "전체 화면". **순수 함수.** */
+export function fullscreenKey(on) { return on ? 'reader.fullscreen.off' : 'reader.fullscreen.on'; }
+
+/** 이 브라우저에서 전체 화면을 쓸 수 있는가. **순수 함수**(문서 객체를 받는다). */
+export function canFullscreen(doc) {
+  return !!(doc && doc.fullscreenEnabled && doc.documentElement && typeof doc.documentElement.requestFullscreen === 'function');
+}
+
+function initFullscreen() {
+  const row = document.getElementById('tsFullscreenRow');
+  const btn = document.getElementById('tsFullscreen');
+  if (!row || !btn) return;
+  const ok = canFullscreen(document);
+  row.hidden = !ok;
+  if (!ok) return;
+  btn.addEventListener('click', () => {
+    let p = null;
+    try {
+      if (document.fullscreenElement) p = document.exitFullscreen();
+      else p = document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    } catch (e) { p = null; }
+    // 거절(사용자 동작이 아님·정책)은 조용히 — 단추는 fullscreenchange 가 맞춘다.
+    if (p && typeof p.catch === 'function') p.catch(() => { });
+  });
+  document.addEventListener('fullscreenchange', () => paintFullscreen(btn));
+  paintFullscreen(btn);
+}
+
+function paintFullscreen(btn) {
+  const on = !!document.fullscreenElement;
+  const key = fullscreenKey(on);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  // `data-i18n` 도 바꿔 둔다 — 언어를 바꾸면 applyTranslations 가 지금 상태의 글자를 다시 쓴다.
+  btn.setAttribute('data-i18n', key);
+  btn.textContent = t(key);
 }

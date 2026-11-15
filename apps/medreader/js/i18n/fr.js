@@ -122,10 +122,10 @@ export default {
   /* ── 리더 (12-3 · 12-4 · 16-F) — 4단계 ───────────── */
   'reader.pageLabel': 'p. {page}',
   'reader.page.nav': 'Page navigation',
-  'reader.page.prev': 'Previous',
-  'reader.page.next': 'Next',
+  'reader.page.prev': 'Préc.',   // `[8e-D10 — Build 정정]` 영어 값이었다. 'Page préc.' 는 360px 세로에서 쪽 이동 바가 두 줄이 됐다 [검토 — Nour·운영자]
+  'reader.page.next': 'Suiv.',   // `[8e-D10 — Build 정정]` 영어 값이었다 [검토 — Nour·운영자]
   'reader.page.input': 'Page number',
-  'reader.page.of': 'of {total}',
+  'reader.page.of': 'sur {total}',   // `[8e-D10]` 영어 값이었다 [검토 — Nour·운영자]
   'reader.page.empty': 'No text was found on this page.',
   /* `[8l]` 빈 쪽 안내(모든 문서)·스캔본·깨짐 안내 — `reader.page.empty` 는 남겨 두고 쓰지 않는다(10단계 정리) */
   'reader.page.noText': 'Il n’y a pas de texte à lire sur cette page : c’est peut-être une image ou une page numérisée.',
@@ -155,6 +155,11 @@ export default {
   'reader.typeset.aa': 'Aa',
   'reader.typeset.open': 'Text settings',
   'reader.typeset.title': 'Reading display',
+  /* `[8e — spec 12-8-1]` barre du haut [≡] en paysage · plein écran [검토 — Nour·운영자] */
+  'reader.chrome.open': 'Afficher le menu',
+  'reader.chrome.close': 'Masquer le menu',
+  'reader.fullscreen.on': 'Plein écran',
+  'reader.fullscreen.off': 'Quitter le plein écran',
   'reader.typeset.fontSize': 'Text size',
   'reader.typeset.lineHeight': 'Line spacing',
   'reader.typeset.letterSpacing': 'Letter spacing',

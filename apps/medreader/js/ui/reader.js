@@ -64,6 +64,8 @@ import { algoVersion as ALGO_VERSION } from '../text/layout.js';
 import { ensure as ensureOutline, isOutlineCurrent } from '../search/outline.js';
 // `[8g-4a]` 검색 화면·결과로 이동·검색 띠(spec 17-8-12 §4). 리더는 입구와 훅만 준다 — 검색 규칙은 그쪽에 있다.
 import { initSearch } from './search.js';
+// `[8e — spec 12-8-1 (3)]` 낮은 화면의 상단바 숨김 [≡] — 표식·상태는 그 파일 하나가 갖는다.
+import { initChrome } from './chrome.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
@@ -574,6 +576,13 @@ export function initReader() {
   initControls();
   // `[8g-4a]` 검색 — controls 의 `onPageRender`(speaker.reload) 구독 **뒤에** 등록돼야 한다(17-8-12 §4-5). `main.js` 는 범위 밖.
   initSearch();
+  // `[8e]` compact(높이 ≤ 520) 상단바 [≡] — 하단 바·상단바 마크업이 다 선 뒤에. 회전으로 배치가 바뀌면 낭독 중 문장을
+  // 편안 영역에 다시 들인다(자동 스크롤과 같은 조건·같은 함수 — 사용자가 스크롤해 쉬는 중이면 두지 않는다).
+  // 회전은 창 크기를 바꿔 scroll 이벤트를 먼저 낸다(같은 프레임 — 미디어 변경 보고보다 앞). 그 쉼은 사용자 스크롤이 아니라 되돌린다.
+  initChrome({ onCompactChange: () => {
+    if (state.scrollPaused && Date.now() - (state.scrollPausedAt || 0) < 100) { state.scrollPaused = false; hideBackChip(); }
+    if (state.currentLineIds.length && !state.scrollPaused && settings.get('reader.autoScroll') !== false && !els.root.hidden) scrollToCurrent(false);
+  } });
 
   els.prev.addEventListener('click', () => goPage(state.page - 1));
   els.next.addEventListener('click', () => goPage(state.page + 1));
@@ -719,6 +728,7 @@ function onAnyScroll() {
   if (Date.now() - state.programScrollAt < TTS.USER_SCROLL_MS) return;   // 우리가 굴린 것
   if (state.scrollPaused) return;
   state.scrollPaused = true;
+  state.scrollPausedAt = Date.now();   // `[8e]` 회전이 낳은 scroll 인지 가르는 시각(아래 initChrome)
   showBackChip();
 }
 
