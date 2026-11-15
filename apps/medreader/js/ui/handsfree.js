@@ -121,6 +121,8 @@ export function positionOf(mode, index, total) {
  * @param {Function} [deps.getSetting]   `(key) => value` — `tts.mediaKeys`·`tts.wakeLock`
  * @param {Object} [deps.timers]         `{setTimeout, clearTimeout}`
  * @param {Object} [deps.config]         `HANDSFREE` 덮어쓰기(테스트 — SESSION 'none' 갈래 등)
+ * @param {Function} [deps.isListening]  `[9b]` `() => boolean` — 음성 명령이 듣는 중(또는 안내 뒤 되돌림 대기)인가
+ * @param {Function} [deps.cancel]       `[9b]` 듣기 취소(되돌림 없음) — 액션 첫 줄에서 부르고 그 단추는 평소대로(17-1-2 3절)
  */
 export function createHandsfree(deps) {
   const d = deps || {};
@@ -160,6 +162,8 @@ export function createHandsfree(deps) {
 
   /** ★ 동기 — `pressPlay()` 앞에 await 없음(6-4 (5) · H2). */
   function handle(action) {
+    // `[9b]` 손이 이긴다 — 듣는 중이면 듣기를 먼저 취소(speaker 를 건드리지 않는다), 아래는 평소대로.
+    if (typeof d.isListening === 'function' && typeof d.cancel === 'function' && d.isListening()) d.cancel();
     stats.actions[action] = (stats.actions[action] || 0) + 1;
     if (!armed || !sp) return;
     const what = actionFor(state(), action, isHidden());

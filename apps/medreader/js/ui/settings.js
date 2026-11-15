@@ -44,6 +44,8 @@ import { piiWarning } from './notice.js';
 import { appendBidiText } from './bididom.js';
 import { TEST_PROMPT } from '../ai/prompts.js';
 import { parseAIJson } from '../ai/jsonrepair.js';
+// `[9b — spec 17-1-2 7]` 설정 "음성 명령" 묶음(켜기·명령 언어·실패 음성·[말해 보기]·명령 목록) — 그리기는 그 파일 하나.
+import { buildVoiceSettings, recognitionOf } from './voice.js';
 
 const CODES = provider.CODES;
 
@@ -605,13 +607,35 @@ function paintAllReadalongRows() {
   for (let i = 0; i < hosts.length; i++) paintReadalongRow(hosts[i]);
 }
 
+/**
+ * `[9b — spec 17-1-2 7 · 결정 9b-D11]` 번역 따라가기 모드를 바꾸는 **한 길** — 화면 단추(아래 위임)와 음성 명령
+ * "번역 켜기·끄기"(`ui/voice.js` — controls 가 주입)가 같이 쓴다. 저장 + 끄기 전 모드(`readalong.lastOn`) 기억 + 줄 다시 그리기.
+ * 유효 모드 다시 계산(`syncReadalong`)은 부르는 쪽 몫이다(리더 — 이 모듈은 리더를 import 하지 않는다).
+ * `settings.set` 은 캐시를 먼저 고친다 — 저장이 늦어도 다시 그리기·`syncReadalong` 은 새 값을 본다.
+ * @param {'off'|'show'|'speak'} mode
+ * @returns {string} 실제로 둔 모드
+ */
+export function setReadalongMode(mode) {
+  const next = normalizeReadalongMode(mode);
+  const prev = readalongState().mode;
+  if (next !== 'off') settings.set('readalong.lastOn', next).catch(() => { });
+  else if (prev !== 'off') settings.set('readalong.lastOn', prev).catch(() => { });
+  settings.set('readalong.mode', next).catch(() => { /* 저장 실패가 화면을 막지 않는다 */ });
+  paintAllReadalongRows();
+  return next;
+}
+
+/** `[9b]` "번역 켜기"가 되돌릴 모드 — 기억한 값이 켜진 모드가 아니면 기본 `speak`(9-3). */
+export function lastOnMode(get) {
+  const g = typeof get === 'function' ? get : settings.get;
+  const v = g('readalong.lastOn');
+  return v === 'show' || v === 'speak' ? v : 'speak';
+}
+
 function onReadalongClick(ev) {
   const m = ev.target.closest('[data-readalong-mode]');
   if (m) {
-    const mode = normalizeReadalongMode(m.getAttribute('data-readalong-mode'));
-    // `settings.set` 은 캐시를 먼저 고친다 — 저장이 늦어도 다시 그리기는 새 값을 본다.
-    settings.set('readalong.mode', mode).catch(() => { /* 저장 실패가 화면을 막지 않는다 */ });
-    paintAllReadalongRows();
+    setReadalongMode(m.getAttribute('data-readalong-mode'));
     return;
   }
   const dv = ev.target.closest('[data-readalong-display]');
@@ -696,7 +720,8 @@ export function initSettingsScreen() {
     voiceLangs: q('ttsVoiceLangs'),   // `[8k]` 낭독 목소리 — 없으면(반쪽 캐시) 그리지 않는다
     readCitations: null,     // `[8h-1]` 아래 buildCitationsRow 가 만든다(정적 HTML 은 import map 만 고친다)
     scriptSwitch: q('ttsScriptSwitch'),  // `[8m]` 글자 체계로 문장마다 목소리 — 없으면(반쪽 캐시) 그리지 않는다
-    mediaKeys: null          // `[9a]` 아래 buildMediaKeysRow 가 만든다(정적 HTML 은 import map 만 고친다)
+    mediaKeys: null,         // `[9a]` 아래 buildMediaKeysRow 가 만든다(정적 HTML 은 import map 만 고친다)
+    voiceCmd: null           // `[9b]` 음성 명령 카드 — buildVoiceSettings 가 낭독 목소리 카드 뒤에 만든다
   };
   // 반쪽 캐시(옛 index.html + 새 JS) — 그릇이 없으면 조용히 물러난다. 던지지 않는다.
   if (!els.keyInput || !els.verifyBtn || !els.testBtn) { els = null; return; }
@@ -740,11 +765,20 @@ export function initSettingsScreen() {
       settings.set('tts.mediaKeys', !!els.mediaKeys.checked).catch(() => { });
     });
   }
+  // `[9b]` 기능 감지는 여기 한 번(창을 읽는 곳) — 없으면 카드에 "지원하지 않음" 한 줄(17-1-2 5절 표 "미지원").
+  {
+    const Rec = recognitionOf(typeof window !== 'undefined' ? window : null);
+    els.voiceCmd = buildVoiceSettings(root, {
+      Recognition: Rec,
+      available: Rec && typeof Rec.available === 'function' ? function (o) { return Rec.available(o); } : undefined,
+      onLine: function () { return typeof navigator === 'undefined' || navigator.onLine !== false; }
+    });
+  }
   if (els.voiceLangs) { els.voiceLangs.addEventListener('change', onVoicePick); els.voiceLangs.addEventListener('click', onVoicePick); }
   els.keyInput.addEventListener('input', paintFormatWarning);
   els.consentCheck.addEventListener('change', () => { if (els.consentCheck.checked) els.consentHint.hidden = true; });
 
-  onLangChange(() => { if (root && !root.hidden) paintAll(); });
+  onLangChange(() => { if (root && !root.hidden) { paintAll(); if (els.voiceCmd) els.voiceCmd.paint(); } });
 }
 
 /**
@@ -809,8 +843,9 @@ function buildMediaKeysRow(card) {
 /** 라우터가 이 화면을 보일 때마다. `params.tab` 은 지금 `ai` 하나뿐이다. */
 export function showSettings(params) {
   if (!els) return;
-  void params;
   paintAll();
+  // `[9b]` `#/settings/voice` — 리더 상태 줄의 [명령 보기]에서 왔으면 음성 명령 카드로.
+  if (els.voiceCmd) els.voiceCmd.show(params && params.tab);
   refreshVoice();
   refreshVoicePicker();
   paintCache();
@@ -826,6 +861,7 @@ export function leaveSettings() {
   }
   inflight.clear();
   if (!els) return;
+  if (els.voiceCmd) els.voiceCmd.leave();     // `[9b]` [말해 보기] 듣는 중이면 취소
   els.keyInput.value = '';
   setKeyVisible(false);
   els.consentHint.hidden = true;

@@ -68,12 +68,21 @@ export const DEFAULTS = Object.freeze({
   // 무음 오디오 전부 없음 = 9a 전 동작(무음 오디오가 다른 앱 소리를 멈추게 하는 게 싫을 때의 비상구). 리더에 들어올 때 읽는다. DB 무관.
   'tts.mediaKeys': true,
 
+  /* 음성 명령 (9b — spec 17-1-2 7절 "설정 키") — DB 무관. 인식된 글자는 저장하지 않는다(메모리만). */
+  'voice.enabled': true,        // 마이크 단추(기능 감지가 참일 때만 보인다). 끄면 단추가 사라진다 — 되돌림 길(11절)
+  'voice.cmdLang': 'auto',      // 'auto'(UI ar → 아랍어, 그 밖 → 영어) | 'ar' | 'en'
+  'voice.tag': '',              // 결과가 온 아랍어 인식 태그(사다리 ar-SY → ar-JO → ar 중) — 다음 누름은 그 태그부터
+  'voice.noticeAt': 0,          // 첫 사용 고지 카드를 보고 [시작]한 시각(ms). 0 = 아직 — 마이크를 처음 누르면 카드부터
+  'voice.sayErrors': true,      // 실패 안내를 짧은 음성 한 마디로도(화면을 안 보는 사용 — 결정 9b-D8)
+
   /* 낭독 동반 번역 (7-8-1) — `[신설 2026-09-28]`. 7b 는 **저장만** 하고 동작은 8b 가 붙인다.
      설정 AI 탭과 리더 속도 팝오버가 **이 두 키 하나씩**을 같은 그리기 함수로 보인다. */
   'readalong.mode': 'speak',    // 'off' | 'show' | 'speak'. 기본 표시+낭독(요구가 "소리 내어 번역")
   'readalong.speakSource': true, // speak 모드에서 원문도 소리 내어 읽는가 — 기본 true(사용자 확정)
   // `[8d — spec 7-7-1]` 리플로우에서 번역을 'band'(아래 띠, 기본) · 'inline'(문장 아래 — 대역). 원본 뷰는 늘 띠. DB 무관.
   'readalong.display': 'band',
+  // `[9b — 결정 9b-D11]` 끄기 전 모드 — 음성 명령 "번역 켜기"가 되돌릴 값('show' | 'speak'). 모드를 고를 때마다 기억한다.
+  'readalong.lastOn': 'speak',
 
   /* 검색 (8g — spec 17-8-7 · 17-8-12 U14) — 최근 검색어 칩. 기기 안에만, 최대 `SEARCH.RECENT_MAX`(5).
      8g-1 은 키만 둔다(쓰는 화면은 8g-4). `search.aiQuery` 는 만들지 않는다(17-8-9 가 — 기본 끔). */

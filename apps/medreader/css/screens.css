@@ -1184,3 +1184,15 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 }
 .voice-region { padding-block: var(--sp-2); }
 .voice-missing, .voice-none { margin-block: var(--sp-1) var(--sp-2); }
+
+/* `[9b — spec 17-1-2 6·7]` 설정 "음성 명령" 묶음 — [말해 보기] 결과(대안 전부·명령·대안 번호·태그·ms) · 복사 실패 시 직접 고를 칸 · 명령 목록 */
+.voice-card .row { gap: var(--sp-2); flex-wrap: wrap; }
+.voice-card .row button { min-block-size: var(--tap); }
+.voice-try-out { margin-block: var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.voice-try-out p { margin-block: 0 var(--sp-1); }
+.voice-copy-out { inline-size: 100%; min-block-size: 6em; font: inherit; font-size: var(--fs-sm); }
+.voice-copy-out[hidden] { display: none; }
+.voice-list summary { min-block-size: var(--tap); display: flex; align-items: center; cursor: pointer; }
+.voice-list ul { margin-block: 0; padding-inline-start: var(--sp-4); font-size: var(--fs-sm); }
+.voice-list li { margin-block: var(--sp-1); overflow-wrap: anywhere; }
+.voice-list li [lang="ar"] { font-family: var(--font-ar); }

@@ -945,6 +945,16 @@ export function createSpeaker(deps) {
     else show(units[i]);
   }
 
+  /** `[9b — spec 17-1-2 7 · 9b-D10]` 지금 문장을 **원문부터** 다시(음성 명령 "다시"). 번역 단계에서 멈췄어도 번역문을 잇지 않는다. */
+  function again() {
+    if (!units.length) return;
+    phase = 'src';
+    trPart = 0;
+    audibleIdx = -1;
+    if (state === 'speaking') restart(index);
+    else show(units[index]);
+  }
+
   function setRate(r) {
     // 5b — **계단 목록이 정본이다**. `clampRate`(0.1 반올림)를 쓰면 1.25 가
     // 1.3 이 되어 목록 밖으로 떨어진다.
@@ -1159,6 +1169,7 @@ export function createSpeaker(deps) {
     stop: stop,
     next: function () { step(1); },
     prev: function () { step(-1); },
+    again: again,
     setRate: setRate,
     setUnit: setUnit,
     setRepeat: setRepeat,

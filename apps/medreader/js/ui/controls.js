@@ -50,6 +50,10 @@ import { initTrBand } from './trband.js';
 import { initInlineTr } from './inlinetr.js';
 // `[9a]` 이어폰·잠금 화면 버튼(Media Session — spec 17-1-1). speaker 공개 함수와 `pressPlay()` 만 부른다.
 import { createHandsfree } from './handsfree.js';
+// `[9b — spec 17-1-2]` 음성 명령 — 마이크 단추·흐름(`ui/voice.js`). speaker 공개 함수·`pressPlay()`·`syncReadalong()`·`paintRate()` 를 주입한다.
+import { createVoice, mountVoice, recognitionOf } from './voice.js';
+// `[9b]` 번역 켜기·끄기 — 설정 화면 단추와 같은 길(저장 + 끄기 전 모드 기억 + 줄 다시 그리기).
+import { setReadalongMode, lastOnMode } from './settings.js';
 
 let els = null;
 let speaker = null;
@@ -63,6 +67,8 @@ let trband = null;
 let inlinetr = null;
 /** `[9a]` 이어폰·잠금 화면 버튼 — `arm()`(쪽이 그려질 때) · `disarm()`(리더를 떠남) · `refreshMeta()` · `debug()`. */
 let handsfree = null;
+/** `[9b]` 음성 명령 — `press()`·`cancel()`·`arm()`·`leave()`·`isListening()`·`debug()`. 인식기가 없으면 단추가 없다. */
+let voice = null;
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -154,8 +160,9 @@ export function initControls() {
      `play()` 앞에 `await` 를 두면 안드로이드에서 소리가 나지 않는다.
      `[9a]` 본문은 `pressPlay()` — 이어폰·알림의 재생도 같은 함수를 부른다(spec 17-1-1 4). */
   els.play.addEventListener('click', pressPlay);
-  els.prev.addEventListener('click', () => speaker.prev());
-  els.next.addEventListener('click', () => speaker.next());
+  // `[9b]` 듣는 중이면 듣기를 먼저 취소하고 평소대로(손이 이긴다 — 17-1-2 3절).
+  els.prev.addEventListener('click', () => { cancelVoice(); speaker.prev(); });
+  els.next.addEventListener('click', () => { cancelVoice(); speaker.next(); });
 
   els.rate.addEventListener('click', () => toggleRatePanel());
   els.rateClose.addEventListener('click', () => toggleRatePanel(false));
@@ -228,6 +235,7 @@ export function initControls() {
   /* ── 6-5 줄 탭 — 낭독 중이면 그 줄부터. 아니면 아무 것도 하지 않는다
      (인라인 번역은 7단계다). ──────────────────────── */
   onLineTap((lineId) => {
+    cancelVoice();                       // `[9b]` 듣는 중 줄 탭도 손이 이긴다
     const s = speaker.getState();
     if (s !== 'speaking' && s !== 'paused') return;
     speaker.play(lineId);
@@ -278,11 +286,44 @@ export function initControls() {
     meta: function () { const p = currentPage(); return { title: docTitle(), page: p.page, pageCount: p.pageCount }; },
     // 멈춤 유지(9-D3) — handsfree 가 **자기 sentinel** 로 쥔다(speaker 의 wakeLock 과 섞지 않는다). `tts.wakeLock` 검사는 양쪽에.
     holdWakeLock: function () { return requestWakeLock(); },
-    getSetting: settings.get
+    getSetting: settings.get,
+    // `[9b]` 듣는 중(또는 실패 안내 뒤 되돌림 대기)이면 액션 첫 줄에서 취소 — 그 단추는 평소대로.
+    isListening: function () { return !!voice && voice.isListening(); },
+    cancel: cancelVoice
   });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') handsfree.onHidden(); });
   onPageRender(() => { handsfree.arm(); });
   onLangChange(() => { handsfree.refreshMeta(); });
+
+  /* ── `[9b — spec 17-1-2]` 음성 명령 ─────────────────────────
+     기능 감지(`SpeechRecognition`·`webkitSpeechRecognition`)는 여기 한 번 — 없으면 단추를 그리지 않는다(5절 "미지원").
+     단추 탭은 **동기**로 `speaker.pause()` → `recognition.start()` 까지 간다(S5). 숨겨지면 듣기를 취소한다(되돌림 없음). */
+  const Rec = recognitionOf(typeof window !== 'undefined' ? window : null);
+  const mounted = mountVoice({ root: root, bar: els.bar, after: els.rate });
+  voice = createVoice({
+    Recognition: Rec,
+    available: Rec && typeof Rec.available === 'function' ? function (o) { return Rec.available(o); } : undefined,
+    permissions: (typeof navigator !== 'undefined' && navigator.permissions) || null,
+    speaker: speaker,
+    pressPlay: pressPlay,
+    syncReadalong: syncReadalong,
+    paintRate: paintRate,
+    setReadalongMode: setReadalongMode,
+    lastOnMode: lastOnMode,
+    getSetting: settings.get,
+    setSetting: settings.set,
+    uiLang: getLang,
+    onLine: function () { return typeof navigator === 'undefined' || navigator.onLine !== false; },
+    synth: (typeof window !== 'undefined' && window.speechSynthesis) || null,
+    makeUtterance: makeUtterance,
+    // 안내 한 마디 = UI 언어 문장 — 표 안내와 같은 해석(8k `langSpeechOf`).
+    sayVoice: function (lang) { return langSpeechOf(lang, voices, settings.get); },
+    vibrate: function (ms) { if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(ms); },
+    view: mounted ? mounted.view : null
+  });
+  if (mounted) mounted.button.addEventListener('click', () => voice.press());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') voice.onHidden(); });
+  onPageRender(() => { voice.arm(); });
 
   onLangChange(() => { paintBar(); paintRatePanel(); paintProgress(lastProgress.index, lastProgress.total); syncNoticeVoice(); });
   // `[8k]` 설정 > 낭독 목소리를 바꿨다 — 세 경로를 다시 고른다(settings.js 가 저장한 뒤 보낸다).
@@ -314,6 +355,7 @@ export function initControls() {
 function attachDebugHook() {
   if (typeof window === 'undefined' || !speaker) return;
   const g = window.__medreader || (window.__medreader = {});
+  if (g.voice !== voiceDebug) g.voice = voiceDebug;          // `[9b]` 17-1-2 9 `[D]`
   if (g.tts && g.tts.__mine) return;
   g.tts = {
     __mine: true,
@@ -336,6 +378,9 @@ function attachDebugHook() {
     handsfree: function () { return handsfree ? handsfree.debug() : null; }
   };
 }
+
+/** `[9b]` `__medreader.voice()` — 최근 기록(글자·명령·태그·ms)·상태. 키 없음. `attachDebugHook` 이 붙인다. */
+function voiceDebug() { return voice ? voice.debug() : null; }
 
 /* ────────────────────────────────────────────────────────
    `[8g-4a — spec 17-8-12 §4-5]` 검색 결과로 이동 — 리더·검색 화면은 speaker 를 import 하지 않는다(3-2).
@@ -401,6 +446,7 @@ export function scanPlayBlocked(sp, verdict) {
  * ★ 6-4 (5) — **동기**로 `speaker.play()` 까지 간다(앞에 `await` 없음).
  */
 function pressPlay() {
+  cancelVoice();                                 // `[9b]` 듣는 중이면 먼저 취소(9a 이어폰 play 도 이 함수 — 17-1-2 3절)
   const s = speaker.getState();
   if (s === 'speaking') speaker.pause();
   else if (scanPlayBlocked(speaker, docScanVerdict())) noReadNotice();   // `[8l]` 스캔본 — 넘기지 않고 안내, idle 그대로
@@ -412,9 +458,13 @@ function noReadNotice() {
   document.dispatchEvent(new CustomEvent('medreader:banner', { detail: { key: 'reader.scan.noRead', tone: 'warn' } }));
 }
 
+/** `[9b]` 듣기·실패 안내 취소(되돌림 없음). 듣는 중이 아니면 아무 일도 없다. */
+function cancelVoice() { if (voice) voice.cancel(); }
+
 /** 리더를 떠날 때 — 소리를 멈춘다. 서재에서 낭독이 계속되면 안 된다. */
 export function leaveControls() {
   if (!speaker) return;
+  if (voice) voice.leave();              // `[9b]` 듣기·안내·고지 카드·상태 줄을 거둔다(멈추기 전 — 되돌림이 끼어들지 않게)
   speaker.stop();
   if (handsfree) handsfree.disarm();     // `[9a]` 핸들러·알림·무음 오디오·멈춤 유지 잠금을 거둔다
   if (readalong) readalong.setActive(false);

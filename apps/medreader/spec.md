@@ -3732,6 +3732,26 @@ hidden 규칙을 그대로 두면 잠금 화면 단추·화면 꺼진 뒤 이어
 - 한국어·프랑스어 명령 표 — `cmdLang` 에 값만 더하면 되는 꼴로 둔다(표 형식 같음). 운영자가 원하면 작은 단계.
 - 인식 결과의 화면 받아쓰기(중간 결과 `interimResults`) — 단발·`false`. "말해 보기"에서만 최종 대안을 보인다.
 
+`[정정 2026-11-15 — 9b-1·9b-2 Build]` 설계와 달라진 것·더한 것(근거: `.claude/tasks/medreader-build-9b1-voice-report.md` 2절 B1–B13 · `medreader-build-9b2-voice-report.md` 5절 D1–D15 · review.md "9b-1 Review"). 아래 각 줄이 위 해당 절을 고친다:
+- **17-1-2 3절 "마이크 단추의 크기·자리"** 끝에: "`[9b-2 Build]` 단추·상태 줄·고지 카드는 `ui/voice.js` 가 JS 로 만든다(정적 HTML 그릇 없음 — 기능 감지 참일 때만). 좁은 바는 속성 하나 `.tts-bar[data-bar-tight="on"]`(진행 표시 시각적 숨김 + 버튼 여백 축소), 켜는 조건은 `VOICE.BAR_TIGHT_MEDIA`(`(max-width: 400px)`) + 마이크 보임 — 실측 412 off · 375·360 on, 12칸 넘침 0."
+- **3절 "9a 단추와의 관계"**: "[▶]·9a play 는 `pressPlay()` 첫 줄 · [이전]·[다음]·줄 탭은 핸들러 첫 줄 · 9a 는 `handle()` 첫 줄에서 `voice.isListening()`(듣는 중 **또는 실패 안내 뒤 되돌림 대기**)이면 `cancel()`. 그 밖의 길로 읽기가 시작되면(statechange → 읽는 중) 듣기를 스스로 취소한다."
+- **4절 "매칭" 1** 에 더함: "**`[운영자 결정 2026-11-15 ①]`** 한 낱말 동의어의 포함 일치는 말 전체(군말·숫자 뗀 뒤)가 `VOICE.PART_MAX_WORDS`(3) 낱말 이하일 때만 — 전체 일치는 그대로. **`[결정 ②]`** 맞은 구(같은 명령 같은 길이 꼴 전부)가 덮은 자리 **밖**에 부정어(`NEGATORS` — en not·never·dont·don't·do not·doesn't·didn't·won't·can't·cannot / ar لا·ما·مش·مو `[검토]`)가 있으면 그 대안 무효(trace `negated`, 다음 대안으로). «بلا ترجمة»·"no translation" 처럼 부정어가 동의어 안이면 그대로."
+- **4절 "가장 긴 동의어"** → "**낱말 수**가 가장 많은 동의어"(9b-1 B7).
+- **4절 예 «التالي والسابق»** → 실제 결과 `next`(낱말 일부 일치 없음 — «والسابق» 은 후보 아님). 모호의 예는 «التالي السابق»·«التالي و السابق». 한 줄 더함: "두 명령이 한 문장이면 같은 길이 = 모호(무효), **둘째 동사에 و 가 붙으면 처음 것**(«وقف وارجع» → pause)."
+- **4절 아랍어 태그 사다리**: "곧장 다시 `start()`" → "앞 인식기의 `end`(상한 `VOICE.RETRY_WAIT_MS` 300ms) 뒤 다시 `start()`". 덧붙여 "`available()` 이 전부 `'unavailable'` 이면 믿지 않고 전부 시도" · "기억한 태그부터 끝까지 실패하면 기억을 지운다"(9b-1 B1–B3).
+- **4절 명령 표 · exact 목록**: `exact` = «يلا»·go·«شغل»(شغّل)·«تابع» / «بس»·«خلص»·«لحظة»·«استنى»·wait / «بعده»·«بعدها»·«قدام» / «ورا» / «الترجمة»·«ترجمة»·«ترجم» / «بسرعة». 더한 동의어: pause «استنى شوي»·wait a second·wait a minute · next — · prev «رجعني» · again «عيدها»·read again·read it again·one more time·say again · trOn «شغل ترجمة»·«افتح ترجمة»·turn on translation · trOff «وقف ترجمة»·«سكر ترجمة»·«طفي ترجمة»·«شيل الترجمة»·turn off translation · slower «نزل السرعة» · faster «زيد السرعة»·speed it up. 전부 `[검토 — Nour·운영자]`.
+- **5절 표** 행 더함: "**인식기 바쁨** | `not-allowed` + (마이크 권한 granted · 듣기 시작 뒤 · 이번 세션에 결과 받은 적 있음) | `voice.err.busy` + 이어폰 문구 | 한 마디 | 남김" · "**시스템 중단** | `aborted`(우리가 부르지 않음) | 없음 | 없음 | 되돌림". "말 없음" 행 감지에 "결과 없이 `end`" 더함.
+- **5절 "음성 한 마디"**: "말은 짧은 키 — 인프라 `voice.say.fail` · 못 맞춤 `voice.noMatch.say` · 속도 끝 `voice.rate.min/max` · explain `voice.notYet`(상태 줄 문장은 길어 4초 상한에 잘린다). 반복 금지는 **같은 인프라 코드** 기준(세션)."
+- **3-2 import 방향 표** 두 줄: "`voice/commands.js` — 순수 · `text/specialty.js`(`foldArabic`)·`config.js`(`TTS.RATE_STEPS`·`VOICE`)" · "`voice/listen.js` — 서비스 · `config.js`(`VOICE`)". ui 행에 `ui/voice.js`(config·i18n·settings·voice/*).
+- **7절 새 파일 행**: `voice/commands.js` 는 "`foldArabic` 만" → "`foldArabic` + `config`(`TTS.RATE_STEPS`·`VOICE`)". `createListener` 의존성에 `onLine`·`micState`·`loadTag`·`saveTag`·`now`, 이벤트에 `cancel`·`fallback`·`end{outcome}`.
+- **7절 `config.js` 행**: `VOICE = { LISTEN_MAX_MS 8000, SAY_MAX_MS 4000, MAX_ALTS 5, AR_TAGS, EN_TAG: TTS_LANG_REGION.en(값을 다시 적지 않는다 — W1), RETRY_WAIT_MS 300, HISTORY 10, CONFIRM_MS 2000, NOTICE_MS 8000, PART_MAX_WORDS 3, BAR_TIGHT_MEDIA '(max-width: 400px)' }`.
+- **7절 "고치는 파일"**: `index.html` → "stamp 만(그릇은 JS)". `ui/settings.js` → "`setReadalongMode`·`lastOnMode` export — 화면 단추도 같은 길" · "음성 명령 카드는 `ui/voice.js` 의 `buildVoiceSettings`(낭독 목소리 카드 뒤)".
+- **7절 i18n 행**: "약 22키" → "48키(`voice.*`)".
+- **9-3 설정 키**: `voice.enabled: true` · `voice.cmdLang: 'auto'` · `voice.tag: ''` · `voice.noticeAt: 0` · `voice.sayErrors: true` · `readalong.lastOn: 'speak'`(모드를 고를 때마다 켜진 모드를 기억 — 화면 단추·음성 명령 공통). (`voice.earLong` 은 9b-3)
+- **9절 점검 묶음**: V-4·V-5·V-7·V-8 에 6절의 ◆ 항목, 새 행 V-11(접은·펼친·가로 화면 바·카드).
+- **10절 테스트**: `voice-commands-9b` C12–C15(말뭉치·부정문·결정 ①) · `voice-listen-9b` L14 · `voice-ui-9b` U1–U11·W1–W4.
+- **6-4 표 마지막 행**: "오프라인이면 버튼 비활성" → "9b 는 막지 않고 시도 → 실패 시 안내(9b-D9)".
+
 ### 17-2. 설명·요약 — 결정: 설명 먼저, 부를 때만 `[신설 2026-10-03]` `[결정 2026-10-03 — 사용자: 권장안대로]`
 
 2026-09-28 에 요약은 NotebookLM 과 겹친다는 이유로 후순위가 됐다(18절). 요구 2 는 앱 안에서의 **설명**과 **요약**을 명시한다. **결정은 사용자가 한다** — 정하기 전까지 후순위가 유효하다. 비용은 17절 머리 원칙의 환산(호출 1회 ≈ 낭독 번역 약 5,900자)으로 적는다.
