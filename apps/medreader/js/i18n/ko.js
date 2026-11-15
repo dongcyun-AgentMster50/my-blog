@@ -476,6 +476,7 @@ export default {
   'voice.notYet': "아직 없는 기능입니다.",
   'voice.noSpeech': "아무 말도 듣지 못했습니다.",
   'voice.noMatch': "명령을 알아듣지 못했습니다: “{text}”",
+  'voice.noMatch.none': "명령을 알아듣지 못했습니다.",
   'voice.noMatch.say': "다시 말해 주세요.",
   'voice.noMatch.list': "명령 보기",
   'voice.say.fail': "음성 명령이 되지 않았습니다. 버튼은 그대로 됩니다.",

@@ -471,6 +471,7 @@ export default {
   'voice.notYet': "هذا الأمر غير متاح بعد.",
   'voice.noSpeech': "لم أسمع شيئًا.",
   'voice.noMatch': "لم أفهم الأمر: «{text}»",
+  'voice.noMatch.none': "لم أفهم الأمر.",
   'voice.noMatch.say': "من فضلك أعد ما قلت.",
   'voice.noMatch.list': "عرض الأوامر",
   'voice.say.fail': "لم ينجح الأمر الصوتي. الأزرار ما زالت تعمل.",

@@ -478,6 +478,7 @@ export default {
   'voice.notYet': "That command is not available yet.",
   'voice.noSpeech': "Didn’t hear anything.",
   'voice.noMatch': "Didn’t catch a command: “{text}”",
+  'voice.noMatch.none': "Didn’t catch a command.",
   'voice.noMatch.say': "Please say it again.",
   'voice.noMatch.list': "See commands",
   'voice.say.fail': "Voice command didn’t work. The buttons still work.",

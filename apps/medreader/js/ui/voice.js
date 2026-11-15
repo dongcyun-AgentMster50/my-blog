@@ -27,7 +27,7 @@
 import { VOICE } from '../config.js';
 import { t as tDefault, applyTranslations, getLang } from '../i18n/index.js';
 import * as settingsStore from '../settings.js';
-import { matchCommand, resolveCmdLang, stepRate, VOICE_COMMANDS, commandById } from '../voice/commands.js';
+import { matchCommand, resolveCmdLang, stepRate, VOICE_COMMANDS } from '../voice/commands.js';
 import { createListener, isInfra, CODES } from '../voice/listen.js';
 
 /** "읽는 중" — speaking·waiting-page(9a `isReading` 과 같은 뜻). */
@@ -50,6 +50,16 @@ export const ERROR_KEYS = Object.freeze({
 
 /** 명령 id → 확인 줄의 이름 키(`explain` 은 꺼진 자리 — "아직 없는 기능"). */
 export function commandKey(id) { return 'voice.cmd.' + id; }
+
+/**
+ * 못 맞춤 문구 — 들은 말이 있으면 따옴표 안에, 없으면(인식기 `no-match` · 빈 대안) 따옴표 없는 키(9b-3 — 빈 “” 를 보이지 않는다).
+ * @param {Function} tr  i18n `t`
+ * @param {string} [heard]
+ */
+export function noMatchText(tr, heard) {
+  const s = heard == null ? '' : String(heard).trim();
+  return s ? tr('voice.noMatch', { text: s }) : tr('voice.noMatch.none');
+}
 
 /* ════════════════════════════════════════════════════════
    1. 최근 기록 — 메모리만(8절). [말해 보기]·[결과 복사]·`__medreader.voice()` 가 같이 본다.
@@ -290,7 +300,7 @@ export function createVoice(deps) {
     const m = matchCommand(det.alternatives, f.lang);
     recordHistory(makeRecord('cmd', f.lang, det, m, now()));
     if (!m.id) {
-      status({ text: tr('voice.noMatch', { text: m.heard }), kind: 'error', list: true }, VOICE.NOTICE_MS);
+      status({ text: noMatchText(tr, m.heard), kind: 'error', list: true }, VOICE.NOTICE_MS);
       say('voice.noMatch.say', f.was);
       return;
     }
@@ -317,7 +327,7 @@ export function createVoice(deps) {
       return;
     }
     if (code === CODES.NO_MATCH) {
-      status({ text: tr('voice.noMatch', { text: '' }), kind: 'error', list: true }, VOICE.NOTICE_MS);
+      status({ text: noMatchText(tr, ''), kind: 'error', list: true }, VOICE.NOTICE_MS);
       say('voice.noMatch.say', f.was);
       return;
     }
@@ -457,7 +467,8 @@ export function tryLines(rec, tr) {
   const out = [];
   if (rec.error) {
     const k = ERROR_KEYS[rec.error];
-    out.push(t('voice.try.error', { msg: k ? t(k, { text: '' }) : rec.error, code: rec.error }));
+    const msg = k === 'voice.noMatch' ? noMatchText(t, '') : k ? t(k) : rec.error;
+    out.push(t('voice.try.error', { msg: msg, code: rec.error }));
   }
   (rec.heard || []).forEach(function (s, i) { out.push((i + 1) + '. «' + s + '»'); });
   if (!rec.error) {

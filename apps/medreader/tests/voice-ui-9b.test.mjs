@@ -16,6 +16,10 @@
    U9  explain(꺼진 명령) · 부정문 → 실행 0 · 안내
    U10 [말해 보기] — 실행 없이 기록 · tryLines · historyText · 최근 HISTORY 개
    U11 speaker.again() — 공개 함수 하나(약 8줄) · 다른 길에서 부르지 않음
+   U12 `[9b-3]` D10 — 안내 중 다시 탭은 그 누름의 되돌림(`was`)을 이어받는다(9b2R-6 R5 빈틈)
+   U13 `[9b-3]` 진짜 `setReadalongMode`·`lastOnMode`(ui/settings) — 끌 때 켜진 모드를 `lastOn` 에 남긴다(9b2R-6 R6 빈틈)
+   W5  `[9b 다듬기 Review 중-1]` 가로 고지 카드 CSS — 폭은 화면 폭·높이 상한은 9b-2 식(바 위에서 자르지 않는다)
+   U14 `[9b-3]` 못 맞춤 문구 — 들은 말이 없으면 빈 따옴표 없이(인식기 no-match · 빈 대안 · [말해 보기] 오류 줄) · Rb 화면 흐름
    W   배선·계층 소스 — controls·handsfree·settings·config·i18n·css
    ============================================================ */
 
@@ -27,8 +31,10 @@ import { createSpeaker } from '../js/tts/speaker.js';
 import { createHandsfree } from '../js/ui/handsfree.js';
 import {
   createVoice, createTry, tryLines, historyText, historySnapshot, clearHistory, recordHistory, isReading,
-  ERROR_KEYS, barTight, recognitionOf
+  ERROR_KEYS, barTight, recognitionOf, noMatchText
 } from '../js/ui/voice.js';
+import { setReadalongMode, lastOnMode } from '../js/ui/settings.js';
+import * as settingsStore from '../js/settings.js';
 import { VOICE, TTS_LANG_REGION } from '../js/config.js';
 import { DEFAULTS } from '../js/settings.js';
 import { BUNDLES } from '../js/i18n/index.js';
@@ -153,8 +159,11 @@ function harness(o) {
     settings: Object.assign({ 'voice.noticeAt': 1 }, opt.settings || {}),
     sets: [], syncs: 0, paintRates: 0, modes: [], presses: 0, paints: [], statuses: [], notices: [], vibes: 0
   };
-  const get = (k) => (Object.prototype.hasOwnProperty.call(env.settings, k) ? env.settings[k] : DEFAULTS[k]);
-  const set = (k, v) => { env.sets.push([k, v]); env.settings[k] = v; return Promise.resolve(); };
+  // `[9b-3]` opt.store — 진짜 설정 저장소(`js/settings.js`)로 읽고 쓴다(진짜 `setReadalongMode` 와 같은 곳을 보게 — U13).
+  const get = opt.store ? opt.store.get : (k) => (Object.prototype.hasOwnProperty.call(env.settings, k) ? env.settings[k] : DEFAULTS[k]);
+  const set = opt.store
+    ? (k, v) => { env.sets.push([k, v]); return opt.store.set(k, v).catch(() => { }); }
+    : (k, v) => { env.sets.push([k, v]); env.settings[k] = v; return Promise.resolve(); };
   let voice = null;
   const pressPlay = () => {
     env.presses++;
@@ -174,14 +183,14 @@ function harness(o) {
     pressPlay: pressPlay,
     syncReadalong: () => { env.syncs++; },
     paintRate: () => { env.paintRates++; },
-    setReadalongMode: (m) => {
+    setReadalongMode: opt.setReadalongMode ? (m) => { env.modes.push(m); return opt.setReadalongMode(m); } : (m) => {
       env.modes.push(m);
       const prev = get('readalong.mode');
       if (m !== 'off') env.settings['readalong.lastOn'] = m;
       else if (prev !== 'off') env.settings['readalong.lastOn'] = prev;
       env.settings['readalong.mode'] = m;
     },
-    lastOnMode: (g) => { const v = g('readalong.lastOn'); return v === 'show' || v === 'speak' ? v : 'speak'; },
+    lastOnMode: opt.lastOnMode || ((g) => { const v = g('readalong.lastOn'); return v === 'show' || v === 'speak' ? v : 'speak'; }),
     getSetting: get,
     setSetting: set,
     uiLang: () => opt.ui || 'en',
@@ -819,4 +828,113 @@ test('W4 i18n — voice.* 키 4개 언어 · fr·ko 실제 번역 · ar 은 아�
     assert.match(BUNDLES[l]['voice.err.network'] + BUNDLES[l]['voice.earphoneOk'], /\S/);
   }
   for (const c of ['play', 'pause', 'next', 'prev', 'again', 'trOn', 'trOff', 'slower', 'faster']) assert.ok(BUNDLES.en['voice.cmd.' + c], c);
+});
+
+/* ══ U12–U14 9b-3 다듬기 ═══════════════════════════════ */
+
+test('U12 [9b-3] D10 — 안내 중 다시 탭은 그 누름의 was 를 이어받는다(읽던 중 → 명령 뒤 다시 읽기)', () => {
+  const h = harness();
+  startAt(h, 1);
+  h.voice.press();                                   // 읽던 중 탭 → 멈춤 · 듣기
+  h.rec().fire('result', ['blah blah blah']);        // 못 맞춤 → 안내 한 마디(되돌림 대기, was = speaking)
+  assert.equal(h.sp.getState(), 'paused');
+  assert.ok(h.voice.isListening());
+  h.voice.press();                                   // ★ 안내 중 다시 탭 — 지금 상태는 paused 지만 was 는 speaking 을 이어받는다
+  assert.equal(h.rec().startCalls, 1, '다시 듣기');
+  h.rec().fire('result', ['next']);
+  assert.equal(h.sp.getIndex(), 2);
+  assert.equal(h.sp.getState(), 'speaking', '★ 이어받은 was(speaking) — 명령 뒤 읽기를 잇는다');
+  // 다시 못 맞추면 안내가 끝난 뒤에도 이어받은 was 로 되돌린다
+  h.voice.press();
+  h.rec().fire('result', ['zzz']);
+  h.voice.press();
+  h.rec().fire('result', ['qqq']);
+  assert.equal(h.sp.getState(), 'paused');
+  h.synth.finish();
+  assert.equal(h.sp.getState(), 'speaking', '두 번 못 맞춰도 처음 누름의 was 로 되돌림');
+  // 멈춘 채 시작한 누름은 이어받아도 멈춘 채
+  h.sp.pause();
+  h.voice.press();
+  h.rec().fire('result', ['zzz']);
+  h.voice.press();
+  h.rec().fire('result', ['next']);
+  assert.equal(h.sp.getState(), 'paused');
+});
+
+test('U13 [9b-3] 진짜 setReadalongMode·lastOnMode — trOff 가 켜진 모드를 lastOn 에 남기고 trOn 이 그것을 되살린다', () => {
+  settingsStore._setCacheForTest({ 'voice.noticeAt': 1, 'readalong.mode': 'show', 'readalong.lastOn': 'speak' });
+  try {
+    const h = harness({ store: settingsStore, setReadalongMode: setReadalongMode, lastOnMode: lastOnMode });
+    startAt(h, 0);
+    h.sp.pause();
+    h.voice.press();
+    h.rec().fire('result', ['translation off']);
+    assert.equal(settingsStore.get('readalong.mode'), 'off');
+    assert.equal(settingsStore.get('readalong.lastOn'), 'show', '★ 끌 때 켜져 있던 모드(show)를 기억');
+    h.voice.press();
+    h.rec().fire('result', ['translation on']);
+    assert.equal(settingsStore.get('readalong.mode'), 'show', '★ lastOn 으로 되살림(기본 speak 아님)');
+    assert.deepEqual(h.env.modes, ['off', 'show']);
+    // 이미 꺼져 있을 때 다시 끄기 — lastOn 을 off 로 덮지 않는다
+    setReadalongMode('off');
+    setReadalongMode('off');
+    assert.equal(settingsStore.get('readalong.lastOn'), 'show');
+  } finally {
+    settingsStore._setCacheForTest({});
+  }
+});
+
+test('U14 [9b-3] 못 맞춤 문구 — 들은 말이 없으면 따옴표 없이 · 들은 말은 따옴표 안 · Rb(부정된 첫 대안) → 실행 0', () => {
+  const t = (k, p) => { let s = BUNDLES.en[k]; for (const [n, v] of Object.entries(p || {})) s = s.split('{' + n + '}').join(String(v)); return s; };
+  for (const l of ['en', 'ar', 'fr', 'ko']) {
+    assert.equal(typeof BUNDLES[l]['voice.noMatch.none'], 'string', l);
+    assert.ok(!/[“”«»"]/.test(BUNDLES[l]['voice.noMatch.none']), l + ' — 따옴표 없음');
+    assert.ok(!/\{text\}/.test(BUNDLES[l]['voice.noMatch.none']), l);
+  }
+  assert.equal(noMatchText(t, ''), BUNDLES.en['voice.noMatch.none']);
+  assert.equal(noMatchText(t, '   '), BUNDLES.en['voice.noMatch.none']);
+  assert.equal(noMatchText(t, null), BUNDLES.en['voice.noMatch.none']);
+  assert.equal(noMatchText(t, 'hello'), 'Didn’t catch a command: “hello”');
+  // 인식기 no-match(코드) — 상태 줄에 빈 “” 없음
+  const h = harness();
+  startAt(h, 0);
+  h.voice.press();
+  h.rec().fire('nomatch');
+  assert.equal(h.lastStatus().kind, 'error');
+  assert.equal(h.lastStatus().text, BUNDLES.en['voice.noMatch.none']);
+  assert.ok(!/“”/.test(h.lastStatus().text));
+  assert.equal(h.lastStatus().list, true, '[명령 보기] 는 그대로');
+  h.synth.finish();
+  assert.equal(h.sp.getState(), 'speaking');
+  // 정규화 뒤 빈 말이어도 인식기가 준 글자가 있으면 그 글자를 따옴표 안에 보인다(무엇을 들었는지)
+  h.voice.press();
+  h.rec().fire('result', ['...']);
+  assert.equal(h.lastStatus().text, 'Didn’t catch a command: “...”', '글자가 있으면 그대로 보인다');
+  h.synth.finish();
+  // [말해 보기] 오류 줄
+  const line = tryLines({ error: CODES.NO_MATCH, heard: [] }, t)[0];
+  assert.ok(!/“”/.test(line), line);
+  assert.ok(line.indexOf(BUNDLES.en['voice.noMatch.none']) === 0, line);
+  // Rb — 첫 대안이 부정되면 아래 대안이 부정어를 잃었어도 실행 0(멈춤 아님 → 안내 뒤 계속 읽기)
+  const a = harness({ ui: 'ar' });
+  startAt(a, 1);
+  a.voice.press();
+  a.rec().fire('result', ['لا توقف', 'توقف']);
+  assert.equal(a.lastStatus().kind, 'error');
+  assert.equal(a.voice.debug().history[0].id, null);
+  assert.deepEqual(a.voice.debug().history[0].trace, ['negated:pause']);
+  a.synth.finish();
+  assert.equal(a.sp.getState(), 'speaking', '★ 반대 동작(멈춤) 없음 — 계속 읽기');
+  assert.equal(a.sp.getIndex(), 1);
+});
+
+test('W5 [9b 다듬기 Review 중-1] 가로 고지 카드 CSS — 폭 넓힘 · 높이 상한은 9b-2 식(고지 글을 카드 안 스크롤 뒤로 숨기지 않는다)', () => {
+  const css = read('../css/reader.css');
+  const i = css.indexOf('@media (max-height: 500px) {\n  .voice-notice {');
+  assert.ok(i > 0, '가로 규칙');
+  const rule = css.slice(i, css.indexOf('\n  }', i));
+  assert.match(rule, /max-inline-size: none;/);
+  assert.match(rule, /padding: var\(--sp-3\);/);
+  assert.match(rule, /max-block-size: calc\(100dvh - var\(--bar-top\) - var\(--sp-4\)\);/, '★ 높이 상한 = 9b-2 식(바 위에서 자르지 않는다 — 330–360px 가로 높이에서 고지 글 100%)');
+  assert.ok(!/--tts-h|--pager-h|--reader-chrome-bottom/.test(rule), '하단 바 높이를 높이 상한에서 빼지 않는다');
 });

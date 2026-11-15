@@ -476,6 +476,7 @@ export default {
   'voice.notYet': "Cette commande n’est pas encore disponible.",
   'voice.noSpeech': "Je n’ai rien entendu.",
   'voice.noMatch': "Commande non reconnue : « {text} »",
+  'voice.noMatch.none': "Commande non reconnue.",
   'voice.noMatch.say': "Veuillez répéter.",
   'voice.noMatch.list': "Voir les commandes",
   'voice.say.fail': "La commande vocale n’a pas fonctionné. Les boutons fonctionnent toujours.",

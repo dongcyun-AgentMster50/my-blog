@@ -16,7 +16,7 @@
         («وقف الترجمة» 가 «وقف» 를 이긴다). 가장 긴 것끼리 다른 명령이면 **모호 → 이 대안은 무효**.
         `exact` 낱말(짧거나 뜻이 둘 — «بس»·«يلا»·«الترجمة» …)은 포함 일치에 쓰지 않는다.
      낱말 일부(접두·어근) 일치는 하지 않는다 — «وقف» 를 و + «قف» 로 떼면 뜻이 바뀐다.
-   첫 대안에서 맞으면 끝, 아니면 다음 대안. **확신도 문턱 없음**(9b-D7 — Android 는 확신도를 1.0 으로 채울 수 있다, S8).
+   첫 대안에서 맞으면 끝, 아니면 다음 대안(부정된 대안을 만나면 그 자리에서 끝 — 아래 Rb). **확신도 문턱 없음**(9b-D7 — Android 는 확신도를 1.0 으로 채울 수 있다, S8).
    표 순서: `ar` 모드 = 아랍어 표(아랍 문자 영어 차용어 포함) **먼저**, 거기서 후보가 하나도 없을 때만 영어 표(9b-D5 —
    아랍어 인식기가 라틴 글자 «next» 를 돌려준 경우). `en` 모드 = 영어 표만.
 
@@ -26,9 +26,11 @@
    ── `[9b-2 — 운영자 결정 2026-11-15]` 오탐 규칙 두 가지 (9b-1 Review 중-1·중-2) ──
      ① **한 낱말 동의어의 포함 일치는 말 전체가 `VOICE.PART_MAX_WORDS`(3) 낱말 이하일 때만.** 전체 일치는 그대로.
         «عندي شغل كتير بكرا»·"continue the antibiotics for a week" 같은 일상·의학 문장이 명령이 되지 않게.
-     ② **부정어가 맞은 구 밖에 있으면 그 대안은 무효**(`NEGATORS` — don't·not·never · لا·ما·مش·مو).
+     ② **부정어가 맞은 구 밖에 있으면 그 대안은 무효**(`NEGATORS` — don't·not·never · لا·ما·مش·مو·بلاش).
         «بلا ترجمة»·"no translation" 처럼 부정어가 동의어 **안**에 든 것은 그대로 그 명령이다.
-     무효가 된 대안은 모호와 같이 다음 대안으로 넘어간다(trace 의 result = 'negated').
+     ~~무효가 된 대안은 모호와 같이 다음 대안으로 넘어간다~~ → `[Rb — 운영자 2026-11-15 · 9b2R-3]` 대안을 순서대로 보다가
+     **맞은 대안보다 부정된 대안을 먼저 만나면 그 누름 전체 무효**(trace 의 마지막 result = 'negated', 뒤 대안은 보지 않는다).
+     첫 대안이 맞으면 뒤 대안의 부정어는 보지 않는다. 모호·none 대안은 그대로 다음 대안으로 넘어간다.
 
    상수 `MAX_ALTS` 는 `config.js` 의 `VOICE.MAX_ALTS` 를 본다 — 인식기(`voice/listen.js`)와 한 값(9b1R-8 4).
    import 방향(3-2): 순수 계층 — `text/specialty.js`(접기) · `config.js`(속도 계단 · `VOICE`)만.
@@ -68,7 +70,8 @@ const RAW = [
   },
   {
     id: 'pause', enabled: true,
-    ar: ['قف', 'توقف', 'وقف', 'وقّف', 'إيقاف', 'إيقاف مؤقت', 'اسكت', 'خلص', 'بس', 'استنى', 'لحظة', 'استنى شوي'],
+    // `[9b-3]` «أوقف»(표준 명령형 "멈춰" — 9b2R-2 놓침). `[검토 — Nour·운영자]`
+    ar: ['قف', 'توقف', 'وقف', 'وقّف', 'إيقاف', 'إيقاف مؤقت', 'اسكت', 'خلص', 'بس', 'استنى', 'لحظة', 'استنى شوي', 'أوقف'],
     arLoan: ['ستوب'],
     en: ['stop', 'pause', 'wait', 'hold on', 'quiet', 'wait a second', 'wait a minute'],
     exact: ['بس', 'خلص', 'لحظة', 'استنى', 'wait']
@@ -106,9 +109,14 @@ const RAW = [
   {
     id: 'trOff', enabled: true,
     ar: ['بلا ترجمة', 'بدون ترجمة', 'وقف الترجمة', 'سكر الترجمة', 'سكّر الترجمة', 'طفي الترجمة', 'اطفي الترجمة',
-      'إيقاف الترجمة', 'إلغاء الترجمة', 'وقف ترجمة', 'سكر ترجمة', 'طفي ترجمة', 'شيل الترجمة'],
+      'إيقاف الترجمة', 'إلغاء الترجمة', 'وقف ترجمة', 'سكر ترجمة', 'طفي ترجمة', 'شيل الترجمة',
+      // `[9b 다듬기 Review 낮음-1]` «أوقف»(pause)를 더하며 «أوقف الترجمة» 가 pause 로 가던 새 혼동을 고친다. `[검토 — Nour·운영자]`
+      'أوقف الترجمة', 'أوقف ترجمة'],
     arLoan: [],
-    en: ['no translation', 'translation off', 'stop translation', 'turn off translation'],
+    // `[9b-3]` 관사 든 꼴 — "stop the translation" 이 pause("stop")로 가던 혼동을 고친다(9b2R-2). `[검토 — Nour·운영자]`
+    // `[9b 다듬기 Review 낮음-1]` "stop translating"·"pause the translation"(pause 로 가던 혼동). `[검토 — Nour·운영자]`
+    en: ['no translation', 'translation off', 'stop translation', 'turn off translation', 'stop the translation',
+      'turn off the translation', 'stop translating', 'pause the translation'],
     exact: []
   },
   {
@@ -116,7 +124,9 @@ const RAW = [
     ar: ['أبطأ', 'ابطأ', 'أبطئ', 'ببطء', 'بشويش', 'على مهل', 'شوي شوي', 'خفف', 'بطيء', 'نزل السرعة'],
     arLoan: [],
     en: ['slower', 'slow down', 'slow'],
-    exact: []
+    // `[9b-3]` 형용사 "slow"·«بطيء» 는 혼자 말할 때만 — "too slow"·«كتير بطيء»·"it's slow"(빠르게를 원함)가
+    //   slower 가 되던 반대 동작을 막는다(9b2R-9 중-2). `[검토 — Nour·운영자]`
+    exact: ['slow', 'بطيء']
   },
   {
     id: 'faster', enabled: true,
@@ -274,12 +284,13 @@ function containsRun(tokens, sub) { return runsOf(tokens, sub).length > 0; }
  * `[결정 ② — 운영자 2026-11-15]` 부정어 — 맞은 구 **밖**에 있으면 그 대안은 무효. 정규화한 꼴로 비교한다
  * (영어 축약 "don't" 는 정규화에서 "don t" 두 낱말이 된다 — 그 꼴 그대로 둔다). 언어를 가리지 않고 한 목록
  * (ar 모드가 라틴 "don't stop" 을 영어 표로 볼 때도 같은 규칙). `[검토 — Nour·운영자]` 아랍어 칸.
- * «لا»(표준 "말라")·«ما»(레반트 부정 "안")·«مش»·«مو»(레반트 "아니다"). «بلا»(…없이)는 낱말이 달라 여기 들지 않는다 —
+ * «لا»(표준 "말라")·«ما»(레반트 부정 "안")·«مش»·«مو»(레반트 "아니다")·«بلاش»(레반트 "…하지 마" — 9b-3). «بلا»(…없이)는 낱말이 달라 여기 들지 않는다 —
  * «بلا ترجمة» 는 동의어 그대로 trOff.
  */
 export const NEGATORS = Object.freeze({
   en: Object.freeze(['not', 'never', 'dont', "don't", 'do not', "doesn't", "didn't", "won't", "can't", 'cannot']),
-  ar: Object.freeze(['لا', 'ما', 'مش', 'مو'])
+  // `[9b-3]` «بلاش»("…하지 마" — «بلاش توقف» 가 pause 가 되던 반대 동작, 9b2R-9 중-2). `[검토 — Nour·운영자]`
+  ar: Object.freeze(['لا', 'ما', 'مش', 'مو', 'بلاش'])
 });
 
 const NEG_TOKENS = NEGATORS.en.concat(NEGATORS.ar).map((s) => normalizeBase(s).split(' '));
@@ -387,8 +398,13 @@ export function matchCommand(alternatives, lang) {
       const c = commandById(res.id);
       return { id: res.id, enabled: !!(c && c.enabled), altIndex: i, how: res.how, table: table, heard: raw, trace: trace };
     }
+    if (res.kind === 'negated') {
+      // `[Rb — 운영자 2026-11-15]` 맞은 대안보다 부정된 대안을 먼저 만났다 → **그 누름 전체 무효**(뒤 대안은 보지 않는다).
+      // 인식기가 아래 대안에서 부정어를 떨어뜨린 꼴(["لا توقف", "توقف"])이 반대 동작이 되지 않게(9b2R-3).
+      trace.push({ alt: raw, norm: norm, result: 'negated', ids: [res.id] });
+      break;
+    }
     if (res.kind === 'ambiguous') trace.push({ alt: raw, norm: norm, result: 'ambiguous', ids: res.ids });
-    else if (res.kind === 'negated') trace.push({ alt: raw, norm: norm, result: 'negated', ids: [res.id] });   // 결정 ②
     else trace.push({ alt: raw, norm: norm, result: 'none' });
   }
   return { id: null, enabled: false, altIndex: -1, how: null, table: null, heard: alts.length ? transcriptOf(alts[0]) : '', trace: trace };

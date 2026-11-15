@@ -16,8 +16,11 @@
    ── `[9b-2]` 오탐 규칙(운영자 결정 2026-11-15) · 9b-1 Review 말뭉치(`r9b1/corpus.mjs`·`neg.mjs` — 짧은 발화라 원문 그대로)
    C12 ★ 말뭉치 — 명령 → 맞는 명령(놓침 0 · 혼동 0)
    C13 ★ 말뭉치 — 명령 아님 → null(남은 오탐 = 목록과 정확히 같다 — 3낱말 이하 한 낱말 동의어, `[검토 — Nour]`)
-   C14 ★ 부정문 → null(결정 ②) · 부정어가 동의어 안이면 그 명령 · 대안 단위
+   C14 ★ 부정문 → null(결정 ②) · 부정어가 동의어 안이면 그 명령 · `[9b-3]` Rb — 부정된 대안을 맞은 대안보다 먼저 만나면 누름 전체 무효
    C15 ★ 결정 ① — 한 낱말 동의어 포함 일치는 말 전체 ≤ PART_MAX_WORDS · 두 낱말 이상 동의어는 길이 무관 · 두 명령 문장
+   ── `[9b-3]` 다듬기(9b-2 Review 9b2R-3·9b2R-9 중-1·중-2 · 운영자 결정 2026-11-15 Rb 채택)
+   C16 ★ Rb 표 — 대안 순서별 결과(["لا توقف","توقف"] → null · ["توقف","لا توقف"] → pause · 모호·none 뒤 부정 → null …)
+   C17 ★ 반대 뜻 낱말 exact("slow"·«بطيء») · «بلاش» 부정어 · 쉬운 동의어(«أوقف» · "stop/turn off the translation")
    ============================================================ */
 
 import test from 'node:test';
@@ -534,11 +537,12 @@ test('C14 ★ 부정문 → null(결정 ②) · 부정어가 동의어 안이면
   for (const n of NEGATORS.en.concat(NEGATORS.ar)) {
     for (const w of normalizeBase(n).split(' ')) assert.ok(!words.has(w), '부정어 «' + w + '» 가 동의어 낱말');
   }
-  // 대안 단위(결정 ② 글자 그대로 — "그 대안을 무효") — 부정된 대안 다음 대안이 맞으면 그 명령. 실기기 V-4 에서 볼 것(보고서 남은 문제).
+  // `[9b-3 — Rb]` 부정된 대안 다음 대안이 맞아도 **누름 전체 무효**(9b-2 까지는 다음 대안이 맞으면 그 명령이었다 — 9b2R-3).
   const alt = matchCommand(["don't stop", 'stop'], 'en');
-  assert.equal(alt.id, 'pause');
-  assert.equal(alt.altIndex, 1);
-  assert.equal(alt.trace[0].result, 'negated');
+  assert.equal(alt.id, null);
+  assert.equal(alt.altIndex, -1);
+  assert.deepEqual(alt.trace.map((x) => x.result), ['negated'], '뒤 대안은 보지 않는다');
+  assert.equal(alt.heard, "don't stop");
 });
 
 test('C15 ★ 결정 ① — 한 낱말 포함 일치는 말 전체 ≤ PART_MAX_WORDS · 긴 동의어는 길이 무관 · 표 손질 · 두 명령 문장', () => {
@@ -575,4 +579,80 @@ test('C15 ★ 결정 ① — 한 낱말 포함 일치는 말 전체 ≤ PART_MAX
     'وقف الترجمة وكمل': 'trOff', 'التالي والسابق': 'next',
     'stop and go back': 'prev', 'pause then next': null, 'next and faster': null
   });
+});
+
+/* ══ C16·C17 9b-3 다듬기 ═══════════════════════════════ */
+
+test('C16 ★ Rb — 맞은 대안보다 부정된 대안을 먼저 만나면 누름 전체 무효 · 첫 대안이 맞으면 뒤 부정어는 보지 않는다', () => {
+  const ROWS = [
+    // [대안 목록, lang, 기대 id, 기대 altIndex, 기대 trace]
+    [['لا توقف', 'توقف'], 'ar', null, -1, ['negated']],                         // ★ 9b2R-3 화면 재현 꼴 — 아래 대안이 부정어를 잃음
+    [['توقف', 'لا توقف'], 'ar', 'pause', 0, ['match']],                          // 첫 대안이 맞음 — 뒤 부정은 안 본다
+    [["don't stop", 'stop'], 'en', null, -1, ['negated']],
+    [['stop', "don't stop"], 'en', 'pause', 0, ['match']],
+    [['uh', "don't stop", 'stop'], 'en', null, -1, ['none', 'negated']],         // none 뒤 부정 → 무효(S2 꼴)
+    [['uh', 'stop', "don't stop"], 'en', 'pause', 1, ['none', 'match']],         // none 뒤 맞음 → 그 명령(S2b 꼴)
+    [['pause then next', "don't stop", 'stop'], 'en', null, -1, ['ambiguous', 'negated']],   // 모호 뒤 부정 → 무효
+    [['', "don't stop", 'stop'], 'en', null, -1, ['empty', 'negated']],          // 빈 대안은 건너뛴 뒤 부정 → 무효
+    [['لا ارجع', 'هه', 'ارجع'], 'ar', null, -1, ['negated']],                    // 뒤에 잡음·맞는 대안이 있어도
+    [['nex', 'next', "don't skip"], 'en', 'next', 1, ['none', 'match']],
+    [['بلا ترجمة', 'ترجمة'], 'ar', 'trOff', 0, ['match']]                        // 부정어가 동의어 안 — 부정이 아니다
+  ];
+  for (const [alts, lang, id, idx, trace] of ROWS) {
+    const r = matchCommand(alts, lang);
+    const k = JSON.stringify(alts);
+    assert.equal(r.id, id, k);
+    assert.equal(r.altIndex, idx, k);
+    assert.deepEqual(r.trace.map((x) => x.result), trace, k);
+    if (id === null) assert.equal(r.heard, String(alts[0]), k + ' — 못 맞추면 첫 대안 글자');
+  }
+  // 부정된 대안 뒤로는 보지 않는다 — trace 길이로
+  const r = matchCommand(["don't stop", 'stop', 'pause', 'wait', 'next'], 'en');
+  assert.equal(r.trace.length, 1);
+  // 소스 — matchCommand 루프에서 negated 를 만나면 곧장 끝(continue 아님)
+  const src = noComments(read('../js/voice/commands.js'));
+  const body = src.slice(src.indexOf('export function matchCommand('), src.indexOf('export function resolveCmdLang('));
+  assert.match(body, /if \(res\.kind === 'negated'\) \{\s*trace\.push\(\{[^}]*\}\);\s*break;\s*\}/);
+});
+
+test('C17 ★ 반대 뜻 낱말 exact · «بلاش» 부정어 · 쉬운 동의어 — 9b2R-9 중-2 · 낮음-1', () => {
+  // "slow"·«بطيء» — 혼자 말할 때만 slower, 문장 속(too slow = 빠르게 원함)에서는 null
+  for (const [s, lang, id] of [
+    ['slow', 'en', 'slower'], ['slow please', 'en', 'slower'], ['بطيء', 'ar', 'slower'], ['بطيء من فضلك', 'ar', 'slower'],
+    ['too slow', 'en', null], ["it's slow", 'en', null], ['so slow', 'en', null], ['كتير بطيء', 'ar', null],
+    ['النبض بطيء', 'ar', null], ['slow heart rate', 'en', null],
+    // 두 낱말 이상 slower 동의어는 그대로
+    ['slow down', 'en', 'slower'], ['slow down a bit', 'en', 'slower'], ['ببطء', 'ar', 'slower']
+  ]) assert.equal(matchCommand([s], lang).id, id, s);
+  const slower = VOICE_COMMANDS.find((c) => c.id === 'slower');
+  assert.ok(slower.exact.includes('slow') && slower.exact.includes('بطيء'));
+  // «بلاش» — 부정어("…하지 마")
+  assert.ok(NEGATORS.ar.includes('بلاش'));
+  for (const s of ['بلاش توقف', 'بلاش ترجع', 'بلاش تكمل', 'بلاش ترجمة', 'بلاش الترجمة']) assert.equal(matchCommand([s], 'ar').id, null, s);
+  assert.equal(matchCommand(['بلاش توقف'], 'ar').trace[0].result, 'negated');
+  assert.equal(matchCommand(['بلا ترجمة'], 'ar').id, 'trOff', '«بلا»(…없이)는 부정어가 아니다 — 동의어 그대로');
+  // Rb + «بلاش» — 아래 대안이 부정어를 잃어도
+  assert.equal(matchCommand(['بلاش توقف', 'توقف'], 'ar').id, null);
+  // 쉬운 동의어
+  for (const [s, lang, id] of [
+    ['أوقف', 'ar', 'pause'], ['اوقف', 'ar', 'pause'], ['أوقف من فضلك', 'ar', 'pause'],
+    ['stop the translation', 'en', 'trOff'], ['turn off the translation', 'en', 'trOff'], ['please stop the translation', 'en', 'trOff'],
+    ['stop the translation', 'ar', 'trOff'],                 // ar 모드 — 라틴은 두 번째 표
+    ['stop', 'en', 'pause'], ['stop translation', 'en', 'trOff'],
+    ["don't stop the translation", 'en', null], ['لا أوقف', 'ar', null],
+    // `[9b 다듬기 Review 낮음-1]` «أوقف» 를 더하며 생긴 혼동(→ pause)과 영어 두 꼴
+    ['أوقف الترجمة', 'ar', 'trOff'],
+    ['أوقف ترجمة', 'ar', 'trOff'],
+    ['stop translating', 'en', 'trOff'],
+    ['pause the translation', 'en', 'trOff'],
+    ['أوقف القراءة', 'ar', 'pause']                         // 번역이 아닌 «أوقف …» 는 그대로 pause
+  ]) assert.equal(matchCommand([s], lang).id, id, s + ' (' + lang + ')');
+  // 표 자리 — `[검토 — Nour·운영자]` 표시가 바로 앞 주석에 남는다
+  const raw = read('../js/voice/commands.js');
+  for (const w of ["'أوقف']", "'stop the translation'", "'turn off the translation'", "exact: ['slow', 'بطيء']", "'بلاش']",
+    "'أوقف الترجمة'", "'stop translating'"]) {
+    const i = raw.indexOf(w);
+    assert.ok(i > 0, w);
+    assert.ok(raw.slice(Math.max(0, i - 500), i).indexOf('[검토 — Nour·운영자]') >= 0, w + ' — 검토 표시');
+  }
 });
