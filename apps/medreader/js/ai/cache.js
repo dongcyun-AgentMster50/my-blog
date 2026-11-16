@@ -185,14 +185,28 @@ export function createCache(deps) {
     });
   }
 
-  /** 15절 화면용 — 항목 수와 크기. */
+  /**
+   * 15절 화면용 — 항목 수와 크기. `[8c-2 — 17-7-6 4-7]` 사용량 화면이 부른다: **다시 훑어**(`sizeBytes` 합) 정확히 세고,
+   * 종류별 항목 수(`byKind` — 번역 `translate` · 단어 `term` · 이후 11 의 요약 …)와 가장 오래된 레코드 시각(`oldestAt`, ms|null)을 함께.
+   * ★ 읽기만 한다 — 지우거나 고치지 않는다(상한 정리는 쓰기 때만 — `putMany`). 셈(`total`)만 맞춰 둔다.
+   * @returns {Promise<{count:number, bytes:number, byKind:Object<string,number>, oldestAt:number|null}>}
+   */
   function stats() {
     return serial(async () => {
       let count = 0;
       let bytes = 0;
-      await db.iterate(STORE, {}, (v) => { count++; bytes += (v && Number(v.sizeBytes)) || 0; });
+      let oldestAt = null;
+      const byKind = {};
+      await db.iterate(STORE, {}, (v) => {
+        count++;
+        bytes += (v && Number(v.sizeBytes)) || 0;
+        const k = cacheKindOf(v && v.kind);
+        byKind[k] = (byKind[k] || 0) + 1;
+        const at = v && Number(v.createdAt);
+        if (Number.isFinite(at) && (oldestAt === null || at < oldestAt)) oldestAt = at;
+      });
       total = bytes;
-      return { count: count, bytes: bytes };
+      return { count: count, bytes: bytes, byKind: byKind, oldestAt: oldestAt };
     });
   }
 

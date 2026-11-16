@@ -98,6 +98,25 @@ export const STATUS = Object.freeze({ SAME_LANG: 'same-lang', UNSUPPORTED_LANG: 
  */
 export const MORE = 'MORE';
 
+/**
+ * `[8c-2 — 15절 · 17-7-6 4-7]` 상한 셈 한 벌 — 파이프라인(`overCap`·80% 경고)과 사용량 화면(`ui/usage.js`)이 같은 규칙을 쓴다.
+ * `dailyCapOf` — `ai.dailyCap` 을 정수로, 1 미만·숫자 아님은 1(0 = 무제한 아님). `capUsedOf` — 그날 행의 호출 중 상한에 세는 것(검증 제외).
+ * `warnThreshold` — `warnAt` 이 (0, 1) 숫자가 아니면(0·1 이상·문자열) null = 경고 없음. 아니면 `ceil(cap × warnAt)`(부동소수 꼬리 무시).
+ */
+export function dailyCapOf(v) {
+  const cap = Math.floor(Number(v));
+  return Number.isFinite(cap) && cap >= 1 ? cap : 1;
+}
+export function capUsedOf(row) {
+  if (!row) return 0;
+  const verify = (row.byKind && Number(row.byKind[AI.VERIFY_KIND])) || 0;
+  return (Number(row.calls) || 0) - verify;
+}
+export function warnThreshold(cap, warnAt) {
+  if (typeof warnAt !== 'number' || !(warnAt > 0) || !(warnAt < 1)) return null;
+  return Math.max(1, Math.ceil(dailyCapOf(cap) * warnAt - 1e-9));
+}
+
 /** 다음 날 로컬 00:00(ms). 7-6 — 429 에 `Retry-After` 가 없을 때. */
 export function nextLocalMidnight(nowMs) {
   const d = new Date(nowMs);
@@ -290,13 +309,41 @@ export function createPipeline(deps) {
 
   /** 15절 — 오늘 쓴 호출(검증 제외)이 사용자의 상한에 닿았는가. 못 읽으면 막지 않는다. */
   async function overCap() {
-    let cap = Math.floor(Number(getSetting('ai.dailyCap')));
-    if (!Number.isFinite(cap) || cap < 1) cap = 1;      // 0 = 무제한 아님 → 최소 1(15절)
+    const cap = dailyCapOf(getSetting('ai.dailyCap'));      // 0 = 무제한 아님 → 최소 1(15절)
     let row = null;
     try { row = await db.get('usage', localDay(now())); } catch (e) { row = null; }
     if (!row) return false;
-    const verify = (row.byKind && Number(row.byKind[AI.VERIFY_KIND])) || 0;
-    return (Number(row.calls) || 0) - verify >= cap;
+    return capUsedOf(row) >= cap;
+  }
+
+  /**
+   * `[8c-2 — 17-7-6 4-7 · 8cf-D9]` **80% 경고** — 호출을 보낸 뒤(`ctx.calls++` 다음) `overCap` 과 같은 행·같은 셈으로
+   * `(calls − verify) ≥ ceil(cap × warnAt)` 이고 그 행에 `capWarned` 가 없으면 구독자에게 **한 번** 알리고 그 행에 표시한다
+   * (새로고침해도 하루 한 번 — 날이 바뀌면 새 행). 낭독·탭·단어 요청이 다 이 한 곳을 지난다. 구독자가 없으면 읽지도 쓰지도 않는다.
+   * ★ 요청·오류 판정·상태 전이와 무관하다(보낸 뒤에 사용량 행만 본다). 던지지 않는다.
+   */
+  const warnListeners = new Set();
+  let warnedDay = null;                 // 같은 파이프라인 안 동시 두 호출이 둘 다 알리지 않게(확인과 표시 사이 await 없음)
+  async function checkWarn() {
+    if (!warnListeners.size) return;
+    // `[8c-2b]` 시계는 한 번만 읽는다 — 행 읽기·표시 쓰기 사이에 자정이 지나도 표시는 읽은 그날 행에(8c2R #1).
+    const t = now();
+    const day = localDay(t);
+    const cap = dailyCapOf(getSetting('ai.dailyCap'));
+    const warnAt = getSetting('ai.warnAt');
+    const at = warnThreshold(cap, warnAt);
+    if (at === null || warnedDay === day) return;
+    let row = null;
+    try { row = await db.get('usage', day); } catch (e) { row = null; }
+    if (!row || warnedDay === day) return;
+    if (row.capWarned === true) { warnedDay = day; return; }
+    const used = capUsedOf(row);
+    if (used < at) return;
+    warnedDay = day;
+    const ev = { used: used, cap: cap, warnAt: warnAt, day: day };
+    // 듣는 쪽 오류가 파이프라인을 멈추지 않는다 — 비동기 구독자의 거절도 여기서 삼킨다(기다리지 않음, 8c2R #3).
+    warnListeners.forEach((fn) => { try { Promise.resolve(fn(ev)).catch(() => {}); } catch (e) { /* 동기 예외 */ } });
+    await bumpUsage({ capWarned: true }, { db: db, now: t });
   }
 
   /**
@@ -540,7 +587,7 @@ export function createPipeline(deps) {
           outs = chunk.map(() => ({ state: SEG.BLOCKED, code: g }));   // 보내지 않은 것
         } else {
           outs = await sendChunk(chunk, ctx, job);
-          if (!outs.notSent) ctx.calls++;          // KEY_IN_URL — 보내기 전에 막혔다(호출 0)
+          if (!outs.notSent) { ctx.calls++; await checkWarn(); }   // KEY_IN_URL — 보내기 전에 막혔다(호출 0) · `[8c-2]` 80% 경고
         }
       }
       for (let i = 0; i < chunk.length; i++) {
@@ -788,6 +835,8 @@ export function createPipeline(deps) {
     state: current,
     /** 상태가 바뀔 때마다 `{state, prev, until, code}`. 되돌림 함수를 준다. */
     onState: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+    /** `[8c-2]` 80% 경고 — 그날 한 번 `{used, cap, warnAt, day}`. 되돌림 함수를 준다. */
+    onWarn: (fn) => { warnListeners.add(fn); return () => warnListeners.delete(fn); },
     /** 이 키가 "보냈다가 실패"로 기억돼 있는가(테스트·8b 조회). */
     isFailed: (key) => failedKeys.has(key),
     _base: () => Object.assign({}, base)

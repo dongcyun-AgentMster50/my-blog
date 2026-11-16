@@ -20,6 +20,7 @@
 - **8f-2**: 실패한 단어를 사용자가 다시 누르면 `translateTerms(…, {retry:true})` 를 넘긴다(안 넘기면 호출 0 으로 실패가 그대로).
 - **8f-3 (시작 전 반드시)**: ① `importPlan` 에서 파일 `updated` 칸이 비었거나 못 읽는 꼴(`dd/mm/yyyy` 등)이면 기기 쪽이 더 새로워도 파일이 덮는다 — 못 읽는 `updated` 는 "충돌(미리보기에서 고르기)"로. ② `store.update` 가 값 공백을 정규화하지 않아 방금 내보낸 CSV 를 그대로 가져와도 "바뀜"·`edited`·`updatedAt` 이 오른다 — 비교 전에 같은 정규화. ③ 실패 단어 다시 누름 `retry:true`(위 8f-2 와 같음).
 - **9c**: 단어 id 는 처음 저장 때의 term 해시 — 원어를 고친 항목과 다른 기기에서 새로 저장한 같은 낱말은 id 가 달라진다(`crypto.subtle` 없는 LAN http 문맥은 `vt:fnv:` 꼴). 병합은 id 다음에 `term+targetLang` 으로도 맞출 것. `update` 가 `suspended` 처럼 내용 밖 필드만 바뀌면 `updatedAt` 을 안 올려 `max(updatedAt, reviewedAt)` 병합에서 질 수 있다(12 도 같음).
+- **9c (8c-2 Review 8c2R)**: 사용량 행 가져오기 "같은 날이면 필드별 큰 값"에 불리언 `capWarned` 는 OR 로 합칠 것(spec 4445행 근처). `links.medical`(18)도 허용 목록에.
 - **11**: `pipeline.runJob(job, items, keys, opts)` 를 넷째 인자 없이 부르면 TypeError — 11 Build 가 기본값 `{}` 를 넣거나 늘 넘긴다.
 - **다듬기 후보**: 비라틴 대상에서 라틴 약어가 정답인 단어(ko `MRI`)가 늘 `LANG` 실패 · `normalizeTerm` 이 터키어 `İ`·독일어 `ß` 를 접지 않음 · 테스트 구멍 RM5(연쇄 삭제 예외의 `name==='cards'` 조건 — 빠지면 term 캐시가 문서 삭제 뒤 남음)·RM6(CSV 접두 CR) · 큰 PDF 추출 중 문서 삭제 시 `pages` 레코드 남음(HEAD 부터).
 
@@ -70,8 +71,10 @@
 - 8c-1c(Review 8c1cR): **원본 보기 → 검색 화면에서 숨긴 리더가 검색 화면을 가림**(HEAD 부터 — `css/reader.css` `body:has(.original) .screen[data-screen="reader"]{display:flex}` 가 `[hidden]` 을 이김, `:not([hidden])` 한 군데 — **다듬기 묶음 첫 줄로**) · `isEditable` 이 range·checkbox 도 편집 칸으로 봄 · 쪽 칸 `select()` 선택이 남아 다음 손가락 탭 하나가 "선택 풀기"로 먹힘 · 창 밖에서 뗀 누름 기록(실기기 확인).
 
 - 8f-2·8f-3(Review 8f2R·8f3R·8f3bR): 테스트 파일 문자열 안 날 U+FEFF 4곳(`tests/vocab-8f3b.test.mjs` 55 · `tests/vocab-ui-8f.test.mjs` 63·198·204 → `'﻿'`) · BOM 없는 UTF-16 LE 아랍어 파일이 `encoding` 대신 `header` 거절 문구 · 740×360 가로 시트 높이 166px 에서 단추 줄 일부 잘림 · 깨진 따옴표 되감기 상한(20) 넘으면 뒤 줄 삼킴 · 닫는 따옴표 뒤 공백 꼴 `quote` 거절 · 미래 시각 허용 오차 0(시계 1ms 앞섬도 충돌) · cp949 `?` 는 미리보기 값 보이기로만 방어 · 내보내기는 책 범위에서도 늘 전체 · bulk 는 첫 항목의 책·언어 묶음만.
+- 8c-2(Review 8c2R · 8c-2b 에서 남김): 두 탭이 같은 IndexedDB 읽기 창 안에서 함께 80% 문턱을 넘으면 탭마다 한 번씩(둘) 경고 — 탭 사이 잠금 없음(8cf-D9 는 새로고침 범위) · 상한 1–4 면 80% 문턱 = 상한이라 경고가 `capped` 와 함께 뜨고 문구가 "80%를 썼습니다(3/3회)" — 동작은 spec(8절 `[D]` 80% 경고 1회)대로 두고 문구만(`{pct}` 대신 used/cap 꼴 등) · 2단추 경고 배너가 360 ar 에서 글 폭 101px·5줄(base.css 1–2단추 `nowrap` 규칙) · ar 수 꼴("1 يومًا"·"12 طلبًا" — 수에 따른 복수형, `[검토 — Nour·운영자]`) · `onState` 구독자도 같은 `try` 꼴이라 비동기 거절은 못 잡음(지금 구독자는 모두 동기 — 8c-2b 는 `onWarn` 만 고침).
 
 ## 14 결정 (2026-11-16, 8i-4-0 측정 뒤 — 위임 권장안)
 - 8i-4-0 시험용 절반: 정밀도 100%·오탐 0 이지만 행 74.2%·칸 73.9%·머리 74.1% — 문턱 못 넘음. → **8i-4 넣지 않음, 14 = 8q 단독(algoVersion 13)**. 다시 연다면 pdf.js 연산자 목록의 괘선·칸 배경 사각형을 쓰는 측정(8i-4-0b)부터, 새 시험 표본으로.
 - `dev/measure-table-8i4.mjs`·보고서는 8q Review 가 함께 본다(측정 결론 재확인) 뒤 8q 와 같이 커밋. 정답표 JSON 은 레포에 두지 않는다(원서 머리 글).
 - 채점 방식 결정 둘(하위 행 묶음 인정·3pt 허용)은 기록만 — 8i-4 를 다시 열 때 운영자 확인.
+- 8c-2 Build(후보): 사용량 화면은 429 거절 수를 "1분 한도일 수도 — 잠시 뒤 [다시 시도]" 로 보이지만 띠(`readalong.blocked.exhausted`)·상태 바(`ai.state.exhausted`)는 여전히 "오늘 무료 한도" — 위 8c-1 줄의 `pipeline.js` 판정(RetryInfo·quotaId 로 cooldown/exhausted 가르기)이 남음 · 사용량 화면의 AI Studio 링크는 출처 줄의 `docs/rate-limits` 주소(실제 "사용량 페이지" 주소 확인 필요) · 80% 경고·capped 배너의 숫자는 띄울 때의 UI 언어 숫자로 고정(언어를 바꾸면 문구만 바뀜 — `ai.state.capped` 와 같은 꼴) · 13-2 는 `ui/usage.js` `callsPer10k(rows, {minChars: 30000})`(null 이면 1.7).

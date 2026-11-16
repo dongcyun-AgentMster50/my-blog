@@ -849,6 +849,13 @@ export function showSettings(params) {
   refreshVoice();
   refreshVoicePicker();
   paintCache();
+  // `[8c-2 — 17-7-6 4-7 · 8cf-D11]` 사용량 화면 [설정에서 비우기] → `#/settings/cache` — [비우기] 장치는 이 한 곳(그 줄을 보이고 포커스만).
+  if (params && params.tab === 'cache' && els.cacheSummary) {
+    const row = els.cacheSummary.closest('.field');
+    try { if (row) row.scrollIntoView({ block: 'center' }); } catch (e) { /* 그대로 */ }
+    const btn = row && row.querySelector('[data-action="cache-clear"]');
+    if (btn) { try { btn.focus({ preventScroll: true }); } catch (e) { /* 그대로 */ } }
+  }
 }
 
 /**

@@ -20,6 +20,7 @@ import { initReader, showReader, leaveReader } from './ui/reader.js';
 import { initQuizScreen, showQuiz, leaveQuiz } from './ui/quiz.js';
 import { initSettingsScreen, showSettings, leaveSettings } from './ui/settings.js';
 import { initVocab, showVocab, leaveVocab } from './ui/vocab.js';
+import { initUsage, showUsage } from './ui/usage.js';   // `[8c-2]` 사용량 화면(17-7-6 4-7)
 
 /* ────────────────────────────────────────────────────────
    14절 배너 — 서비스 계층이 낸 **코드**를 여기서 문장으로 바꾼다(3-2).
@@ -199,6 +200,7 @@ async function boot() {
   initQuizScreen();
   initSettingsScreen();
   initVocab();          // `[8f-3]` 단어장 화면(17-7-6 4-6)
+  initUsage();          // `[8c-2]` 사용량 화면 — 읽기만(호출 0)
 
   // 정적 이동 버튼 — 해시만 바꾼다(뒤로가기가 그대로 동작한다).
   document.addEventListener('click', (ev) => {
@@ -289,6 +291,7 @@ function onRoute(route) {
       showSettings(route.params);
       break;
     case 'vocab': showVocab(route.params); break;   // `[8f-3]` 단어장(전체 · 그 책)
+    case 'usage': showUsage(); break;               // `[8c-2]` 사용량 — 열 때 다시 읽고 90일 지난 행을 지운다
     default:
       break;
   }

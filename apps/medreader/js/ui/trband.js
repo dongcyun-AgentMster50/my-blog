@@ -219,8 +219,9 @@ export function remoteBanner(state, o) {
   switch (state) {
     case 'offline': return { key: 'ai.state.offline', params: null, actions: [] };
     case 'exhausted': return { key: 'ai.state.exhausted', params: null, actions: [] };
+    // `[8c-2 — 17-7-6 4-7]` 상한 도달 배너에 [사용량 보기] 하나 더(`#/usage` — 오늘 쓴 것·종류별을 본다)
     case 'capped': return { key: 'ai.state.capped', params: { cap: String(x.cap == null ? '' : x.cap) },
-      actions: [{ key: 'reader.readalong.settings', nav: SETTINGS_AI_HASH }] };
+      actions: [{ key: 'reader.readalong.settings', nav: SETTINGS_AI_HASH }, { key: 'usage.open', nav: '#/usage' }] };
     case 'cooldown': return { key: 'ai.state.cooldown', params: null, actions: [] };
     case 'region': return stateNotice(provider.CODES.REGION, x.providerLabel || '');
     case 'model': return { key: 'ai.state.model', params: null, actions: [{ key: 'reader.readalong.settings', nav: SETTINGS_AI_HASH }] };

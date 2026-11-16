@@ -53,16 +53,16 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=7ff71180ec">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=82c9c05802">
+<link rel="stylesheet" href="css/screens.css?v=81d8d70af1">
 <link rel="stylesheet" href="css/reader.css?v=a531f97813">
 <script type="importmap">
 {
   "imports": {
     "./js/ai/adapters/gemini.js": "./js/ai/adapters/gemini.js?v=66c1388a70",
-    "./js/ai/cache.js": "./js/ai/cache.js?v=3b68ff8768",
+    "./js/ai/cache.js": "./js/ai/cache.js?v=eefc9a73ba",
     "./js/ai/jsonrepair.js": "./js/ai/jsonrepair.js?v=1b8d7ede4d",
     "./js/ai/ondevice.js": "./js/ai/ondevice.js?v=febf2b47a8",
-    "./js/ai/pipeline.js": "./js/ai/pipeline.js?v=05e3526c20",
+    "./js/ai/pipeline.js": "./js/ai/pipeline.js?v=4520bf1045",
     "./js/ai/prompts.js": "./js/ai/prompts.js?v=7061928844",
     "./js/ai/provider.js": "./js/ai/provider.js?v=046931d5b2",
     "./js/ai/readalong.js": "./js/ai/readalong.js?v=6472c5f7cc",
@@ -70,12 +70,12 @@
     "./js/config.js": "./js/config.js?v=a8f008abcd",
     "./js/db.js": "./js/db.js?v=2b36013d63",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=95448e7f98",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=d39933339e",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=e3b077ff88",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=6fc4df5198",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=17ca2e6440",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=83e9cd7505",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=e02fb6b515",
-    "./js/main.js": "./js/main.js?v=c471ea04a3",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=5cce8a722c",
+    "./js/main.js": "./js/main.js?v=f45e86f685",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
     "./js/pdf/render.js": "./js/pdf/render.js?v=381bf3bc23",
@@ -110,7 +110,7 @@
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
     "./js/ui/chrome.js": "./js/ui/chrome.js?v=ebc3657eb9",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=1df22a6636",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=115d548ec8",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
     "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=0fe335b7ac",
     "./js/ui/library.js": "./js/ui/library.js?v=0fcd5c5379",
@@ -121,9 +121,10 @@
     "./js/ui/reader.js": "./js/ui/reader.js?v=f19365aa4d",
     "./js/ui/search.js": "./js/ui/search.js?v=201f6e6458",
     "./js/ui/selbar.js": "./js/ui/selbar.js?v=d9ccb18840",
-    "./js/ui/settings.js": "./js/ui/settings.js?v=9ef03f7182",
-    "./js/ui/trband.js": "./js/ui/trband.js?v=109a7de297",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=166dafe46e",
+    "./js/ui/trband.js": "./js/ui/trband.js?v=9879796ba1",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=2ccd2e6cd1",
+    "./js/ui/usage.js": "./js/ui/usage.js?v=a5b6dde423",
     "./js/ui/vocab.js": "./js/ui/vocab.js?v=dff0c8e87c",
     "./js/ui/voice.js": "./js/ui/voice.js?v=4e91faa4bd",
     "./js/ui/wordsheet.js": "./js/ui/wordsheet.js?v=e1bb841a16",
@@ -798,6 +799,8 @@
         <label for="aiDailyCap" data-i18n="settings.ai.dailyCap"></label>
         <input type="number" id="aiDailyCap" inputmode="numeric" min="1" step="1">
         <p class="muted" data-i18n="settings.ai.dailyCap.help"></p>
+        <!-- `[8c-2 — 17-7-6 4-7]` 사용량 화면 입구 — 전역 `data-nav` 위임 -->
+        <button type="button" class="link usage-entry" data-nav="#/usage" data-i18n="usage.open"></button>
       </div>
 
       <div class="consent-row">
@@ -957,15 +960,48 @@
     </dialog>
   </section>
 
-  <!-- ════ 사용량 — 자리표시자. 8단계. ══════════════════ -->
-  <section class="screen" data-screen="usage" hidden>
+  <!-- ════ 사용량 (15절 · spec 17-7-6 4-7) — 8c-2 ══════════════════
+       ★ 호출 0 — 기기 안 숫자만(`usage` 행·`aiCache` 훑기·마지막으로 연 책의 `readStats`). 숫자는 순수 `usageView` 가 만들고
+         `js/ui/usage.js` 가 textContent 로 그린다. 무료 티어 한도 숫자는 어디에도 없다(16-J) — AI Studio 링크만.
+       ★ 화면을 열 때 90일 지난 `usage` 행을 지운다(8cf-D12). 캐시 [비우기] 장치는 설정 AI 탭 한 곳(8cf-D11). -->
+  <section class="screen usage-screen" data-screen="usage" hidden>
     <div class="topbar">
       <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
-      <h1 class="title" data-i18n="usage.placeholder.title"></h1>
+      <h1 class="title" data-i18n="usage.title"></h1>
     </div>
-    <div class="placeholder">
-      <p data-i18n="usage.placeholder.body"></p>
+    <p class="usage-status" id="usageStatus" role="status" aria-live="polite"></p>
+
+    <div class="card usage-card" id="usageToday" role="region" aria-labelledby="usageTodayH">
+      <h2 id="usageTodayH" data-i18n="usage.today"></h2>
+      <p class="usage-big" id="usageCalls"></p>
+      <div class="usage-meter" id="usageMeter" role="meter" aria-valuemin="0">
+        <span class="usage-meter-fill" id="usageMeterFill"></span>
+      </div>
+      <p class="usage-line" id="usageLeft"></p>
+      <ul class="usage-kinds" id="usageKinds"></ul>
+      <p class="usage-line muted" id="usageProvider"></p>
+      <p class="usage-line muted" id="usageTokens"></p>
+      <p class="usage-line" id="usageSaved"></p>
+      <p class="usage-line" id="usageRa"></p>
+      <p class="usage-line" id="usagePages" hidden></p>
+      <p class="usage-line warn-note" id="usage429" hidden></p>
     </div>
+
+    <div class="card usage-card" id="usageMonth" role="region" aria-labelledby="usageMonthH">
+      <h2 id="usageMonthH" data-i18n="usage.month"></h2>
+      <div class="usage-bars" id="usageBars" role="img"></div>
+      <p class="usage-line" id="usageMonthSum"></p>
+    </div>
+
+    <div class="card usage-card" id="usageCache" role="region" aria-labelledby="usageCacheH">
+      <h2 id="usageCacheH" data-i18n="usage.cache"></h2>
+      <p class="usage-line" id="usageCacheSum"></p>
+      <button type="button" data-nav="#/settings/cache" data-i18n="usage.cache.toSettings"></button>
+    </div>
+
+    <p class="usage-line muted usage-studio">
+      <a id="usageStudio" href="https://aistudio.google.com/docs/rate-limits" target="_blank" rel="noopener noreferrer" data-i18n="usage.studio"></a>
+    </p>
   </section>
 
   <!-- ════ 정보 (12-1) ══════════════════════════════════ -->

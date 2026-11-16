@@ -129,6 +129,12 @@ export function initControls() {
      `loadParas` 는 리더가 주입한다(서비스가 화면 계층을 import 하지 않게 — 3-2). */
   pipeline = createPipeline({ getKey: () => keys.readKeySecret(providerId()) || '' });
   readalong = createReadalong({ pipeline: pipeline, loadParas: loadFlowParas, getSetting: settings.get });
+  // `[8c-2 — 17-7-6 4-7 · 8cf-D9]` 80% 경고 — 파이프라인이 그날 한 번 알린다(낭독·탭·단어 요청 어느 길이든 같은 한 곳). 상태 바 한 번 + [사용량 보기].
+  pipeline.onWarn((w) => {
+    document.dispatchEvent(new CustomEvent('medreader:banner', { detail: { key: 'ai.capWarn', tone: 'warn',
+      params: { used: formatNumber(w.used), cap: formatNumber(w.cap), pct: formatNumber(Math.round(w.warnAt * 100)) },
+      actions: [{ key: 'usage.open', nav: '#/usage' }] } }));
+  });
 
   speaker = createSpeaker({
     synth: (typeof window !== 'undefined' && window.speechSynthesis) || null,
