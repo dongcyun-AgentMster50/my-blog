@@ -79,8 +79,10 @@ export default {
   'library.card.extractFailed.other': 'تعذّرت قراءة {n} صفحة',
   'library.card.continue': 'متابعة القراءة',
   'library.card.delete': 'حذف',
-  'library.card.deleteConfirm': 'هل تريد حذف «{title}» وكل ما هو مخزَّن معه؟',
+  // `[11-2]` "وكل ما هو مخزَّن معه" → ما يُحذف فعلًا (القائمة والملخصات تبقى — السطور التالية). [검토 — Nour·운영자]
+  'library.card.deleteConfirm': 'هل تريد حذف «{title}»؟ سيُحذف ملف PDF وموضع القراءة وسجل الاختبارات والترجمات المخزّنة مؤقتًا.',
   'library.card.deleteConfirmVocab': 'ستبقى {n} من كلمات القائمة',   // `[8f-2]` [검토 — Nour·운영자]
+  'library.card.deleteConfirmSummaries': 'ستبقى {n} من الملخصات المحفوظة',   // `[11-2]` [검토 — Nour·운영자]
   'library.card.vocab': 'قائمة كلمات هذا الكتاب',   // `[8f-3]` [검토 — Nour·운영자]
 
   /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
@@ -374,6 +376,33 @@ export default {
   'sel.sentence': "ترجمة الجملة",
   'sel.readFrom': "القراءة من هنا",
   'sel.tooLong': "لترجمة كلمة، حدّد ست كلمات على الأكثر (ستين حرفًا)",
+  /* `[11-2 — spec 17-2-1]` قائمة [⋯] · [ملخص] · لوحة الملخص — [검토 — Nour·운영자] 아랍어 문구 전부. */
+  'sel.more': "إجراءات أخرى",
+  'sel.summary': "ملخص",
+  'sum.title': "ملخص الفقرة · {page}",
+  'sum.titlePage': "ملخص الصفحة · {page}",
+  'sum.pending': "جارٍ التلخيص…",
+  'sum.failed': "تعذّر التلخيص.",
+  'sum.notEligible': "هذه الفقرة قصيرة جدًا للتلخيص، أو ليست من نص الكتاب.",
+  'sum.terms': "المصطلحات",
+  'sum.disclaimer': "ملخص بالذكاء الاصطناعي — للدراسة فقط. راجِع النص الأصلي.",
+  'sum.save': "حفظ",
+  'sum.saved': "محفوظ ✓",
+  'sum.unsaveAsk': "هل تريد حذف هذا الملخص المحفوظ؟",
+  'sum.unsaveYes': "حذف",
+  'sum.keep': "إبقاؤه",
+  'sum.listen': "▶ استماع",
+  'sum.pageAll': "تلخيص الصفحة كلها (فقرات {n} · طلبات {k})",
+  'sum.saveAll': "حفظ الكل ({n})",
+  'sum.savedAll': "حُفظ {n} من الملخصات.",
+  'sum.redo': "إعادة التلخيص",
+  'sum.redoAsk': "هل تريد تلخيص هذه الفقرة من جديد؟ (طلب واحد)",
+  'sum.foldAll': "طيّ الكل",
+  'sum.unfoldAll': "توسيع الكل",
+  'sum.savedLink': "الملخصات المحفوظة لهذا الكتاب ({n})",
+  'sum.savedNote': "تم الحفظ.",
+  'sum.saveFailed': "تعذّر الحفظ.",
+  'sum.removed': "حُذف الملخص المحفوظ.",
   /* `[18 — spec 17-9]` مواقع طبية · [ابحث] — [검토 — Nour·운영자] 아랍어 문구 전부. أسماء الروابط لا تُترجم. */
   'sel.lookup': "ابحث",
   'links.tooLong': "للبحث، حدّد ست كلمات على الأكثر (ستين حرفًا)",
@@ -661,6 +690,8 @@ export default {
   'voice.cmd.slower': "أبطأ",
   'voice.cmd.faster': "أسرع",
   'voice.cmd.explain': "اشرح",
+  'voice.cmd.summarize': "تلخيص الفقرة",          // `[11-2]` [검토 — Nour·운영자]
+  'voice.cmd.summarizePrev': "تلخيص الفقرة السابقة",
   'voice.notYet': "هذا الأمر غير متاح بعد.",
   'voice.noSpeech': "لم أسمع شيئًا.",
   'voice.noMatch': "لم أفهم الأمر: «{text}»",

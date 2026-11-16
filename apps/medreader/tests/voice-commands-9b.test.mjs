@@ -98,7 +98,8 @@ test('C2 ★ V1 한 벌 — foldArabic(text/specialty.js) 와 같은 접기, imp
 function allSynonyms(c) { return c.ar.concat(c.arLoan, c.en); }
 
 test('C3 ★ V2 표 무결성 — id · 켜짐 · 겹침 = SHARED_FORMS · exact 는 표 안 · 군말·숫자 없음', () => {
-  assert.deepEqual(COMMAND_IDS, ['play', 'pause', 'next', 'prev', 'again', 'trOn', 'trOff', 'slower', 'faster', 'explain']);
+  // `[11-2 — spec 17-2-1 4-5 · 11-D11]` `summarize` 를 explain 앞에 더했다(표 무결성 규칙은 그대로 — 아래 겹침·exact·군말·숫자).
+  assert.deepEqual(COMMAND_IDS, ['play', 'pause', 'next', 'prev', 'again', 'trOn', 'trOff', 'slower', 'faster', 'summarize', 'explain']);
   assert.equal(new Set(COMMAND_IDS).size, COMMAND_IDS.length, 'id 중복');
   assert.deepEqual(VOICE_COMMANDS.filter((c) => !c.enabled).map((c) => c.id), ['explain']);
   assert.equal(MAX_ALTS, 5);

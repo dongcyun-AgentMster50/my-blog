@@ -12460,3 +12460,129 @@ Edge 412×915 · pipe · **새 프로필 `r11-1/p1`** · 가짜 키(꼬리표 `r
 스크래치 `r11-1b/`: `t1.mjs`·`t1.out.json`(꼴·전수·거울 대조·정상 응답·개요·앱 길 전수) · `t1b.mjs`(11문단) · `t2.mjs`·`t2.out.json`(숫자·길이) · `t3.mjs`·`t3.out.json`(잘린 번역·단어 세 판) · `v111/js`(11-1 판 — js 복사 2.3MB) · `rdiff.out.json`·`trunc.out.json`·`chk.out.json` · `full1.txt`·`full2.tap` · `mut.mjs`·`mut.out.json`·`mut2.out.json`·`bak/` · `diffstat-before/after.txt` · `section.md`(이 절)·`append.mjs`.
 
 **배포 가능** — 중간-1(잘린 응답의 반쪽 캐시)은 정수 `i` 의 모든 자르는 자리에서 반쪽 0·앞 문단 살아남음, 중간-2(숫자 쪼갬)는 15꼴 × 10필드 2,680경계에서 0, 정상 응답 3,000개 버림 0, 길이 상한 넘음 0, 번역·단어는 HEAD·11-1 판과 바이트까지 같음, 시험 1,774×2. 남은 것은 낮음 다섯(#1 스키마 밖 문자열 `i` 잔여 · #2–#4 시험 한 줄씩 · #5 fr 공백 천 단위 — #4 계열).
+
+
+---
+
+# 11-2 Review — 요약 시트 · 글 트리 · 선택 줄 `[⋯]` · 음성 "요약" (spec 17-2-1) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-11-2.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: spec 17-2-1(4-3·4-4·4-5·5 표 11-2 행·6·7·8 "11-2"·10, `[정정 2026-11-17 — 11-2 Build]` 세 줄), 17-1-2(9b 규칙), crossstep-notes, Build 지침·보고서(믿지 않고 다시 잼), `git diff` 16파일 + 새 파일 6개(`js/ui/sumsheet.js`·`tree.js`·`ask.js`·`js/tts/say.js`·시험 둘). 스크래치 `r11-2/`(Build `b11-2/`·`r9b1/`·`r9b2/`·`r9b3/` 는 읽기만 — `common.mjs`·`run-a.mjs`·`run-r.mjs` 는 사본을 `r11-2/` 에 두고 프로필만 새로).
+
+## 11-2R-0. 판정 — **배포 가능** (중간 0 · 낮음 6 · 정보 4)
+
+회귀 0(8c-1·8f-2·18·9a·9b·8e·서재 삭제 확인 · 번역 요청 본문 HEAD 와 바이트 같음) · 호출 수 설계 그대로(연타 5 → 1) · 엉뚱한 문단 저장 0 · XSS 0 · 콘솔 오류 0(의도한 429 네트워크 줄만). 남은 것은 Esc 와 [×] 의 소리 처리 차이, 시험 틈 둘, 9b 규칙 그대로인 "sum up" 포함 일치, 360 en·fr 두 줄, 쪽이 바뀐 뒤 "이 쪽" 문안.
+
+## 11-2R-1. 회귀 (확인 1 — 가장 중요)
+
+- **번역 요청 본문**: `r11-2/run-a.mjs`(Build 하네스 사본 · 프로필 `r11-2/pA` · HEAD = `git show` 가로채기) → **`bodiesSame: true`** — 탭 2,624B `d7e08bab` · 단어 2,543B `fdbdf49b` · 낭독 6,196B `33e4d546`(11-1·Build 값과 같음).
+- **9b 음성 명령 전부**(`r11-2/voice-diff.mjs`): 9b-1·9b-2·9b-3 Review 말뭉치(`r9b1/corpus.mjs`·`neg.mjs` · `r9b2/corpus2.mjs` · `r9b3/corpus3.mjs` C3·STEAL) **346발화 × 명령 언어 둘 = 692판**을 HEAD 명령 표(`git show` 사본)와 작업 트리 표에 넣음 → **결과(id·마지막 판정) 바뀐 것 0** · 이웃 발화를 대안 둘로 묶은 345쌍 × 명령 언어 둘 → 바뀐 것 0. 새 낱말이 기존 명령을 빼앗지 않는다. «وقف الملخص» → pause(기존 명령이 이김) · "summary stop"·"summarize slower"·«لخص و وقف» → 모호(무효). 부정 «لا لخص»·«بلاش تلخيص»·«مش ملخص»·"don't summarize"·"do not sum up" → negated · Rb(부정 대안 먼저 → 누름 무효) 3꼴 null. 9b 시험 파일은 전체 시험에서 그대로 통과.
+- **옛 시험 기대 4곳**: 뜻을 지킴 — `links-18` L9 는 고정 자리 `[3]` → 끝 자리 `[L]` 로 바꾸고 `more:true` 단언을 더함(숨김·흐림·문구 단언 무변) · `taptr-8c` I7b·`wordsheet-8f` W14 는 목록에 `summary` 한 칸(보이는 칸 = word·sentence 단언 더함) · `voice-commands-9b` C3 는 id 목록에 `summarize`(겹침 = `SHARED_FORMS`·exact·군말·숫자 단언 무변, `enabled:false` = explain 만 그대로).
+- **8c-1·8f-2·18·9a·9b·8e**(`r11-2/run-r.mjs` — Build 하네스 사본, 새 프로필 `pRr1`, 28초): 18 [⋯] → [찾아보기] 링크 둘 → 목록 줄 위(항목 2) · Esc → 목록만 닫힘·포커스 `[⋯]` · 항목·링크 하나 → `target=_blank`·`rel="noopener noreferrer"`·`no-referrer` · Esc 층: 띠 + `[⋯]` → Esc 1 메뉴만(포커스 `[⋯]`) → Esc 2 띠 / 띠 + 단어 시트 → 시트 → 띠 / 띠 + 요약 시트 → 시트 → 띠(포커스 줄) · 시트가 열린 동안 선택 줄 `display:none` · 손가락 줄 탭 → 띠 · 9a 이어폰 `play`(말하는 중) → sayer 멈춤(stops 1) → 낭독 speaking · 9b «التالي» idx 0→1 · «توقف» paused · 8e 915×412 dock·띠·선택 줄 겹침 0·[≡] 보임·가로 스크롤 0.
+- **18 링크 0개 규칙**(`run-r3.mjs` · ar UI): `links.medical=[]` → 메뉴 `summary,readFrom`(찾아보기 없음) · `{q}` 없는 링크뿐 → 없음 · 기본 → `summary,readFrom,lookup`.
+- **서재 삭제 확인**(`run-r1.mjs` 8): ko 머리 "…지울까요?"(영어·"everything" 0) + "저장한 요약 n개는 남습니다" 둘째 줄 · 답 false → 문서 그대로. 4언어 문구(diff): 지우는 것 = PDF·읽던 자리·퀴즈 기록·번역 캐시 — 실제 연쇄(`pages`·`progress`·`questions`·`attempts`·`mistakes`·`cards`(term 제외)·`aiCache`·`sections`·`searchText`)의 요약으로 틀린 말 없음.
+
+## 11-2R-2. 호출 수 (확인 2) — `run-r1.mjs`(25초)
+
+| 동작 | 설계 | 잰 값 |
+|---|---|---|
+| [요약] 미적중 | 1 | 1(아래 연타 · 늦은 결과 · 쪽 바뀜 갈래 모두) |
+| [요약] 연타 5번(한 누름 안에 click 다섯, 응답 600ms 늦춤) | 1 | **1** — 첫 click 의 `beforeOpen` 이 선택 줄을 거둬 스냅숏이 비고, 나머지는 `if (!s) return` |
+| [이 쪽 전체 요약] 연타 5번(n 4 · 미리 센 k 1) | k | **1** · 결과 4 ready(둘째부터 `st.busy`) |
+| [다시 시도] 연타 5번(429 → `blocked/exhausted` 뒤) | 1 | **1**(`pipeline.retry()` 를 다섯 번 불러도 같은 키 진행 중 공유) · ready |
+| 429 뒤 3초 | 0 | **0**(자동 재시도 없음) |
+| [저장] · [저장됨 ✓] → [지우기] | 0 | 0 · 0 |
+| 닫은 뒤 다른 문단 열기(옛 문단 응답 1.8초 늦음) | 각 1 | 2(옛 1 + 새 1) — 옛 응답은 새 시트를 덮지 않음(아래 4) |
+
+**[다시 시도] 의 `pipeline.retry()` 와 7-6 "자동 재시도 0"**: `retry()` 는 시트 [다시 시도] 누름(`act('retry')` → `flow.retry`) 안에서만, 막힌 원격 상태(`RETRYABLE_REMOTE` — exhausted·cooldown·region·model)일 때만 부른다. 타이머·상태 알림에서 부르는 길 0(`d.unblock()` 부르는 곳은 `flow.retry` 1곳, `flow.retry` 는 `act('retry')` 뿐 — grep). 사용자 동작이므로 7-6 과 맞는다. 문지기 막힘(no-key·consent)은 `retry()` 없이 문지기를 다시 볼 뿐(X9 변이가 K4 로 지켜짐).
+
+## 11-2R-3. 음성 흐름 (확인 3) — `run-r2.mjs`(30초 · 412 ko UI · 명령 ar · 흉내 음성 30–60ms/자)
+
+| 장면 | 결과 |
+|---|---|
+| 낭독 중(문단 둘째 문장 idx 2) «لخص» → 요지 말하는 중 **Esc** | 시트 닫힘 · **sayer 계속 말함** · 낭독 paused → 다 말한 뒤 **speaking, 같은 문장 idx 2**(restores 1) — #1 |
+| 요지 말하는 중 **마이크 다시 탭** | sayer 멈춤(stops 1) · asking false · **되돌림 0** · 인식기 시작 1 → 이어서 «التالي» → idx 5→6, paused 유지(그 누름의 `was` = paused) · sayer 다시 안 켜짐 |
+| 요지 말하는 중 **9a 이어폰 play** | sayer 멈춤(stops 1) · 낭독 speaking · asking false |
+| 요지 말하는 중 **서재로**(화면 떠남) | sayer 멈춤 · 시트 숨음 · 낭독 idle · 떠난 뒤 1.5초 발화 **0** |
+| **단어 시트 열린 채** «لخص» | 단어 시트 닫힘 → 요약 시트(둘이 함께 열린 때 0) |
+| **잘린 JSON** | item failed · 상태 줄 error · 발화 = **ko-KR 한 마디**(UI 언어) 뒤 en-US(원문 낭독 재개) · restores 1 · 요청 1 |
+| **429** | `blocked/exhausted` · error · ko-KR 한 마디 → 재개 · restores 1 · 요청 1 |
+
+Build V(지금/앞 문단·대상 언어 `ar-SA`·괄호 라틴 0·멈춤이면 멈춘 채·[▶] 손이 이김)는 시험 K11·K11b + 변이 X10(확인 줄 "앞 문단")·X5([▶ 듣기] 'stopped' 뒤 재생 금지)로 다시 확인.
+
+**남은 6 — "sum up" 긴 문장 안 오탐**: "to sum up the patient is stable"·"let me sum up the dosage for you" → summarize(포함 일치). 9b 규칙 ① 은 **한 낱말** 동의어만 3낱말 이하로 묶는다 — 2낱말 "speed up"·"slow down"·"go back" 과 같은 결이고 9b 다듬기 때 운영자가 정한 범위. 마이크를 눌러야만 듣고, 피해는 요약 1호출 + 요지 말하는 동안 낭독 잠시 멈춤 뒤 재개(엉뚱하게 멈춘 채가 아님) → **낮음**(#4). 같은 규칙으로 "no summary" → summarize("no" 는 부정어 목록 밖 — "no translation" = trOff 와 같은 규칙) · "give me a summary"(4낱말) → 못 알아들음. «ملخص الفقرة»·«لخص هون»·«من فضلك لخص» → summarize · «لخصلي»·«يا ريت تلخص» → none(접미 붙은 꼴은 표에 없음 — `[검토 — Nour]`).
+
+## 11-2R-4. 데이터 (확인 4) — `run-r1.mjs`
+
+- **[저장] 레코드 꼴**: `kind:'summary'` · 키 `anchor·cacheKey·createdAt·docId·docTitle·domain·gist·gistSrc·id·kind·langs·model·pageNo·points·promptVersion·provider·src·target·terms·updatedAt` · `anchor` = `lineIds·pageNo·paraId·textHash` · `pageNo` 2 = `anchor.pageNo` · `paraId` 그 문단 · `textHash` = `textHashOf(문단 글)` · **`text` 필드 0 · 문단 글 40자 조각 6개 중 레코드에 든 것 0**. 대체 규칙(같은 docId+textHash+target)은 11-1 서비스 — 11-1 Review 에서 확인, 여기서는 [다시 요약] 뒤 `saved=null` → [저장] 이 대체로 가는 길(K7 · 변이 X11 빨강).
+- **[저장됨 ✓]**: 질문 줄(`ask:'unsave'`) · 처음 포커스 **[그대로 두기]**(`askNo`) · [지우기] → annotations 0 · 요청 0.
+- **쪽이 바뀐 뒤 [이 쪽 전체 요약](남은 3)**: 2쪽 문단으로 시트를 연 뒤 3쪽으로 넘김 → 시트 열린 채(plan n 4·k 1) → [이 쪽 전체 요약] 요청 1 · 결과 4 · [모두 저장] → 레코드 **전부 `pageNo` 2 · `anchor.pageNo` 2 · 각 `paraId` 의 2쪽 해시 = 레코드 `textHash`**(합성 PDF 는 3쪽에도 같은 문단 글이 있어 해시만으로는 쪽을 못 가리지만, 쪽·문단 id·줄 id 가 모두 연 때의 쪽). **엉뚱한 쪽·문단 저장 0.** 저장 3건(4문단 중 같은 글 두 문단이 같은 해시 → 11-D10 대체로 한 레코드 — 설계 그대로). 쪽 결과의 요지를 누르면(2쪽 줄 `revealLine`) 3쪽에서는 조용히 아무 일 없음(오류 0, 쪽 그대로) — #6.
+- **늦게 온 결과**: 2:p2 요약 중(응답 1.8초 늦음) Esc → 2:p4 열기(ready) → 2.2초 뒤에도 시트 문단 2:p4·같은 요지 길이 — 옛 결과가 새 문단을 덮지 않음(`run()` 의 `my !== gen`). 이 줄은 node 시험이 지키지 않는다(변이 X2 살아남음 — #3).
+
+## 11-2R-5. 화면 · 접근성 (확인 5)
+
+- **배치**(`run-l2.mjs` — 360×740·412×915·915×412 × ko·ar·en·fr = 12조합, 51초): 보이는 칸 **3**(word·sentence·`[⋯]`) · 48px 이상 · `[⋯]` 가 논리 끝(ar 은 왼쪽) · 가로 넘침 0 · 두 줄 칸 = **360 en·fr 의 [문장 번역] 하나뿐**(`121`, 남은 1 그대로 — #5) · 메뉴 위끝 ≥ 0(가로 24)·화면 안·칸 48·`text-align:start`·ar `direction:rtl` · **18 목록**(메뉴 자리에서) 위끝 ≥ 0·화면 안(가로 5) · 문단 시트·**쪽 시트** 모두 위끝 ≥ 0(세로 73·가로 24) · [×] 48×48 `elementFromPoint` 로 보임 · 시트 안 단추·`summary` 전부 48 이상 · 가로 넘침 0 · 끝까지 굴린 마지막 단추가 머리 아래·시트 안에서 눌림 · 가로 compact 시트 높이 219px(4언어).
+- **키보드**: 트리 `summary` Enter·Space 접고 펴기(Build B · K9) · **Tab 가둠** — [×]에서 Tab 14번·Shift+Tab 14번 28걸음 모두 시트 안(SUMMARY·save·listen·pageAll·redo·fold·close 순환) · **Esc → 포커스 그 문단 첫 줄**(`2:1`) · `[⋯]` Enter → 첫 칸 포커스 · ↓↓↓↑·End·Home 순환 · Esc → 메뉴만 닫힘·포커스 `[⋯]`·줄 그대로 · Tab → 메뉴 닫힘(포커스 다음 요소).
+- **aria**: 시트 `role=dialog`·`aria-modal=false`·`aria-labelledby=sumTitle`(제목 `tabindex=-1` 에 열 때 포커스) · 상태 줄 `role=status`·`aria-live=polite` · 질문 줄 `aria-live=polite` · `[⋯]` `aria-haspopup=menu`·`aria-expanded` true/false·`aria-controls` · 메뉴 `role=menu`+이름 · 칸 `role=menuitem`.
+- **XSS**(`run-x.mjs`): 흉내 응답의 요지·요점·하위 요점·용어 원어/번역·원문 요지에 `<img src=x onerror=…>`·`<b>`·`<i>` → 시트 `img` 0 · `b/i/script` 0 · onerror 발동 0 · 글자로 보임(ready · 요지·원문 요지·트리 2줄·용어 1줄). (첫 시도는 onerror 안 숫자 `0`·`1` 때문에 숫자 거름이 요지를 failed 로 — 숫자 뺀 꼴로 다시.) `innerHTML`·`insertAdjacentHTML`·`outerHTML` grep: js 전체에 주석뿐.
+
+## 11-2R-6. 시험 · 점검 (확인 6)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,797/1,797 · 1,797/1,797**(fail 0 · 10.8초 · 10.7초, `r11-2/full1.tap`·`full2.tap`).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 85개 · CSS 4개)" · `git diff --check` 0 · 새 파일 6개 `diff --no-index --check` 0 · `grep -rn splitSentences js/` = HEAD `git grep` 과 같은 10줄(`text/cite.js` 주석 3 · `text/segment.js` 1 · `tts/text.js` 6).
+
+## 11-2R-7. 변이 (확인 7) — `r11-2/mut.mjs`(Build M1–M9 와 다른 곳 · 원본 바이트를 `r11-2/bak/` 에 쓰고 한 곳만 바꿈 → 11-2·9a·9b·8c·8f·18 시험 8파일 132건 → `bak/` 를 읽어 되씀 → 바이트 비교 · 끝에 `cmp` 4파일 0)
+
+| # | 변이 | 결과 |
+|---|---|---|
+| X4 | `say.js` 엔진 '취소' 오류를 'stopped' 대신 다음 조각으로 | **빨강** Y5 |
+| X5 | `ask.listen` — 손이 끊어도('stopped') 낭독 다시 켜기 | **빨강** Y7 |
+| X7 | [이 쪽 전체 요약]을 요약 가능 문단 1개에도(정정 ③ ≥ 2) | **빨강** K8 |
+| X8 | 원격 막힘 전부에 [다시 시도](capped·no-key 포함) | **빨강** K4·K8 |
+| X9 | 시트 `open()` — 문지기가 막아도 보내기 | **빨강** K4 |
+| X10 | 음성 확인 줄 — 앞 문단이어도 "문단 요약" | **빨강** K11 |
+| X11 | [다시 요약] `force` 빼기(캐시 적중 → 0호출) | **빨강** K7 |
+| X2 | 시트 `run()` — 닫은 뒤 늦게 온 결과를 버리지 않기 | 살아남음 — **시험 틈**(#3) · headless 로 지금 코드 확인 |
+| X6 | 마이크 다시 탭 — 요지 말하는 중 `stopAsk` 빼기 | 살아남음 — **시험 틈**(#2) · headless 로 지금 코드 확인 |
+| X1 | voice.js 결과 뒤 `alive()` 확인 빼기 | 살아남음 — 동치(`fail()` 안의 `alive()` · ask 의 `alive()` 가 같은 일) |
+| X3 | [이 쪽 전체 요약]이 이미 준비된 문단도 다시 보냄 | 살아남음 — 거의 동치(파이프라인 캐시가 0호출로 거름 — 호출 수 그대로) |
+
+모두 `restored: true` · `cmp` sumsheet·voice·say·ask ↔ `bak/` 차이 0 · 변이 전후 `git diff --shortstat` 같음(16파일 +727 −73).
+
+## 11-2R-8. headless (확인 8)
+
+Edge · pipe · 새 프로필 `r11-2/p*` · 가짜 키 · 흉내 Gemini(OPTIONS 204 + CORS, `responseSchema` 갈래 — 요약 `gist` · 번역 · 단어) · 흉내 `speechSynthesis`·9b-2 가짜 인식기 · `setCacheEnabled(false)` · **서버 띄우지 않음**(가로채기) · 합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 · 한 번에 하나.
+
+| 실행 | 프로필 | 시간 | 콘솔 오류 · pageerror · 외부 · 없는 파일 · 흉내 오류 |
+|---|---|---|---|
+| `run-a.mjs`(번역 본문 HEAD 대조) | pA | 47초 | 0 · 0 · 0 · 0 · 0 |
+| `run-r1.mjs`(호출·저장·쪽 바뀜·Tab·삭제 확인) | pR1a | 25초 | 1(의도한 429 네트워크 줄) · 0 · 0 · 0 · 0 |
+| `run-x.mjs`(XSS) | pX1 · pX2 | 6초 · 6초 | 0 |
+| `run-r2.mjs`(음성 가장자리) | pR2a | 30초 | 1(의도한 429) · 0 · 0 · 0 · 0 |
+| `run-l2.mjs`(12조합) | pL2a | 51초 | 0 |
+| `run-r.mjs`(Build 회귀 하네스 다시) | pRr1 | 28초 | 0 |
+| `run-r3.mjs`(메뉴 키보드·링크 0) | pR3a | 10초 | 0 |
+
+스크린샷 `r11-2/shots/`: `r-sheet-360x740-fr.png` · `r-sheet-412x915-ar.png` · `r-page-ko-915x412.png`.
+
+## 11-2R-9. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(닫는 두 길이 다름) | 음성 "요약" 요지를 말하는 중 **Esc** 로 시트를 닫으면 sayer 가 계속 말하고, 끝나면 이어 읽는다(restores 1). 같은 때 **[×]**(또는 시트 단추)는 `act()` 첫 줄 `cancelVoice` 로 말하기를 끊고 **되돌림 없음**(낭독 멈춘 채). 데스크톱 키보드에서만 생김 | 11-2R-3 · `sumsheet.js` `onKey` 는 `closeSheet(true)` 만. 방향: Esc 닫기에도 `deps.cancelVoice()` 한 줄(=[×] 와 같게) — 또는 "Esc 는 소리를 건드리지 않는다"를 spec 정정 줄에 |
+| 2 | 낮음(시험 틈) | 요지 말하는 중 **마이크 다시 탭**이 sayer 를 멈추는 줄(`press()` 의 `if (askJob ‖ sayerBusy()) stopAsk()`)을 node 시험이 지키지 않음(X6 살아남음). 지금 코드는 맞게 동작(stops 1·되돌림 0·듣기 시작) | 11-2R-7 X6. 방향: K11b 에 "말하는 중 `voice.press()` → `sayer.busy()` false · restores 그대로" 한 줄 |
+| 3 | 낮음(시험 틈) | 시트 `run()` 의 `if (my !== gen) return false` 를 지키는 시험 없음(X2 살아남음). 빠지면 닫은 뒤 늦게 온 **옛 문단 결과가 새 시트 문단에 덮이고**, 그대로 [저장] 하면 옛 요지가 새 문단 해시로 저장된다(엉뚱한 문단 저장의 유일한 길). 지금 코드는 막음(11-2R-4) | 11-2R-7 X2. 방향: `createSumFlow` 시험에 "open(A, 느린 응답) → close → open(B) → A 응답 도착 → items[0] = B" 한 줄 |
+| 4 | 낮음(9b 규칙 그대로 — 남은 6) | "sum up" 이 긴 문장 안에서도 summarize("to sum up the patient is stable"). "no summary" → summarize. 9b ① 은 한 낱말만 묶고 "no" 는 부정어가 아니다 — 기존 2낱말 동의어와 같은 결. 마이크를 눌러야만이고 피해는 1호출 + 잠시 멈춤 뒤 재개 → 중간 아님 | 11-2R-3. 방향: `[검토 — Nour·운영자]` 줄에 "en `sum up` 을 exact 로 둘지" 한 줄(Nour 는 ar 명령) |
+| 5 | 낮음(남은 1 그대로 — 실기기 거리) | 360 en·fr [문장 번역] 한 칸 두 줄(56px · 넘침 0). ko·ar·412·915 는 모두 한 줄 | 11-2R-5. 18R #2(넷 접힘)는 풀림. 실기기 묶음에 이미 있음 |
+| 6 | 낮음(문안 — 남은 3) | 쪽이 바뀌어도 시트의 [이 쪽 전체 요약 (문단 n · 호출 k)]은 **연 때의 쪽** — 저장은 맞지만(엉뚱한 쪽 0) 단추 이름 "이 쪽"이 보이는 쪽과 다르고, 쪽 결과의 요지를 눌러도 다른 쪽에서는 아무 일 없음 | 11-2R-4. 방향: 쪽이 바뀌면 [이 쪽 전체 요약]을 숨기거나 단추에 머리와 같은 쪽 라벨 |
+| 7 | 정보(설계 그대로) | 음성 요지를 말하는 중 시트의 아무 단추([저장] 등)를 누르면 말하기가 끊기고 되돌림이 없어 낭독이 멈춘 채 — 17-7-6 2절 1 "손이 이긴다" 그대로 | 실기기 묶음 "이어폰 재생 단추" 줄 옆에 "요지 듣는 중 [저장]" 한 줄 권함 |
+| 8 | 정보 | X1·X3 은 동치 변이(앞뒤 확인·파이프라인 캐시). 옛 시험 4곳 수정은 뜻 유지 | 11-2R-1·7 |
+| 9 | 정보 | 서재 삭제 확인 머리가 ko 에서 한국어가 됐지만 같은 묶음의 `library.card.delete`·`continue`·`extractFailed.*` 는 ko 에서 여전히 영어(HEAD 부터 — 이번 범위 밖) | `i18n/ko.js` 83–88행 |
+| 10 | 정보 | Build 보고 다시 잼 — 1,797×2 · stamp 85·4 · `bodiesSame` · Esc 층 · 18 · 9a · 9b · 8e · 12조합 · 콘솔 — 모두 맞음. `sumsheet.js` 814줄(설계 약 330)은 Build 가 적은 그대로 | 11-2R-1·5·6 |
+
+**판정: 배포 가능** — 중간 이상 0. #1–#3 은 다음 다듬기(또는 11-3 Build 와 함께) 한 줄씩.
+
+## 11-2R-10. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — HEAD 명령 표 사본만 `git show … > 파일` 리다이렉트 한 번). **막힌(거절된) 명령 0.** 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음(합성 PDF·지어낸 글만 — 결과에 글 0) · `b11-2/`·`r9b*/` 쓰기 0 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
+
+스크래치 `r11-2/`: `prep.mjs`(Build `common.mjs` → 사본 `common.mjs` — 프로필 자리·가짜 키 이름·흉내 'xss'·응답 늦춤) · `run-a.mjs`·`run-r.mjs`(Build 사본) · `run-r1.mjs`·`run-r2.mjs`·`run-r3.mjs`·`run-l2.mjs`·`run-x.mjs` · `voice-diff.mjs`·`head/`(HEAD 명령 표) · `mut.mjs`·`bak/` · `full1.tap`·`full2.tap` · `shots/` · `section.md`(이 절)·`append.mjs`.

@@ -4109,6 +4109,7 @@ TASK(general): 위와 같고 "medical term" 문장 대신 GENERAL_STYLE_LINE 과
   7. 단추(48px 이상, 논리 순서): `[저장]`(저장되어 있으면 `[저장됨 ✓]` — 누르면 "저장을 지울까요?" 페이지 안 확인) · `[▶ 듣기]`(요지를 대상 언어 음성으로 — 4-5 의 sayer. 낭독 중이면 멈추고 말한 뒤 이어 읽는다 — 설명과 같은 규칙 11-D15) · `[이 쪽 전체 요약 (문단 n · 호출 k)]` · `[다시 요약]`(호출 1 — 누르면 먼저 묻는다) · 링크 "이 책의 저장한 요약 (n)"(11-3 부터 보임, `#/summaries/:docId`).
 - **[이 쪽 전체 요약]**: 지금 쪽의 요약 가능한 문단 전부(`eligible`) → 캐시에 없는 것만 `summarize` 한 번(k = 같은 자르기 함수로 미리 센 호출 수 — 보통 1–2). 결과 화면 = 문단 순서대로 요지 + 접힌 트리 + 문단마다 [저장] + 위에 `[모두 저장 (n)]`. 문단 요지를 누르면 본문의 그 문단으로 굴린다(`revealLine(첫 줄)`).
 - 모든 글자 `textContent`/`appendBidiText`, `innerHTML` 0(13절 — Review grep).
+- `[정정 2026-11-17 — 11-2 Build]` ① **닫기**: 아래 sticky [닫기] 대신 **머리(제목 + [×] 48×48)를 위에 sticky** — 가로 compact(시트 약 219px)에서도 늘 보이고 단추 줄을 덮지 않는다(8f-2 시트의 sticky [닫기]가 compact 에서 단추를 덮던 8f3R #8 과 같은 까닭). [×] 의 이름은 `common.close`. ② 단추 [모두 접기]/[모두 펼치기]는 트리에 접히는 줄이 있을 때만, 글자는 지금 트리 상태에서(손으로 접어도 맞춘다). ③ [이 쪽 전체 요약]은 쪽에 요약 가능 문단이 **2개 이상**이고 k 를 센 뒤에만 보인다(지금 문단만이면 뜻이 없다). 이미 준비된(캐시) 문단은 다시 보내지 않는다. 쪽 결과 화면에는 [▶ 듣기]·[다시 요약]이 없다(문단 모드에서). ④ 확인 질문(다시 요약·저장 지우기)은 시트 안 질문 줄 — 처음 포커스는 [취소]/[그대로 두기]. ⑤ 쪽이 바뀌어도 시트는 닫지 않는다(머리에 쪽 라벨 — 음성 "요약" 뒤 낭독이 다음 쪽으로 넘어가도 요약은 남는다). 리더를 떠나면 닫는다. ⑥ [⋯] → [요약] 의 흐림은 **메뉴를 열 때** 잰다(`ask.canSummarize` — 호출 0). 단어 시트와 요약 시트는 한 번에 하나(열 때 다른 쪽을 거둔다 — 시트가 열린 동안 선택 줄은 숨으므로 실제로는 음성 "요약"만 단어 시트 위에서 연다).
 
 ##### 4-4. 저장 (11-1 서비스 `notes/summaries.js` · 11-2 단추)
 
@@ -4138,6 +4139,7 @@ TASK(general): 위와 같고 "medical term" 문장 대신 GENERAL_STYLE_LINE 과
   ```
 - **sayer**(`tts/say.js` 새, 약 90줄 — 서비스, `synth`·`makeUtterance`·`speechOf(lang)` 주입): `say(text, lang) → Promise<'end'|'stopped'>` · `stop()` · `busy()`. 글이 길면 `splitLong` 으로 300자 조각을 이어 말하고 조각마다 `trWatchdogMs` 감시(6-2 와 같은 이유 — onend 를 잃으면 멈춤). 목소리는 8k `langSpeechOf(target)`(번역문 음성과 같은 해석 — 휴대폰 설정 따름). 괄호 속 라틴(원어)은 `trSpeechText` 로 소리에서만 뺀다(번역문 낭독과 같다). **손이 이긴다**: [▶]·이전·다음·9a 단추·줄 탭·마이크 → `sayer.stop()`(되돌림 없음) — voice.js `cancel()` 과 같은 자리에서 부른다.
 - 음성 흐름 동안 "요약 중…/설명 준비 중…" 상태 줄은 9b 상태 줄(`status`) 하나를 쓴다.
+- `[정정 2026-11-17 — 11-2 Build]` **되돌림은 9b 흐름 한 곳**: voice.js `exec('summarize')` → 주입 `deps.onSummarize({via:'voice', was, heard, alive})` = `ask.summarize` → 준비되면 ask 가 `sayer.say(trSpeechText(요지), 대상 언어)` 를 `{ok:true, prev, done}` 으로 돌려주고, **voice.js 가 `done` 뒤 `restore(was)`**('stopped' 면 되돌림 없음). 대상 아님·막힘·실패는 `{ok:false, key}` → voice.js 가 상태 줄 + 한 마디(`say(key, was)`) → 되돌림. 확인 줄은 결과 뒤 — 앞 문단이면 `voice.cmd.summarizePrev`("앞 문단 요약"). 기다리는 사이 손이 닿으면(`cancel`) `alive()` 가 거짓이라 ask 는 말하지 않는다. voice.js 는 `sayer`({busy, stop})도 주입받아 **바쁨**(`isListening`)에 넣는다 — 9a 이어폰 단추·화면 단추가 먼저 `cancel()`(= `sayer.stop()`). controls `cancelVoice()` 는 `voice.cancel()` + `sayer.stop()`(인식기가 없는 기기에서도 손이 이긴다). 시트 [▶ 듣기]는 ask `listen(text, lang)` — 읽던 중이면 `speaker.pause()` → 말함 → 'end' 면 [▶] 와 같은 `pressPlay()`. sayer 목소리는 `langSpeechOf(lang)`(8k), 속도는 낭독 속도. 11-4 설명 갈래도 같은 꼴(`done` · `listen`)을 쓰면 된다.
 
 ##### 4-6. 저장한 요약 모아 보기 · 범위 개요(11c) · 내보내기 (11-3 — `ui/summaries.js`)
 
@@ -4204,7 +4206,8 @@ TASK(general): 위와 같고 "medical term" 문장 대신 GENERAL_STYLE_LINE 과
 
 #### 7. i18n (4언어 같은 키 — i18n 시험이 짝을 본다)
 
-11-2 `sum.*` 약 20(제목·요약 중·실패·대상 아님·막힘은 `noteKeyFor` 재사용·저장·저장됨·저장 지우기 확인·듣기·이 쪽 전체 요약(문단 n · 호출 k)·모두 저장·다시 요약 확인·모두 접기/펼치기·용어·원문 언어 요지·고지·책의 저장한 요약 링크) + `sel.more`·`sel.summary` + `voice.cmd.summarize` + 서재 `library.card.deleteConfirmSummaries`. 11-3 `summaries.*` 약 26(제목·전체/책별·장/쪽 범위·개요 만들기(호출 1)·범위가 큼·개요 저장·원문으로·위치 바뀜·삭제 확인·내보내기·내보내기 고지·빈 목록·문서 없음 묶음). 11-4 `explain.*` 약 10(꼬리표·준비 중·실패·대상 아님·다시 듣기·고지) + `sel.explain` + `usage.kind.explain`. ar·fr 새 문구는 `[검토 — Nour·운영자]`. 음성 명령 낱말도 `[검토 — Nour·운영자]`.
+11-2 `sum.*` 약 20(제목·요약 중·실패·대상 아님·막힘은 `noteKeyFor` 재사용·저장·저장됨·저장 지우기 확인·듣기·이 쪽 전체 요약(문단 n · 호출 k)·모두 저장·다시 요약 확인·모두 접기/펼치기·용어·원문 언어 요지·고지·책의 저장한 요약 링크) + `sel.more`·`sel.summary` + `voice.cmd.summarize` + 서재 `library.card.deleteConfirmSummaries`.
+`[정정 2026-11-17 — 11-2 Build]` 실제 31키: `sum.*` 26(제목 둘 — 문단·쪽 · 저장 안내·실패·지움 · 모두 저장 결과 포함, 원문 언어 요지 라벨은 두지 않음 — 작은 글자 줄로 구별) + `sel.more`·`sel.summary` + `voice.cmd.summarize`·`voice.cmd.summarizePrev`("앞 문단 요약" — 11-D12 확인 줄) + `library.card.deleteConfirmSummaries`. 서재 삭제 확인 머리 `library.card.deleteConfirm` 4언어를 "…와 함께 저장된 모든 것" 대신 지워지는 것(PDF·읽던 자리·퀴즈 기록·번역 캐시)으로 고쳤다(ko 가 영어였음 — 11-1R #8 · ar·fr `[검토 — Nour·운영자]`). 11-3 `summaries.*` 약 26(제목·전체/책별·장/쪽 범위·개요 만들기(호출 1)·범위가 큼·개요 저장·원문으로·위치 바뀜·삭제 확인·내보내기·내보내기 고지·빈 목록·문서 없음 묶음). 11-4 `explain.*` 약 10(꼬리표·준비 중·실패·대상 아님·다시 듣기·고지) + `sel.explain` + `usage.kind.explain`. ar·fr 새 문구는 `[검토 — Nour·운영자]`. 음성 명령 낱말도 `[검토 — Nour·운영자]`.
 
 #### 8. 수용 기준 (16절 형식 — 16-D5 를 대체)
 

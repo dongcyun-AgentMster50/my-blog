@@ -83,8 +83,10 @@ export default {
   'library.card.extractFailed.other': '{n} pages could not be read',
   'library.card.continue': 'Continue reading',
   'library.card.delete': 'Delete',
-  'library.card.deleteConfirm': 'Delete "{title}" and everything stored with it?',
+  // `[11-2]` [검토 — Nour·운영자]
+  'library.card.deleteConfirm': 'Supprimer « {title} » ? Le PDF, la progression de lecture, l’historique des quiz et les traductions en cache seront supprimés.',
   'library.card.deleteConfirmVocab': '{n} entrées du lexique seront conservées',   // `[8f-2]` [검토 — Nour·운영자]
+  'library.card.deleteConfirmSummaries': '{n} résumés enregistrés seront conservés',   // `[11-2]` [검토 — Nour·운영자]
   'library.card.vocab': 'Lexique de ce livre',   // `[8f-3]` [검토 — Nour·운영자]
 
   /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
@@ -378,6 +380,33 @@ export default {
   'sel.sentence': "Traduire la phrase",
   'sel.readFrom': "Lire à partir d’ici",
   'sel.tooLong': "Pour traduire un mot, sélectionnez au plus 6 mots (60 caractères)",
+  /* `[11-2 — spec 17-2-1]` menu [⋯] · [Résumé] · fiche de résumé — [검토 — Nour·운영자] */
+  'sel.more': "Autres actions",
+  'sel.summary': "Résumé",
+  'sum.title': "Résumé du paragraphe · {page}",
+  'sum.titlePage': "Résumé de la page · {page}",
+  'sum.pending': "Résumé en cours…",
+  'sum.failed': "Résumé impossible.",
+  'sum.notEligible': "Ce paragraphe est trop court pour un résumé, ou ce n’est pas du texte courant.",
+  'sum.terms': "Termes clés",
+  'sum.disclaimer': "Résumé par IA — pour l’étude uniquement. Vérifiez le texte original.",
+  'sum.save': "Enregistrer",
+  'sum.saved': "Enregistré ✓",
+  'sum.unsaveAsk': "Supprimer ce résumé enregistré ?",
+  'sum.unsaveYes': "Supprimer",
+  'sum.keep': "Le garder",
+  'sum.listen': "▶ Écouter",
+  'sum.pageAll': "Résumer toute la page (paragraphes {n} · appels {k})",
+  'sum.saveAll': "Tout enregistrer ({n})",
+  'sum.savedAll': "{n} résumés enregistrés.",
+  'sum.redo': "Résumer à nouveau",
+  'sum.redoAsk': "Résumer à nouveau ce paragraphe ? (1 appel)",
+  'sum.foldAll': "Tout replier",
+  'sum.unfoldAll': "Tout déplier",
+  'sum.savedLink': "Résumés enregistrés de ce livre ({n})",
+  'sum.savedNote': "Enregistré.",
+  'sum.saveFailed': "Enregistrement impossible.",
+  'sum.removed': "Résumé enregistré supprimé.",
   /* `[18 — spec 17-9]` sites médicaux · [Chercher] — [검토 — Nour·운영자] */
   'sel.lookup': "Chercher",
   'links.tooLong': "Pour chercher, sélectionnez au plus 6 mots (60 caractères)",
@@ -666,6 +695,8 @@ export default {
   'voice.cmd.slower': "Plus lent",
   'voice.cmd.faster': "Plus vite",
   'voice.cmd.explain': "Expliquer",
+  'voice.cmd.summarize': "Résumer le paragraphe",                // `[11-2]` [검토 — Nour·운영자]
+  'voice.cmd.summarizePrev': "Résumer le paragraphe précédent",
   'voice.notYet': "Cette commande n’est pas encore disponible.",
   'voice.noSpeech': "Je n’ai rien entendu.",
   'voice.noMatch': "Commande non reconnue : « {text} »",

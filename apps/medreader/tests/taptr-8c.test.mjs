@@ -594,12 +594,14 @@ test('I7 ★ tapView — 준비된 번역 이어 붙이기 · 가장 무거운 �
 });
 
 test('I7b 선택 줄 — SEL_ACTIONS(단어 번역 hidden · 문장 번역 · 여기서부터 읽기) · selBarModel 흐림 · clampSelection 6낱말·60자', () => {
-  // `[18]` 넷째 `lookup`([찾아보기] — `{q}` 링크가 있을 때만, ctx 없으면 숨김)이 붙었다(links-18 L9 가 본다).
-  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'readFrom', 'lookup']);
+  // `[18]` `lookup`([찾아보기] — `{q}` 링크가 있을 때만, ctx 없으면 숨김)이 붙었다(links-18 L9 가 본다).
+  // `[11-2 — 11-D3]` [요약]이 더해지고 [요약]·[여기서부터 읽기]·[찾아보기]는 `[⋯]` 안(`more`) — 보이는 칸은 [단어 번역][문장 번역].
+  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'summary', 'readFrom', 'lookup']);
+  assert.deepEqual(SEL_ACTIONS.filter((a) => !a.more).map((a) => a.id), ['word', 'sentence']);
   assert.equal(SEL_ACTIONS[0].hidden, true, '8c-1 에서는 마크업만(8f-2 가 켠다)');
   assert.equal(HIDE_DELAY_MS, 300);
   const m = selBarModel(SEL_ACTIONS, { text: 'myocardial' });
-  assert.deepEqual(m.map((x) => [x.id, x.hidden, x.disabled]), [['word', true, false], ['sentence', false, false], ['readFrom', false, false], ['lookup', true, false]]);
+  assert.deepEqual(m.map((x) => [x.id, x.hidden, x.disabled]), [['word', true, false], ['sentence', false, false], ['summary', false, false], ['readFrom', false, false], ['lookup', true, false]]);
   const long = selBarModel(SEL_ACTIONS, { text: 'a b c d e f g' });
   assert.equal(long[0].disabled, true);
   assert.equal(long[1].disabled, false, '[문장 번역]은 길어도 된다');

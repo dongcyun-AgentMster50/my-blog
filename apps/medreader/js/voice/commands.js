@@ -60,6 +60,7 @@ export const CMD_LANGS = Object.freeze(['auto', 'ar', 'en']);
 //   더하고, 뜻이 둘인 낱말(«شغل» "일" · «بعده» "아직" · «قدام»·«ورا» 장소 · «تابع» "따라가다" · «ترجمة»·«ترجم»)은 `exact` 로 —
 //   혼자 말할 때만 명령이다. `[검토 — Nour·운영자]` 더한 낱말 전부.
 // `enabled:false` = 표에 자리만(explain — 11a 결정 뒤 켠다, 9b-D14). 꺼진 동안 이 말은 nomatch 가 아니라 `enabled:false` 로 돌아온다.
+// `[11-2]` `summarize`(문단 요약)를 explain 앞에 더했다 — 실행은 `ui/voice.js` 가 주입 함수(`deps.onSummarize`)로만.
 const RAW = [
   {
     id: 'play', enabled: true,
@@ -134,6 +135,14 @@ const RAW = [
     arLoan: [],
     en: ['faster', 'speed up', 'quicker', 'speed it up'],
     exact: ['بسرعة']   // "빨리" — «تعال لهون بسرعة» 같은 일상 문장(9b1R-2)
+  },
+  {
+    // `[11-2 — spec 17-2-1 4-5 · 11-D11]` 문단 요약 — 지금 문단(문단 첫 문장이면 바로 앞 문단, 11-D12). `[검토 — Nour·운영자]` 낱말 전부.
+    id: 'summarize', enabled: true,
+    ar: ['لخص', 'لخّص', 'ملخص', 'تلخيص', 'لخص الفقرة'],
+    arLoan: [],
+    en: ['summarize', 'summary', 'sum up'],
+    exact: []
   },
   {
     id: 'explain', enabled: false,

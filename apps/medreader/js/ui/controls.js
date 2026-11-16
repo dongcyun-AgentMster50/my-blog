@@ -33,7 +33,9 @@ import {
   // `[9a]` 이어폰·잠금 화면 알림의 제목(spec 17-1-1 5)
   docTitle,
   // `[8c-1]` 탭한 줄·선택이 띠·선택 줄에 가리면 굴린다(spec 17-7-6 4-1·4-2)
-  liftAbove, liftLineAbove, focusLine
+  liftAbove, liftLineAbove, focusLine,
+  // `[11-2]` 쪽 요약에서 문단 요지를 누르면 그 문단 첫 줄로
+  revealLine
 } from './reader.js';
 // `[8c-1 — spec 17-7-6 4-1·4-2]` 줄 → 문장(순수) · 선택 동작 줄.
 import { unitAt, tapPlan, liftEdge } from '../text/select.js';
@@ -61,6 +63,10 @@ import { createHandsfree } from './handsfree.js';
 import { createVoice, mountVoice, recognitionOf } from './voice.js';
 // `[9b]` 번역 켜기·끄기 — 설정 화면 단추와 같은 길(저장 + 끄기 전 모드 기억 + 줄 다시 그리기).
 import { setReadalongMode, lastOnMode } from './settings.js';
+// `[11-2 — spec 17-2-1 4-3·4-5]` 문단 요약 — 대상 언어 한 번 말하기(sayer) · 요약 시트 · 흐름(선택 줄 [요약]·음성 "요약"이 같은 길).
+import { createSayer } from '../tts/say.js';
+import { initSumSheet } from './sumsheet.js';
+import { createAsk } from './ask.js';
 
 let els = null;
 let speaker = null;
@@ -80,6 +86,10 @@ let voice = null;
 let selbar = null;
 /** `[8f-2]` 단어 시트 — `open(snap)`·`close(back)`·`isOpen()`. 마크업이 없으면 null(선택 줄 [단어 번역]은 숨은 그대로). */
 let wordsheet = null;
+/** `[11-2]` 요약 — sayer(`say`·`stop`·`busy`) · 시트(`open`·`close`·`isOpen`) · 흐름(`summarize`·`listen`·`canSummarize`). */
+let sayer = null;
+let sumsheet = null;
+let ask = null;
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -265,7 +275,9 @@ export function initControls() {
   selbar = initSelBar({
     root: root,
     onAction: onSelAction,
-    lift: function (bottom, edge) { liftAbove(bottom, edge); }
+    lift: function (bottom, edge) { liftAbove(bottom, edge); },
+    // `[11-2]` [⋯] 를 열 때 [요약] 흐림 판정(그 문단이 요약 대상인가 — 호출 0)
+    canSummarize: function (s) { return ask ? ask.canSummarize(s) : undefined; }
   });
   // `[8f-2 — spec 17-7-6 4-5]` 단어 시트 — 문장 단위는 탭 번역과 같은 `speaker.sentenceUnits()`(문지기 문맥을 먼저 맞춘다),
   // 문서·대상 언어·문체는 리더 값. 시트가 준비되면 선택 줄 [단어 번역]을 켠다(목록을 바꿔 끼움 — 8c-1 `refresh`).
@@ -280,6 +292,38 @@ export function initControls() {
     cancelVoice: cancelVoice
   });
   if (wordsheet && selbar) selbar.refresh(showAction(SEL_ACTIONS, 'word'));
+  // `[11-2 — spec 17-2-1 4-3·4-5]` 요약 — sayer(대상 언어 음성: 번역문과 같은 해석 `langSpeechOf`) · 시트(같은 pipeline — 상태 기계 한 벌) ·
+  // 흐름(문장 단위는 탭 번역·단어 시트와 같은 `speaker.sentenceUnits()`). 시트는 한 번에 하나 — 열 때 단어 시트·선택 줄을 거둔다.
+  sayer = createSayer({
+    synth: (typeof window !== 'undefined' && window.speechSynthesis) || null,
+    makeUtterance: makeUtterance,
+    speechOf: function (lang) { return langSpeechOf(lang, voices, settings.get); },
+    rate: function () { return speaker.getRate(); }
+  });
+  sumsheet = initSumSheet({
+    pipeline: pipeline,
+    gate: function () { return ask ? ask.gate() : { ok: true, reason: null }; },
+    listen: function (text, lang) { return ask ? ask.listen(text, lang) : null; },
+    revealLine: function (lineId) { return revealLine(lineId); },
+    focusBack: function (lineId) { focusLine(lineId, false); },
+    cancelVoice: cancelVoice
+  });
+  if (sumsheet) {
+    ask = createAsk({
+      speaker: speaker,
+      readalong: readalong,
+      sheet: sumsheet,
+      sayer: sayer,
+      units: function () { syncReadalong(); return speaker.sentenceUnits(); },
+      ctx: function () {
+        const p = currentPage();
+        return { docId: p.docId, page: p.page, src: sourceLang(), target: targetLang(), domain: docDomain(), docTitle: docTitle(),
+          provider: providerId(), model: String(settings.get('ai.model') || '') };
+      },
+      pressPlay: pressPlay,
+      beforeOpen: function () { if (wordsheet) wordsheet.close(false); if (selbar) selbar.clear(); }
+    });
+  }
   // `[8c-1]` 쪽이 바뀌면(쪽 넘김·뷰 전환·새 판) 탭 띠를 닫는다 — 다른 쪽 문장의 번역이 남지 않게.
   onPageRender(() => { if (trband) trband.closeTap(); });
   // `[8c-1c]` 숨긴 리더를 다시 보이면(검색 화면에서 돌아옴 — 다시 그리지 않는다) 띠 자리를 다시 잡는다: 떠날 때 `closeTapBand` 가
@@ -364,7 +408,10 @@ export function initControls() {
     // 안내 한 마디 = UI 언어 문장 — 표 안내와 같은 해석(8k `langSpeechOf`).
     sayVoice: function (lang) { return langSpeechOf(lang, voices, settings.get); },
     vibrate: function (ms) { if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(ms); },
-    view: mounted ? mounted.view : null
+    view: mounted ? mounted.view : null,
+    // `[11-2 — spec 17-2-1 4-5]` 음성 "요약" — 흐름(ask)을 주입(voice.js 는 파이프라인·시트를 모른다) · 요지 말하기(sayer)도 손이 이긴다
+    onSummarize: function (o) { return ask ? ask.summarize(o) : Promise.resolve(null); },
+    sayer: sayer
   });
   if (mounted) mounted.button.addEventListener('click', () => voice.press());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') voice.onHidden(); });
@@ -421,7 +468,9 @@ function attachDebugHook() {
         taps: st.taps, tapBusy: st.tapBusy, tapWaiting: st.tapWaiting };   // `[8c-1b]` 탭 요청 수·떠 있음·대기 칸
     },
     // `[9a]` 이어폰·잠금 화면 버튼 — 걸림·상태·무시 수·focusFights(키·원문·제목 없음).
-    handsfree: function () { return handsfree ? handsfree.debug() : null; }
+    handsfree: function () { return handsfree ? handsfree.debug() : null; },
+    // `[11-2]` 요지 말하기 — 수·태그만(글 없음)
+    sayer: function () { return sayer ? sayer.stats() : null; }
   };
 }
 
@@ -505,8 +554,11 @@ function noReadNotice() {
   document.dispatchEvent(new CustomEvent('medreader:banner', { detail: { key: 'reader.scan.noRead', tone: 'warn' } }));
 }
 
-/** `[9b]` 듣기·실패 안내 취소(되돌림 없음). 듣는 중이 아니면 아무 일도 없다. */
-function cancelVoice() { if (voice) voice.cancel(); }
+/**
+ * `[9b]` 듣기·실패 안내 취소(되돌림 없음). 듣는 중이 아니면 아무 일도 없다.
+ * `[11-2]` 요지 말하기(sayer — 음성 "요약"·시트 [▶ 듣기])도 같은 자리에서 멈춘다(손이 이긴다 — 인식기가 없는 기기에서도).
+ */
+function cancelVoice() { if (voice) voice.cancel(); if (sayer) sayer.stop(); }
 
 /** 리더를 떠날 때 — 소리를 멈춘다. 서재에서 낭독이 계속되면 안 된다. */
 export function leaveControls() {
@@ -519,6 +571,8 @@ export function leaveControls() {
   if (inlinetr) inlinetr.leave();
   if (selbar) selbar.hide();             // `[8c-1]` 선택 동작 줄을 거둔다
   if (wordsheet) wordsheet.close(false); // `[8f-2]` 단어 시트를 거둔다(포커스는 옮기지 않는다)
+  if (sumsheet) sumsheet.close(false);   // `[11-2]` 요약 시트도
+  if (sayer) sayer.stop();
   lastShown = null;
   toggleRatePanel(false);
 }
@@ -564,6 +618,7 @@ function openTapFor(lineId, segsWanted) {
 function onSelAction(id, snap) {
   cancelVoice();
   if (!snap || snap.lineId == null) return;
+  if (id === 'word' && sumsheet) sumsheet.close(false);    // `[11-2]` 시트는 한 번에 하나
   if (id === 'sentence') {
     // 선택 시작·끝 글자의 문장(들) — 모든 낭독 상태에서(낭독 중에도 — 다음 문장에서 띠가 낭독 문장으로 돌아간다).
     const units = speaker.sentenceUnits();
@@ -581,6 +636,9 @@ function onSelAction(id, snap) {
   } else if (id === 'word') {
     // `[8f-2]` 단어 시트 — 찾는 순서는 호출 0 먼저(단어장 → 문장 번역). 낭독은 멈추지 않는다.
     if (wordsheet) wordsheet.open(snap);
+  } else if (id === 'summary') {
+    // `[11-2 — spec 17-2-1 4-3]` 요약 시트 — 선택 시작 줄의 문장이 속한 문단(호출 1, 캐시 적중이면 0). 낭독은 멈추지 않는다.
+    if (ask) ask.summarize({ via: 'button', snap: snap }).catch(() => { /* 결과는 시트가 그린다 */ });
   }
 }
 

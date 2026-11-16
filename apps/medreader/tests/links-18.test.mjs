@@ -212,24 +212,27 @@ test('L8 ★ 새 탭 속성 한 곳 — armAnchor(target·rel·referrerPolicy) �
   assert.doesNotMatch(code, /\.target\s*=\s*'_blank'[\s\S]*\.target\s*=\s*'_blank'/, 'target 은 armAnchor 한 곳에서만');
 });
 
-test('L9 선택 줄 — SEL_ACTIONS 넷째 lookup(when:links) · selBarModel 숨김·흐림·문구 키', () => {
-  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'readFrom', 'lookup']);
-  assert.equal(SEL_ACTIONS[3].when, 'links');
-  assert.equal(SEL_ACTIONS[3].key, 'sel.lookup');
+test('L9 선택 줄 — SEL_ACTIONS 끝 lookup(when:links · [⋯] 안) · selBarModel 숨김·흐림·문구 키', () => {
+  // `[11-2 — 11-D3]` 줄 단추 목록이 [단어 번역][문장 번역] + [⋯](요약·여기서부터 읽기·찾아보기)로 바뀌었다 — lookup 은 넷째 → 다섯째(`more`).
+  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'summary', 'readFrom', 'lookup']);
+  const L = SEL_ACTIONS.length - 1;
+  assert.equal(SEL_ACTIONS[L].when, 'links');
+  assert.equal(SEL_ACTIONS[L].key, 'sel.lookup');
+  assert.equal(SEL_ACTIONS[L].more, true, '[⋯] 안');
   const on = showAction(SEL_ACTIONS, 'word');
-  assert.equal(on[3].when, 'links', '[단어 번역] 켜기(8f-2)가 lookup 항목을 지우지 않는다');
+  assert.equal(on[L].when, 'links', '[단어 번역] 켜기(8f-2)가 lookup 항목을 지우지 않는다');
   const none = selBarModel(on, { text: 'asthma' }, { links: 0 });
-  assert.equal(none[3].hidden, true, '{q} 링크 0 → 없음');
-  assert.equal(selBarModel(on, { text: 'asthma' })[3].hidden, true, 'ctx 없으면 없음');
+  assert.equal(none[L].hidden, true, '{q} 링크 0 → 없음');
+  assert.equal(selBarModel(on, { text: 'asthma' })[L].hidden, true, 'ctx 없으면 없음');
   const one = selBarModel(on, { text: 'asthma' }, { links: 1 });
-  assert.deepEqual(one.map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['readFrom', false, false], ['lookup', false, false]]);
-  assert.equal(one[3].note, 'links.tooLong');
+  assert.deepEqual(one.map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['summary', false, false], ['readFrom', false, false], ['lookup', false, false]]);
+  assert.equal(one[L].note, 'links.tooLong');
   assert.equal(one[0].note, 'sel.tooLong');
   const long = selBarModel(on, { text: 'a b c d e f g' }, { links: 2 });
-  assert.equal(long[3].disabled, true, '7낱말 → 흐림');
+  assert.equal(long[L].disabled, true, '7낱말 → 흐림');
   assert.equal(long[0].disabled, true);
   assert.equal(long[1].disabled, false);
-  assert.equal(selBarModel(on, { text: '…' }, { links: 2 })[3].disabled, true, '구두점뿐 → 흐림');
+  assert.equal(selBarModel(on, { text: '…' }, { links: 2 })[L].disabled, true, '구두점뿐 → 흐림');
   assert.equal(selBarModel(on, { text: '…' }, { links: 2 })[0].disabled, false, '[단어 번역] 판정은 8c-1 그대로');
 });
 

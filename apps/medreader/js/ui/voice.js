@@ -132,6 +132,9 @@ function makeRecord(kind, lang, d, m, now) {
  * @param {Function} [deps.now]              ms 시계
  * @param {Object}   [deps.view]             `{paint({visible, listening}), status(msg|null), notice(open, handlers)}`
  * @param {Object}   [deps.listener]         미리 만든 듣기 서비스(테스트) — 없으면 `createListener`
+ * @param {Function} [deps.onSummarize]      `[11-2]` 음성 "요약" — `({via:'voice', was, heard, alive})` → `Promise<{ok, key?, prev?, done?}>`
+ *                                           (controls → `ui/ask.js`. 이 파일은 파이프라인·시트를 모른다 — 주입만)
+ * @param {Object}   [deps.sayer]            `[11-2]` `tts/say.js` — `{busy(), stop()}`. 말하는 중이면 "바쁨"(9a·화면 단추가 먼저 `cancel()`)
  */
 export function createVoice(deps) {
   const d = deps || {};
@@ -165,14 +168,23 @@ export function createVoice(deps) {
 
   let flow = null;           // 지금 누름 {was, lang}
   let sayJob = null;         // 실패 안내 한 마디 {was, u, timer}
+  let askJob = null;         // `[11-2]` 음성 "요약" — 요약을 기다리거나 요지를 말하는 중 {was}
   let statusTimer = null;
   const saidInfra = new Set();   // 같은 인프라 실패는 두 번째부터 음성 없이(세션 동안 — 5절)
   const stats = { presses: 0, cancels: 0, says: 0, restores: 0, commands: {} };
+  const sayer = d.sayer && typeof d.sayer.stop === 'function' ? d.sayer : null;
 
   function state() { try { return sp ? sp.getState() : 'idle'; } catch (e) { return 'idle'; } }
   function supported() { return listener.isSupported(); }
   function visible() { return supported() && get('voice.enabled') !== false; }
-  function busyNow() { return listener.isListening() || !!sayJob; }
+  function sayerBusy() { try { return !!sayer && typeof sayer.busy === 'function' && !!sayer.busy(); } catch (e) { return false; } }
+  function busyNow() { return listener.isListening() || !!sayJob || !!askJob || sayerBusy(); }
+
+  /** `[11-2]` 요약 흐름·요지 말하기를 거둔다(되돌림 없음 — 손이 이긴다). */
+  function stopAsk() {
+    askJob = null;
+    if (sayer) { try { sayer.stop(); } catch (e) { /* 이미 끝남 */ } }
+  }
 
   function paint() { try { view.paint({ visible: visible(), listening: listener.isListening() }); } catch (e) { /* 그리기 실패가 흐름을 막지 않는다 */ } }
 
@@ -284,10 +296,49 @@ export function createVoice(deps) {
         restore(was);
         break;
       }
+      case 'summarize':
+        summarize(was, heard);
+        return;                                    // 확인 줄은 결과 뒤("앞 문단 요약"인지 알 때)
       default:
         return;
     }
     confirm(id, heard);
+  }
+
+  /**
+   * `[11-2 — spec 17-2-1 4-5 · 11-D13]` 음성 "요약" — 주입 함수(`ui/ask.js`)가 대상 문단을 정해 시트를 열고 요약한다.
+   * 준비되면 ask 가 요지를 대상 언어로 한 번 말하고(`done`), 끝나면 여기서 **되돌린다**(`restore(was)` — 읽던 중이었으면 이어 읽기).
+   * 대상 아님·막힘·실패면 상태 줄 + 한 마디 → 되돌림(9b 규칙 그대로). 손이 닿으면(`cancel`) 되돌림 없음.
+   */
+  function summarize(was, heard) {
+    if (typeof d.onSummarize !== 'function') {
+      status({ text: tr('voice.notYet'), kind: 'info' }, VOICE.NOTICE_MS);
+      say('voice.notYet', was);
+      return;
+    }
+    const job = { was: was };
+    askJob = job;
+    const alive = function () { return askJob === job; };
+    status({ text: tr('sum.pending'), kind: 'info' }, 0);
+    const fail = function (key) {
+      if (!alive()) return;
+      askJob = null;
+      status({ text: tr(key || 'sum.failed'), kind: 'error' }, VOICE.NOTICE_MS);
+      say(key || 'sum.failed', was);                // 한 마디가 끝나면 restore(was)
+    };
+    let p = null;
+    try { p = Promise.resolve(d.onSummarize({ via: 'voice', was: was, heard: heard, alive: alive })); } catch (e) { p = Promise.resolve(null); }
+    p.then(function (r) {
+      if (!alive()) return;                        // 손이 끊었다 — 되돌림 없음
+      if (!r || !r.ok) { fail(r && r.key); return; }
+      confirm(r.prev ? 'summarizePrev' : 'summarize', heard);
+      Promise.resolve(r.done).then(function (how) {
+        if (!alive()) return;
+        askJob = null;
+        if (how !== 'stopped') restore(was);
+        paint();
+      }, function () { if (alive()) { askJob = null; restore(was); } });
+    }, function () { fail('sum.failed'); });
   }
 
   /* ── 인식기 이벤트 → 흐름 ─────────────────────────── */
@@ -375,6 +426,7 @@ export function createVoice(deps) {
     if (listener.isListening()) { cancel(); return; }  // 듣는 중 다시 탭 = 취소(되돌림 없음)
     let carry = null;
     if (sayJob) { carry = sayJob.was; stopSay(); }       // 안내 중 다시 탭 — 그 누름의 되돌림을 이어받는다
+    if (askJob || sayerBusy()) stopAsk();                // `[11-2]` 요약을 기다리거나 말하는 중 — 손이 이긴다(되돌림 없음)
     if (!get('voice.noticeAt')) {
       // 첫 사용 고지 카드(8절) — [시작] 탭이 그 제스처 안에서 흐름을 시작한다.
       try {
@@ -397,6 +449,7 @@ export function createVoice(deps) {
     if (!busyNow()) return false;
     stats.cancels++;
     stopSay();
+    stopAsk();                                          // `[11-2]` 요약 기다림·요지 말하기(sayer)도 — 되돌림 없음
     flow = null;
     if (listener.isListening()) listener.abort();       // 핸들러 밖에서만 이 줄에 닿는다(핸들러 안에서는 듣는 중이 아니다)
     status(null);
@@ -446,7 +499,8 @@ export function createVoice(deps) {
     debug: function () {
       return {
         supported: supported(), enabled: get('voice.enabled') !== false, listening: listener.isListening(),
-        saying: !!sayJob, cmdLang: resolveCmdLang(get('voice.cmdLang'), uiLang()), tag: String(get('voice.tag') || ''),
+        saying: !!sayJob, asking: !!askJob, sayer: sayerBusy(),
+        cmdLang: resolveCmdLang(get('voice.cmdLang'), uiLang()), tag: String(get('voice.tag') || ''),
         mic: mic, skipped: listener.skipped(), stats: JSON.parse(JSON.stringify(stats)), history: historySnapshot()
       };
     }
