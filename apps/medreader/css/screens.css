@@ -1437,3 +1437,89 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 .banner:has(> button:nth-of-type(3)) { flex-wrap: wrap; }
 .banner:has(> button:nth-of-type(3)) > .banner-text { flex: 1 1 100%; min-inline-size: 0; overflow-wrap: anywhere; }
 .banner:has(> button:nth-of-type(3)) > .banner-action:first-of-type { margin-inline-start: auto; }
+
+/* ── `[18 — spec 17-9]` 의료 사이트 — 서재 접는 카드 · 설정 카드 · 선택 줄 위 [찾아보기] 목록 ─────────
+   ★ 논리 속성만(16-H — 아랍어에서 저절로 거울). 누를 곳 48px 이상(16-G). 360px 가로 넘침 0 — 이름·호스트는 `overflow-wrap: anywhere`.
+   ★ 목록은 선택 줄(fixed) 안의 absolute — 줄 바로 위, 최대 높이는 JS 가 "줄 위 공간"으로 준다(안 스크롤). */
+.links-card > summary {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  cursor: pointer;
+  font-weight: 600;
+}
+/* flex 가 기본 펼침 표시를 지운다 — 방향과 무관한 +/− 를 끝에(아랍어에서도 뜻이 같다). */
+.links-card > summary::after { content: "+"; margin-inline-start: auto; padding-inline: var(--sp-2); font-size: var(--fs-lg); color: var(--c-text-dim); }
+.links-card[open] > summary::after { content: "\2212"; }
+.links-list { list-style: none; margin: var(--sp-2) 0; padding: 0; }
+.links-list[hidden] { display: none; }
+.links-list > li { border-block-start: 1px solid var(--c-border); }
+.links-open {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-1);
+  overflow-wrap: anywhere;
+}
+.links-edit { min-block-size: var(--tap); }
+.links-edit-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; }
+.links-edit-list[hidden] { display: none; }
+.links-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-block: var(--sp-2);
+  border-block-end: 1px solid var(--c-border);
+}
+.links-row-text { flex: 1 1 10em; min-inline-size: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; overflow-wrap: anywhere; }
+.links-row-name { font-weight: 600; }
+.links-row-host { font-size: var(--fs-sm); color: var(--c-text-dim); unicode-bidi: isolate; overflow-wrap: anywhere; }
+.links-badge {
+  font-size: var(--fs-sm);
+  padding-inline: var(--sp-1);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  color: var(--c-text-dim);
+}
+.links-row-btns { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-inline-start: auto; }
+.links-row-btns button { padding-inline: var(--sp-2); }
+.links-form,
+.links-suggest {
+  margin-block: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px dashed var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.links-form[hidden],
+.links-suggest[hidden] { display: none; }
+.links-suggest-row label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-inline-size: 0; min-block-size: var(--tap); overflow-wrap: anywhere; }
+.links-actions { margin-block-end: var(--sp-2); }
+.links-actions button { flex: 1 1 auto; }
+#linksMsg:empty { display: none; }
+.links-menu {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  box-sizing: border-box;
+  background: var(--c-surface);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.links-menu-q {
+  margin: 0;
+  padding-inline: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+.links-menu-item { flex: 0 0 auto; min-block-size: var(--tap); text-align: start; overflow-wrap: anywhere; }

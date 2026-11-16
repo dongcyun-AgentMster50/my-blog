@@ -94,6 +94,9 @@ export const DEFAULTS = Object.freeze({
      null = 아직 내보낸 적 없음. 8f-3 이 내보낼 때 쓴다(ISO 문자열 또는 ms — `vocab/store.js` `changedSince` 가 둘 다 받는다). DB 무관. */
   'vocab.lastExportAt': null,
 
+  /* `[18 — spec 17-9]` 의료 사이트 북마크 — null = 기본 목록(config.js `LINKS.DEFAULTS`), 배열 = 사용자 목록 `[{id, name, url}]`(빈 배열 = 목록 없음). DB 무관. */
+  'links.medical': null,
+
   /* AI (7·8단계) */
   'ai.provider': 'gemini',
   'ai.model': '',

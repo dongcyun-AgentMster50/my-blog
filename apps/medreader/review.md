@@ -11506,3 +11506,112 @@ Edge 한 번 · pipe · 새 프로필 `r8f4b/p1` · 가짜 키 · 흉내 Gemini(
 스크래치 `r8f4b/`: `run.mjs`·`run-out.json`·`summ.mjs`·`p1/` · `mutate.mjs`·`restore.mjs`·`bak/search.js` · `test1.txt`·`test2.txt` · `section.md`(이 절)·`append.mjs`.
 
 **배포 가능** — 중간-1 이 닫혔다(바꾼 원어 0건 — 이 책에 없는 낱말·다른 책 낱말 — 이 HEAD 안내·[«الفهرس» 로] 단추와 같은 DOM, 실패는 node). 8f-4b 가 새로 만든 검색 결과·끝 안내·최근 검색어의 HEAD 대비 변화 0(32 + X 3 + N 12 모두 같음), 낡은 결과 0(`vocabSettle` 다섯 값 화면 길), 호출 0, 콘솔 오류 0. 낮음 2(낭독기 알림이 지나가는 상태를 거침 · `'swapped'` 표지 줄 시험 없음)는 다듬기 후보.
+
+
+# 18 Review — 의료 사이트 북마크 + 검색어 바로가기 (spec 17-9) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-18-links.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: spec 17-9 전부(+ `[정정 2026-11-16 — 18 Build]` 넷)·13절(외부 요청·유료 DB)·3-2 `URL` 예외 줄, Build 지침·보고서(다시 쟀다), `git diff`(14파일 +386 −23) + 새 파일 셋(`js/text/links.js`·`js/ui/links.js`·`tests/links-18.test.mjs`).
+
+## 18R-0. 판정 — **배포 가능** (중간 이상 0 · 낮음 7 · 정보 2)
+
+위험한 주소 저장·열림 0, 새 탭은 모든 여는 길에서 `noopener noreferrer` + `no-referrer`, 앱 탭 요청 0(18 동작 11구간), 외부 요청 0, XSS 0, 콘솔 오류 0, 8c-1·8f-2·8f-3·8c-2·서재 회귀 0, 번역 요청 본문 HEAD 와 같음. [기본 목록으로 되돌리기]가 확인 없이 사용자 목록을 지우는 것은 **설계(17-9 2 "화면")가 확인을 요구하지 않으므로 낮음** — 다만 다듬기 1순위.
+
+## 18R-1. 보안 · 개인정보 (확인 1) ★
+
+**순수 공격 꼴 105개**(`r18/attack.mjs` — Review 가 새로 만든 꼴, 앱 파일은 import 만): 기대와 다른 것 1(아래 #6, 앱 길로는 닿지 않음).
+
+| 무리 | 꼴 | 결과 |
+|---|---|---|
+| 위험 스킴 | `javascript:`·`JaVaScRiPt:`·앞 공백 `javascript:`·`data:`·`vbscript:`·`blob:`·`file:`·`ftp:`·`http:` | 모두 `url-not-https` |
+| 공백·제어 | 앞뒤 공백·앞 탭/줄바꿈 → 뗀 뒤 ok · 가운데 탭·LF·CR·NUL·DEL · `java\tscript:` · `h\ttps:` | 가운데 것 모두 `url-bad`(C1 U+0085 는 ok — `URL` 이 퍼센트 인코딩, 여는 값과 보이는 호스트 같음) |
+| 꼬인 구분자 | `https:\\evil`·`https:/evil` → ok(WHATWG 가 `https://evil/` 로 — 호스트는 사용자가 친 그곳, `hostOf` 표시와 여는 곳 같음) · `//evil`·`https://` → `url-bad` · `https://a.b\@evil/` → 호스트 `a.b`(역슬래시 = 경로) | 위험 없음 |
+| IDN·IP | 키릴 `а` 섞인 호스트 ok(설정 목록 호스트 줄은 `xn--` 꼴로 보임) · `[::1]`·사설 IPv4·localhost ok | 사용자가 넣은 https 주소 — 설계 범위 |
+| userinfo | `u:p@`·`u@`·`:p@` → `url-userinfo` · `@` 가 경로·쿼리·조각에만 있으면 ok | ✔ |
+| `{q}` 자리 | 호스트 전체·하위 도메인·호스트 뒤·포트·`https:{q}` → `url-bad` · userinfo 안 `{q}` → `url-userinfo` · 스킴 자리 → `url-not-https` · 경로 첫·조각·두 번 → ok | ✔ |
+| 길이·개수 | 2,000 ok · 2,001 `url-long` · 이름 이모지 60 코드포인트 ok · 61 `name-long` · `count` 29 ok / 30 `too-many` · `effectiveLinks` 31 → 30 | ✔ |
+| 저장값 오염 | `effectiveLinks` 에 `javascript:`·`data:`·userinfo·빈 이름·줄바꿈·`null`·숫자·문자열·겹친 id → 통과 3개만(https 만, id `c`·`c_`·`l2`) · 배열 아님 → 0 | ✔ |
+| `fillQuery` | 검색어 `{q}`·`%`·`#`·`&`·`?`·`/`·`\`·`@evil`·`https://evil/`·`javascript:`·LF·NUL·아랍어·한글·이모지 → 모두 다시 `checkLink` ok · 호스트 그대로 · `searchParams` 왕복 같음 · 짝 잃은 서로게이트 → null · 경로 첫 `{q}` 에 `//evil`·`/\evil`·`..`·`%2e%2e` → 호스트 그대로 | ✔ |
+| `queryText` | 6낱말·60자 경계 = `clampSelection` 경계(같은 상수) · 숨은 하이픈·폭 없는 공백 지움 · 전각 → NFKC · 줄바꿈 → 공백 | ✔(구두점·이모지뿐 → null, #7) |
+
+**화면 길(headless `run-a`)**: 설정 카드 [저장]으로 공격 주소 15꼴(위 스킴 7 · 가운데 탭 · `//evil` · 스킴 없음 · `{q}` 호스트·포트·userinfo · `u:p@` · 2,001자) → 코드별 문구 한 줄 + `aria-invalid` + **저장값 무변**. 저장소를 직접 고쳐 `javascript:`·`data:`·호스트 `{q}` 를 넣어도 서재 카드에 링크 0(정상 하나만). `HtTpS://Example.org/s?mail=a@b&q={q}` + 앞뒤 공백 → 뗀 값으로 저장, 호스트 줄 `example.org`. 주소 칸 줄바꿈은 `input type=text` 가 값에서 지운다(붙여 넣어도 저장값에 LF 없음).
+
+**새 탭 속성 — 여는 길 넷 전부**: 서재 카드(사용자 누름 — 퍼펫티어 좌표 클릭) · `{q}` 없는 링크(서재 카드에서 주소 그대로) · `[찾아보기]` 링크 하나 → 바로(`a.click`) · 둘 이상 → 목록 고름(`a.click`) — 모두 `target=_blank` · `rel="noopener noreferrer"` · `referrerPolicy=no-referrer` · `https:` (`allOpenedAttrsOk` 참). `window.open` 0 · `confirm()` 0 · 새 page 대상 0.
+
+**XSS**: 링크 이름 `<img src=x onerror=…>` → 서재 카드·설정 목록·삭제 확인 대화 제목 모두 글자로(`img` 0, 실행 0). `ui/links.js` 의 `innerHTML`·`window.open`·`confirm(`·`fetch(` 는 주석뿐. `git diff -G` 로 걸린 `index.html` 도 주석 한 줄(`confirm()` 금지 안내).
+
+**요청**: 18 동작 11구간(서재 2 · 설정 3 · 선택 줄 6 — 낭독 중 포함) 앱 탭 요청 **0**. 하네스 전체 외부 요청 **0**(pdf.js CDN 포함 — 아래 18R-6).
+
+## 18R-2. 데이터 (확인 2)
+
+- `null` → 기본 넷(서재·설정) · `[]` → 목록 없음(서재 "링크가 없습니다", `[찾아보기]` 숨김) · 배열 → 그 배열.
+- 추가(Enter) · 수정(같은 id) · ↑ · ↓(포커스가 옮긴 줄의 같은 단추로) · 삭제(페이지 안 `<dialog>` — `:modal`, 첫 포커스 [취소], [취소]·Esc 는 지우지 않음, [삭제]만 지움) → **새로고침 뒤 목록·저장값 같음**. `confirm()` 0.
+- 30 상한: 29개에서 추천 둘 → `too-many` 한 줄, **하나도 안 들어감**(29 그대로) · [링크 추가] 하나 → 30 · 하나 더 → `too-many`, 30 그대로 · 30개일 때 수정은 됨.
+- **[기본 목록으로 되돌리기]**: 30개 사용자 목록에서 한 번 누름 → 저장값 `null`, 대화 0, `confirm` 0, 되돌릴 길 0(보고서 남은 3 그대로 재현). 17-9 2 "화면"은 `[기본 목록으로 되돌리기](값을 null 로)` 만 적고, 페이지 안 확인은 **삭제**에만 요구한다 → 판정 기준상 **낮음**. 다만 한 줄 삭제는 확인하고 목록 전체는 확인하지 않는 불균형이라 다듬기 1순위(#1).
+
+## 18R-3. 선택 줄 `[찾아보기]` (확인 3)
+
+| 항목 | 결과 |
+|---|---|
+| `{q}` 링크 0(`{q}` 없는 링크만 · 빈 배열) | 단추 `hidden`, `display:none` |
+| 1개 | 누르면 바로 `a.click`(검색어 `encodeURIComponent`), 목록 없음 |
+| 2개 이상 | 줄 위 `role=menu` 4항목(48px), 맨 위 검색어 `dir=ltr` 글자 = 고른 낱말, 새 탭 0 → 넷째 고르면 DailyMed 주소로 열리고 목록 닫힘 |
+| 흐림 | 7낱말 → `aria-disabled` + `links.tooLong` 한 줄 + 새 탭 0 + 목록 0 · 6낱말 → 목록 |
+| 낭독 중 | `speechSynthesis.cancel` 증가 0, 계속 말함, 새 탭 1 |
+| 키보드 | Enter(detail 0) → 첫 항목 포커스 · ↓ → 둘째 · Esc → 목록만 닫고 `[찾아보기]` 로 포커스, 줄 남음 |
+| Esc 층 | 탭 띠 + 목록 → 첫 Esc 목록만(띠 남음) → 둘째 Esc 띠 |
+| 목록 수명 | 선택이 풀려도 목록·줄 남음 → 본문 pointerdown 으로 둘 다 닫힘 · 목록이 뜬 채 다른 낱말을 고르면 옛 목록 닫힘, 줄은 새 선택으로 |
+| 360px 줄 높이(남은 1) | ko·fr 360: **네 단추가 모두 두세 줄로 접혀** 단추 76px · 줄 86px(412·915 는 56/66). ar 360 은 안 접힘(66) → #2 |
+| 목록이 고른 글자를 가림(남은 2) | 줄 바로 위 줄의 낱말을 고르면 **모든 크기에서 가림** · 915×412 가로에서는 맨 위 줄 낱말도 가림(목록이 본문 대부분을 덮음 — `shots/menu-915x412-*.png`). 검색어는 목록 맨 위에 보임 → #3 |
+| 8c-1·8f-2 | [단어 번역] 7낱말 흐림 문구는 그대로 `sel.tooLong`(단추별 `data-sel-note`) · 시트 열림(선택 줄 `display:none`)·Esc 닫힘 · [여기서부터 읽기] 낭독 시작·선택 지움·줄 숨김 |
+
+## 18R-4. 화면 (확인 4) — 8조합(360×740·412×915·915×412 × ko·ar + en 412 · fr 360)
+
+`r18/run-l.mjs` — 서재 카드(펼침) · 설정 카드([링크 추가] 열린 꼴) · 선택 줄 위·아래 줄 두 번. 일부러 띄어쓰기 없는 60자 이름·긴 하위 도메인 호스트·아랍어 이름·`{q}` 없는 링크를 넣음.
+- 가로 넘침 0(문서·카드·목록 `scrollWidth`), 카드 밖으로 나간 요소 0, 설정 카드의 보이는 단추 **전부 48×48 이상**, 서재 링크·접는 제목·[편집] **높이** 48, 목록 항목 48, 목록은 화면 안·줄 위.
+- 주소 칸 `dir=ltr`(계산값도 ltr)·`inputmode=url` · 호스트 줄 `dir=ltr` · 목록 검색어 줄 `dir=ltr` · ar 에서 목록·항목 `direction:rtl`, 글자 `text-align:start`.
+- RTL 거울: ar 설정 줄 단추 묶음이 왼쪽(inline-end)·이름 오른쪽 정렬(`shots/set-360x740-ar.png`). (하네스의 "같은 줄일 때" 비교식이 접힌 줄에서 틀려 ar 360·412 를 실패로 찍었다 — 사진으로 거울 확인, 앱 문제 아님.)
+- 걸린 것: 서재 카드 **[편집] 단추 너비 27–61px**(en 27 · ko 32 · ar 39 · fr 61, 높이는 48) → #4 · ar 주소 칸 이름표 «العنوان (https://…)» 가 RTL 에서 괄호 안 라틴이 뒤집혀 `(…//:https)` 처럼 보임(배율 2 확대 `shots/ar-url-label.png`) → #5.
+
+## 18R-5. 회귀 (확인 5)
+
+- **번역 요청 본문 바이트 HEAD 와 같음**: 같은 지어낸 문서·캐시 비움·1쪽 [▶] 6초 — HEAD 판(git HEAD 파일을 가로채 내줌, 242/242) POST 2개 `f080b93f25f0c79b`(2771B)·`4f7778c9be1cfeab`(2300B) = 지금 판 같은 둘. HEAD 판엔 `#settingsLinks` 없음(제대로 옛 판).
+- `run-r` 10/10: 서재(문서 카드·저장 줄·[단어장]·의료 사이트 카드 접힘) · 8f-3 단어장 화면 · 설정 카드 순서 `AI → 번역 따라가기 → 목소리 → 음성 명령 → 의료 사이트` · 8c-2 [사용량 보기] → `#/usage` · `#/settings/cache` → [캐시 지우기] 포커스(의료 사이트 제목으로 가지 않음) · 8c-1 **손가락 탭(CDP touch) → 탭 띠** · Esc 로 띠 닫힘 · 선택 줄 네 단추 · [단어 번역] 흐림 문구 · 8f-2 시트.
+
+## 18R-6. 시험 · 변이 · headless (확인 6·7·8)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **1회차 1677/1677(11.5초) · 2회차 1677/1677(10.3초)** (`r18/full1.txt`·`full2.txt`). `stamp --check` "그대로다 (모듈 75개 · CSS 4개)"(처음·변이 복원 뒤) · `git diff --check` 0 · 변이 뒤 `git diff --stat` 처음과 같음(14파일 +386 −23).
+- 변이 6개(Build M1–M7 과 다른 곳) — `r18/mut.mjs`(원본을 읽어 `r18/bak/` 에 쓰고 한 곳만 바꿈 → 되돌릴 땐 백업을 읽어 씀) + 매번 `cmp` 0. 변이마다 전체 시험(stamp IM2·IM6·IM7b 는 파일이 바뀌면 늘 빨강 — 아래 표에서 뺌):
+
+| # | 변이 | node | headless |
+|---|---|---|---|
+| R1 | `checkLink` 제어 문자 검사(`CTRL.test`) 지움 | **빨강** L1 | — |
+| R2 | `effectiveLinks` 30개 상한 줄 지움 | **빨강** L4 | — |
+| R3 | `openExternal` 이 `armAnchor` 우회(href·target 만) | **빨강** L8 | **빨강** `sel.menuPick`·`sel.oneDirect` |
+| R4 | 스킴 비교를 `/^https?:$/`(http 허용) | **빨강** L1 | — |
+| R5 | `lookupPlan` 의 "넣은 뒤 다시 `checkLink`" 지움 | **초록** → #6 | — |
+| R6 | `selbar.update` 의 "목록이 떠 있으면 선택이 풀려도 줄 유지" 막이 지움 | 초록(DOM 동작) | **빨강** `sel.menuLifecycle` |
+
+- headless: Edge · pipe · 새 프로필 `r18/p0–p7`(시운전 p0 · 기능 p1·p4 · 화면 p2 · 회귀 p3 · 변이 p5·p6 · 이름표 p7) + 본문 대조 `ph`·`pc` · 가짜 키 · 흉내 Gemini(OPTIONS 204 + CORS, 가로채 응답 — 실제 접속 0) · 흉내 음성 · `setCacheEnabled(false)` · **한 번에 하나씩**. **서버 띄움 0 — 8000 에 쓰지도 않음**: 출처 이름 `127.0.0.1:8000` 만 빌리고 그 출처 요청은 모두 가로채 작업 트리(또는 `git show HEAD:`)에서 내줌(`missing` 0 · 4xx 0). **외부 요청은 pdf.js CDN 까지 전부 abort·기록 → 기록 0건** — 그래서 PDF 대신 Review 가 쓴 지어낸 문서(6문단, 원서 아님)를 DB 에 바로 넣었다(pdf.js 없이 읽기 화면·선택 줄·낭독·번역이 다 돔). `HTMLAnchorElement.prototype.click` 가로채기 + 외부 `a[href]` 사용자 누름 캡처 `preventDefault`. 콘솔 오류 **0** · pageerror 0 (모든 실행).
+- 스크린샷 `r18/shots/`: `lib-*`·`set-*`(8조합) · `menu-360x740-{ko,ar}-low.png` · `menu-915x412-{ko,ar}.png` · `set-412-ko.png` · `menu-412-ko.png` · `ar-url-label.png` · `ar-help-query.png`.
+
+## 18R-7. 발견 사항
+
+| # | 심각도 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음 | [기본 목록으로 되돌리기]가 확인·되돌리기 없이 사용자 목록(최대 30)을 지운다. 설계는 확인을 요구하지 않음(삭제에만). 한 줄 삭제는 확인하는데 전체는 안 함 | 18R-2 실측. 저장값이 배열일 때만 같은 `<dialog>`(첫 포커스 [취소]) — 문구 키 하나 |
+| 2 | 낮음 | 360px ko·fr 선택 줄: 네 단추가 **모두** 접혀 76px·줄 86px(보고서는 "여기서부터 읽기 두 줄"이라 했으나 넷 다 접힘, 그 단추는 세 줄). 줄이 본문을 더 가림 | 18R-3 · `shots/menu-360x740-ko-low.png`. 11 이 `[⋯]` 로 옮기면 풀림(crossstep 18) |
+| 3 | 낮음 | 목록이 고른 낱말을 가림 — 줄 바로 위 줄이면 모든 크기, 915×412 가로는 맨 위 줄도. 고르는 동안만, 검색어는 목록 맨 위에 보임 | 18R-3. 다듬기 때 선택 범위 위/아래 빈 쪽에 띄우기 또는 가로에서 2열 |
+| 4 | 낮음 | 서재 카드 [편집] 단추 너비 27–61px(높이 48) — 16-G 48px 는 높이만 맞음. Build `lib.tap48` 은 높이만 쟀다 | 18R-4. `min-inline-size: var(--tap)` 한 줄 |
+| 5 | 낮음 | ar 이름표 «العنوان (https://…)» 의 괄호 속 라틴이 RTL 에서 뒤섞여 보임. ar 안내 줄의 `{q}` 도 고립 없음 — 사용자가 그대로 쳐야 하는 글자라 실기기·Nour 확인 거리 | `shots/ar-url-label.png`·`ar-help-query.png`. 문구에 U+2066…U+2069(LRI…PDI) 또는 `<bdi dir=ltr>` |
+| 6 | 낮음 | `lookupPlan` 의 "넣은 뒤 다시 검사"를 지워도 node 초록(R5). 앱 길은 `effectiveLinks`(호스트 `{q}` 거름) + `encodeURIComponent` + `openExternal` 재검사로 막혀 실제 위험 0. 다만 순수 함수 계약으로는 효과 목록을 안 거친 템플릿 `https://{q}/` 를 받으면 채운 주소 `https://heart/` 가 재검사를 통과한다(채운 뒤엔 `{q}` 가 없어 origin 비교가 안 돎) | `r18/attack.mjs` 의 lookupPlan 줄. `lookupPlan` 안에서 원 템플릿 `checkLink` 도 보거나, L 시험에 그 꼴 한 줄 |
+| 7 | 낮음 | 구두점·이모지만 고르면 `queryText` null → 흐림 문구가 "6낱말(60자)까지"(이유와 다른 말). spec 대로(빈 글자 = 흐림) | `attack.mjs` queryText 줄. 문구 다듬기 거리 |
+| 8 | 정보 | `cssId` 는 `"`·`\` 만 가린다 — 9c 가져오기 등으로 id 에 줄바꿈이 들어오면 `querySelector` 가 예외(저장 뒤 포커스 단계). 지금은 UI 로 만들 수 없음(코드 읽기, headless 미확인) | 9c 가 `links.medical` 을 받을 때 id 꼴 검사, 또는 `CSS.escape` |
+| 9 | 정보 | Build 보고 다시 잼 — 1677 ×2 · stamp · `diff --check` · 요청 0 · 콘솔 0 · 새 탭 속성 · Esc 층 · 낭독 끊김 0 · 본문 HEAD 같음 모두 맞음. Build 하네스는 pdf.js CDN(jsDelivr) 요청을 통과시켰고, 이 Review 는 외부 0 으로 같은 결론 | 18R-1~6 |
+
+## 18R-8. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 파일로 쓰고 따로 읽음). **막힌 명령 0.** 서버 띄움 0(8000 접속도 0) · 외부 사이트 접속 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 인용 0(지어낸 문서만). 변이 6개 모두 백업과 `cmp` 0, `git status` 처음과 같음.
+
+스크래치 `r18/`: `common.mjs`·`smoke.mjs`·`attack.mjs`·`run-a.mjs`·`run-l.mjs`·`run-r.mjs`·`run-body.mjs`·`run-label.mjs`·`mut.mjs`·`bak/`(R1–R6) · `full1.txt`·`full2.txt`·`m-R1`–`m-R6.txt`·`a-R3.json`·`a-R6.json` · `shots/` · `p0–p7`·`ph`·`pc` · `section.md`(이 절)·`append.mjs`.
+
+**배포 가능** — 위험한 주소 저장·열림 0, 새 탭 속성 넷 길 전부, 앱·외부 요청 0, XSS 0, 회귀 0, 콘솔 오류 0. 낮음 7(되돌리기 확인 · 360 줄 높이 · 목록 가림 · [편집] 너비 · ar 이름표 bidi · lookupPlan 재검사 시험 · 흐림 문구)은 다듬기 후보, 1번이 1순위.

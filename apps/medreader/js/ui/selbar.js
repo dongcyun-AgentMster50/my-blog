@@ -6,6 +6,8 @@
    **바로 위**에 동작 줄을 띄운다. 자체 타이머로 길게 누르기를 잡지 않는다 — `selectionchange` 만 듣는다(17-7-1).
      · `[단어 번역]`(기본 목록에서는 `hidden` — `[8f-2]` 단어 시트가 준비되면 controls 가 `refresh(showAction(…,'word'))` 로 켠다)
        · `[문장 번역]` · `[여기서부터 읽기]`
+       · `[18]` `[찾아보기]` — `{q}` 의료 사이트 링크가 하나 이상일 때만(spec 17-9). 여는 일은 이 파일이 `ui/links.js` 로 곧바로
+         (새 탭은 누름 안에서 — 팝업 차단), 그다음 `onAction('lookup')`(controls 는 듣기 취소만)
      · 단추 목록은 **데이터**(`SEL_ACTIONS`)에서 그린다 — 11 이 "보이는 3칸 + `[⋯]`"(설명·요약·여기서부터 읽기·검색)로
        바꿀 때 목록과 `selBarModel` 만 고치면 된다(crossstep-notes 8c-1)
    동작 자체는 모른다 — controls 가 넘긴 `onAction(id, snapshot)` 을 부른다(speaker·readalong·띠를 import 하지 않는다).
@@ -20,6 +22,9 @@
 
 import { t, applyTranslations, onLangChange } from '../i18n/index.js';
 import { lineOffsetOf, clampSelection } from '../text/select.js';
+// `[18 — spec 17-9 · 결정 18-D1]` [찾아보기] — 검색어는 순수 `queryText`(8c-1 과 같은 6낱말·60자 상수), 여는 일·목록은 `ui/links.js`.
+import { queryText } from '../text/links.js';
+import { lookup, queryLinkCount, closeLookupMenu, lookupMenuOpen } from './links.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — `tests/taptr-8c.test.mjs`
@@ -32,7 +37,9 @@ import { lineOffsetOf, clampSelection } from '../text/select.js';
 export const SEL_ACTIONS = Object.freeze([
   Object.freeze({ id: 'word', key: 'sel.word', hidden: true }),      // 8f-2 가 켠다
   Object.freeze({ id: 'sentence', key: 'sel.sentence' }),
-  Object.freeze({ id: 'readFrom', key: 'sel.readFrom' })
+  Object.freeze({ id: 'readFrom', key: 'sel.readFrom' }),
+  // `[18 — spec 17-9]` 넷째 자리. `when:'links'` = `{q}` 링크가 하나 이상일 때만 보인다(`selBarModel` 셋째 인자). 11 이 `[⋯]` 안으로 옮긴다.
+  Object.freeze({ id: 'lookup', key: 'sel.lookup', when: 'links' })
 ]);
 
 /**
@@ -50,15 +57,25 @@ export const HIDE_DELAY_MS = 300;
 
 /**
  * 단추 목록 → 그릴 칸들. [단어 번역]은 선택이 6낱말·60자를 넘으면 흐림(`disabled` — 누르면 `sel.tooLong` 한 줄). 순수 함수.
- * @param {ReadonlyArray<{id:string, key:string, hidden?:boolean}>} actions
+ * `[18]` [찾아보기](`when:'links'`)는 `ctx.links`(`{q}` 링크 수)가 0 이면 숨김, 검색어(`queryText`)가 없으면(6낱말·60자 초과·
+ * 구두점뿐) 흐림 — 누르면 `links.tooLong` 한 줄. `note` = 흐린 칸을 누를 때의 문구 키.
+ * @param {ReadonlyArray<{id:string, key:string, hidden?:boolean, when?:string}>} actions
  * @param {?{text:string}} snap
- * @returns {{id:string, key:string, hidden:boolean, disabled:boolean}[]}
+ * @param {{links?:number}} [ctx]
+ * @returns {{id:string, key:string, hidden:boolean, disabled:boolean, note:string}[]}
  */
-export function selBarModel(actions, snap) {
+export function selBarModel(actions, snap, ctx) {
   const long = !!snap && clampSelection(snap.text).tooLong;
-  return (Array.isArray(actions) ? actions : []).map((a) => ({
-    id: a.id, key: a.key, hidden: !!a.hidden, disabled: a.id === 'word' && long
-  }));
+  const links = ctx && Number(ctx.links) > 0;
+  const noQuery = !!snap && queryText(snap.text) === null;
+  return (Array.isArray(actions) ? actions : []).map((a) => {
+    const lk = a.when === 'links';
+    return {
+      id: a.id, key: a.key, hidden: !!a.hidden || (lk && !links),
+      disabled: (a.id === 'word' && long) || (lk && noQuery),
+      note: lk ? 'links.tooLong' : 'sel.tooLong'
+    };
+  });
 }
 
 /**
@@ -130,6 +147,12 @@ function onSelectionChange() {
 function update() {
   if (!els) return;
   const s = snapshotOf(typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null);
+  // `[18]` [찾아보기] 목록이 떠 있는 동안 선택이 풀려도(손가락 탭) 줄을 거두지 않는다 — 고르거나 닫으면(`onClose`) 다시 본다.
+  // 선택이 다른 글자로 바뀌면 옛 검색어의 목록은 닫는다.
+  if (lookupMenuOpen()) {
+    if (!s) return;
+    if (!snap || s.text !== snap.text) closeLookupMenu(true);
+  }
   const step = selBarStep(!!s, { hidden: els.bar.hidden, hiding: hideTimer !== null });
   if (step.cancelHide) { clearTimeout(hideTimer); hideTimer = null; }
   if (step.show) {
@@ -185,7 +208,7 @@ function snapshotOf(sel) {
 
 /** 목록 데이터에서 단추를 (다시) 그린다. 같은 칸이면 속성만 고친다. */
 function render(s) {
-  const model = selBarModel(actions, s);
+  const model = selBarModel(actions, s, { links: queryLinkCount() });
   const host = els.list;
   if (host.children.length !== model.length) {
     while (host.firstChild) host.removeChild(host.firstChild);
@@ -203,6 +226,7 @@ function render(s) {
     const b = host.children[i];
     b.hidden = model[i].hidden;
     if (model[i].disabled) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
+    b.setAttribute('data-sel-note', model[i].note);
   }
 }
 
@@ -217,6 +241,7 @@ function show() {
 export function hide() {
   if (!els) return;
   if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
+  closeLookupMenu(true);                 // `[18]` 목록은 줄 안에 있다 — 줄과 함께 거둔다
   snap = null;
   els.bar.hidden = true;
   if (els.note) { els.note.hidden = true; els.note.textContent = ''; }
@@ -233,6 +258,7 @@ export function clear() {
 export function refresh(list) {
   if (Array.isArray(list)) actions = list;
   if (!els) return;
+  closeLookupMenu(true);
   while (els.list.firstChild) els.list.removeChild(els.list.firstChild);
   render(snap);
 }
@@ -254,11 +280,19 @@ function onClick(ev) {
   if (!b || !els.bar.contains(b) || b.hidden) return;
   const id = b.getAttribute('data-sel-action');
   if (b.getAttribute('aria-disabled') === 'true') {
-    if (els.note) { els.note.textContent = t('sel.tooLong'); els.note.hidden = false; }
+    if (els.note) { els.note.textContent = t(b.getAttribute('data-sel-note') || 'sel.tooLong'); els.note.hidden = false; }
     return;
   }
   const s = snap;
   if (!s) return;
+  if (id === 'lookup') {
+    // `[18 — spec 17-9]` 새 탭은 **이 누름 안에서 곧바로**(팝업 차단을 피한다) — controls 보다 먼저. 낭독은 건드리지 않는다.
+    let r = 'none';
+    try {
+      r = lookup(s.text, els.bar, { back: b, byKey: ev.detail === 0, onClose: onSelectionChange });
+    } catch (e) { /* 열지 못해도 줄은 남는다 */ }
+    if (r === 'tooLong' && els.note) { els.note.textContent = t('links.tooLong'); els.note.hidden = false; }
+  }
   try { deps.onAction(id, Object.assign({}, s)); } catch (e) { /* 동작 오류가 줄을 막지 않는다 */ }
 }
 

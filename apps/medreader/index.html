@@ -53,7 +53,7 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=7ff71180ec">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=81d8d70af1">
+<link rel="stylesheet" href="css/screens.css?v=5af498832f">
 <link rel="stylesheet" href="css/reader.css?v=a531f97813">
 <script type="importmap">
 {
@@ -67,14 +67,14 @@
     "./js/ai/provider.js": "./js/ai/provider.js?v=046931d5b2",
     "./js/ai/readalong.js": "./js/ai/readalong.js?v=6472c5f7cc",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
-    "./js/config.js": "./js/config.js?v=a8f008abcd",
+    "./js/config.js": "./js/config.js?v=6f893f2fe0",
     "./js/db.js": "./js/db.js?v=2b36013d63",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=f0d380ef96",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=c2fffd6578",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=dc3061cefb",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=6ee5d10458",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=cbe48a80d1",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=ee9d465919",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=c1526dcd09",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=51fef8ef75",
     "./js/main.js": "./js/main.js?v=f45e86f685",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -86,7 +86,7 @@
     "./js/router.js": "./js/router.js?v=808197bad0",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
-    "./js/settings.js": "./js/settings.js?v=f45bf8256a",
+    "./js/settings.js": "./js/settings.js?v=78340ff443",
     "./js/text/bidi.js": "./js/text/bidi.js?v=2bda7b28c4",
     "./js/text/blocks.js": "./js/text/blocks.js?v=d1928663d6",
     "./js/text/cite.js": "./js/text/cite.js?v=259bcf49ea",
@@ -95,6 +95,7 @@
     "./js/text/lang.js": "./js/text/lang.js?v=d65a608780",
     "./js/text/layout.js": "./js/text/layout.js?v=4f04936974",
     "./js/text/lines.js": "./js/text/lines.js?v=8a5f9e1f9b",
+    "./js/text/links.js": "./js/text/links.js?v=3ab404d6df",
     "./js/text/rowtable.js": "./js/text/rowtable.js?v=76a7ee780f",
     "./js/text/scan.js": "./js/text/scan.js?v=4b8d4ca314",
     "./js/text/screen.js": "./js/text/screen.js?v=5c78d755dd",
@@ -113,15 +114,16 @@
     "./js/ui/controls.js": "./js/ui/controls.js?v=115d548ec8",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
     "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=0fe335b7ac",
-    "./js/ui/library.js": "./js/ui/library.js?v=0fcd5c5379",
+    "./js/ui/library.js": "./js/ui/library.js?v=8dd089baa6",
+    "./js/ui/links.js": "./js/ui/links.js?v=af6adb9d8f",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=e840a78947",
     "./js/ui/quiz.js": "./js/ui/quiz.js?v=f9cfebd1cf",
     "./js/ui/reader.js": "./js/ui/reader.js?v=f19365aa4d",
     "./js/ui/search.js": "./js/ui/search.js?v=fd4c8242c4",
-    "./js/ui/selbar.js": "./js/ui/selbar.js?v=d9ccb18840",
-    "./js/ui/settings.js": "./js/ui/settings.js?v=166dafe46e",
+    "./js/ui/selbar.js": "./js/ui/selbar.js?v=867bd2fb91",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=ce3439f316",
     "./js/ui/trband.js": "./js/ui/trband.js?v=9879796ba1",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=2ccd2e6cd1",
     "./js/ui/usage.js": "./js/ui/usage.js?v=a5b6dde423",
@@ -333,6 +335,15 @@
       <p data-i18n="library.empty.body"></p>
       <p class="muted" id="fileProtoNote" hidden data-i18n="library.empty.fileProtocol"></p>
     </div>
+
+    <!-- `[18 — spec 17-9 · 결정 18-D2]` "의료 사이트" 접는 카드(기본 접힘 · 열림 상태는 저장하지 않음). 링크는 `ui/links.js` 가
+         textContent·href 로 채운다 — 이름만, 새 탭. `{q}` 링크는 그 사이트 첫 화면으로. [편집]은 `data-nav` 전역 위임. -->
+    <details class="card links-card" id="libraryLinks">
+      <summary data-i18n="links.card.title"></summary>
+      <ul class="links-list" id="libraryLinksList"></ul>
+      <p class="muted" id="libraryLinksEmpty" data-i18n="links.empty" hidden></p>
+      <button type="button" class="link links-edit" data-nav="#/settings/links" data-i18n="links.card.edit"></button>
+    </details>
 
     <p class="storage-line" id="storageLine"></p>
 
@@ -839,6 +850,53 @@
       <p class="muted" data-i18n="settings.tts.scriptSwitch.help"></p>
       <div class="voice-langs" id="ttsVoiceLangs"></div>
       <p class="muted" id="ttsVoiceHint" data-i18n="settings.tts.voiceHint"></p>
+    </div>
+
+    <!-- `[18 — spec 17-9]` 의료 사이트 — 추가·수정·삭제·순서·추천·기본으로 되돌리기. 동작은 카드 하나의 위임 리스너(`data-la`,
+         `ui/links.js`). 삭제 확인은 페이지 안 `<dialog>`(`confirm()` 금지). 주소 칸은 UI 가 아랍어여도 `dir="ltr"`.
+         ★ 아이디·비밀번호 칸은 없다 — 로그인은 그 사이트에서(13절). -->
+    <div class="card settings-card links-settings" id="settingsLinks">
+      <h2 data-i18n="links.settings.title"></h2>
+      <p class="muted" data-i18n="links.help.query"></p>
+      <p class="muted" data-i18n="links.help.account"></p>
+      <ul class="links-edit-list" id="linksEditList"></ul>
+      <p class="muted" id="linksEditEmpty" data-i18n="links.empty" hidden></p>
+      <div class="links-form" id="linksForm" hidden>
+        <div class="field">
+          <label for="linksName" data-i18n="links.name"></label>
+          <input type="text" id="linksName" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="linksUrl" data-i18n="links.url"></label>
+          <input type="text" id="linksUrl" dir="ltr" inputmode="url" autocomplete="off" autocapitalize="off"
+                 autocorrect="off" spellcheck="false" aria-describedby="linksErr">
+        </div>
+        <p class="warn-note" id="linksErr" role="alert" hidden></p>
+        <div class="row">
+          <button type="button" class="primary" data-la="save" data-i18n="links.save"></button>
+          <button type="button" data-la="cancel" data-i18n="links.cancel"></button>
+        </div>
+      </div>
+      <div class="links-suggest" id="linksSuggest" hidden>
+        <div id="linksSuggestList"></div>
+        <div class="row">
+          <button type="button" class="primary" data-la="suggest-add" data-i18n="links.suggested.add"></button>
+          <button type="button" data-la="suggest-cancel" data-i18n="links.cancel"></button>
+        </div>
+      </div>
+      <div class="row links-actions">
+        <button type="button" data-la="add" data-i18n="links.add"></button>
+        <button type="button" data-la="suggest" data-i18n="links.addSuggested"></button>
+        <button type="button" data-la="reset" data-i18n="links.reset"></button>
+      </div>
+      <p class="muted" id="linksMsg" role="status" aria-live="polite"></p>
+      <dialog class="confirm-dialog" id="linksDelDialog" aria-labelledby="linksDelTitle">
+        <h2 id="linksDelTitle"></h2>
+        <div class="confirm-actions">
+          <button type="button" data-dialog="cancel" data-i18n="links.cancel"></button>
+          <button type="button" class="primary" data-dialog="ok" data-i18n="links.delete"></button>
+        </div>
+      </dialog>
     </div>
   </section>
 

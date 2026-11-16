@@ -338,6 +338,7 @@ node apps/medreader/dev/profile.mjs <pdf> [--pages 200] [--json out.js]
 - `config.js`는 값만 export 한다(함수·부작용 없음).
 - `i18n.js`는 UI와 서비스 양쪽에서 쓰지만, 서비스는 사용자에게 보여줄 문자열을 만들지 않고 **에러 코드**(`'ERR_RATE_LIMIT'`)를 반환한다. 문자열화는 UI가 한다. 그래야 순수·서비스 계층 테스트가 언어에 의존하지 않는다.
 - 순수 계층은 `Math`, `String`, `Array`, `Map` 외의 전역을 참조하지 않는다. `hash.js`만 예외로 `globalThis.crypto`를 **존재 검사 후** 쓴다.
+- `[정정 2026-11-16 — 18 Build]` 예외 하나 더: `text/links.js`(의료 사이트 주소 검사 — 17-9 · 결정 18-D6 (가))가 Node·브라우저 공통 내장 `URL` 을 **존재 검사 후** 쓴다(없으면 모든 주소가 `url-bad`). 16-A grep 허용 줄은 `tests/links-18.test.mjs` L5 의 두 줄(`typeof URL` 검사·`new URL(…)`)뿐.
 - `[수정 2026-11-16 — 11 Plan]` **`notes/*`**(저장 요약·개요 — 나중 필기도) 행은 `vocab/*`·`search/*` 행과 같다: `config`·`text/*`·`db`·`hash` 만 import 한다(`ui/`·`ai/`·`pdf/`·`tts/` 금지). `tts/say.js` 는 `tts/*` 행 그대로(`synth` 주입).
 - `[수정 2026-11-16 — 12·13 Plan]` **`srs/sm2.js`·`plan/planner.js` 는 순수 계층**(`config` 만 — `Date` 도 쓰지 않는다, 시각·날짜는 인자). **`srs/cards.js`·`plan/readlog.js`** 행은 `vocab/*`·`notes/*`·`search/*` 행과 같다: `config`·`text/*`·`db`·`hash`·같은 폴더만(`ui/`·`ai/`·`pdf/`·`tts/` 금지 — 번역 조회·speaker 는 주입).
 - `[수정 2026-11-16 — 15·16·19·20 Plan]` **`review/*`** 행은 `notes/*` 행과 같다. **`ext/*`**(외부 공개 서비스 — Open-i)는 `config`·`text/*` 만 import 하는 네트워크 서비스(`ai/adapters/*` 와 같은 자리, `ui/` 가 부른다). `text/anchor.js`·`text/diagram.js`·`text/review.js`·`text/openi.js`·`ai/grounding.js` 는 순수(16-A grep 대상). `screenIndex`·`rangesOnScreen` 은 `ui/search.js` → `text/screen.js`(옮김).
@@ -5815,6 +5816,8 @@ searchLibrary(query) → 책마다 searchDoc 를 차례로(열린 책 먼저), �
 | 설정 화면 | 카드 셋(AI · 번역 따라가기 · 목소리), 라우트 `#/settings/{tab}`(탭 값은 담아만 둠) | `index.html:650-773` · `js/router.js:74-76` |
 | 9c 와의 관계 | 9c 가 `settings` 를 담으므로 `links.medical` 은 백업에 저절로 들어간다(17-4-1 4 허용 목록에 넣는다) | 17-4 표 "학습 기록" |
 
+`[정정 2026-11-16 — 18 Build]` 위 표는 8e 때 작업 트리다. 18 Build 시점(8f-4 `ee8ecfd` 뒤): 선택 동작 줄은 있다 — `js/ui/selbar.js` `SEL_ACTIONS`(목록 데이터)·`selBarModel`·`refresh`·`showAction`, `js/text/select.js` `SEL_LIMIT`(6낱말·60자)·`clampSelection`. 8f-2 가 `[단어 번역]` 을 켜 보이는 단추는 셋이었다 → 18 이 넷째 `lookup`(`when:'links'`) 을 `SEL_ACTIONS` 의 한 항목으로 더했다(11 이 `[⋯]` 안으로 옮기기 쉽게 — crossstep-notes 18). 서재 상단은 `[단어장][설정][정보][🔍]`(8f-3). 설정에는 사용량 입구·`#/settings/cache`(8c-2)·음성 명령 카드(9b, 목소리 카드 바로 뒤에 JS 가 만든다 — 그래서 "의료 사이트" 카드는 목소리·음성 명령 카드 아래).
+
 #### 2. 설계
 
 **데이터** — `settings` 키 `links.medical`(DB 무관 · 9-3 에 한 줄 더함):
@@ -5829,6 +5832,7 @@ links.medical : null | [{ id, name, url }]      # null = 기본 목록(config.js
 - `hasQuery(url)` = `url.includes('{q}')`.
 - `fillQuery(url, q)` = `{q}` 자리마다 `encodeURIComponent(q)`. `q` 는 `queryText(sel)` — NFKC·공백 하나·앞뒤 구두점 제거·**6낱말·60자**(8c-1 `clampSelection` 과 같은 수치, 넘으면 `null` → 단추 흐림).
 - 순수 계층(16-A grep 대상) — `URL` 은 전역이지만 Node·브라우저 공통 내장이다. 3-2 "순수 계층은 Math·String·Array·Map 외 전역 금지" 의 예외로 `URL` 하나를 더한다(`hash.js` 의 `globalThis.crypto` 처럼 존재 검사 후). **대안**: 검증을 `ui/links.js` 로 옮겨 순수 규칙을 건드리지 않는다 — 결정 18-D6.
+- `[정정 2026-11-16 — 18 Build]` 만든 그대로: `checkLink(link, {count})` — 새로 더할 때만 `count`(지금 목록 수)를 넘겨 `≥ 30` 이면 `too-many`. 더 막은 것 둘 — 주소에 제어 문자(줄바꿈·탭)가 있으면 `url-bad`(`URL` 이 조용히 지워 보이는 값과 여는 값이 달라지지 않게) · `{q}` 가 호스트·포트에 있으면 `url-bad`(`{q}`→`x`·`y` 두 번 바꿔 origin 이 같아야 — 검색어가 다른 사이트 주소가 되지 않게). `queryText` 는 NFKC 뒤 숨은 하이픈(U+00AD)·폭 없는 공백(U+200B·FEFF)도 지운다. 더한 순수 함수: `effectiveLinks`(저장값 → 목록, 검사 통과 항목만·최대 30·id 겹침 없음) · `queryLinks` · `homeUrl`(18-D5) · `hostOf` · `lookupPlan` · `newLinkId`·`moveLink`·`removeLink`·`upsertLink`.
 
 **기본 목록 — `config.js` `LINKS.DEFAULTS`**(결정 18-D3):
 
@@ -5860,8 +5864,10 @@ links.medical : null | [{ id, name, url }]      # null = 기본 목록(config.js
   - 낭독은 멈추지 않는다(새 탭으로 가면 Android 가 페이지를 숨김 → 6-4 "hidden → 일시정지" 규칙 그대로).
   - 열기: `<a>` 를 만들어 `href = fillQuery(...)`(검증을 다시 통과한 값만), `target="_blank"`, `rel="noopener noreferrer"`, `referrerPolicy = 'no-referrer'` 를 누르게 한다(`window.open` 대신 — 팝업 차단을 피하고 탭 안 사용자 동작으로 연다).
 - **11a 와의 자리**: 8c-1 이 "단추 4개까지 한 줄"로 만든다. 18 이 넷째를 쓰면 11a [설명]은 다섯째가 된다 → 11a Plan 이 "좁으면 `[⋯]` 로 접기"를 정한다(이번엔 자리만 기록).
+- `[정정 2026-11-16 — 18 Build]` 배선: `controls.js` 는 3절 표에 없어 고치지 않았다 — `[찾아보기]` 는 `selbar.js` 가 누름 안에서 곧바로 `ui/links.js` `lookup()` 을 부르고(새 탭이 사용자 동작 안에서 열리게), 그다음 늘 하던 `onAction('lookup', snap)` 을 부른다(controls 는 듣기 취소만 하고 모르는 id 는 지나간다 — 낭독 무변). 흐림 문구는 단추마다 `data-sel-note`(`sel.tooLong`·`links.tooLong`). 목록(`#linksMenu`)은 선택 줄 **안**의 absolute 요소라 줄과 함께 숨고, 항목은 `<button role="menuitem">` → `openExternal`(`<a>` 만들어 `click`). **목록이 떠 있는 동안 선택이 풀려도 줄을 거두지 않는다**(손가락으로 단추를 누르면 Android 가 선택을 풀 수 있다 `[가정 — 실기기]` — 고르기 전에 목록이 사라지지 않게) — 항목을 고르거나 Esc·줄 밖 누름으로 닫으면 선택을 다시 본다. Esc 는 `window` 캡처에서 목록만 닫는다(탭 띠의 `document` 캡처 Esc 보다 먼저 — `preventDefault`). 18-D4 `[가정 — 8c-1 Build 확인]` 은 틀렸다: 8c-1 스냅숏 글자는 `String(selection)` 그대로이고 하이픈 결합(`expandWord`)은 단어 시트만 한다 — 다만 줄 끝 숨긴 하이픈(`span.hy`, CSS 로 숨김)은 `String(selection)` 에 들어가지 않아 결합된 꼴이 된다(headless Edge 확인 — 11자 낱말이 하이픈·공백 없이 11자). 폰 Chrome 은 실기기 목록에.
 
 **i18n**(4언어 같은 키 — i18n 테스트가 짝을 본다, 약 18키): `links.card.title`·`links.card.edit`·`links.settings.title`·`links.add`·`links.addSuggested`·`links.reset`·`links.name`·`links.url`·`links.help.query`·`links.help.account`·`links.queryBadge`·`links.err.{nameEmpty,nameLong,urlBad,urlNotHttps,urlUserinfo,urlLong,tooMany}`·`links.delete.confirm`·`sel.lookup`·`links.tooLong`. 링크 **이름**은 번역하지 않는다(고유명사). ar·fr 새 문구는 `[검토 — Nour·운영자]`.
+`[정정 2026-11-16 — 18 Build]` 실제 34키 — 위 21키 + 화면에 필요한 13키: `links.empty`·`links.menu`(목록 aria 이름)·`links.up`·`links.down`(↑↓ 단추 aria 이름)·`links.edit`·`links.delete`·`links.save`·`links.cancel`·`links.saved`(상태 줄)·`links.suggested.{add,none,paid,unverified}`(추천 체크 칸 — 유료·`[확인 필요]` 표시).
 
 #### 3. 고치는 파일 · import 방향
 

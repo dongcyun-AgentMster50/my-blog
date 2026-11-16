@@ -46,6 +46,8 @@ import { TEST_PROMPT } from '../ai/prompts.js';
 import { parseAIJson } from '../ai/jsonrepair.js';
 // `[9b — spec 17-1-2 7]` 설정 "음성 명령" 묶음(켜기·명령 언어·실패 음성·[말해 보기]·명령 목록) — 그리기는 그 파일 하나.
 import { buildVoiceSettings, recognitionOf } from './voice.js';
+// `[18 — spec 17-9]` "의료 사이트" 카드(추가·수정·삭제·순서) — 그리기·동작은 `ui/links.js`, 여기는 init·보이기·떠나기만.
+import { initLinksSettings, showLinksSettings, leaveLinksSettings } from './links.js';
 
 const CODES = provider.CODES;
 
@@ -775,6 +777,7 @@ export function initSettingsScreen() {
     });
   }
   if (els.voiceLangs) { els.voiceLangs.addEventListener('change', onVoicePick); els.voiceLangs.addEventListener('click', onVoicePick); }
+  initLinksSettings();      // `[18]` 카드 그릇이 없으면(반쪽 캐시) 조용히 물러난다
   els.keyInput.addEventListener('input', paintFormatWarning);
   els.consentCheck.addEventListener('change', () => { if (els.consentCheck.checked) els.consentHint.hidden = true; });
 
@@ -856,6 +859,8 @@ export function showSettings(params) {
     const btn = row && row.querySelector('[data-action="cache-clear"]');
     if (btn) { try { btn.focus({ preventScroll: true }); } catch (e) { /* 그대로 */ } }
   }
+  // `[18]` `#/settings/links` — 서재 "의료 사이트" 카드 [편집]에서 왔으면 그 카드로 굴린다.
+  showLinksSettings(params && params.tab);
 }
 
 /**
@@ -869,6 +874,7 @@ export function leaveSettings() {
   inflight.clear();
   if (!els) return;
   if (els.voiceCmd) els.voiceCmd.leave();     // `[9b]` [말해 보기] 듣는 중이면 취소
+  leaveLinksSettings();                        // `[18]` 열린 입력 칸·추천·확인 대화를 닫는다
   els.keyInput.value = '';
   setKeyVisible(false);
   els.consentHint.hidden = true;

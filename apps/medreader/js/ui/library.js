@@ -57,6 +57,8 @@ import {
 import { DOMAINS, domainOf, normalizeDomain } from '../ai/prompts.js';
 // `[8f-2 — spec 17-7-6 4-4]` 문서를 지워도 남는 단어장 수(삭제 확인 "단어장 n개는 남습니다") — 읽기만.
 import { vocabStore } from '../vocab/store.js';
+// `[18 — spec 17-9 · 결정 18-D2]` 저장 줄 위 "의료 사이트" 접는 카드(열기만) — 그리기는 `ui/links.js` 한 곳.
+import { renderLibraryLinks } from './links.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -151,6 +153,7 @@ export function openFilePicker() {
 
 export async function showLibrary() {
   if (!root) return;
+  renderLibraryLinks();   // `[18]` 설정에서 고친 목록을 다시 읽는다(호출 0 — 설정 메모리)
   await renderList();
   await renderStorage();
 }

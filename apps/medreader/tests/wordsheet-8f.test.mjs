@@ -452,10 +452,11 @@ test('W13 ★ deleteKeepLines — 단어장 n>0 이면 한 줄(0 이면 없음) 
 test('W14 선택 줄 [단어 번역] 켜기 — 기본 목록은 그대로(hidden) · showAction 사본 · 스냅숏 multi · controls 가 시트가 있을 때만 refresh', () => {
   assert.equal(SEL_ACTIONS[0].hidden, true, '기본 목록은 8c-1 그대로');
   const on = showAction(SEL_ACTIONS, 'word');
-  assert.deepEqual(on.map((a) => [a.id, !!a.hidden]), [['word', false], ['sentence', false], ['readFrom', false]]);
+  // `[18]` 넷째 `lookup`([찾아보기])은 `hidden` 이 아니라 `when:'links'` — 보이기는 selBarModel 의 ctx(`{q}` 링크 수)가 정한다.
+  assert.deepEqual(on.map((a) => [a.id, !!a.hidden]), [['word', false], ['sentence', false], ['readFrom', false], ['lookup', false]]);
   assert.equal(SEL_ACTIONS[0].hidden, true, '원본을 바꾸지 않는다');
   assert.ok(Object.isFrozen(on) && Object.isFrozen(on[0]));
-  assert.deepEqual(selBarModel(on, { text: 'arthritis' }).map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['readFrom', false, false]]);
+  assert.deepEqual(selBarModel(on, { text: 'arthritis' }).map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['readFrom', false, false], ['lookup', true, false]]);
   assert.equal(selBarModel(on, { text: 'a b c d e f g' })[0].disabled, true, '6낱말 넘으면 흐림(8c-1 그대로)');
   const sb = strip(src('../js/ui/selbar.js'));
   assert.match(sb, /multi: endLine !== line \};/, '스냅숏 — 선택이 다음 줄까지 걸쳤나');

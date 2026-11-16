@@ -864,3 +864,28 @@ export const SCAN = Object.freeze({
   /* `[8l Build — spec 밖 작은 값]` 첫 쪽 표시를 막지 않게: 추출기가 첫 쪽을 내거나 이만큼 지나면 판정을 시작한다 */
   START_AFTER_MS: 1500
 });
+
+/* ────────────────────────────────────────────────────────
+   `[18 — spec 17-9]` 의료 사이트 북마크 + 검색어 바로가기 — **링크만**(스크래핑·응답 읽기·계정 정보 없음, 호출 0 — 13절 · E7).
+   검증은 순수 `text/links.js`, 저장은 설정 키 `links.medical`(null = 아래 DEFAULTS). `{q}` 자리에 고른 글자가 들어간다.
+   ★ 기본 목록은 검색 주소를 2026-11-16 확인한 무료·공개 넷만(결정 18-D3). 추천(SUGGESTED)은 설정 [추천 링크 추가]에서만.
+   `check:'unverified'` = 검색 주소 꼴을 아직 확인하지 못함(실기기 몫) · `paid:true` = 유료 구독(Nour 구독 뒤 — N9).
+   ──────────────────────────────────────────────────────── */
+export const LINKS = Object.freeze({
+  MAX: 30,             // 목록 최대 수
+  NAME_MAX: 60,        // 이름(앞뒤 공백 뗀 뒤 코드 포인트)
+  URL_MAX: 2000,       // 주소 글자 수
+  QUERY: '{q}',        // 검색어 자리
+  DEFAULTS: Object.freeze([
+    Object.freeze({ id: 'medlineplus', name: 'MedlinePlus', url: 'https://vsearch.nlm.nih.gov/vivisimo/cgi-bin/query-meta?v%3Aproject=medlineplus&v%3Asources=medlineplus-bundle&query={q}' }),
+    Object.freeze({ id: 'pubmed', name: 'PubMed', url: 'https://pubmed.ncbi.nlm.nih.gov/?term={q}' }),
+    Object.freeze({ id: 'wikipedia-en', name: 'Wikipedia (English)', url: 'https://en.wikipedia.org/w/index.php?search={q}' }),
+    Object.freeze({ id: 'dailymed', name: 'DailyMed', url: 'https://dailymed.nlm.nih.gov/dailymed/search.cfm?query={q}' })
+  ]),
+  SUGGESTED: Object.freeze([
+    Object.freeze({ id: 'msd-pro', name: 'MSD Manual (Professional)', url: 'https://www.msdmanuals.com/professional/searchresults?query={q}', check: 'unverified' }),
+    Object.freeze({ id: 'radiopaedia', name: 'Radiopaedia', url: 'https://radiopaedia.org/search?q={q}', check: 'unverified' }),
+    Object.freeze({ id: 'ncbi-bookshelf', name: 'NCBI Bookshelf (StatPearls)', url: 'https://www.ncbi.nlm.nih.gov/books/?term={q}', check: 'unverified' }),
+    Object.freeze({ id: 'uptodate', name: 'UpToDate', url: 'https://www.uptodate.com/contents/search?search={q}', check: 'unverified', paid: true })
+  ])
+});
