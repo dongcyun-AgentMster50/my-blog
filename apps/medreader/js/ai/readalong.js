@@ -37,6 +37,10 @@
    화면(`ui/inlinetr.js`)은 이 서비스 객체를 **주입받아** `get`·`onChange`·`translatable`·`readyNow`·`cachedFor` 만 쓴다.
    `cachedFor` 는 refill 과 같은 키 함수(`cacheKeyOf`)로 캐시를 **읽기만** 한다 — 요청·창·readStats 무관(호출 0).
 
+   ── `[8c-1]` 탭 번역(spec 17-7-6 4-1) ─────────────────────
+   `requestTap(units)` — 화면이 고른 문단의 문장을 **같은 메모리·같은 `pipeline.translate`**(kind `translate`)로 받는다.
+   유효 모드·`active` 와 무관(문지기는 `tapGate` — consent → unsupported-lang → same-lang → no-key). 창·refill·readStats 무관.
+
    ── 원격 상태 이벤트 거르기 (8a Review 주의) ───────────
    파이프라인은 성공 호출마다 `inflight → ready` 를 낸다. 그것을 "돌아왔다"로 읽으면
    매 호출마다 회복 처리(알림 거두기·blocked 재전송)가 돈다. **이전 상태(`prev`)가 막힌
@@ -96,6 +100,24 @@ export function effectiveMode(ctx) {
   if (!c.hasKey) return off(REASON.NO_KEY);
   if (mode === 'speak' && c.trVoice === false) return { mode: 'show', reason: REASON.NO_VOICE };
   return { mode: mode, reason: null };
+}
+
+/**
+ * `[8c-1 — spec 17-7-6 4-1]` 탭 번역의 문지기. **순수 함수.** 위에서부터 처음 걸리는 줄이 이긴다:
+ * consent → unsupported-lang → same-lang → no-key. 유효 모드와 달리 `mode`(번역 끔)·`unit`(줄 단위)·`trVoice` 는 보지 않는다 —
+ * 탭은 사용자가 그 문장의 번역을 부른 것이다(낭독 동반 번역을 꺼 둔 사람도, 줄 단위로 듣는 사람도 쓴다).
+ * @param {Object} ctx  `effectiveMode` 와 같은 문맥(`setContext` 가 받은 값)
+ * @returns {{ok:boolean, reason:string|null}}
+ */
+export function tapGate(ctx) {
+  const c = ctx || {};
+  const no = (reason) => ({ ok: false, reason: reason });
+  if (!c.consented) return no(REASON.CONSENT);
+  const supported = Array.isArray(c.supportedSrc) ? c.supportedSrc : [];
+  if (!c.srcLang || supported.indexOf(c.srcLang) < 0) return no(REASON.UNSUPPORTED_LANG);
+  if (c.srcLang === c.targetLang) return no(REASON.SAME_LANG);
+  if (!c.hasKey) return no(REASON.NO_KEY);
+  return { ok: true, reason: null };
 }
 
 /** 창 크기와 선행 요청 문턱(7-8-6). `maxReqChars` 한 숫자에서 둘 다 나온다. */
@@ -164,11 +186,14 @@ export function createReadalong(deps) {
   let headInflight = 0;
   let active = false;                   // 낭독 중일 때만 요청한다(7-8-3 onQueue)
   let mode = { mode: 'off', reason: REASON.OFF };
+  let lastCtx = {};                     // `[8c-1]` 마지막 `setContext` 문맥 — `tapGate()` 가 읽는다
+  let tapBusy = false;                  // `[8c-1b]` 탭 요청이 떠 있다(한 번에 하나)
+  let tapWait = null;                   // `[8c-1b]` 대기 한 칸 `{units, opts, gen, resolve}` — 새 탭이 오면 앞 것은 버린다
   const noticed = new Set();            // 사유별 안내 한 번
   let lastAnnounced = null;             // 원격 상태 안내 — 전이 때 한 번(RA4)
   let running = null;                   // refill 직렬화
   let again = false;
-  const log = { calls: 0, chars: 0, requests: [], maxInflight: 0 };
+  const log = { calls: 0, chars: 0, requests: [], maxInflight: 0, taps: 0 };
   const changeFns = new Map();          // srcKey → Set<fn>
 
   function emit(type, detail) { bus.dispatchEvent(new CustomEvent(type, { detail: detail })); }
@@ -485,6 +510,7 @@ export function createReadalong(deps) {
    * @returns {{mode:string, reason:string|null}}
    */
   function setContext(ctx) {
+    lastCtx = Object.assign({}, ctx || {});            // `[8c-1]` 탭 문지기(`tapGate`)가 같은 문맥을 읽는다
     const next = effectiveMode(ctx);
     const prev = mode;
     mode = next;
@@ -639,6 +665,89 @@ export function createReadalong(deps) {
     return { state: st, resent: resent };
   }
 
+  /**
+   * `[8c-1 — spec 17-7-6 4-1]` 탭 번역 요청 — **문단 단위 1회**(7-2). 낭독 동반 번역과 **같은 메모리·같은 캐시 키·같은
+   * 번역 요청**(`pipeline.translate` — 요청 꼴 새로 만들지 않음)을 쓴다. 그래서 띠(`onChange`)·문장 아래(다시 그릴 때)·이후
+   * 낭독(refill 이 메모리 ready 를 건너뜀)이 같은 결과를 본다. 사용량 종류는 `translate`(`charsTranslated` 는 낭독만 — 15절).
+   *   · 메모리 `ready`·`pending` 인 문장은 보내지 않는다(같은 문단 두 번째 탭 = 0회)
+   *   · `[8m]` 대상 언어와 같은 문장은 항목에서 빠진다(`sentencesFromUnits` 거름 그대로)
+   *   · 캐시 적중·떠 있는 같은 키 공유·상한·상태 기계는 파이프라인이 한다
+   * 유효 모드·`active` 는 보지 않는다(문지기는 화면이 `tapGate()` 로 먼저 본다).
+   * @param {Array} units  탭한 문장들의 **문단** 단위(`speaker.sentenceUnits()` 에서 고른 것)
+   * @param {{retry?:boolean, all?:Array, page?:number}} [opts]
+   *   `retry` — 사용자 [다시 시도](막힌 원격 상태면 `pipeline.retry()` 먼저) · `all` — 그 쪽 전체 단위(첫·끝 문장 조각 표시를
+   *   쪽 기준으로 — 낭독 동반 번역과 같은 `frag`) · `page` — 쪽 번호(알림 detail 용)
+   * `[8c-1b]` **한 번에 하나**: 탭 요청이 떠 있는 동안 온 새 탭은 대기 한 칸에 들어가고, 앞서 기다리던 탭은 **보내지 않고 버린다**
+   * (`{calls:0, sent:0, dropped:true}`) — 띠는 마지막 탭만 보이므로 지나간 문단을 보낼 까닭이 없고, 호출 수는 "문단당 1" 을
+   * 넘지 않는다(17-7-6 6절). 떠 있던 요청이 끝나면 대기 칸을 그때의 메모리로 다시 걸러 보낸다. 낭독 동반 번역의 동시 상한은 무관.
+   * @returns {Promise<{calls:number, sent:number, dropped?:boolean}>}
+   */
+  async function requestTap(units, opts) {
+    const o = opts || {};
+    if (!doc.id || !doc.target || !pipeline) return { calls: 0, sent: 0 };
+    if (!tapList(units, o).length) {
+      // `[8c-1c]` 마지막 탭의 문단이 이미 떠 있거나 받았다 — 기다리던 (지나간) 탭은 보내지 않는다(띠는 마지막 탭 — 8c1bR-8 #4)
+      if (tapWait) { const w = tapWait; tapWait = null; w.resolve({ calls: 0, sent: 0, dropped: true }); }
+      return { calls: 0, sent: 0 };
+    }
+    if (tapBusy) {
+      if (tapWait) tapWait.resolve({ calls: 0, sent: 0, dropped: true });
+      return new Promise((resolve) => { tapWait = { units: units, opts: o, gen: docGen, resolve: resolve }; });
+    }
+    tapBusy = true;
+    try {
+      return await sendTap(units, o);
+    } finally {
+      tapBusy = false;
+      const w = tapWait;
+      tapWait = null;
+      if (w && w.gen === docGen) requestTap(w.units, w.opts).then(w.resolve, () => w.resolve({ calls: 0, sent: 0 }));
+      else if (w) w.resolve({ calls: 0, sent: 0, dropped: true });
+    }
+  }
+
+  /** `[8c-1b]` 탭 요청에 넣을 문장 — 메모리 `ready`·`pending` 은 뺀다(같은 문단 두 번째 탭 = 0회). */
+  function tapList(units, o) {
+    const page = Number.isFinite(Number(o.page)) ? Number(o.page) : null;
+    const want = new Set((Array.isArray(units) ? units : []).filter((u) => u && Number.isInteger(u.seg)).map((u) => u.seg));
+    const base = Array.isArray(o.all) && o.all.length ? o.all : (Array.isArray(units) ? units : []);
+    return sentencesFromUnits(page, base).filter((s) => want.has(s.seg))
+      .filter((s) => { const st = stateOf(s.key); return st !== SEG.READY && st !== 'pending'; });
+  }
+
+  async function sendTap(units, o) {
+    const list = tapList(units, o);
+    if (!list.length) return { calls: 0, sent: 0 };
+    const g = docGen;
+    if (o.retry && typeof pipeline.retry === 'function' && BLOCKING.has(pipeline.state())) {
+      try { await pipeline.retry(); } catch (e) { /* 상태는 아래 translate 가 다시 본다 */ }
+      if (g !== docGen) return { calls: 0, sent: 0 };
+    }
+    for (const s of list) setMem(s.key, { state: 'pending' }, s);
+    log.taps++;
+    let r = null;
+    try {
+      r = await pipeline.translate(list.map((s) => (s.lang ? { text: s.src, frag: s.frag, src: s.lang } : { text: s.src, frag: s.frag })), {
+        src: doc.lang, target: doc.target, kind: 'translate', docId: doc.id, retry: !!o.retry, domain: doc.domain
+      });
+    } catch (e) {
+      r = null;
+    }
+    if (g !== docGen) return { calls: 0, sent: list.length };
+    const results = (r && Array.isArray(r.results)) ? r.results : [];
+    for (let i = 0; i < list.length; i++) {
+      const x = results[i] || { state: SEG.FAILED, code: 'UNKNOWN' };
+      let rec;
+      if (x.state === SEG.READY) rec = { state: SEG.READY, text: String(x.text == null ? '' : x.text) };
+      else if (x.state === SEG.BLOCKED) rec = BLOCKING.has(pipeline.state())
+        ? { state: SEG.BLOCKED, code: x.code || null } : { state: SEG.FAILED, code: x.code || null };
+      else rec = { state: SEG.FAILED, code: x.code || null };
+      setMem(list[i].key, rec, list[i]);
+      if (rec.state === SEG.READY) missed.delete(list[i].key);
+    }
+    return { calls: (r && Number(r.calls)) || 0, sent: list.length };
+  }
+
   function dispose() {
     active = false;
     docGen++;
@@ -660,6 +769,9 @@ export function createReadalong(deps) {
     readyNow: readyNow,
     cachedFor: cachedFor,
     retry: retry,
+    requestTap: requestTap,
+    /** `[8c-1]` 탭 번역 문지기 — 마지막 `setContext` 문맥으로 `tapGate(ctx)`. */
+    tapGate: () => tapGate(lastCtx),
     dispose: dispose,
     /** 지금 유효 모드 `{mode, reason}`. */
     mode: () => Object.assign({}, mode),
@@ -671,7 +783,8 @@ export function createReadalong(deps) {
     idle: () => running || Promise.resolve(),
     /** 요청 기록(테스트·측정용 — 문장 원문은 담지 않는다). */
     stats: () => ({ calls: log.calls, chars: log.chars, maxInflight: log.maxInflight,
-      inflight: headInflight + regularInflight, requests: log.requests.slice() })
+      inflight: headInflight + regularInflight, requests: log.requests.slice(), taps: log.taps,
+      tapBusy: tapBusy, tapWaiting: !!tapWait })
   };
 }
 

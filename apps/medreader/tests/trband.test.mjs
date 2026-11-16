@@ -315,6 +315,12 @@ test('WB1 ★ [다시 시도] → readalong.retry() — 띠 하나의 위임(dat
   const fn = tb.slice(tb.indexOf('function onRetry'), tb.indexOf('function expectedFor'));
   assert.match(fn, /\.then\(\(\) => ra\.retry\(\)\)/, 'onRetry 가 readalong.retry() 를 부른다');
   assert.equal((tb.match(/\.retry\(\)/g) || []).length, 1, 'retry() 는 버튼 경로 한 곳에서만');
+  // `[8c-1b]` 탭 모드 재시도(`then(tap.retry)` — 함수를 넘기는 꼴이라 위 `.retry()` 셈에 안 걸린다)도 센다:
+  // 재시도를 **부르는** 모든 꼴(`.retry()`·`.retry(`·`then(x.retry)`)이 onRetry 안에만, 합 2(낭독 1 + 탭 1)
+  const calls = (src) => (src.match(/\.retry\(|then\(\s*[A-Za-z_$][\w$]*\.retry\s*\)/g) || []).length;
+  assert.equal(calls(tb), 2, '재시도 호출 꼴은 둘(ra.retry() · then(tap.retry))');
+  assert.equal(calls(fn), 2, '★ 둘 다 [다시 시도] 버튼 경로(onRetry) 안 — 자동 호출 0');
+  assert.match(fn, /Promise\.resolve\(\)\.then\(tap\.retry\)/);
   assert.ok(!/onclick/.test(tb));
   // 띠 자리 — #ttsBar 바로 앞, region, aria-live 없음(7-7), 기본 숨김
   const at = html.indexOf('id="trBand"');

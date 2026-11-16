@@ -4858,6 +4858,7 @@ controls onLineTap(lineId):                          # 9b-2 의 cancelVoice() �
 - **띠 탭 모드**(`trband.js` +약 110줄): `openTap(o)` · `closeTap()`. 열리면 유효 모드와 무관하게 띠를 보이고 `data-tr-band="on"`, `inlinetr.suspend(true)`. 내용 = `hit` 문장(들)의 번역(seg 순서, 둘이면 이어서), 상태는 `bandView`·`noteKeyFor` 그대로(pending "번역 중…" · failed + [다시 시도] → `requestTap(para, {retry:true})` · blocked 짧은 줄). 새 단추 둘: **[×]**(`tr-close`, 48×48)·**[문단 전체]**(`aria-pressed`, 문단 모든 문장 — 띠 안 스크롤). 닫기 = [×] · 다른 줄 탭(새 내용으로 바뀜) · [▶] · 쪽 넘김 · 리더 떠남. 낭독이 시작되면 다음 `linechange` 에서 낭독 문장으로 돌아간다(7-7) — 유효 모드가 `off` 면 띠를 닫는다.
 - **탭한 줄이 띠에 가리면** 띠를 연 뒤 그 줄 아래변이 띠 윗변 − 4px 보다 아래면 그만큼 굴린다(프로그램 스크롤 — `programScrollAt` 기록, 6-5 800ms 판정과 섞이지 않게). 리플로우만(원본은 상자 안 스크롤 그대로).
 - **막힘 안내**: `tapGate` 가 `no-key`·`consent` 면 띠 한 줄 + **즉시** 배너(`noticeBanner` — 재생을 기다리는 `DEFER_UNTIL_PLAY` 와 달리 사용자가 번역을 부른 것이므로). 원격 상태(`exhausted`·`capped`·`offline` …)의 긴 안내는 지금처럼 readalong `remote` → 상태 바 한 번.
+- `[정정 2026-11-16 — 8c-1 Build]` ① `requestTap(units, {retry, all, page})` — `all`(그 쪽 전체 문장 단위)로 첫·끝 문장 조각(`frag`)을 낭독 동반 번역과 같은 쪽 기준으로 매긴다(문단만 넘기면 문단 끝이 `head` 가 된다). `retry` 이고 원격 상태가 막혀 있으면 `pipeline.retry()` 먼저. 메모리 `pending` 도 건너뛴다. ② 띠 ↔ inline 배선은 `trband.setInlineSuspend(fn)`(controls 가 `inlinetr.suspend` 를 넘김) — `initTrBand({readalong, speaker})` 한 줄은 그대로(8b-2 WB2). ③ 머리 끝 단추 칸은 번역문 **앞**의 `float: inline-end` 묶음 `#trTools`([문단 전체] · `#trSlot`(12 [☆] 자리, 비어 있음) · [×]) — 따로 머리 줄을 두면 compact 2줄 띠(84px)에 글자 칸이 1줄도 안 남아서. [문단 전체]는 문단 문장이 탭한 문장보다 많을 때만 보인다. 상태 모으기는 순수 `tapView`(준비된 번역을 seg 순서로 잇고, 남은 것 중 실패 > 막힘 > 번역 중 한 줄). ④ 닫기의 "쪽 넘김"은 `onPageRender` 구독 하나 — 뷰 전환·8i-1 새 판 다시 그리기도 닫는다. no-key·consent 즉시 배너를 띄우면 재생을 기다리던 같은 안내(`deferred`)는 거둔다(두 번 뜨지 않게). ⑤ `speaker.sentenceUnits()` 는 `queueOf(paras, peek=true, 'sentence')` — speaker 의 `buildUnits` 호출은 여전히 한 곳(8h-1 테스트).
 
 ###### 4-2. 선택 동작 줄 (8c-1 이 만들고 8f-2 가 [단어 번역]을 켠다)
 
@@ -4870,6 +4871,7 @@ controls onLineTap(lineId):                          # 9b-2 의 cancelVoice() �
   - `[단어 번역]` → 8f-2 의 단어 시트. 8c-1 에서는 **마크업만 두고 `hidden`**.
   - 낱말 6개·60자를 넘으면 `[단어 번역]` 만 흐림(`aria-disabled`, 누르면 한 줄 안내 `sel.tooLong`).
 - 원본 보기·검색 화면·퀴즈에서는 붙지 않는다(리더 리플로우만).
+- `[정정 2026-11-16 — 8c-1 Build]` ① 단추는 `ui/selbar.js` 의 목록 데이터 `SEL_ACTIONS`(+ 순수 `selBarModel`)에서 그린다 — 11 의 "보이는 3칸 + `[⋯]`"는 목록과 모델만 고친다(crossstep-notes). `refresh(list)` 로 바꿔 끼운다(8f-2 [단어 번역] 켜기). ② 가림 굴리기는 줄이 **처음 뜰 때** 한 번(손잡이를 끄는 동안 매번 굴리면 끌기와 다툰다). ③ z 24(팝오버 25·35 아래). 같은 자리의 "읽던 곳으로" 칩(z 28)은 줄이 떠 있는 동안 숨긴다(`<html data-sel-bar="on">`). ④ [여기서부터 읽기]는 선택을 지우고 탭 띠를 닫은 뒤 `syncReadalong()` → `speaker.play(lineId)`(그 줄의 첫 발화부터). [문장 번역]은 선택을 남긴다(8f-2 [단어 번역]으로 이어지게). ⑤ 데스크톱 마우스로 단추를 누를 때 본문 선택이 풀리지 않게 줄의 `mousedown` 기본 동작을 막는다(터치는 스냅숏).
 
 ###### 4-3. 단어 번역 (8f-1 서비스·순수, 8f-2 화면)
 
@@ -4959,6 +4961,9 @@ controls onLineTap(lineId):                          # 9b-2 의 cancelVoice() �
 ##### 8. 수용 기준 (16절 형식 — 16-D4 를 나눠 붙이고 17-7-5 를 다듬음)
 
 **8c-1 탭 번역·선택 동작 줄**
+- `[정정 2026-11-16 — 8c-1 Build]` 아래 `[D]` 의 "멈춘 상태"·"멈춤 중 탭"은 3절 표의 `idle`·`error`(재생 전·끝남)다 — `paused` 의 줄 탭은 8cf-D3 대로 그 줄로 이동·재생(번역은 선택 줄 [문장 번역]). `isTap` 은 `isTap(down, up, hadSel)` — `up.sel` 이 "지금 선택"(④), `down` 이 없으면(누름 기록 없음) ③④만 본다. 10px 은 "초과"만 탭 아님(10px 정확히는 탭).
+- `[정정 2026-11-16 — 8c-1b]` (8c-1 Review 8c1R-9 #1–#6) 누름 기록은 **포인터별**(`select.js` `createTapTracker` — 리더·원본 같은 규칙) — `isTap(down, up, hadSel, multi)`: 누름 동안 동시 포인터 ≥ 2 를 본 제스처(두 손가락·엄지를 댄 채 다른 손가락 탭)는 어느 손가락도 탭 아님(⑤), 짝 없는 `pointerup`(기록 없음)도 탭 아님(⑥ — 위 정정의 "`down` 이 없으면 ③④만"을 바꾼다), `pointercancel`·`lostpointercapture` 가 기록을 지움 · 탭 요청은 **한 번에 하나** + 대기 한 칸(새 탭이 앞 대기를 보내지 않고 버림 — 6절 "문단당 1"의 상한 안, 낭독 동반 번역 상한은 무관) · 탭 띠가 offline 막힘일 때 연결이 돌아오면(원격 offline → ready) 그 문단을 한 번 다시 보냄(`retry` 표시 없음) · [×]·Esc 로 닫으면 포커스를 탭한 줄(없으면 리더 본문)로, Esc 는 띠보다 위 층(팝오버·시트·`<dialog>`·8e `[≡]`)이 없을 때만 · 띠가 새로 뜰 때 선택 줄이 떠 있으면 그 윗변 기준으로 굴림 · 계획(띠 문장·문단 단위)은 순수 `tapPlan`, 선택 줄 거둠 판단은 순수 `selBarStep`. 키보드로 탭 번역을 **여는** 길은 여전히 정하지 않았다(다듬기 후보).
+- `[정정 2026-11-16 — 8c-1c]` (8c-1b 재검증 8c1bR-8 #1–#5·#7) 문서 붙잡기 단계 `pointerup` 이 그 포인터 기록에 "떼어짐" 표시(`release` — 본문에 닿으면 그대로 판정), `pointercancel` 은 지움 → 다음 누름이 **종류와 무관하게** 떼어진 기록을 지운다(본문 밖에서 뗀 마우스·펜이 다음 손가락 탭을 막지 않게, 아직 누르고 있는 포인터는 그대로 다중) · 4-1 닫기 조건 "리더 떠남"에 숨기기만 하는 검색 화면 전환도 든다(포커스 되돌림 없이 닫고, 다시 보이면 띠 자리를 다시 잡음) · Esc 는 띠가 **실제로 보일 때**(리더 화면 섹션까지)만, 대상이 편집 칸(`input`·`textarea`·`select`·`[contenteditable]`)이면 손대지 않음(기본 동작 그대로) · 마지막 탭의 문단이 이미 떠 있거나 받은 문단이면 대기 칸을 비움 · **키보드로** 닫았을 때(Esc·[×] Enter/Space)만 줄이 본문 영역 밖이면 `block:'nearest'` 로 굴림(손가락·마우스 [×] 는 읽던 자리를 끌어올리지 않음) · 굴리기 가장자리 규칙은 순수 `liftEdge`.
 - [ ] `[N]` `isTap`: 누름 449ms·이동 9px·누를 때 선택 없음 → 탭 / 450ms 이상·10px 초과·누를 때 선택 있음·지금 선택 있음 → 탭 아님(표 8줄).
 - [ ] `[N]` `segsOnLine`·`unitAt`: 한 줄에서 두 문장이 갈리는 픽스처 — 앞 문장 줄 오프셋 → 앞 seg, 뒤 → 뒤 seg, 그 줄 탭 → 두 seg 순서대로. 300자 분할(ranges 없음) → `lineIds` 로. 인용·표 안내만 있는 줄 → 빈 목록.
 - [ ] `[N]` `tapGate`: consent → unsupported-lang → same-lang → no-key 순서, `mode:'off'`·`unit:'line'`·`trVoice:false` 여도 ok(effectiveMode 와 다른 점을 표로).

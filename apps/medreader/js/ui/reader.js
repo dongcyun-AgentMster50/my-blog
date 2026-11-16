@@ -48,7 +48,7 @@ import { openDoc, extractorFor, markScanNoticed } from './library.js';
 // `[8l]` 스캔본·글자 깨짐 안내 띠(17-5-1 3 · 19-1-3 §3-3) — 판정·키는 순수 `text/scan.js`.
 import { bandKey } from '../text/scan.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
-import { initControls, leaveControls, speechState } from './controls.js';
+import { initControls, leaveControls, speechState, closeTapBand } from './controls.js';
 // 5-4 · 5-5 제안 칩 — 퀴즈 화면은 스스로 배선된다(이 import 가 그것을 읽힌다).
 import { updateReaderChip, onQuizEntry } from './quiz.js';
 import { TTS, ORIGINAL } from '../config.js';
@@ -66,6 +66,8 @@ import { ensure as ensureOutline, isOutlineCurrent } from '../search/outline.js'
 import { initSearch } from './search.js';
 // `[8e — spec 12-8-1 (3)]` 낮은 화면의 상단바 숨김 [≡] — 표식·상태는 그 파일 하나가 갖는다.
 import { initChrome } from './chrome.js';
+// `[8c-1 — spec 17-7-6 3절]` 탭 판정(누름 시간·움직임·선택 풀기 탭)·가림 굴리기 — 순수 함수, 원본 보기와 같은 규칙.
+import { isTap, createTapTracker, liftDelta, outOfView } from '../text/select.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — tests/reader.test.mjs 가 고정한다.
@@ -594,17 +596,30 @@ export function initReader() {
   });
 
   /* ── 6-5 줄 탭 ──────────────────────────────────────
-     낭독 중이면 **그 줄부터 이동**. 낭독 중이 아니면 이 단계는 아무 것도
-     하지 않는다 — 인라인 번역은 7단계 몫이다(6-5). 구독자가 판단한다.
+     낭독 중이면 **그 줄부터 이동**. `[8c-1]` 낭독 중이 아니면 탭 번역(띠) — 구독자(controls)가 판단한다.
 
-     `click` 이 아니라 `pointerup` 을 쓰는 이유는 12-3 이 길게 누르기(번역)를
-     예고하기 때문이다. 지금은 길게 누르기를 잡지 않는다(7단계). */
+     `click` 이 아니라 `pointerup` 을 쓰는 이유: 길게 누르기는 브라우저 낱말 선택이다(17-7-1 — 자체 타이머 없음).
+     `[8c-1 — spec 17-7-6 3절]` 탭이 아닌 것: 누름 ≥ 450ms · 움직임 > 10px · **누를 때 이미 선택이 있었다**(선택을 풀려고
+     누른 탭) · 지금 선택이 있다 — 순수 `isTap`. 길게 눌러 선택하는 동안 `pointerup` 이 늦게 오거나 `pointercancel` 이 와도
+     탭으로 세지 않는다.
+     `[8c-1b]` 누름 기록은 **포인터별**(`createTapTracker`) — 두 손가락·엄지를 댄 채 다른 손가락 탭은 그 제스처의 어느 손가락도
+     탭이 아니고, 짝 없는 `pointerup` 도 탭이 아니다. `pointercancel`·`lostpointercapture` 가 기록을 지운다. */
+  const taps = createTapTracker();
+  els.mount.addEventListener('pointerdown', (ev) => {
+    taps.down({ id: ev.pointerId, t: ev.timeStamp, x: ev.clientX, y: ev.clientY, sel: hasTextSelection(), primary: ev.isPrimary, type: ev.pointerType });
+  }, { passive: true });
+  els.mount.addEventListener('pointercancel', (ev) => { taps.drop(ev.pointerId); }, { passive: true });
+  els.mount.addEventListener('lostpointercapture', (ev) => { taps.drop(ev.pointerId); }, { passive: true });
+  // `[8c-1c]` 본문 밖에서 뗀 마우스·펜(암묵 캡처 없음)의 기록이 남아 다음 손가락 탭을 "여러 손가락"으로 만들지 않게 —
+  // 문서 붙잡기 단계에서 먼저 "떼어짐" 표시(본문에 닿으면 아래 `up` 이 그대로 판정)·취소는 지운다(8c1bR-8 #1).
+  document.addEventListener('pointerup', (ev) => { taps.release(ev.pointerId); }, { capture: true, passive: true });
+  document.addEventListener('pointercancel', (ev) => { taps.drop(ev.pointerId); }, { capture: true, passive: true });
   els.mount.addEventListener('pointerup', (ev) => {
+    const down = taps.up(ev.pointerId);
     const span = ev.target && ev.target.closest ? ev.target.closest('span.line[data-flow="1"]') : null;
     if (!span) return;
-    // 글자를 드래그해 선택하는 중이면 탭이 아니다.
-    const sel = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
-    if (sel && String(sel).length > 0) return;
+    // 글자를 드래그해 선택하는 중·선택을 풀려고 누른 탭·길게 누르기·끌기·여러 손가락은 탭이 아니다.
+    if (!isTap(down, { t: ev.timeStamp, x: ev.clientX, y: ev.clientY, sel: hasTextSelection() }, !!(down && down.sel), !!(down && down.multi))) return;
     const id = span.getAttribute('data-line-id');
     state.lastTappedLineId = id;            // `pickAnchorLine` 의 ctx 한 조각
     for (const fn of lineTapListeners) { try { fn(id); } catch (e) { /* 구독자 예외가 리더를 막지 않는다 */ } }
@@ -870,6 +885,8 @@ export function leaveReader() {
     state.soft = true;
     state.softEntry = 'back';
     closeTypeset();
+    // `[8c-1c]` 탭 띠의 닫기 조건 "리더 떠남"(17-7-6 4-1) — 숨기기만 하는 갈래에서도 닫는다(포커스 되돌림 없이 — 8c1bR-8 #2)
+    closeTapBand();
     return;
   }
   leaveReaderNow();
@@ -1846,6 +1863,68 @@ export function revealTop() {
   state.programScrollAt = Date.now();
   if (state.view === 'original') { const sc = els.mount.querySelector('.original-scroll'); if (sc) sc.scrollTop = 0; }
   try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) { window.scrollTo(0, 0); }
+}
+
+/** `[8c-1]` 지금 문서에 글자 선택이 있는가(탭 판정 ③④). */
+function hasTextSelection() {
+  try {
+    const sel = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
+    return !!sel && String(sel).length > 0;
+  } catch (e) { return false; }
+}
+
+/**
+ * `[8c-1 — spec 17-7-6 4-1·4-2]` 가림 굴리기 — 아래변 `bottom`(뷰포트 px)이 가림 윗변 `edge` − 4px 보다 아래면 그만큼 굴린다.
+ * 리플로우만(원본은 상자 안 스크롤 그대로). `programScrollAt` 을 세워 6-5 사용자 스크롤 판정과 섞이지 않게.
+ * @returns {number} 굴린 px(0 = 굴리지 않음)
+ */
+export function liftAbove(bottom, edge) {
+  if (!els || els.root.hidden || state.view !== 'reflow') return 0;
+  const dy = liftDelta(bottom, edge, 4);
+  if (dy <= 0) return 0;
+  state.programScrollAt = Date.now();
+  try { window.scrollBy({ top: dy, behavior: 'instant' }); } catch (e) { window.scrollBy(0, dy); }
+  return dy;
+}
+
+/** `[8c-1]` 탭한 줄이 열린 띠(윗변 `edge`)에 가리면 굴린다 — `liftAbove` 의 줄 판. */
+export function liftLineAbove(lineId, edge) {
+  if (!els || lineId == null || edge == null || state.view !== 'reflow') return 0;
+  const node = lineElement(lineId);
+  if (!node) return 0;
+  return liftAbove(node.getBoundingClientRect().bottom, edge);
+}
+
+/**
+ * `[8c-1b]` 탭 띠를 [×]·Esc 로 닫은 뒤 포커스를 돌려놓는다 — 탭했던 줄(리플로우에서 보이면), 없으면 리더 본문(`#readerMount` —
+ * 원본 보기도 여기 그린다). 줄·본문은 원래 포커스 대상이 아니라 `tabindex="-1"` 을 잠깐 달고(떠나면 뗀다) 스크롤 없이 옮긴다.
+ * `[8c-1c]` `reveal`(키보드로 닫았다 — Esc · [×] Enter/Space)이면, 띠를 연 뒤 본문을 굴려 그 줄이 본문 영역 밖일 때 가장 가까운
+ * 쪽으로만 굴린다(`block:'nearest'` — 상·하단 바는 `scroll-padding` 이 비킨다). 프로그램 스크롤로 표시해 6-5 사용자 스크롤 판정과
+ * 섞이지 않게(8c1bR-8 #5). 손가락·마우스 [×] 는 굴리지 않는다(읽던 자리를 끌어올리지 않게).
+ */
+export function focusLine(lineId, reveal) {
+  if (!els || !els.mount) return;
+  const span = state.view === 'reflow' ? lineElement(lineId) : null;
+  if (span && span.getClientRects().length && focusQuiet(span)) {
+    if (!reveal) return;
+    const r = span.getBoundingClientRect();
+    const area = bodyArea(window.innerHeight || 0);
+    if (outOfView(r.top, r.bottom, area.top, area.bottom)) {
+      state.programScrollAt = Date.now();
+      try { span.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* 굴리지 못해도 포커스는 옮겼다 */ }
+    }
+    return;
+  }
+  focusQuiet(els.mount);
+}
+
+function focusQuiet(el) {
+  if (!el.hasAttribute('tabindex')) {
+    el.setAttribute('tabindex', '-1');
+    el.addEventListener('blur', () => el.removeAttribute('tabindex'), { once: true });
+  }
+  try { el.focus({ preventScroll: true }); } catch (e) { /* 포커스를 못 옮겨도 그만 */ }
+  return document.activeElement === el;
 }
 
 function centerRect(rect) {

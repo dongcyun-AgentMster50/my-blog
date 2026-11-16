@@ -255,7 +255,23 @@ export function initInlineTr(deps) {
   return api();
 }
 
-function api() { return { sync: sync, willShow: willShow, leave: leave }; }
+function api() { return { sync: sync, willShow: willShow, leave: leave, suspend: suspend }; }
+
+/** `[8c-1]` 탭 번역 띠가 열린 동안 참 — `data-tr-inline` 을 걸지 않는다(블록은 그대로). */
+let suspended = false;
+
+/**
+ * `[8c-1 — spec 17-7-6 2절 2 · 8cf-D5]` 문장 아래 표시에서 탭 번역은 **띠**다. 띠가 열린 동안 `<html data-tr-inline>` 을 떼어
+ * CSS 가 띠를 감추지 않게(띠 높이 토큰도 돌아온다) 하고, 닫으면 되돌린다. 이미 그려진 `.ra-tr` 블록은 지우지 않는다
+ * (본문이 움직이지 않게). 블록 그리기·구독은 그대로 돈다.
+ * @param {boolean} on
+ */
+export function suspend(on) {
+  suspended = !!on;
+  if (!els) return;
+  if (suspended) document.documentElement.removeAttribute('data-tr-inline');
+  else sync();
+}
 
 function targetLang() { return normalizeTranslationLang(settings.get('ai.translationLang')); }
 
@@ -281,7 +297,7 @@ export function sync() {
   const m = (ra.mode() || {}).mode || 'off';
   const art = article();
   const on = inlineOn(settings.get('readalong.display'), m, !!art);
-  if (on) document.documentElement.setAttribute('data-tr-inline', 'on');
+  if (on && !suspended) document.documentElement.setAttribute('data-tr-inline', 'on');
   else document.documentElement.removeAttribute('data-tr-inline');
   if (!on) {
     if (active || anyBlock()) clearAll();
@@ -299,6 +315,7 @@ export function leave() {
   if (!els) return;
   clearAll();
   active = false;
+  suspended = false;
   cur = { seg: null, page: null, src: null };
   queue = { units: null, page: null };
   document.documentElement.removeAttribute('data-tr-inline');
@@ -590,7 +607,7 @@ function attachDebugHook() {
       const states = {};
       for (let i = 0; i < list.length; i++) { const s = list[i].getAttribute('data-state') || '?'; states[s] = (states[s] || 0) + 1; }
       return { active: active, blocks: list.length, states: states, cur: { seg: cur.seg, page: cur.page }, watchers: watchers.size, quiet: !!curWatch,
-        rootAttr: document.documentElement.getAttribute('data-tr-inline') };
+        rootAttr: document.documentElement.getAttribute('data-tr-inline'), suspended: suspended };
     },
     /** 지금 큐의 문장 번호·단위 언어(`[8m]` 예외만)·번역 대상 여부 — 글자는 담지 않는다. */
     queueSegs: function () {

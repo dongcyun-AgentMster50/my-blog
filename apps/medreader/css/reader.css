@@ -603,6 +603,104 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
   touch-action: manipulation;
 }
 
+/* ── `[8c-1 — spec 17-7-6 4-1]` 띠 탭 모드 — 머리 끝 단추 칸 ─────────────
+   ★ 번역문 앞에서 줄 끝(inline-end)에 뜬다 — 글이 그 옆으로 흐르고 띠 높이 토큰은 그대로다(2줄 compact 에서도 글자 칸이 남는다).
+   ★ 칸 순서(논리): [문단 전체] · [☆] 자리(12 기억 카드 — 지금 비어 있음) · [×]. 48×48(16-G). 논리 속성만(16-H). */
+.tr-band .tr-tools {
+  float: right;                 /* `float: inline-end` 를 모르는 브라우저 */
+  float: inline-end;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-inline-start: var(--sp-2);
+  margin-block-end: var(--sp-1);
+}
+.tr-band .tr-tools[hidden],
+.tr-band .tr-tools [hidden] { display: none; }
+.tr-band .tr-tools > button {
+  flex: 0 0 auto;
+  min-block-size: var(--tap);
+  min-inline-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-base);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  touch-action: manipulation;
+}
+.tr-band .tr-tools > .tr-close {
+  inline-size: var(--tap);
+  padding: 0;
+  font-size: var(--fs-xl);
+  line-height: 1;
+}
+.tr-band .tr-tools > .tr-para[aria-pressed="true"] {
+  border-color: var(--c-accent);
+  box-shadow: inset 0 0 0 1px var(--c-accent);
+}
+/* 12 의 [☆] 자리 — 지금은 숨김(자리만 마크업에). */
+.tr-band .tr-tools > .tr-slot { inline-size: var(--tap); min-block-size: var(--tap); }
+
+/* ── `[8c-1 — spec 17-7-6 4-2]` 선택 동작 줄 ─────────────
+   ★ 컨트롤 바(띠가 켜져 있으면 띠 — `--reader-chrome-bottom` 하나가 띠 높이를 품는다) **바로 위 4px**. 8e compact 에서도 같은 토큰.
+   ★ z 는 팝오버(25·35) 아래·본문 위. 같은 자리의 "읽던 곳으로" 칩은 줄이 떠 있는 동안 숨긴다(겹치지 않게).
+   ★ 단추 48×48 이상, 논리 순서(아랍어에서 저절로 거울). */
+.sel-bar {
+  position: fixed;
+  inset-inline: var(--sp-2);
+  inset-block-end: calc(var(--reader-chrome-bottom) + 4px + env(safe-area-inset-bottom, 0px));
+  z-index: 24;
+  max-inline-size: 520px;
+  margin-inline: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  background: var(--c-surface);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.sel-bar[hidden] { display: none; }
+.sel-bar .sel-actions {
+  display: flex;
+  flex: 1 1 100%;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+}
+.sel-bar .sel-btn {
+  flex: 1 1 0;
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-2);
+  font: inherit;
+  font-size: var(--fs-base);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  touch-action: manipulation;
+}
+.sel-bar .sel-btn[hidden] { display: none; }
+.sel-bar .sel-btn[aria-disabled="true"] { opacity: 0.5; }
+.sel-bar .sel-note {
+  flex: 1 1 100%;
+  margin: 0;
+  padding-inline: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  text-align: start;
+}
+.sel-bar .sel-note[hidden] { display: none; }
+:root[data-sel-bar="on"] .back-to-line { display: none; }
+
 /* ── 하단 컨트롤 바 (12-3 · 16-G) ─────────────────────
    쪽 이동 바(.pager) 바로 **위**에 앉는다. 둘이 겹치면 한 손 조작에서
    쪽이 넘어가 버린다 — 실기기에서 가장 치명적인 오조작이다.

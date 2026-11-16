@@ -733,8 +733,9 @@ export function createSpeaker(deps) {
    * `[8h-1]` 큐를 만드는 **한 곳**. 설정이 꺼져 있으면 인용(`Unit.cite`) 단위를 뺀다.
    * 인용은 `seg` 가 없으므로 `sentencesOf` 결과(번역 흐름)는 거르기 전과 같다(RA-C1).
    */
-  function queueOf(paras, peek) {
-    const all = buildUnits(paras || [], unit, unitOpts());
+  function queueOf(paras, peek, as) {
+    // `[8c-1]` `as` — 다른 단위로 **읽기만**(peek) 만들 때(`sentenceUnits` — 줄 모드에서 문장 단위). 분할·거름은 같은 한 곳.
+    const all = buildUnits(paras || [], as || unit, unitOpts());
     const q = citationsOn() ? all : all.filter(function (x) { return !x.cite; });
     if (!peek) citeOnlyQueue = all.length > 0 && q.length === 0;   // `[8l]` peek — 읽기만(`isQueueEmptyHere`)
     return q;
@@ -1205,6 +1206,15 @@ export function createSpeaker(deps) {
      */
     isQueueEmptyHere: function () {
       try { return queueOf((view && view.paras && view.paras()) || [], true).length === 0; } catch (e) { return true; }
+    },
+    /**
+     * `[8c-1 — spec 17-7-6 4-1 · 8cf-D6]` 지금 쪽의 **문장** 단위 — 읽기만(큐·상태·이벤트를 바꾸지 않는다).
+     * 문장 모드면 지금 큐의 사본, 줄 모드(또는 큐가 비었으면)는 큐와 **같은 `buildUnits`·같은 `unitOpts()`·같은 인용 거름**으로
+     * `'sentence'` 를 따로 만든다(분할 한 벌 — 7-8-2 R6). 탭 번역·선택 동작 줄이 줄 → 문장을 찾을 때 쓴다.
+     */
+    sentenceUnits: function () {
+      if (unit === 'sentence' && units.length) return units.slice();
+      try { return queueOf((view && view.paras && view.paras()) || [], true, 'sentence'); } catch (e) { return []; }
     },
     getCurrent: function () { return units[index] || null; },
     /** `[8b-1]` 지금 발화 단계 `'src'|'tr-wait'|'tr'`. */

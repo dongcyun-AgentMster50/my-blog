@@ -31,8 +31,13 @@ import {
   // `[8d]` 문장 아래 번역(spec 7-7-1) — 줄 찾기·DOM 을 새로 붙인 알림
   lineElement, onPageRepaint,
   // `[9a]` 이어폰·잠금 화면 알림의 제목(spec 17-1-1 5)
-  docTitle
+  docTitle,
+  // `[8c-1]` 탭한 줄·선택이 띠·선택 줄에 가리면 굴린다(spec 17-7-6 4-1·4-2)
+  liftAbove, liftLineAbove, focusLine
 } from './reader.js';
+// `[8c-1 — spec 17-7-6 4-1·4-2]` 줄 → 문장(순수) · 선택 동작 줄.
+import { unitAt, tapPlan, liftEdge } from '../text/select.js';
+import { initSelBar } from './selbar.js';
 import { blocksPlay } from '../text/scan.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
 import { renderReadalongRow } from './settings.js';
@@ -69,6 +74,8 @@ let inlinetr = null;
 let handsfree = null;
 /** `[9b]` 음성 명령 — `press()`·`cancel()`·`arm()`·`leave()`·`isListening()`·`debug()`. 인식기가 없으면 단추가 없다. */
 let voice = null;
+/** `[8c-1]` 선택 동작 줄 — `hide()`·`clear()`·`refresh()`. */
+let selbar = null;
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -154,6 +161,8 @@ export function initControls() {
 
   // `[8b-2]` 띠가 같은 두 객체의 이벤트를 듣는다(띠는 speaker 를 조작하지 않는다).
   trband = initTrBand({ readalong: readalong, speaker: speaker });
+  // `[8c-1]` 탭 모드가 열린 동안 문장 아래 표시의 `data-tr-inline` 을 뗀다(8cf-D5 — 띠가 보이게). inlinetr 는 아래에서 만든다.
+  trband.setInlineSuspend(function (on) { if (inlinetr) inlinetr.suspend(on); });
 
   /* ── 버튼 ──────────────────────────────────────────
      ★ 6-4 (5) — 재생은 **핸들러 안에서 동기적으로** `speak()` 까지 간다.
@@ -232,14 +241,27 @@ export function initControls() {
   speaker.addEventListener('end', () => { paintBar(); paintProgress(0, 0); });
   speaker.addEventListener('error', (ev) => onSpeakerError((ev.detail || {}).code, ev.detail || {}));
 
-  /* ── 6-5 줄 탭 — 낭독 중이면 그 줄부터. 아니면 아무 것도 하지 않는다
-     (인라인 번역은 7단계다). ──────────────────────── */
+  /* ── 6-5 줄 탭 — 낭독 중(`speaking`·`paused`)이면 그 줄부터(8cf-D3 — 지금 그대로). 쪽 넘김 대기면 무시.
+     `[8c-1 — spec 17-7-6 4-1]` 그 밖(`idle`·`error`)이면 **탭 번역** — 그 줄 문장의 번역을 띠에(문단 1회 요청). ── */
   onLineTap((lineId) => {
     cancelVoice();                       // `[9b]` 듣는 중 줄 탭도 손이 이긴다
     const s = speaker.getState();
-    if (s !== 'speaking' && s !== 'paused') return;
-    speaker.play(lineId);
+    if (s === 'speaking' || s === 'paused') { speaker.play(lineId); return; }
+    if (s === 'waiting-page') return;
+    openTapFor(lineId, null);
   });
+
+  /* ── `[8c-1 — spec 17-7-6 4-2]` 선택 동작 줄 — 길게 눌러 고른 글자 위 동작. 단추는 스냅숏만 쓴다. ── */
+  selbar = initSelBar({
+    root: root,
+    onAction: onSelAction,
+    lift: function (bottom, edge) { liftAbove(bottom, edge); }
+  });
+  // `[8c-1]` 쪽이 바뀌면(쪽 넘김·뷰 전환·새 판) 탭 띠를 닫는다 — 다른 쪽 문장의 번역이 남지 않게.
+  onPageRender(() => { if (trband) trband.closeTap(); });
+  // `[8c-1c]` 숨긴 리더를 다시 보이면(검색 화면에서 돌아옴 — 다시 그리지 않는다) 띠 자리를 다시 잡는다: 떠날 때 `closeTapBand` 가
+  // 숨은 화면 기준으로 띠를 숨겼다(보이기 모드의 낭독 띠가 돌아와서도 숨은 채 남지 않게).
+  onPageRepaint(() => { if (trband) trband.sync(); });
 
   /* 쪽이 새로 그려지면 큐를 그 쪽 것으로 갈아 끼운다.
      `[7c]` 원문 언어가 바뀌었으면(서재 [⋯]·자동 추정 — 리더가 `medreader:doclang` 을 듣고
@@ -372,7 +394,8 @@ function attachDebugHook() {
     switchOff: function () { return speaker.getSwitchOff(); },
     readalong: function () {
       const st = readalong.stats();
-      return { mode: readalong.mode(), remote: readalong.remoteState(), calls: st.calls, chars: st.chars, maxInflight: st.maxInflight };
+      return { mode: readalong.mode(), remote: readalong.remoteState(), calls: st.calls, chars: st.chars, maxInflight: st.maxInflight,
+        taps: st.taps, tapBusy: st.tapBusy, tapWaiting: st.tapWaiting };   // `[8c-1b]` 탭 요청 수·떠 있음·대기 칸
     },
     // `[9a]` 이어폰·잠금 화면 버튼 — 걸림·상태·무시 수·focusFights(키·원문·제목 없음).
     handsfree: function () { return handsfree ? handsfree.debug() : null; }
@@ -447,6 +470,7 @@ export function scanPlayBlocked(sp, verdict) {
  */
 function pressPlay() {
   cancelVoice();                                 // `[9b]` 듣는 중이면 먼저 취소(9a 이어폰 play 도 이 함수 — 17-1-2 3절)
+  if (trband) trband.closeTap();                 // `[8c-1]` [▶] 는 탭 번역 띠를 닫는다(낭독 문장으로 — 7-7)
   const s = speaker.getState();
   if (s === 'speaking') speaker.pause();
   else if (scanPlayBlocked(speaker, docScanVerdict())) noReadNotice();   // `[8l]` 스캔본 — 넘기지 않고 안내, idle 그대로
@@ -470,8 +494,68 @@ export function leaveControls() {
   if (readalong) readalong.setActive(false);
   if (trband) trband.leave();
   if (inlinetr) inlinetr.leave();
+  if (selbar) selbar.hide();             // `[8c-1]` 선택 동작 줄을 거둔다
   lastShown = null;
   toggleRatePanel(false);
+}
+
+/**
+ * `[8c-1c]` 리더를 숨기기만 하고 떠날 때(검색 화면 — `reader.leaveReader` 의 검색 갈래) 탭 띠를 닫는다. 포커스는 건드리지 않는다
+ * (숨은 줄로 옮기지 않게). 낭독·낭독 띠는 그대로다(숨긴 리더의 낭독은 이어진다 — 8g-4a).
+ */
+export function closeTapBand() {
+  if (trband) trband.closeTap();
+}
+
+/* ────────────────────────────────────────────────────────
+   `[8c-1 — spec 17-7-6 4-1·4-2]` 탭 번역 · 선택 동작 줄 — 서비스는 readalong 한 곳(같은 메모리·캐시·요청)
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 그 줄(또는 고른 문장들)의 번역을 띠에 연다. 문지기(`tapGate`)를 지나면 **문단 단위 1회** 요청(메모리·캐시 적중이면 0회).
+ * 줄 → 문장은 `speaker.sentenceUnits()`(줄 단위 낭독이어도 같은 `buildUnits` 로 문장 단위 — 8cf-D6).
+ * @param {string} lineId
+ * @param {?number[]} segsWanted  선택 동작 줄 [문장 번역] 이 고른 문장 번호들(null 이면 그 줄과 겹치는 문장 전부)
+ */
+function openTapFor(lineId, segsWanted) {
+  if (!speaker || !readalong || !trband) return;
+  syncReadalong();                                           // 키·동의·언어를 지금 값으로(문지기가 같은 문맥을 읽는다)
+  const units = speaker.sentenceUnits();
+  // `[8c-1b]` 띠에 보일 문장·요청할 문단 단위는 순수 `tapPlan`(문단 단위 1회 — node 테스트가 고정한다)
+  const plan = tapPlan(units, lineId, segsWanted, (u) => readalong.translatable(u));
+  const hit = plan.hit;
+  const paraUnits = plan.paraUnits;
+  const gate = readalong.tapGate();
+  const page = currentPage().page;
+  const ask = function (retry) { return readalong.requestTap(paraUnits, { all: units, page: page, retry: !!retry }); };
+  trband.openTap({ lineId: lineId, segs: hit, paraSegs: plan.para, gate: gate, retry: function () { return ask(true); },
+    resend: function () { return ask(false); }, focusBack: function (reveal) { focusLine(lineId, reveal); } });
+  // `[8c-1b]` 가림 굴리기 가장자리 — 선택 줄이 떠 있으면(띠가 새로 나타나 위로 올라간) 그 윗변, 아니면 띠 윗변(8c1R-9 #4).
+  // `[8c-1c]` 고르는 규칙은 순수 `liftEdge`(node 가 지킨다 — 8c1bR-8 #7)
+  liftLineAbove(lineId, liftEdge(selbar ? selbar.top() : null, trband.bandTop()));
+  if (gate.ok && hit.length) ask(false).catch(() => { /* 결과는 띠가 onChange 로 본다 */ });
+}
+
+/** 선택 동작 줄 단추. 첫 줄에서 듣기를 취소한다(손이 이긴다 — 17-7-6 2절 1). */
+function onSelAction(id, snap) {
+  cancelVoice();
+  if (!snap || snap.lineId == null) return;
+  if (id === 'sentence') {
+    // 선택 시작·끝 글자의 문장(들) — 모든 낭독 상태에서(낭독 중에도 — 다음 문장에서 띠가 낭독 문장으로 돌아간다).
+    const units = speaker.sentenceUnits();
+    const a = unitAt(units, snap.lineId, snap.start);
+    const b = unitAt(units, snap.lineId, Math.max(snap.start, snap.end - 1));
+    const segs = [];
+    for (const u of [a, b]) if (u && Number.isInteger(u.seg) && segs.indexOf(u.seg) < 0) segs.push(u.seg);
+    openTapFor(snap.lineId, segs);
+  } else if (id === 'readFrom') {
+    // 12-3 "멈춤 중 길게 누르기 = 여기서부터 재생"을 옮겼다. 선택을 지운다.
+    if (selbar) selbar.clear();
+    if (trband) trband.closeTap();
+    syncReadalong();
+    speaker.play(snap.lineId);
+  }
+  // 'word' — 8f-2 가 단어 시트를 연다(8c-1 에서는 단추가 숨어 있다).
 }
 
 /* ────────────────────────────────────────────────────────

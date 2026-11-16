@@ -54,7 +54,7 @@
 <link rel="stylesheet" href="css/tokens.css?v=7ff71180ec">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
 <link rel="stylesheet" href="css/screens.css?v=492dcd0b3d">
-<link rel="stylesheet" href="css/reader.css?v=a393b17f3d">
+<link rel="stylesheet" href="css/reader.css?v=b9eda2f33d">
 <script type="importmap">
 {
   "imports": {
@@ -65,16 +65,16 @@
     "./js/ai/pipeline.js": "./js/ai/pipeline.js?v=49941561a1",
     "./js/ai/prompts.js": "./js/ai/prompts.js?v=839ab982d3",
     "./js/ai/provider.js": "./js/ai/provider.js?v=48d1929564",
-    "./js/ai/readalong.js": "./js/ai/readalong.js?v=d8b1511ad4",
+    "./js/ai/readalong.js": "./js/ai/readalong.js?v=6472c5f7cc",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
     "./js/config.js": "./js/config.js?v=200f68d6bf",
     "./js/db.js": "./js/db.js?v=726d46e5c0",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=46fa3e050b",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=d7d3f45121",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=a884695c1c",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=912d44adde",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=3ab227bd7d",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=0e31e752b4",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=dfa2c254e2",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=ef3c52f627",
     "./js/main.js": "./js/main.js?v=4397e74713",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -100,26 +100,28 @@
     "./js/text/screen.js": "./js/text/screen.js?v=5c78d755dd",
     "./js/text/search.js": "./js/text/search.js?v=8d59170873",
     "./js/text/segment.js": "./js/text/segment.js?v=a236d5c193",
+    "./js/text/select.js": "./js/text/select.js?v=9b0c8204cd",
     "./js/text/specialty.js": "./js/text/specialty.js?v=cfb1a910f6",
     "./js/text/store.js": "./js/text/store.js?v=0e6752a027",
-    "./js/tts/speaker.js": "./js/tts/speaker.js?v=bd72182e15",
+    "./js/tts/speaker.js": "./js/tts/speaker.js?v=bfb10b8e3d",
     "./js/tts/text.js": "./js/tts/text.js?v=fb5bc74285",
     "./js/tts/voices.js": "./js/tts/voices.js?v=67fb29c15a",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
     "./js/ui/chrome.js": "./js/ui/chrome.js?v=ebc3657eb9",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=8019c7c1b5",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=256c00858c",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
-    "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=d7e7d7ad7f",
+    "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=0fe335b7ac",
     "./js/ui/library.js": "./js/ui/library.js?v=36fb0be11e",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
-    "./js/ui/original.js": "./js/ui/original.js?v=a9b1f7c3f5",
+    "./js/ui/original.js": "./js/ui/original.js?v=e840a78947",
     "./js/ui/quiz.js": "./js/ui/quiz.js?v=f9cfebd1cf",
-    "./js/ui/reader.js": "./js/ui/reader.js?v=a0e95174ea",
+    "./js/ui/reader.js": "./js/ui/reader.js?v=f19365aa4d",
     "./js/ui/search.js": "./js/ui/search.js?v=201f6e6458",
+    "./js/ui/selbar.js": "./js/ui/selbar.js?v=d3bf546684",
     "./js/ui/settings.js": "./js/ui/settings.js?v=9ef03f7182",
-    "./js/ui/trband.js": "./js/ui/trband.js?v=102dcbf169",
+    "./js/ui/trband.js": "./js/ui/trband.js?v=109a7de297",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=2ccd2e6cd1",
     "./js/ui/voice.js": "./js/ui/voice.js?v=4e91faa4bd",
     "./js/voice/commands.js": "./js/voice/commands.js?v=a5507bc3f4",
@@ -476,12 +478,30 @@
          낭독이 이미 소리로 읽는다(7-7). [다시 시도]의 동작은 띠 하나의 위임 리스너(`data-tr-action`)가 받는다. -->
     <div class="tr-band" id="trBand" role="region" data-i18n-aria="readalong.band"
          data-state="idle" data-speaking="src" hidden>
+      <!-- `[8c-1 — spec 17-7-6 4-1]` 탭 모드(멈춘 상태 줄 탭 · 선택 줄 [문장 번역])일 때만 보이는 머리 끝 단추 칸.
+           [문단 전체](aria-pressed) · 12 기억 카드의 [☆] 자리(비어 있음 — 12 가 채운다) · [×](닫기, 48×48).
+           번역문 앞에 두어 글이 그 옆으로 흐른다(띠 높이는 토큰 그대로). 동작은 띠의 위임 리스너(`data-tr-action`). -->
+      <div class="tr-tools" id="trTools" hidden>
+        <button type="button" class="tr-para" id="trPara" data-tr-action="para" aria-pressed="false"
+                data-i18n="tap.para" hidden></button>
+        <span class="tr-slot" id="trSlot" hidden></span>
+        <button type="button" class="tr-close" id="trClose" data-tr-action="close"
+                data-i18n-aria="tap.close"><span aria-hidden="true">×</span></button>
+      </div>
       <p class="tr-text" id="trText" hidden></p>
       <div class="tr-status" id="trStatus">
         <p class="tr-note" id="trNote"></p>
         <button type="button" class="tr-retry" id="trRetry" data-tr-action="retry"
                 data-i18n="readalong.retry" hidden></button>
       </div>
+    </div>
+
+    <!-- `[8c-1 — spec 17-7-6 4-2]` 선택 동작 줄 — 본문 글자를 길게 눌러 고르면 컨트롤 바(띠가 켜져 있으면 띠) 바로 위에 뜬다.
+         단추는 `js/ui/selbar.js` 가 목록 데이터(`SEL_ACTIONS`)에서 그린다 — [단어 번역](8f-2 가 켠다 — 지금 hidden) ·
+         [문장 번역] · [여기서부터 읽기]. 동작은 줄 하나의 위임 리스너(`data-sel-action`). -->
+    <div class="sel-bar" id="selBar" role="region" data-i18n-aria="sel.bar" hidden>
+      <div class="sel-actions" id="selActions"></div>
+      <p class="sel-note" id="selNote" role="status" hidden></p>
     </div>
 
     <!-- `[8e — spec 12-8-1 (2) · 8e-D2]` 하단 두 바의 공통 상자. 고지 바로 위에 fixed 로 앉는다.

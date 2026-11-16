@@ -18,6 +18,13 @@
    ★ [다시 시도]는 사용자 동작만 — `readalong.retry()`(7-6). 자동으로 부르지 않는다.
      버튼 동작은 띠 하나의 위임 리스너(`data-tr-action`)가 받는다(`onclick` 0건).
    ★ 띠는 speaker 를 직접 조작하지 않는다. 모드 변경은 controls 의 `syncReadalong()` 이 한다.
+
+   ── `[8c-1]` 탭 모드 (spec 17-7-6 4-1) ─────────────────
+   `openTap(o)` — 멈춘 상태의 줄 탭·선택 동작 줄 [문장 번역]. **유효 모드와 무관하게** 띠를 보이고(`data-tr-band="on"`)
+   그 문장(들)의 번역을 그린다(상태 문구는 `bandView` 규칙 그대로 — `tapView`). 문장 아래 표시면 열린 동안
+   `suspendInline(true)`(controls → `inlinetr.suspend` — `data-tr-inline` 을 뗀다). 머리 끝 단추 칸: [문단 전체] · (12 의 [☆] 자리) · [×].
+   닫기 = [×] · 다른 줄 탭(새 내용) · [▶] · 쪽 넘김 · 리더 떠남 · 낭독의 다음 문장(`linechange` — 7-7 낭독 문장으로 돌아감,
+   유효 모드 `off` 면 닫힌 채 숨음). 요청은 하지 않는다 — controls 가 `readalong.requestTap` 을 부르고 띠는 `onChange` 로 안다.
    ============================================================ */
 
 import * as settings from '../settings.js';
@@ -82,6 +89,78 @@ export function bandView(rec, ctx) {
 export function noteKeyFor(rec, ctx) {
   const v = bandView(rec, ctx);
   return { state: v.state, noteKey: v.noteKey, retry: v.retry };
+}
+
+/** `[8c-1]` 탭 문지기 사유(`readalong.tapGate`) → 띠 한 줄. no-key·consent 는 상태 바 배너도 **즉시**(`noticeBanner`). */
+export const GATE_KEYS = Object.freeze({
+  consent: 'readalong.consent',
+  'unsupported-lang': 'readalong.unsupportedLang',
+  'same-lang': 'readalong.sameLang',
+  'no-key': 'readalong.blocked.noKey'
+});
+
+/** `[8c-1]` 탭 막힘 중 상태 바 배너를 바로 띄우는 사유(재생을 기다리는 `DEFER_UNTIL_PLAY` 와 달리 사용자가 번역을 불렀다). */
+export const TAP_BANNER_NOW = Object.freeze(['no-key', 'consent']);
+
+/**
+ * `[8c-1b]` Esc 가 탭 띠를 닫는가 — 띠가 열려 있고, 다른 손이 이미 쓰지 않았고(`prevented`), 띠보다 위의 층(팝오버·시트·
+ * `<dialog>`·8e `[≡]`)이 하나도 열려 있지 않을 때만. 가장 위의 것 하나만 닫힌다. 순수 함수.
+ * `[8c-1c]` 띠가 **실제로 보일 때만**(`shown:false` — 리더 화면이 숨었다: 검색 화면 등) · Esc 대상이 **편집 칸**이면(`editing` —
+ * `input`·`textarea`·`select`·`[contenteditable]`) 손대지 않는다: 기본 동작(검색어 지우기·쪽 번호 입력 그대로)이 이긴다(8c1bR-8 #2·#3).
+ * @param {{tapOpen:boolean, prevented?:boolean, layers?:number, shown?:boolean, editing?:boolean}} o
+ * @returns {boolean}
+ */
+export function escClosesTap(o) {
+  const x = o || {};
+  if (x.shown === false || x.editing === true) return false;
+  return !!x.tapOpen && !x.prevented && !(Number(x.layers) > 0);
+}
+
+/** `[8c-1c]` Esc 대상이 편집 칸인가(띠 안 단추는 아니다). DOM 요소를 받는다. */
+function isEditable(t) {
+  if (!t || typeof t.closest !== 'function') return false;
+  if (t.isContentEditable) return true;
+  return !!t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+}
+
+/**
+ * `[8c-1b]` 연결이 돌아왔을 때(원격 상태 offline → ready) 탭 문단을 **한 번** 다시 보낼까 — 띠 글이 "연결되면 번역이 나옵니다"
+ * 인데 낭독 창의 자동 재전송(`kick`)은 탭 문단을 모른다(8c-1 Review 8c1R-9 #3). 막힘(offline) 문장이 있고 아직 다시 보내지
+ * 않았을 때만. 사용자 [다시 시도](`retry`)가 아니다 — `retry` 표시 없이 같은 `requestTap` 을 부른다. 순수 함수.
+ * @param {Array<{state:string, code?:string}>} recs  문단 문장마다 `readalong.get(src)`
+ * @param {?string} prev  직전 원격 상태
+ * @param {boolean} already  이 탭에서 이미 다시 보냈는가
+ * @returns {boolean}
+ */
+export function tapResendOnline(recs, prev, already) {
+  if (already || prev !== 'offline') return false;
+  return (Array.isArray(recs) ? recs : []).some((r) => !!r && r.state === 'blocked' && r.code === 'offline');
+}
+
+/**
+ * `[8c-1 — spec 17-7-6 4-1]` 탭 모드 띠 한 장. 문장 여럿(탭한 줄의 문장들 또는 [문단 전체])의 상태를 하나로 모은다.
+ * 준비된 번역은 seg 순서로 이어 보이고, 아직인 문장이 있으면 가장 무거운 상태(실패 > 막힘 > 번역 중)의 한 줄을 함께. 순수 함수.
+ * @param {Array<{state:string, text?:string, code?:string}>|null} recs  문장마다 `readalong.get(src)` (번역 대상 문장만)
+ * @param {{gate?:{ok:boolean, reason:string|null}, remote?:string}} ctx
+ * @returns {{state:string, text:string, noteKey:string|null, retry:boolean, code:string|null}}
+ */
+export function tapView(recs, ctx) {
+  const c = ctx || {};
+  if (c.gate && !c.gate.ok) {
+    return { state: 'blocked', text: '', noteKey: GATE_KEYS[c.gate.reason] || 'tap.none', retry: false, code: c.gate.reason || null };
+  }
+  const list = Array.isArray(recs) ? recs : [];
+  if (!list.length) return { state: 'none', text: '', noteKey: 'tap.none', retry: false, code: null };
+  const rank = { pending: 1, blocked: 2, failed: 3 };
+  const texts = [];
+  let worst = null;
+  for (const r of list) {
+    const v = bandView(r, { hasSentence: true, remote: c.remote });
+    if (v.state === 'ready') { if (v.text) texts.push(v.text); continue; }
+    if (!worst || (rank[v.state] || 0) > (rank[worst.state] || 0)) worst = v;
+  }
+  if (!worst) return { state: 'ready', text: texts.join(' '), noteKey: null, retry: false, code: null };
+  return { state: worst.state, text: texts.join(' '), noteKey: worst.noteKey, retry: worst.retry, code: worst.code };
 }
 
 /**
@@ -172,6 +251,13 @@ let lastPaint = '';
 const roll = { kind: null, origin: 0, expected: 0, held: false, timer: null };
 /** 띄운 배너 — 거둘 때 키로 찾는다. */
 const banners = { notice: new Map(), remote: null, deferred: new Map() };
+/**
+ * `[8c-1]` 탭 모드 — 열려 있으면 `{lineId, segs, paraSegs, gate, full, retry, offs}`, 닫히면 null.
+ * `segs`·`paraSegs` 는 `{seg, src}`(번역 대상 문장만 — controls 가 `readalong.translatable` 로 거름).
+ */
+let tap = null;
+/** `[8c-1]` controls 가 넘긴 문장 아래 표시 멈춤(`inlinetr.suspend`). */
+let suspendInline = null;
 
 /**
  * @param {{readalong:Object, speaker:Object}} deps  controls 가 만든 그 둘(8b-1 계약 8절)
@@ -187,17 +273,27 @@ export function initTrBand(deps) {
     text: band.querySelector('#trText'),
     status: band.querySelector('#trStatus'),
     note: band.querySelector('#trNote'),
-    retry: band.querySelector('#trRetry')
+    retry: band.querySelector('#trRetry'),
+    // `[8c-1]` 탭 모드 머리 끝 단추 칸 — [문단 전체] · [☆] 자리(12) · [×]
+    tools: band.querySelector('#trTools'),
+    para: band.querySelector('#trPara'),
+    close: band.querySelector('#trClose')
   };
   ra = d.readalong;
   sp = d.speaker;
 
-  /* ── 위임 리스너 하나 — [다시 시도] ───────────────────── */
+  /* ── 위임 리스너 하나 — [다시 시도] · `[8c-1]` [×] · [문단 전체] ───────── */
   band.addEventListener('click', (ev) => {
     const b = ev.target && ev.target.closest ? ev.target.closest('[data-tr-action]') : null;
     if (!b || !band.contains(b)) return;
     if (b.getAttribute('data-tr-action') === 'retry') onRetry(b);
+    else if (b.getAttribute('data-tr-action') === 'close') closeTapByUser(ev.detail === 0);   // `[8c-1c]` 0 = 키보드로 누름
+    else if (b.getAttribute('data-tr-action') === 'para') toggleFull();
   });
+
+  /* ── `[8c-1b]` Esc — 탭 띠가 **가장 위**일 때만 닫는다. 붙잡기 단계에서 먼저 본다: 팝오버(Aa·속도)·시트(음성 고지 카드)·
+     `<dialog>`·8e `[≡]` 가 열려 있으면 그쪽 몫이라 손대지 않는다(그것들이 자기 Esc 로 닫힌 뒤 띠까지 닫히지 않게). ── */
+  document.addEventListener('keydown', onEscKey, true);
 
   /* ── 띠를 만지면 그 문장 동안 자동 스크롤을 멈춘다(7-7) ── */
   const hold = () => { roll.held = true; };
@@ -227,18 +323,25 @@ export function initTrBand(deps) {
   return api();
 }
 
-function api() { return { sync: sync, leave: leave }; }
+function api() {
+  return { sync: sync, leave: leave, openTap: openTap, closeTap: closeTap, isTapOpen: isTapOpen, bandTop: bandTop,
+    setInlineSuspend: setInlineSuspend };
+}
+
+/** `[8c-1]` 문장 아래 표시 멈춤 함수(controls → `inlinetr.suspend`). 탭 모드가 열리고 닫힐 때 부른다. */
+export function setInlineSuspend(fn) { suspendInline = typeof fn === 'function' ? fn : null; }
 
 /**
  * 유효 모드를 읽어 띠를 보이거나 숨기고 다시 그린다. controls 의 `syncReadalong()` 끝에서 불린다
  * (쪽이 그려질 때·재생 탭·모드 줄·단위 변경) — `mode` 이벤트가 없어도(값이 같아도) 리더에 다시 들어오면 자리를 잡는다.
+ * `[8c-1]` 탭 모드가 열려 있으면 유효 모드와 무관하게 보인다.
  */
 export function sync() {
   if (!els || !ra) return;
   const m = (ra.mode() || {}).mode || 'off';
   const on = m === 'show' || m === 'speak';
   const reader = els.band.closest('[data-screen="reader"]');
-  const visible = on && !(reader && reader.hidden);
+  const visible = (on || !!tap) && !(reader && reader.hidden);
   shownMode = on ? m : 'off';
   els.band.hidden = !visible;
   const root = document.documentElement;
@@ -257,6 +360,7 @@ export function sync() {
 /** 리더를 떠난다 — 자리를 비운다(다른 화면의 세로 예산을 건드리지 않는다). */
 export function leave() {
   if (!els) return;
+  dropTap();
   stopRoll();
   if (offCur) { try { offCur(); } catch (e) { /* 이미 풀림 */ } offCur = null; }
   cur = { src: null, seg: null, page: null };
@@ -268,6 +372,8 @@ export function leave() {
 /* ── 지금 문장 ─────────────────────────────────────────── */
 
 function onLine(d) {
+  // `[8c-1]` 낭독이 다음 문장으로 갔다 — 탭 모드를 닫고 낭독 문장으로 돌아간다(7-7). 유효 모드 off 면 `sync` 가 숨긴다.
+  if (tap) closeTap();
   const src = typeof d.src === 'string' && d.src ? d.src : null;
   const seg = Number.isInteger(d.seg) ? d.seg : null;
   const same = src !== null && src === cur.src && seg === cur.seg;
@@ -321,6 +427,9 @@ function targetLang() { return normalizeTranslationLang(settings.get('ai.transla
 
 function paint() {
   if (!els || !ra) return;
+  if (tap) { paintTap(); return; }
+  if (els.tools) els.tools.hidden = true;
+  els.band.removeAttribute('data-tap');
   const rec = cur.src ? ra.get(cur.src) : null;
   const v = bandView(rec, {
     hasSentence: cur.src !== null || cur.seg !== null || cur.page !== null,
@@ -359,6 +468,11 @@ function safeRemote() {
 function onRetry(btn) {
   if (!ra || btn.disabled) return;
   btn.disabled = true;                 // 두 번 눌러 두 번 보내지 않게 — 결과가 오면 다시 그린다
+  // `[8c-1]` 탭 모드 — 그 문단을 `retry:true` 로 다시(controls 가 넘긴 `requestTap(para, {retry:true})`). 사용자 동작만.
+  if (tap && typeof tap.retry === 'function') {
+    Promise.resolve().then(tap.retry).catch(() => null).then(() => { lastPaint = ''; paint(); });
+    return;
+  }
   Promise.resolve()
     .then(() => ra.retry())
     .catch(() => null)
@@ -409,7 +523,7 @@ function reducedMotion() {
 }
 
 function tick() {
-  if (!els || !roll.kind || roll.held || els.band.hidden) return;
+  if (!els || !roll.kind || roll.held || els.band.hidden || tap) return;
   if (roll.kind === 'tr' && !(roll.expected > 0)) roll.expected = expectedFor('tr');
   const max = els.band.scrollHeight - els.band.clientHeight;
   if (max <= 0) return;
@@ -422,6 +536,160 @@ function tick() {
   }
   if (Math.abs(els.band.scrollTop - target) < 1) return;
   try { els.band.scrollTo({ top: target, behavior: 'smooth' }); } catch (e) { els.band.scrollTop = target; }
+}
+
+/* ── `[8c-1]` 탭 모드 (spec 17-7-6 4-1) ───────────────── */
+
+/**
+ * 탭 번역 띠를 연다(이미 열려 있으면 새 내용으로 바꾼다). 요청은 하지 않는다 — controls 가 `requestTap` 을 부른다.
+ * @param {{lineId?:string, segs:{seg:number, src:string}[], paraSegs?:{seg:number, src:string}[],
+ *          gate?:{ok:boolean, reason:string|null}, retry?:Function}} o
+ */
+export function openTap(o) {
+  if (!els || !ra) return;
+  const x = o || {};
+  const segs = Array.isArray(x.segs) ? x.segs.filter((s) => s && typeof s.src === 'string') : [];
+  const para = Array.isArray(x.paraSegs) ? x.paraSegs.filter((s) => s && typeof s.src === 'string') : segs.slice();
+  const was = !!tap;
+  unwatchTap();
+  tap = { lineId: x.lineId == null ? null : String(x.lineId), segs: segs, paraSegs: para.length ? para : segs.slice(),
+    gate: x.gate && typeof x.gate.ok === 'boolean' ? { ok: x.gate.ok, reason: x.gate.reason || null } : { ok: true, reason: null },
+    full: false, retry: typeof x.retry === 'function' ? x.retry : null, offs: [],
+    // `[8c-1b]` 연결 회복 때 한 번 다시 보내기(retry 표시 없음) · [×]·Esc 로 닫은 뒤 포커스를 돌려놓을 곳(탭한 줄 — 없으면 리더 본문)
+    resend: typeof x.resend === 'function' ? x.resend : null, resent: false,
+    focusBack: typeof x.focusBack === 'function' ? x.focusBack : null };
+  // 문단의 모든 문장을 지켜본다([문단 전체]로 바꿔도 같은 구독).
+  const seen = new Set();
+  for (const s of tap.paraSegs.concat(tap.segs)) {
+    if (seen.has(s.src)) continue;
+    seen.add(s.src);
+    tap.offs.push(ra.onChange(s.src, () => { if (tap) paint(); }));
+  }
+  stopRoll();
+  if (!was && suspendInline) { try { suspendInline(true); } catch (e) { /* 띠는 그래도 연다 */ } }
+  // 막힘 안내 — 키 없음·동의는 상태 바도 **즉시**(사용자가 번역을 불렀다). 재생을 기다리던 같은 안내는 거둔다(두 번 뜨지 않게).
+  const reason = tap.gate.ok ? null : tap.gate.reason;
+  if (reason && TAP_BANNER_NOW.indexOf(reason) >= 0) {
+    const b = noticeBanner(reason, null);
+    if (b) { banners.deferred.delete(reason); banners.notice.set(reason, b.key); banner(b); }
+  }
+  lastPaint = '';
+  resetScroll();
+  sync();
+}
+
+/** 탭 모드를 닫는다 — 낭독 문장(또는 유효 모드 `off` 면 숨김)으로 돌아간다. 열려 있지 않으면 아무 일도 없다. */
+export function closeTap() {
+  if (!tap) return;
+  dropTap();
+  lastPaint = '';
+  resetScroll();
+  sync();
+}
+
+/**
+ * `[8c-1b]` 사용자가 닫았다([×]·Esc) — 닫고 포커스를 탭한 줄(없으면 리더 본문)로 되돌린다. 숨은 [×] 에서 포커스가 `body` 로
+ * 떨어지지 않게(8c-1 Review 8c1R-5). 다른 닫기(다른 줄 탭·[▶]·쪽 넘김·낭독 다음 문장)는 포커스를 건드리지 않는다.
+ * `[8c-1c]` `byKey` — 키보드로 닫았다(Esc · [×] 를 Enter/Space 로 — `click.detail === 0`). 그때만 그 줄이 화면 밖이면 굴려 보인다
+ * (8c1bR-8 #5 — 포커스 표시가 보이게). 손가락·마우스로 [×] 를 누른 사람은 읽던 자리를 굴려 둔 것이라 끌어올리지 않는다.
+ */
+function closeTapByUser(byKey) {
+  if (!tap) return;
+  const back = tap.focusBack;
+  closeTap();
+  if (back) { try { back(!!byKey); } catch (e) { /* 포커스를 못 옮겨도 띠는 닫혔다 */ } }
+}
+
+/** 띠보다 위의 층 — 보이는 팝오버·시트(`role=dialog`)·열린 `<dialog>`·펼친 8e `[≡]`. */
+function upperLayers() {
+  let n = 0;
+  for (const el of document.querySelectorAll('dialog[open], [role="dialog"]:not([hidden])')) {
+    if (el.getClientRects().length) n++;
+  }
+  const chrome = document.getElementById('chromeToggle');
+  if (chrome && chrome.getAttribute('aria-expanded') === 'true' && chrome.getClientRects().length) n++;
+  return n;
+}
+
+function onEscKey(ev) {
+  if (ev.key !== 'Escape' && ev.key !== 'Esc') return;
+  if (!els || !tap || els.band.hidden) return;
+  if (!escClosesTap({ tapOpen: true, prevented: ev.defaultPrevented, layers: upperLayers(), shown: bandShown(), editing: isEditable(ev.target) })) return;
+  ev.preventDefault();
+  closeTapByUser(true);
+}
+
+/** `[8c-1c]` 띠가 정말 보이는가 — 띠 자신의 `hidden` 만이 아니라 리더 화면 섹션의 숨김(검색 화면 뒤 숨은 리더)·그려진 상자까지. */
+function bandShown() {
+  if (!els || els.band.hidden) return false;
+  const reader = els.band.closest('[data-screen="reader"]');
+  if (reader && reader.hidden) return false;
+  return els.band.getClientRects().length > 0;
+}
+
+/** 탭 상태·구독만 거둔다(그리기 없음) — `leave` 와 `closeTap` 이 같이 쓴다. */
+function dropTap() {
+  if (!tap) return;
+  unwatchTap();
+  tap = null;
+  if (els) {
+    els.band.removeAttribute('data-tap');
+    if (els.tools) els.tools.hidden = true;
+  }
+  if (suspendInline) { try { suspendInline(false); } catch (e) { /* 되돌림 실패가 띠를 막지 않는다 */ } }
+}
+
+function unwatchTap() {
+  if (!tap) return;
+  for (const off of tap.offs) { try { off(); } catch (e) { /* 이미 풀림 */ } }
+  tap.offs = [];
+}
+
+export function isTapOpen() { return !!tap; }
+
+/** 띠 윗변(px, 뷰포트 기준) — 보이지 않으면 null. 탭한 줄 가림 굴리기(4-1)가 쓴다. */
+export function bandTop() {
+  if (!els || els.band.hidden) return null;
+  const r = els.band.getBoundingClientRect();
+  return r && r.height > 0 ? r.top : null;
+}
+
+/** [문단 전체] — 탭한 문장(들) ↔ 그 문단 모든 문장. 띠 안 스크롤로 본다. */
+function toggleFull() {
+  if (!tap) return;
+  tap.full = !tap.full;
+  lastPaint = '';
+  resetScroll();
+  paint();
+}
+
+function paintTap() {
+  const list = tap.full ? tap.paraSegs : tap.segs;
+  const v = tapView(tap.gate.ok ? list.map((s) => ra.get(s.src)) : null, { gate: tap.gate, remote: safeRemote() });
+  const a = translationBlockAttrs(targetLang());
+  const showPara = tap.gate.ok && tap.paraSegs.length > tap.segs.length;
+  const sig = ['tap', tap.full, showPara, v.state, v.text, v.noteKey, v.retry, a.lang, a.dir].join('\u0001');
+  els.band.setAttribute('data-state', v.state);
+  els.band.setAttribute('data-tap', 'on');
+  if (sig === lastPaint) return;
+  lastPaint = sig;
+
+  if (els.tools) els.tools.hidden = false;
+  if (els.para) {
+    els.para.hidden = !showPara;
+    els.para.setAttribute('aria-pressed', tap.full ? 'true' : 'false');
+  }
+  const tx = els.text;
+  while (tx.firstChild) tx.removeChild(tx.firstChild);
+  tx.lang = a.lang;
+  tx.dir = a.dir;
+  if (v.text) appendBidiText(tx, v.text, a.dir);
+  tx.hidden = !v.text;
+  els.note.dir = getDir();
+  els.note.textContent = v.noteKey ? t(v.noteKey) : '';
+  els.retry.hidden = !v.retry;
+  els.retry.disabled = false;
+  els.status.hidden = !v.noteKey && !v.retry;
 }
 
 /* ── 상태 바 (14절 배너) — 바뀔 때 한 번 ──────────────── */
@@ -473,6 +741,7 @@ function onRemote(d) {
     banners.remote = null;
     if (prevKey) withdraw(prevKey);
     lastPaint = ''; paint();
+    resendTapOnline(d.prev);
     return;
   }
   const b = remoteBanner(state, { providerLabel: providerLabel(), cap: settings.get('ai.dailyCap') });
@@ -481,6 +750,14 @@ function onRemote(d) {
   banners.remote = b.key;
   banner(b);
   lastPaint = ''; paint();
+}
+
+/** `[8c-1b]` 연결 회복 — 탭 띠가 offline 막힘이면 그 문단을 한 번 다시 보낸다(`tapResendOnline`). 결과는 `onChange` 로 그려진다. */
+function resendTapOnline(prev) {
+  if (!tap || typeof tap.resend !== 'function') return;
+  if (!tapResendOnline(tap.paraSegs.map((s) => ra.get(s.src)), prev, tap.resent)) return;
+  tap.resent = true;
+  Promise.resolve().then(tap.resend).catch(() => null);
 }
 
 function providerLabel() {
@@ -501,7 +778,9 @@ function attachDebugHook() {
       return {
         hidden: els.band.hidden, state: els.band.getAttribute('data-state'), speaking: els.band.getAttribute('data-speaking'),
         mode: shownMode, roll: roll.kind, held: roll.held, expected: Math.round(roll.expected),
-        scrollTop: els.band.scrollTop, scrollMax: els.band.scrollHeight - els.band.clientHeight
+        scrollTop: els.band.scrollTop, scrollMax: els.band.scrollHeight - els.band.clientHeight,
+        // `[8c-1]` 탭 모드 — 문장 수·문단 전체·문지기 사유만(글자 없음)
+        tap: tap ? { segs: tap.segs.length, para: tap.paraSegs.length, full: tap.full, gate: tap.gate.reason } : null
       };
     }
   };

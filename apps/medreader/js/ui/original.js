@@ -34,6 +34,8 @@
 import * as render from '../pdf/render.js';
 import { ORIGINAL } from '../config.js';
 import { t, formatNumber } from '../i18n/index.js';
+// `[8c-1 — spec 17-7-6 3절]` 리플로우와 같은 탭 판정(누름 시간·움직임·선택 풀기 탭).
+import { isTap, createTapTracker } from '../text/select.js';
 
 /* ────────────────────────────────────────────────────────
    ★ `[10b]` 줌 하한 — 12-5 "페이지 폭을 화면 폭에 맞춘 scale 을 기본으로"
@@ -434,8 +436,15 @@ function buildDom(mount) {
   layer.appendChild(hl);
   pageWrap.appendChild(layer);
 
-  // 4-12 — 탭 좌표를 PDF 좌표로 되돌려 줄을 찾는다.
+  // 4-12 — 탭 좌표를 PDF 좌표로 되돌려 줄을 찾는다. `[8c-1]` 누름을 기록해 길게 누르기·끌기(확대 상태 스크롤)를 탭으로 세지 않는다.
+  // `[8c-1b]` 기록은 포인터별 — 여러 손가락·짝 없는 up 은 탭이 아니다. 취소·캡처 잃음이 기록을 지운다.
+  pageWrap.addEventListener('pointerdown', onPointerDown, { passive: true });
+  pageWrap.addEventListener('pointercancel', (ev) => { taps.drop(ev.pointerId); }, { passive: true });
+  pageWrap.addEventListener('lostpointercapture', (ev) => { taps.drop(ev.pointerId); }, { passive: true });
   pageWrap.addEventListener('pointerup', onPointerUp);
+  // `[8c-1c]` 본문 밖에서 뗀 마우스·펜 기록이 남지 않게 — 문서 붙잡기 단계(같은 함수라 원본을 다시 열어도 한 번만 걸린다)
+  document.addEventListener('pointerup', onDocPointerUp, { capture: true, passive: true });
+  document.addEventListener('pointercancel', onDocPointerCancel, { capture: true, passive: true });
 
   scroller.appendChild(pageWrap);
   root.appendChild(scroller);
@@ -457,10 +466,26 @@ function ensureBoxes(n) {
   return els.boxes;
 }
 
-function onPointerUp(ev) {
-  if (!state.viewport || !els) return;
+/** `[8c-1b]` 누름 기록 — 포인터별(`createTapTracker`, 리더 리플로우와 같은 규칙). */
+const taps = createTapTracker();
+
+function hasSel() {
   const sel = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
-  if (sel && String(sel).length > 0) return;
+  return !!sel && String(sel).length > 0;
+}
+
+function onPointerDown(ev) {
+  taps.down({ id: ev.pointerId, t: ev.timeStamp, x: ev.clientX, y: ev.clientY, sel: hasSel(), primary: ev.isPrimary, type: ev.pointerType });
+}
+
+/** `[8c-1c]` 문서 붙잡기 단계 — 뗌은 "떼어짐" 표시만(본문에 닿으면 `onPointerUp` 이 판정), 취소는 지운다(리더 리플로우와 같은 규칙). */
+function onDocPointerUp(ev) { taps.release(ev.pointerId); }
+function onDocPointerCancel(ev) { taps.drop(ev.pointerId); }
+
+function onPointerUp(ev) {
+  const down = taps.up(ev.pointerId);
+  if (!state.viewport || !els) return;
+  if (!isTap(down, { t: ev.timeStamp, x: ev.clientX, y: ev.clientY, sel: hasSel() }, !!(down && down.sel), !!(down && down.multi))) return;
   const id = lineIdAtClient(ev.clientX, ev.clientY);
   if (!id) return;
   if (deps && deps.onLineTap) { try { deps.onLineTap(id); } catch (e) { /* 구독자 예외 */ } }
