@@ -4,7 +4,8 @@
    ── 이 파일이 하는 일 ───────────────────────────────────
    리플로우 본문 글자를 길게 눌러(브라우저 낱말 선택) 또는 손잡이로 늘려 고르면, 낭독 컨트롤 바(띠가 켜져 있으면 띠)
    **바로 위**에 동작 줄을 띄운다. 자체 타이머로 길게 누르기를 잡지 않는다 — `selectionchange` 만 듣는다(17-7-1).
-     · `[단어 번역]`(8f-2 가 켠다 — 8c-1 에서는 마크업만, `hidden`) · `[문장 번역]` · `[여기서부터 읽기]`
+     · `[단어 번역]`(기본 목록에서는 `hidden` — `[8f-2]` 단어 시트가 준비되면 controls 가 `refresh(showAction(…,'word'))` 로 켠다)
+       · `[문장 번역]` · `[여기서부터 읽기]`
      · 단추 목록은 **데이터**(`SEL_ACTIONS`)에서 그린다 — 11 이 "보이는 3칸 + `[⋯]`"(설명·요약·여기서부터 읽기·검색)로
        바꿀 때 목록과 `selBarModel` 만 고치면 된다(crossstep-notes 8c-1)
    동작 자체는 모른다 — controls 가 넘긴 `onAction(id, snapshot)` 을 부른다(speaker·readalong·띠를 import 하지 않는다).
@@ -33,6 +34,16 @@ export const SEL_ACTIONS = Object.freeze([
   Object.freeze({ id: 'sentence', key: 'sel.sentence' }),
   Object.freeze({ id: 'readFrom', key: 'sel.readFrom' })
 ]);
+
+/**
+ * `[8f-2]` 목록에서 한 칸을 켠 사본(`hidden` 을 뗀다) — 단어 시트가 준비되면 controls 가 `refresh(showAction(SEL_ACTIONS, 'word'))`.
+ * 시트가 없으면(마크업·의존 없음) 목록을 바꾸지 않으므로 [단어 번역]은 숨은 그대로다. 순수 함수.
+ * @param {ReadonlyArray<{id:string, key:string, hidden?:boolean}>} list
+ * @param {string} id
+ */
+export function showAction(list, id) {
+  return Object.freeze((Array.isArray(list) ? list : []).map((a) => Object.freeze(a.id === id ? { id: a.id, key: a.key } : Object.assign({}, a))));
+}
 
 /** 접힌 선택을 거두기까지(단추 탭이 닿을 틈). */
 export const HIDE_DELAY_MS = 300;
@@ -167,7 +178,9 @@ function snapshotOf(sel) {
   const end = endLine === line ? offsetIn(line, r.endContainer, r.endOffset) : len;
   const sec = line.closest('section.page');
   const pg = sec ? Number(sec.getAttribute('data-page')) : NaN;
-  return { lineId: id, start: start, end: Math.max(start, end), text: text.slice(0, 400), page: Number.isFinite(pg) ? pg : null };
+  // `[8f-2]` `multi` — 선택이 다음 줄까지 걸쳤다(단어 시트가 줄 글자 대신 선택 글자로 원어를 만든다 — `wordsheet.pickSurface`).
+  return { lineId: id, start: start, end: Math.max(start, end), text: text.slice(0, 400), page: Number.isFinite(pg) ? pg : null,
+    multi: endLine !== line };
 }
 
 /** 목록 데이터에서 단추를 (다시) 그린다. 같은 칸이면 속성만 고친다. */

@@ -37,7 +37,9 @@ import {
 } from './reader.js';
 // `[8c-1 — spec 17-7-6 4-1·4-2]` 줄 → 문장(순수) · 선택 동작 줄.
 import { unitAt, tapPlan, liftEdge } from '../text/select.js';
-import { initSelBar } from './selbar.js';
+import { initSelBar, SEL_ACTIONS, showAction } from './selbar.js';
+// `[8f-2 — spec 17-7-6 4-5]` 단어 시트(선택 줄 [단어 번역]) — 같은 pipeline·readalong 을 넘긴다(새 호출 경로 없음).
+import { initWordSheet } from './wordsheet.js';
 import { blocksPlay } from '../text/scan.js';
 // 7b — 번역 따라가기 줄. 설정 AI 탭과 **같은 그리기 함수**를 쓴다(12-3 · 16-D0).
 import { renderReadalongRow } from './settings.js';
@@ -76,6 +78,8 @@ let handsfree = null;
 let voice = null;
 /** `[8c-1]` 선택 동작 줄 — `hide()`·`clear()`·`refresh()`. */
 let selbar = null;
+/** `[8f-2]` 단어 시트 — `open(snap)`·`close(back)`·`isOpen()`. 마크업이 없으면 null(선택 줄 [단어 번역]은 숨은 그대로). */
+let wordsheet = null;
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -257,6 +261,19 @@ export function initControls() {
     onAction: onSelAction,
     lift: function (bottom, edge) { liftAbove(bottom, edge); }
   });
+  // `[8f-2 — spec 17-7-6 4-5]` 단어 시트 — 문장 단위는 탭 번역과 같은 `speaker.sentenceUnits()`(문지기 문맥을 먼저 맞춘다),
+  // 문서·대상 언어·문체는 리더 값. 시트가 준비되면 선택 줄 [단어 번역]을 켠다(목록을 바꿔 끼움 — 8c-1 `refresh`).
+  wordsheet = initWordSheet({
+    pipeline: pipeline,
+    readalong: readalong,
+    units: function () { syncReadalong(); return speaker.sentenceUnits(); },
+    ctx: function () { const p = currentPage(); return { docId: p.docId, page: p.page, docLang: sourceLang(), target: targetLang(), domain: docDomain(), docTitle: docTitle() }; },
+    lineElement: lineElement,
+    focusBack: function (lineId) { focusLine(lineId, false); },
+    clearSelection: function () { if (selbar) selbar.clear(); },
+    cancelVoice: cancelVoice
+  });
+  if (wordsheet && selbar) selbar.refresh(showAction(SEL_ACTIONS, 'word'));
   // `[8c-1]` 쪽이 바뀌면(쪽 넘김·뷰 전환·새 판) 탭 띠를 닫는다 — 다른 쪽 문장의 번역이 남지 않게.
   onPageRender(() => { if (trband) trband.closeTap(); });
   // `[8c-1c]` 숨긴 리더를 다시 보이면(검색 화면에서 돌아옴 — 다시 그리지 않는다) 띠 자리를 다시 잡는다: 떠날 때 `closeTapBand` 가
@@ -495,6 +512,7 @@ export function leaveControls() {
   if (trband) trband.leave();
   if (inlinetr) inlinetr.leave();
   if (selbar) selbar.hide();             // `[8c-1]` 선택 동작 줄을 거둔다
+  if (wordsheet) wordsheet.close(false); // `[8f-2]` 단어 시트를 거둔다(포커스는 옮기지 않는다)
   lastShown = null;
   toggleRatePanel(false);
 }
@@ -554,8 +572,10 @@ function onSelAction(id, snap) {
     if (trband) trband.closeTap();
     syncReadalong();
     speaker.play(snap.lineId);
+  } else if (id === 'word') {
+    // `[8f-2]` 단어 시트 — 찾는 순서는 호출 0 먼저(단어장 → 문장 번역). 낭독은 멈추지 않는다.
+    if (wordsheet) wordsheet.open(snap);
   }
-  // 'word' — 8f-2 가 단어 시트를 연다(8c-1 에서는 단추가 숨어 있다).
 }
 
 /* ────────────────────────────────────────────────────────

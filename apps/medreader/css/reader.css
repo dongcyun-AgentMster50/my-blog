@@ -701,6 +701,137 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
 .sel-bar .sel-note[hidden] { display: none; }
 :root[data-sel-bar="on"] .back-to-line { display: none; }
 
+/* ── `[8f-2 — spec 17-7-6 4-5]` 단어 시트 ─────────────
+   ★ Aa·속도 팝오버와 **같은 아래 붙임·높이 식**(`--reader-chrome-bottom` 하나 — 띠가 켜져 있으면 띠 위, 8e compact 에서도 같은 식.
+     `--bar-top` 을 빼므로 8e [≡] 로 상단바를 펼쳐도 그 아래에서 멈춘다). 안 스크롤, [닫기] sticky.
+   ★ z 36 — 팝오버(25·35)·compact 하단 상자(30)·선택 줄(24) 위(가장 위 층 — Esc 도 시트가 먼저). 열린 동안 선택 줄·"읽던 곳으로" 칩은 숨긴다.
+   ★ 단추 48×48 이상, 논리 속성만(16-H — 아랍어에서 저절로 거울). */
+.word-sheet {
+  position: fixed;
+  inset-block-end: calc(var(--reader-chrome-bottom) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  inset-inline: var(--sp-2);
+  z-index: 36;
+  max-inline-size: 520px;
+  margin-inline: auto;
+  box-sizing: border-box;
+  background: var(--c-surface);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  padding-block-end: 0;          /* sticky [닫기] 가 자기 여백을 갖는다 */
+  box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+  max-block-size: max(calc(var(--tap) * 3), calc(100dvh - var(--banners-h, 0px) - var(--bar-top) - var(--reader-chrome-bottom) - var(--sp-6)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+.word-sheet[hidden],
+.word-sheet [hidden] { display: none; }
+:root[data-word-sheet="on"] .sel-bar,
+:root[data-word-sheet="on"] .back-to-line { display: none; }
+.word-sheet .ws-term {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: start;
+  unicode-bidi: isolate;
+}
+.word-sheet .ws-term:focus { outline: none; }
+.word-sheet .ws-term:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.word-sheet .ws-status {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  text-align: start;
+}
+.word-sheet .ws-status:empty { display: none; }
+.word-sheet .ws-label {
+  display: block;
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  text-align: start;
+}
+.word-sheet .ws-field,
+.word-sheet .ws-row { margin-block-end: var(--sp-3); }
+.word-sheet .ws-input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-base);
+  color: var(--c-text);
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  unicode-bidi: plaintext;
+}
+.word-sheet .ws-input:lang(ar),
+.word-sheet .ws-gloss:lang(ar),
+.word-sheet .ws-ctx:lang(ar) { font-family: var(--font-ar); }
+.word-sheet .ws-gloss,
+.word-sheet .ws-ctx,
+.word-sheet .ws-memo {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  text-align: start;
+  unicode-bidi: plaintext;
+}
+.word-sheet .ws-memo { margin-block-end: var(--sp-3); color: var(--c-text-dim); }
+.word-sheet .vs-hit {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--c-accent);
+}
+.word-sheet .ws-ask { margin-block-end: var(--sp-3); }
+.word-sheet .ws-ask-q { margin: 0 0 var(--sp-2); font-weight: 600; text-align: start; }
+.word-sheet .ws-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-block-end: var(--sp-2);
+}
+.word-sheet .ws-btn {
+  flex: 1 1 8em;
+  min-inline-size: var(--tap);
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-base);
+  line-height: 1.2;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  touch-action: manipulation;
+}
+.word-sheet .ws-btn.ws-primary {
+  border-color: var(--c-accent);
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+}
+.word-sheet .ws-btn[aria-disabled="true"] { opacity: 0.5; }
+.word-sheet .ws-hint {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  text-align: start;
+}
+/* 패널 안에서 늘 보이는 [닫기] — Aa 팝오버와 같은 sticky. */
+.word-sheet > .ws-close {
+  position: sticky;
+  inset-block-end: 0;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  margin-block-start: var(--sp-2);
+  box-shadow: 0 -8px 12px -8px rgb(0 0 0 / 25%);
+}
+
 /* ── 하단 컨트롤 바 (12-3 · 16-G) ─────────────────────
    쪽 이동 바(.pager) 바로 **위**에 앉는다. 둘이 겹치면 한 손 조작에서
    쪽이 넘어가 버린다 — 실기기에서 가장 치명적인 오조작이다.

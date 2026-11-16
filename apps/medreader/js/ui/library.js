@@ -55,6 +55,8 @@ import {
 } from '../text/scan.js';
 // `[8p — spec 19-1-3 §7]` 번역 문체(`documents.domain`) — 값 해석은 순수 `ai/prompts.js` 한 곳.
 import { DOMAINS, domainOf, normalizeDomain } from '../ai/prompts.js';
+// `[8f-2 — spec 17-7-6 4-4]` 문서를 지워도 남는 단어장 수(삭제 확인 "단어장 n개는 남습니다") — 읽기만.
+import { vocabStore } from '../vocab/store.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -1025,7 +1027,8 @@ async function onListClick(ev) {
     const doc = await db.get('documents', docId);
     const name = (doc && (doc.title || doc.fileName)) || docId;
     // 12-6 — 연쇄 삭제 확인. confirm 은 브라우저 문자열이 아니라 우리 문장을 쓴다.
-    if (!confirm(t('library.card.deleteConfirm', { title: name }))) return;
+    // `[8f-2]` 문서를 지워도 남는 것("단어장 n개는 남습니다")은 `deleteKeepLines` 한 함수가 줄을 만든다(11·12 가 같은 함수에 더한다).
+    if (!confirm(deleteConfirmText(name, deleteKeepLines(await deleteKeepCounts(docId))))) return;
     const ex = extractors.get(docId);
     if (ex) { ex.stop(); extractors.delete(docId); }
     unwatchLangGuess(docId);
@@ -1040,6 +1043,55 @@ async function onListClick(ev) {
     await renderList();
     await renderStorage();
   }
+}
+
+/* ────────────────────────────────────────────────────────
+   `[8f-2 · crossstep "8f-2·11-2"]` 삭제 확인의 "남습니다" 줄 — **한 함수**
+   문서를 지워도 남는 기록(단어장 — `db.keepsOnDocDelete`)을 확인 대화에 알린다. 11(요약)·12(기억 카드)가 남기는 것을
+   만들면 `deleteKeepCounts` 에 셈을, `deleteKeepLines` 에 줄을 **여기에** 더한다(따로 confirm 줄을 만들지 않는다).
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 남는 것들의 셈 → 확인 대화에 덧붙일 줄(i18n 키·자리표시자). 0개인 것은 줄을 만들지 않는다. 순수 함수.
+ * @param {{vocab?:number}} counts
+ * @returns {{key:string, params:Object}[]}
+ */
+export function deleteKeepLines(counts) {
+  const c = counts || {};
+  const out = [];
+  const vocab = Math.floor(Number(c.vocab));
+  if (Number.isFinite(vocab) && vocab > 0) out.push({ key: 'library.card.deleteConfirmVocab', params: { n: vocab } });
+  return out;
+}
+
+/**
+ * 그 문서를 지워도 남는 것을 센다 — 읽기만(호출 0). 못 읽으면 0(확인 대화를 막지 않는다).
+ * @param {string} docId
+ * @param {{vocab?:{countByDoc:Function}}} [deps]  테스트가 가짜 저장소를 넣는다
+ * @returns {Promise<{vocab:number}>}
+ */
+export async function deleteKeepCounts(docId, deps) {
+  const vs = (deps && deps.vocab) || vocabStore;
+  let vocab = 0;
+  try { vocab = Number(await vs.countByDoc(docId)) || 0; } catch (e) { vocab = 0; }
+  return { vocab: vocab };
+}
+
+/**
+ * 확인 대화 문장 — 머리(`library.card.deleteConfirm`) + 남는 줄들(줄바꿈). 숫자는 UI 언어 숫자로.
+ * @param {string} title
+ * @param {{key:string, params:Object}[]} lines  `deleteKeepLines` 결과
+ * @param {Function} [tr]  번역 함수(기본 `t`)
+ */
+export function deleteConfirmText(title, lines, tr) {
+  const tt = typeof tr === 'function' ? tr : t;
+  const out = [tt('library.card.deleteConfirm', { title: title })];
+  for (const l of Array.isArray(lines) ? lines : []) {
+    const p = Object.assign({}, l.params || {});
+    if (typeof p.n === 'number') p.n = formatNumber(p.n);
+    out.push(tt(l.key, p));
+  }
+  return out.join('\n');
 }
 
 /* ────────────────────────────────────────────────────────
