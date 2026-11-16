@@ -7,12 +7,18 @@
    ★ `ai/*` 를 import 하지 않는다 — `ui/settings.js` 가 이 파일을 import 하므로 inlinetr 의 import 고리에 캐시가 들어가면 안 된다(8d D8).
    - `[내보내기]` → 진행 막대(묶음 이름·n/총, `aria-live`) → 내려받기 → `backup.lastExportAt` = 지금
    - 접는 목록 "PDF 원본 따로 받기" — blob 이 있는 책마다 `[PDF 내려받기]`(원본 Blob 그대로, 이름 = `fileName`)
+   - `[9c-2]` `[가져오기]` → 파일 고르기(`accept` 비움 — Android 가 `.gz`·`.jsonl` 을 흐리게 할 수 있다) → 미리보기(머리 줄·문서 목록만) →
+     `☑ 설정도 가져오기` → `[이 파일 가져오기]` → 진행 막대 → "가져오기 끝 — 새로 불러옵니다" + `[다시 불러오기]`(9c-D7).
+     가져오는 동안 화면을 떠나려 하면 확인(떠나면 지금 묶음 뒤 멈추고 새로 불러온다 — 같은 파일로 다시 하면 이어진다). 끝난 뒤
+     다시 불러오기 전에 다른 화면으로 가면 그 화면에서 새로 불러온다(설정·캐시 크기·파이프라인 메모리가 옛 값이므로).
+     가져오기 그릇은 이 파일이 만든다(`index.html` 은 9c-1 카드 그대로 — 글자는 `textContent`).
    ★ 글자는 전부 `textContent`·`data-i18n`(HTML 문자열로 넣는 곳 0). 동작은 카드 하나의 위임 리스너(`data-ba`).
    ══════════════════════════════════════════════════════════════════════ */
 
 import * as settings from '../settings.js';
-import { t, applyTranslations, formatBytes, formatNumber, onLangChange } from '../i18n/index.js';
+import { t, applyTranslations, formatBytes, formatNumber, onLangChange, getLang } from '../i18n/index.js';
 import { exportBackup, pdfList, pdfBlob, cacheSize } from '../backup/export.js';
+import { previewBackup, importBackup, EST_CACHE_REC_BYTES } from '../backup/import.js';
 import { backupAge } from '../text/backup.js';
 
 /** 스토어 → 진행 줄의 묶음 이름(i18n `backup.part.*`). */
@@ -40,10 +46,17 @@ const REVOKE_AFTER_MS = 120000;
 let el = null;
 let busy = false;
 let cacheBytes = null;           // number | null(아직·실패)
-let msg = null;                  // {key, params} — 언어가 바뀌면 다시 쓴다
+let cacheCount = 0;
+let msg = null;                  // {key, params} 또는 그 목록 — 언어가 바뀌면 다시 쓴다
 let prog = null;                 // 마지막 진행 {store, done, total, phase}
 let saidAt = 0;
 let saidPart = '';
+/* `[9c-2]` 가져오기 */
+let pick = null;                 // {file, preview} — 미리보기 중인 파일
+let importing = null;            // {signal:{aborted}, leaveTo:string|null} — 가져오는 동안
+let needReload = false;          // 가져오기가 DB 를 바꿨다 — 메모리(설정 맵·캐시 크기·파이프라인)가 옛 값
+let reloading = false;
+let guarded = false;
 
 export function initBackupCard() {
   if (el || typeof document === 'undefined') return;
@@ -58,8 +71,52 @@ export function initBackupCard() {
   };
   // 반쪽 캐시(옛 index.html + 새 JS) — 그릇이 없으면 조용히 물러난다
   if (!el.btn || !el.lastText || !el.cache || !el.cacheLabel || !el.pdfList) { el = null; return; }
+  buildImport(card);
   card.addEventListener('click', onClick);
+  if (el.file) el.file.addEventListener('change', onFilePicked);
   onLangChange(() => { if (el) { paintAll(); refreshPdfs(); } });
+}
+
+/** `[9c-2]` 가져오기 그릇 — 고지 줄 앞에 둔다(내보내기 묶음 다음). 모두 `createElement`·`textContent`. */
+function buildImport(card) {
+  const before = card.querySelector('p[data-i18n="backup.notice"]') || null;
+  const mk = (tag, props) => Object.assign(document.createElement(tag), props || {});
+  const btn = mk('button', { type: 'button', id: 'backupImport', className: 'big' });
+  btn.setAttribute('data-ba', 'import');
+  const input = mk('input');
+  input.type = 'file';             // accept 는 비워 둔다(17-4-1 6 — Android 파일 고르기)
+  input.id = 'backupFile';
+  input.hidden = true;
+  input.tabIndex = -1;
+  input.setAttribute('aria-hidden', 'true');
+  const box = mk('div', { id: 'backupPreview', className: 'backup-preview' });
+  box.hidden = true;
+  const list = mk('ul', { id: 'backupPreviewList', className: 'backup-preview-list' });
+  // `.consent-row` 는 display:flex 라 `hidden` 이 먹지 않는다 — 감싸는 div 를 숨긴다
+  const row = mk('div');
+  const inner = mk('div', { className: 'consent-row' });
+  const chk = mk('input', { type: 'checkbox', id: 'backupWithSettings', checked: true });
+  const lab = mk('label', { id: 'backupWithSettingsLabel' });
+  lab.htmlFor = 'backupWithSettings';
+  inner.appendChild(chk);
+  inner.appendChild(lab);
+  row.appendChild(inner);
+  const acts = mk('div', { className: 'row' });
+  const go = mk('button', { type: 'button', id: 'backupImportGo', className: 'primary' });
+  go.setAttribute('data-ba', 'import-go');
+  const no = mk('button', { type: 'button', id: 'backupImportCancel' });
+  no.setAttribute('data-ba', 'import-cancel');
+  acts.appendChild(go);
+  acts.appendChild(no);
+  box.appendChild(list);
+  box.appendChild(row);
+  box.appendChild(acts);
+  const reload = mk('button', { type: 'button', id: 'backupReload', className: 'primary big' });
+  reload.setAttribute('data-ba', 'reload');
+  reload.hidden = true;
+  for (const n of [btn, input, box, reload]) card.insertBefore(n, before);
+  Object.assign(el, { imp: btn, file: input, pv: box, pvList: list, withSettings: chk, withSettingsRow: row,
+    withSettingsLabel: lab, go: go, no: no, reload: reload });
 }
 
 /** 설정 화면이 보일 때마다. `tab === 'backup'` 이면 이 카드로 굴리고 제목에 포커스(서재 [백업]). */
@@ -77,7 +134,7 @@ export function showBackupCard(tab) {
 
 /** 설정 화면을 떠날 때 — 내보내는 중이면 그대로 끝까지 간다(파일은 끝나면 내려받아진다). 끝난 알림은 지운다. */
 export function leaveBackupCard() {
-  if (!el || busy) return;
+  if (!el || busy || needReload) return;
   msg = null;
   paintMsg();
 }
@@ -85,6 +142,7 @@ export function leaveBackupCard() {
 function paintAll() {
   paintLast();
   paintCacheLabel();
+  paintImport();
   paintMsg();
   paintProgress();
 }
@@ -106,19 +164,21 @@ async function refreshCacheSize() {
   try {
     const st = await cacheSize();
     cacheBytes = Number(st && st.bytes) || 0;
+    cacheCount = Number(st && st.count) || 0;
   } catch (e) {
     cacheBytes = null;
   }
-  if (el) paintCacheLabel();
+  if (el) { paintCacheLabel(); if (pick) paintPreview(); }
 }
 
 function paintMsg() {
   if (!el.msg) return;
-  el.msg.textContent = msg ? t(msg.key, msg.params) : '';
+  const parts = !msg ? [] : Array.isArray(msg) ? msg : [msg];
+  el.msg.textContent = parts.map((m) => t(m.key, m.params)).join(' ');
 }
 
 function setMsg(key, params) {
-  msg = key ? { key: key, params: params } : null;
+  msg = Array.isArray(key) ? key : key ? { key: key, params: params } : null;
   paintMsg();
 }
 
@@ -160,10 +220,11 @@ function download(blob, name) {
 }
 
 async function onExport() {
-  if (busy) return;
+  if (busy || needReload) return;
   busy = true;
   el.btn.disabled = true;
   el.cache.disabled = true;
+  if (el.imp) el.imp.disabled = true;
   setMsg(null);
   prog = { store: 'documents', done: 0, total: 0, phase: 'read' };
   saidPart = '';
@@ -184,10 +245,244 @@ async function onExport() {
     if (el) {
       el.btn.disabled = false;
       el.cache.disabled = false;
+      if (el.imp) el.imp.disabled = false;
       paintProgress(true);
       paintLast();
     }
   }
+}
+
+/* ────────────────────────────────────────────────────────
+   `[9c-2]` 가져오기 — 미리보기 · 진행 · 떠나기 확인 · 다시 불러오기
+   ──────────────────────────────────────────────────────── */
+
+const PREVIEW_ERR = Object.freeze({ newer: 'backup.newer', 'not-backup': 'backup.notBackup' });
+
+function onPickFile() {
+  if (busy || needReload || !el.file) return;
+  el.file.value = '';
+  el.file.click();
+}
+
+async function onFilePicked() {
+  const f = el.file.files && el.file.files[0];
+  if (!f || busy) return;
+  pick = null;
+  paintImport();
+  setMsg('backup.import.reading');
+  let p;
+  try { p = await previewBackup(f); } catch (e) { p = { ok: false, code: 'read' }; }
+  if (!el) return;
+  if (!p.ok) { setMsg(PREVIEW_ERR[p.code] || 'backup.import.failed'); return; }
+  pick = { file: f, preview: p };
+  el.withSettings.checked = true;
+  setMsg(null);
+  paintImport();
+  try { el.go.focus(); } catch (e) { /* 그대로 */ }
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return String(iso || '—');
+  try { return new Intl.DateTimeFormat(getLang(), { dateStyle: 'medium', timeStyle: 'short' }).format(d); } catch (e) { return d.toISOString(); }
+}
+
+/** 미리보기 줄(17-4-1 5) — 머리 줄 개수·문서 목록만. 들어올 캐시 크기는 머리 줄에 없어 **어림**(이 기기 평균 또는 레코드당 약 1.5KB). */
+function previewLines(p) {
+  const c = p.counts || {};
+  const n = (k) => Number(c[k]) || 0;
+  const out = [];
+  out.push({ key: 'backup.preview.made', params: { date: fmtDate(p.createdAt) } });
+  out.push({ key: 'backup.preview.books', params: { n: formatNumber(p.docs.total), k: formatNumber(p.docs.existing), m: formatNumber(p.docs.fresh) } });
+  out.push({ key: 'backup.preview.records', params: { vocab: formatNumber(n('cards')), quiz: formatNumber(n('attempts')), notes: formatNumber(n('annotations')) } });
+  if (p.include.cache && n('aiCache') > 0) {
+    const avg = cacheCount > 0 && cacheBytes ? cacheBytes / cacheCount : EST_CACHE_REC_BYTES;
+    const est = Math.round(n('aiCache') * avg);
+    out.push({ key: 'backup.preview.cache', params: { n: formatNumber(n('aiCache')), size: formatBytes(est) } });
+    const limit = (Number(settings.get('ai.cacheLimitMB')) || 0) * 1024 * 1024;
+    if (limit > 0 && (cacheBytes || 0) + est > limit) out.push({ key: 'backup.preview.cacheOver', params: { limit: formatBytes(limit) } });
+  } else {
+    out.push({ key: 'backup.preview.noCache' });
+  }
+  out.push({ key: p.include.settings && n('settings') > 0 ? 'backup.preview.settings.yes' : 'backup.preview.settings.no' });
+  if (p.hashMismatch) out.push({ key: 'backup.hashMismatch' });
+  if (p.truncated === true) out.push({ key: 'backup.truncated' });
+  return out;
+}
+
+function paintPreview() {
+  const list = el.pvList;
+  while (list.firstChild) list.removeChild(list.firstChild);
+  if (!pick) return;
+  for (const l of previewLines(pick.preview)) {
+    const li = document.createElement('li');
+    li.dir = 'auto';
+    li.textContent = t(l.key, l.params);
+    if (l.key === 'backup.truncated' || l.key === 'backup.hashMismatch' || l.key === 'backup.preview.cacheOver') li.className = 'warn-note';
+    list.appendChild(li);
+  }
+  const hasSettings = pick.preview.include.settings && Number(pick.preview.counts.settings) > 0;
+  el.withSettingsRow.hidden = !hasSettings;
+}
+
+function paintImport() {
+  if (!el || !el.imp) return;
+  el.imp.textContent = t('backup.import');
+  el.go.textContent = t('backup.import.go');
+  el.no.textContent = t('backup.cancel');
+  el.withSettingsLabel.textContent = t('backup.withSettings');
+  el.reload.textContent = t('common.reload');
+  el.pv.hidden = !pick || !!importing;
+  el.reload.hidden = !needReload;
+  el.imp.disabled = busy || needReload;
+  paintPreview();
+}
+
+function leaves(hash) {
+  return !/^#\/settings(?:[/?]|$)/.test(String(hash || ''));
+}
+
+function askLeave() {
+  try { return window.confirm(t('backup.import.leave')); } catch (e) { return false; }
+}
+
+/** 새로 불러온다(9c-D7) — `to` 가 있으면 그 화면에서. */
+function reloadAt(to) {
+  if (reloading) return;
+  reloading = true;
+  if (to && location.hash !== to) location.hash = to;
+  location.reload();
+}
+
+/** 떠나려 한다 — 가져오는 중이면 확인 뒤 멈춤(멈춘 뒤 새로 불러온다), 끝난 뒤면 그 화면에서 새로 불러온다. */
+function leaveTo(to) {
+  if (importing) {
+    if (importing.signal.aborted) return true;
+    if (!askLeave()) return false;
+    importing.leaveTo = to;
+    importing.signal.aborted = true;
+    setMsg('backup.import.stopping');
+    return true;
+  }
+  if (needReload) reloadAt(to);
+  return true;
+}
+
+function onBeforeUnload(ev) {
+  if (!importing) return;
+  ev.preventDefault();
+  ev.returnValue = '';
+}
+
+/** 화면 이동 단추·주소 링크(누르기 전 — 붙잡는 단계에서). 카드 안 단추는 상관없다. */
+function onNavClick(ev) {
+  if (!importing && !needReload) return;
+  const n = ev.target && ev.target.closest ? ev.target.closest('[data-nav], a[href^="#"]') : null;
+  if (!n || (el && el.card.contains(n))) return;
+  const to = n.getAttribute('data-nav') || n.getAttribute('href') || '';
+  if (!leaves(to)) return;
+  ev.preventDefault();
+  ev.stopImmediatePropagation();
+  leaveTo(to);
+}
+
+/** 뒤로 가기·음성 명령처럼 단추 없이 해시가 바뀐 경우. */
+function onHashChange() {
+  if ((!importing && !needReload) || !leaves(location.hash)) return;
+  if (!importing) { reloadAt(null); return; }
+  if (importing.signal.aborted) return;
+  if (askLeave()) {
+    importing.leaveTo = location.hash;
+    importing.signal.aborted = true;
+    setMsg('backup.import.stopping');
+  } else {
+    location.hash = '#/settings/backup';        // 머문다
+  }
+}
+
+function guard(on) {
+  if (on === guarded || typeof window === 'undefined') return;
+  guarded = on;
+  const f = on ? 'addEventListener' : 'removeEventListener';
+  window[f]('beforeunload', onBeforeUnload);
+  window[f]('click', onNavClick, true);
+  window[f]('hashchange', onHashChange);
+}
+
+function sumOps(ops) {
+  const s = { add: 0, changed: 0, kept: 0, skipped: 0 };
+  for (const k of Object.keys(ops || {})) {
+    const o = ops[k];
+    s.add += o.add || 0;
+    s.changed += (o.put || 0) + (o.patch || 0);
+    s.kept += o.keep || 0;
+    s.skipped += o.skip || 0;
+  }
+  return s;
+}
+
+async function onImportGo() {
+  if (busy || !pick || needReload) return;
+  const file = pick.file;
+  const c = pick.preview.counts || {};
+  const withSettings = !!el.withSettings.checked && !el.withSettingsRow.hidden;
+  busy = true;
+  importing = { signal: { aborted: false }, leaveTo: null };
+  guard(true);
+  el.btn.disabled = true;
+  el.cache.disabled = true;
+  setMsg(null);
+  let total = 0;
+  for (const k of Object.keys(c)) if (PART_OF[k] && (k !== 'settings' || withSettings)) total += Number(c[k]) || 0;
+  prog = { store: 'documents', done: 0, total: total, phase: 'import' };
+  saidPart = '';
+  paintImport();
+  paintProgress(true);
+  let r = null;
+  try {
+    r = await importBackup(file, {
+      withSettings: withSettings,
+      signal: importing.signal,
+      onProgress: (p) => { prog = { store: p.store || (prog && prog.store) || 'documents', done: p.done, total: p.total, phase: 'import' }; paintProgress(false); }
+    });
+  } catch (e) {
+    r = { ok: false, code: 'write', records: 0 };
+  }
+  const stop = importing;
+  busy = false;
+  importing = null;
+  prog = null;
+  pick = null;
+  if (r && Number(r.records) > 0) needReload = true;
+  if (stop.signal.aborted && stop.leaveTo !== null) { reloadAt(stop.leaveTo); return; }
+  if (!needReload) guard(false);
+  if (!el) return;
+  el.btn.disabled = false;
+  el.cache.disabled = false;
+  paintProgress(true);
+  if (r && r.head && !r.code) {
+    const s = sumOps(r.ops);
+    const parts = [{ key: 'backup.imported' },
+      { key: 'backup.import.result', params: { add: formatNumber(s.add), changed: formatNumber(s.changed), kept: formatNumber(s.kept), skipped: formatNumber(s.skipped) } }];
+    if (r.truncated || r.broken) parts.push({ key: 'backup.import.broken' });
+    if (r.mismatch && r.mismatch.length) {
+      const names = Array.from(new Set(r.mismatch.map((m) => PART_OF[m.store]).filter(Boolean)));
+      parts.push({ key: 'backup.import.countsDiffer', params: { parts: names.map((p) => t('backup.part.' + p)).join(', ') } });
+    }
+    setMsg(parts);
+  } else {
+    setMsg(PREVIEW_ERR[r && r.code] || 'backup.import.failed');
+  }
+  paintImport();
+  if (needReload) { try { el.reload.focus(); } catch (e) { /* 그대로 */ } }
+}
+
+function onImportCancel() {
+  if (busy) return;
+  pick = null;
+  setMsg(null);
+  paintImport();
+  try { el.imp.focus(); } catch (e) { /* 그대로 */ }
 }
 
 async function refreshPdfs() {
@@ -243,4 +538,8 @@ function onClick(ev) {
   const act = b.getAttribute('data-ba');
   if (act === 'export') onExport();
   else if (act === 'pdf') onPdf(b.getAttribute('data-id'));
+  else if (act === 'import') onPickFile();
+  else if (act === 'import-go') onImportGo();
+  else if (act === 'import-cancel') onImportCancel();
+  else if (act === 'reload') reloadAt(null);
 }

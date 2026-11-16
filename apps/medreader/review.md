@@ -11892,3 +11892,116 @@ Edge `--enable-precise-memory-info`·`--expose-gc` · pipe · 새 프로필 `r9c
 스크래치 `r9c1c/`: `probe.mjs`·`probe.json` · `fp.mjs`·`fp.json`·`cfg-9c1b.mjs`(9c-1b 판 config 사본) · `mut.mjs`·`mut.json`·`m-V1`–`m-V3.txt`·`bak/` · `full1.txt`·`full2.txt` · `section.md`(이 절)·`append.mjs`.
 
 **배포 가능** — 중간-1 닫힘(`%XX`·JSON 이스케이프 뒤 키 0), 새 Bearer 조건 의도대로·실물 오탐 0, `REDACT_PATTERNS` 무변, 1703 ×2. #1–#4 는 낮음(#2·#3 은 원하면 경계 한 줄씩).
+
+---
+
+# 9c-2 Review — 백업 가져오기 (spec 17-4-1) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-9c2-import.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: spec 17-4-1 전부(+ `[정정 2026-11-17 — 9c-1 Build·9c-1b·9c-1c·9c-2 Build]`), Build 지침·보고서(믿지 않고 다시 잼), review.md 9c1R·9c1bR·9c1cR 절, `git diff`(10파일 +482 −38) + 새 파일 둘(`js/backup/import.js`·`tests/backup-import-9c.test.mjs`). 리뷰 스크립트는 모두 스크래치 `r9c2/`, Build 의 `b9c2/`·`b9c1/`·`r9c1c/`·`p14/` 는 읽기만(합성 PDF·A 백업·150MB 합성 파일 재사용, 새 150MB 합성 0).
+
+## 9c2R-0. 판정 — **배포 가능** (중간 이상 0 · 낮음 9 · 정보 5)
+
+리뷰가 새로 짠 기기·파일 쌍에서 기기 쪽이 더 새로운 값은 하나도 덮이지 않았고(설정은 설계대로 [설정도 가져오기]를 켰을 때만 파일 값), 파일 쪽이 더 새로운 값은 들어왔다. 멱등(세 번 = 한 번, 전 스토어 깊은 비교)·끊긴 가져오기(묶음 1·2·3·7 × 모든 경계, 잘린 파일 31자리, 묶음 안 실패 되돌림 5자리, 실제 IDB 에서 [예]로 멈춘 뒤 다시) 모두 "한 번에 넣은 것과 같음". 다른 기기의 같은 책(같은 해시·기기 변형 키·파일 변형 키) 세 경우 모두 문서 1개·캐시 키 셋째 칸만·`w=` 그대로·진도·문항·시도·오답 접두 바뀜. 파생 스토어·blobs 쓰기 0, 프로토타입 오염 0, XSS 0, `javascript:` 링크가 `href` 가 된 곳 0, 회귀 0(번역 요청 본문 HEAD 와 같은 바이트), 콘솔 오류 0. 낮음은 모두 손댄 파일·안내 문구·시험 틈·실기기 거리.
+
+## 9c2R-1. 데이터 안전 (확인 1 — 가장 중요) ★ `r9c2/safety.mjs`(fake-idb, 71 단정 전부 초록)
+
+| 쌍 | 기기 | 파일 | 결과 |
+|---|---|---|---|
+| A 기기가 더 새로움 | 문서 `lastOpenedAt` 늦음·`langSource:'user'`(es)·domain·readStats 9·추출 끝 | 옛 자리·fr user | 자리·언어·domain·readStats·extraction·title **그대로** |
+| | 단어(내용·`sm2` reps 6·`dueAt`·`reviewedAt`·`introducedAt`·`suspended:true`·`edited:true`, 늦은 `updatedAt`) | 옛 내용·옛 복습 | **JSON 깊게 같음** |
+| | 문장 카드(복습 늦음)·필기·해결된 오답·진도 | 옛것·미해결 | 그대로 |
+| | 읽은 구간 `[[4,5]]` | `[[1,3]]` | 합집합 `[[1,5]]`·pages 5·`updatedAt` 큰 값 |
+| | 캐시 `hits 42`·`createdAt`·다른 result | 같은 키 | result·hits·createdAt 그대로 |
+| | 사용량 같은 날 calls 50·`capWarned:true`·tokensIn 999 | 7·false·새 칸 `explain`·`openai` | 필드별 큰 값·OR·새 칸 더함 |
+| | 설정 `ui.lang`·`links.medical`(내 목록)·`reader.fontSize` | 다른 값 | **설정 끔 → 셋 다 그대로** · 켬 → 파일에 있는 둘만 파일 값(설계 — #2), 파일에 없는 키 그대로 |
+| B 파일이 더 새로움 | 옛것 | 새 자리·user 언어·단어 내용·복습·문장 카드·필기·해결·진도 | 모두 들어옴. 단어 `suspended` 는 기기 것, `edited` 는 파일 값, `updatedAt` 은 가져온 시각(뒤로 가지 않음 — #정보1) |
+| E 다른 id 같은 낱말 | `vt:fnv:dev`(옛 내용·늦은 복습) | `vt:s256:file` | 하나로 합침(기기 id), 내용 파일·복습 기기 · 다른 대상 언어는 따로 · 같은 id 다른 대상 언어(손댄 파일) → 기기 그대로 · 미래 시각 파일 → 기기 유지 |
+
+- **멱등**: A·B·D 각 세 번째까지 스냅숏 같음.
+- **끊긴 가져오기**: ① `signal` 로 묶음 크기 1·2·3·7 × 모든 묶음 경계에서 멈춤 → 같은 파일 다시 = 한 번에(같은 낱말 다른 id 두 줄·변형 해시 문서 포함한 파일) ② 평문을 37자 간격 31자리에서 자른 파일 → 온전한 파일 = 한 번에 ③ 묶음 안 1·3·5·8·12 번째 `put` 을 요청 안에서 실패시켜 그 묶음 되돌림(`write`) → 다시 = 한 번에. 실제 IDB(headless `p2`): 3,000줄 파일을 [예]로 1,493 에서 멈춤 → `#/vocab` 에서 새로 불러옴 → 다시 → "새로 1,507 · 그대로 1,500"·캐시 3,000·단어 5.
+- **다른 기기의 같은 책**(D, `old1` → `devB`): 기기 같은 해시 · 기기는 `해시:n40` 변형(바탕은 쪽수 다른 다른 PDF) · 파일이 변형 키 — 세 경우 모두 remap `{old1: devB}`·문서 = 기기 것 + `old10` 하나 · 캐시 키 `translate|ar|devB|…`·`term|ar|devB|s256:def|w=old1:x`(셋째 칸만, `w=` 안 `old1` 그대로)·`old10` 키 무변 · `v.docId` · progress 키 첫 칸만(sectionId 안 `old1:` 무변) · `questions.id`·`attempts.items[].questionId`(`old10:` 항목·`null` 무변)·`mistakes` docId·questionId · cards·annotations docId · 기기 문서 fileHash·자리 그대로.
+
+## 9c2R-2. 입력 견고성 (확인 2) — `r9c2/robust.mjs`(20 단정 초록) · `keyval.mjs`
+
+- **잘린 gzip**(2%·10%·50%·90%·99.9%): 던짐 0 · 2% → `not-backup`(머리 줄 전) · 나머지 앞까지(18·190·359·400) + `broken`. 99.9%(트레일러만 잘림)는 400/400·끝 줄까지 들어갔는데도 "뒷부분이 잘렸거나 손상" 문구(#8).
+- 평문: 머리 줄 없음 → `not-backup`·쓰기 0 · `format:2` → `newer`·쓰기 0 · `format:0`·`app` 다름 → `not-backup` · `format:"1"`(글자) 는 받아들임 · BOM·CRLF·빈 줄·반쪽 줄 → 반쪽 하나만 버림 · 끝 줄 `counts` 다름 → `mismatch` · 끝 줄 뒤 레코드 → 넣지 않음(`bad`).
+- **깨진 UTF-8**(둘째 레코드 가운데 `C3 28`): 첫 레코드만 들어가고 그 뒤 줄 0, `broken`·`truncated` → 화면 "파일 뒷부분이 잘렸거나 손상되어 그 앞까지 가져왔습니다." — spec ⑫② 설계와 같고 사용자에게 알린다. 미리보기는 끝 줄만 봐서 모름(설계 — 본문을 훑지 않음).
+- **모르는 스토어** `blobs`·`pages`·`searchText`·`sections`·`__proto__`·`constructor`·`toString`·`hasOwnProperty`·`""`·`DOCUMENTS`: 쓰기 0, 던짐 0(headless evil 에서도 blobs 0·pages 0).
+- **꼴이 틀린 레코드**: `mergeRecord` 에 8스토어 × 필드 × 이상한 값 14가지 × 기기 있음/없음/기기 쪽이 이상함 **2,856 경우 던짐 0**(던지면 실제 IDB 에서 그 묶음이 되돌려지고 가져오기가 멈춘다). id 없음·숫자 id·키 없음·객체 키·`day:null`·`key` 없는 설정 → 그 줄만 건너뜀, 마지막 캐시 줄까지 들어감. 아주 큰 값(설정 5M 글자·필기 7M 글자)은 그대로 저장 · `term` 없는 term 카드도 저장 · 2만 겹 깊은 객체는 쓰기에서 실패해 가져오기 `write`(#3·#4).
+- **속성 이름**: 키 꼴 이름은 얕은 곳·배열 안 모두 빠짐, 깊이 33 넘으면 남음(정보). `__proto__`·`constructor.prototype` — `Object.prototype` 오염 **0**(6가지 꼴). `__proto__` 는 자기 속성으로 저장되거나(필기) `maxMerge` 에서 사라짐(사용량) — 해 없음.
+- **값 속 키 모양**: 설정은 행째 건너뜀, 필기·단어 문맥·캐시 결과 값은 다시 지우지 않고 그대로 들어감(내보내기가 이미 지움 — 앱 파일에는 없다, 정보).
+- **`links.medical` 위험 주소**: `javascript:`·`data:`·`http:`·`user:pw@` 는 **저장은 되지만** 쓸 때 `effectiveLinks`(→ `checkLink`)가 걸러 `https` 셋만 남음 · id 꼴(따옴표·줄바꿈) → `i2`·`i3` · 값이 글자이면 빈 목록. headless(evil 파일 → 다시 불러오기 → 서재·단어장·사용량·설정 링크·백업·검색 6화면 + 리더): `a[href^="javascript:"]`·`http:` 0, `img[onerror]` 0, `window.__xss` 0, `<img …>` 이름은 글자로.
+- **줄 상한 8M**: 가운데 8M+10 글자 줄 → 그 줄만 버림(`long 1`, 18ms)·뒤 줄 들어감·`mismatch`(필기) 로 알림 · 8M−200 줄은 들어감.
+
+## 9c2R-3. 다시 불러오기·화면 (확인 3) — headless `run-imp`(p2)·`run-lay`(pl1)·`run-rt`(pr1)
+
+- **설정 끔 가져오기**(UI en, A 파일): 미리보기 5줄("Made…"·"1 books — already 0 · new 1 (PDF needed)"·"Word list 2…"·"36 saved translations (about 53 KB)"·"Settings: included"), 초점 `[이 파일 가져오기]` → "New 38 · changed 1 · unchanged 1 · skipped 9", `[다시 불러오기]` 초점. 다시 불러오기 **전**: 기기 단어 깊게 같음·단어 2(겹침 없음)·사용량 50·`capWarned`·내 링크·ui.lang en·fontSize 30, [가져오기] 꺼짐. 그 상태에서 해시를 `#/library` 로 → 확인 없이 그 화면에서 새로 불러옴.
+- **떠나기 확인**(3,000줄 파일): 진행 500 이상에서 `beforeunload` 막음 true · `#/search` + [아니요] → confirm 1·`#/settings/backup` 으로 돌아옴·끝까지 감(새로 3,007) · 새로 불러온 뒤 `beforeunload` 막음 false · [예] → 1,493 에서 멈추고 `#/vocab` 에서 새로 불러옴 → 다시 → 3,000.
+- **`window.confirm` 인 것**: 설계 6절·5절은 "화면을 떠나면 확인"만 정했고, 같은 장치를 설정 캐시 지우기(`ui/settings.js:1908`)·서재 삭제(`ui/library.js:1045`)도 쓴다 → 설계와 어긋나지 않음. 다만 페이지 안 `<dialog>` 와 달리 단추 문구·방향은 브라우저 몫이고, 해시 경로(뒤로 가기·음성)는 라우터가 먼저 목적지 화면을 그린 뒤 확인이 뜬다 → #7(실기기 거리).
+- **진행 막대**: `#backupProgressText` `aria-live=polite` · `#backupMsg` `role=status`·`aria-live=polite` · 막대 `role=progressbar` · 진행 글자 "الترجمات المحفوظة — 500 من 3,007" 꼴, 진행 중 가로 넘침 0.
+- **8조합**(360×740·412×915 × ko·en·fr·ar, 미리보기 열림): 문서 가로 넘침 0 · 카드 밖 요소 0 · 줄 넘침 0 · `[가져오기]` 294/346×64 · `[이 파일 가져오기]` 149–177×48 · `[취소]` 63–90×48(높이·너비 모두 48 이상) · 체크 줄 64 · ar `dir=rtl` · 미리보기 줄 `dir=auto` · 빈 `data-i18n` 0 · [취소] 뒤 초점 `[가져오기]`. 끝 화면(360 ar·412 fr): `[다시 불러오기]` 294/346×64·초점·넘침 0 (`r9c2/shots/done-360-ar.png`).
+- **`innerHTML`**: `ui/backup.js`·`backup/*`·`text/backup.js` 0(grep) — 그릇은 `createElement`·`textContent`.
+- **다시 불러오기 뒤**: ui.lang ko(설정 켬일 때)·캐시 칸 "약 35 KB"(전에는 "0 B" — 다시 불러오기가 필요한 이유 그대로).
+
+## 9c2R-4. 회귀 (확인 4)
+
+- **9c-1 내보내기**(`run-rt`, 가져온 뒤): 캐시 켬 51줄·머리 counts = 실제(문서 1·설정 9·사용량 1·단어 2·캐시 36)·끝 줄 · 캐시 끔 15줄·aiCache 0 · 가짜 키·`medreader.key.`·`privacy.consentedAt` 0.
+- 설정 링크·캐시(`#/settings/cache` 초점 단추)·서재·단어장·사용량·검색: 가로 넘침 0, 오류 0. evil 데이터 상태에서도 6화면 오류 0.
+- **`KEY_PATTERNS`**(`r9c2/fp.mjs`, HEAD 판은 `git show HEAD:` 사본): 정상 글 61 → **57 그대로(HEAD 57, 새로 지움 0)** · bearer 겨냥 40 → 31(HEAD 27, 새로 지움 0) · CMDT 2026 318,943글·1,277만 자 걸림 **0/0** · `REDACT_PATTERNS`·`KEY_SHAPES` HEAD 와 같음 · 리뷰 앞붙이 24가지: `\x2f`·`%u003D/d`·`%2520`·`=0A`·`\101`·`\\x22` 뒤 진짜 길이 키 이제 지움(HEAD 샘), `\X22`(대문자 X)·`=3d`(소문자 QP)·`\0`(한 자리 8진) 뒤는 HEAD 와 같이 샘(기록) · Bearer 왼쪽 경계: `(`·`[`·`'`·`"`·`|`·탭·`9`·`_`·`.`·`é`·아랍어 뒤 모두 지움(HEAD 와 같음), `X-`·`x`·`Pall` 붙음은 이제 남김(받아들인 틈 — Build 남은 문제 8).
+- **번역 요청 본문 바이트**(`run-body`, 합성 PDF 3쪽, 새 프로필 둘): 지금 판 `4f2e6b6ac89f9d78`(2,729B)·`356e9e3f5ef34de4`(6,090B) = HEAD 판(257파일 `git show HEAD:`) 같은 둘.
+- **힙**(`run-h`, `b9c1/dl/h-150k.jsonl.gz` 읽기만, 새 프로필 `ph1`): 가져오는 동안 최댓값 **+45.1MB**(≤ +64) · gc 3번 뒤 남는 양 **+0.16MB** · 46.5초 · 막대 150,010/150,010 · 캐시 150,000·문서 2 · 미리보기 "약 215 MB"+상한 넘음 줄. Build(+49.0·+37.1·0.16·48초)와 같은 범위 → 폰 OOM "거의 확실" 아님.
+
+## 9c2R-5. 남은 1(HEAD) — `lastLineId` (확인 5) — `run-line`(지금 판 `pn1` · HEAD 판 `pn2`, 같은 결과)
+
+리더는 쪽을 보일 때마다 `saveLastPage()` 로 `lastLineId = state.currentLineId || firstFlowLineId()` 를 쓴다(`ui/reader.js:821-822·1594-1617`). 재현: 3쪽 넷째 줄 `3:3` 을 넣고 서재 [이어 읽기] → 3쪽은 열리지만 `scrollY 0`·그 줄 표시 없음, `lastLineId` → **`3:1`**(그 쪽 첫 흐름 줄) · 3쪽 추출본이 없는 상태로 열면 → **`null`**, 추출이 끝나 그려진 뒤에도 다시 쓰지 않아 `null` 로 남음. `lastPage` 는 모든 경우 **3 그대로**. `lastLineId` 를 읽는 코드는 0(grep — 백업 병합뿐).
+→ **낮음**: 사용자가 잃는 것은 없다(쪽 단위 진도는 그대로, 줄 단위 이어 읽기는 원래 없는 기능 — 줄 값은 열 때마다 "첫 줄"로 바뀌어 왔다). 다만 17-4 뼈대·9c-2 `[D]` 기준의 "p.3·**같은 줄**"은 지금 리더로는 지킬 수 없는 기준이다 — 줄로 되살리려면 리더 단계의 새 기능(열 때 `lastLineId` 로 굴리기 + 낭독 위치가 바뀔 때 저장)이다. 9c-3 이나 리더 다듬기에서 기준 문구를 "p.3"으로 고치거나 기능으로 넣을지 오케스트레이터 몫.
+
+## 9c2R-6. 시험 · 검사 · 변이 (확인 6·7)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **1회차 1719/1719(10.5초) · 2회차 1719/1719(10.3초)**(`r9c2/full1.txt`·`full2.txt`) · `stamp-importmap --check` "그대로다 (모듈 79개 · CSS 4개)" · `git diff --check` 0.
+- **변이 7개**(Build V1–V14 와 다른 곳 — `r9c2/mut.mjs`: 원본을 읽어 `r9c2/bak/` 에 쓰고 정확히 1곳만 바꿈 → 백업 시험 둘 → finally 원본 바이트로 되씀 → 바이트 비교, 끝에 `cmp import.js bak/R1-…` 0):
+
+| # | 변이 (`js/backup/import.js`) | repo 시험 | 리뷰 스크립트 |
+|---|---|---|---|
+| R1 | fileHash 가 맞으면 쪽수(`samePdf`)를 보지 않음 | **빨강** I4b | — |
+| R2 | term 인덱스로 찾을 때 대상 언어를 보지 않음 | 살아남음 | 빨강(safety E "다른 대상 언어는 따로") |
+| R3 | 끝 줄 뒤 레코드도 넣음 | 살아남음 | 빨강(robust 2 둘) |
+| R4 | 평문 끝 줄 확인이 늘 "있음" | **빨강** I11 | — |
+| R5 | `validKey` 늘 참(틀린 키도 put → 묶음 실패) | 살아남음 | 빨강(robust 5) |
+| R6 | dup 일 때 내용 거르기 없이 patch | **빨강** I7 | — |
+| R7 | 새 문서 fileHash 를 파일 값 그대로(바탕이 비어도 변형 키) | **빨강** I4b | — |
+
+repo 시험 4/7 빨강, 살아남은 3개는 리뷰 스크립트가 모두 잡음 → #6(시험 한 줄씩). 7개 모두 복원 확인(바이트 같음).
+
+## 9c2R-7. headless (확인 8)
+
+Edge `--enable-precise-memory-info`·`--expose-gc` · pipe · 새 프로필 `r9c2/p1`(첫 시도 — 하네스 기다림 실수로 중간 끊김, 결과는 p2 로 다시)·`p2`·`pl1`·`pn1`·`pn2`·`pbc`·`pbh`·`pr1`·`ph1` · 가짜 키(세션·로컬) · 흉내 Gemini(OPTIONS 204 + CORS, 가로채 응답) · `setCacheEnabled(false)` · **한 번에 하나씩**. **서버 띄움 0·8000 접속 0**: 출처 이름만 빌리고 앱 요청은 모두 가로채 작업 트리(또는 `git show HEAD:`)에서 내줌(missing 0·4xx 0). 파일 넘기기는 `uploadFile` 로 스크래치 파일만(`b9c2/syn.pdf`·`b9c2/dl/A.jsonl.gz`·`b9c1/dl/h-150k.jsonl.gz` 읽기만, `r9c2/dl/mid·evil.jsonl.gz` 리뷰가 지음). **모든 실행 콘솔 오류 0 · pageerror 0 · 새 탭 0** · 외부 요청 0(합성 PDF 를 연 실행만 pdf.js CDN 7 — 앱이 원래 쓰는 라이브러리) · Gemini POST 는 본문 대조 run 의 2개씩만.
+
+## 9c2R-8. 발견 사항
+
+| # | 심각도 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음 | **다시 불러오기 전 `[내보내기]` 가 켜져 보이지만 눌러도 아무 일 없다** — 가져오기가 끝나면 `el.btn.disabled = false` 로 되돌리는데 `onExport` 는 `needReload` 면 조용히 `return`(Blob 0·알림 0) | `run-rt` `exportBeforeReload {disabled:false, blobs:0, msgChanged:false}`, 스크린샷 `done-360-ar.png`. 방향: 끝난 뒤 `[내보내기]` 도 끄거나(가져오기 단추처럼) 누르면 "먼저 다시 불러오세요" 한 줄 |
+| 2 | 낮음 (설계 그대로) | [설정도 가져오기](기본 켬)면 **`links.medical`(사용자가 만든 목록)·`search.recent`·`vocab.lastExportAt` 도 파일 값으로 통째로 바뀐다** — 기기에만 있던 의료 사이트가 사라짐(safety A1: `mine` → `theirs`). 17-4-1 5 "settings = 파일 값으로 덮는다"·체크로 끌 수 있음·미리보기 "설정: 들어 있음" 이라 조용한 덮기는 아님 | 방향(운영자 판단): 링크·최근 검색어는 합집합(링크는 url 로 겹침 제거) 또는 미리보기에 "의료 사이트 목록·최근 검색어도 파일 것으로 바뀝니다" 한 줄. `vocab.lastExportAt` 는 기기 몫(그 기기의 CSV 저장 시각)으로 옮기지 않는 쪽이 맞아 보임 |
+| 3 | 낮음 | **가져온 값의 타입·범위를 보지 않는다**(손댄 파일·시계가 크게 틀린 기기에서만): 문서 `lastOpenedAt` 미래(`9999-…`)면 그 뒤 모든 가져오기에서 파일 자리가 이김·서재 맨 위 고정, `lastPage:'abc'`·`pageCount:'many'` 저장 · 설정 `reader.fontSize:'huge'`·`ai.dailyCap:'unlimited'`·5M 글자가 그대로 저장되어 다음 부팅에 쓰임(`settings.readValue` 는 타입을 안 봄) · `term` 없는 term 카드 저장. 화면 오류·XSS 는 0(evil 6화면 + 리더) | robust 5 · `run-imp` evil. 방향: 문서 `lastOpenedAt` 은 term 처럼 `nowMs` 로 자르기 · 설정은 `DEFAULTS` 와 같은 타입일 때만 · term 필수 키(`term`·`targetLang`) 없으면 건너뜀 |
+| 4 | 낮음 | **레코드 하나가 쓰기에서 실패하면 그 묶음을 되돌리고 가져오기 전체가 멈춘다**(2만 겹 객체 → `write`, 저장소 가득 → `quota`). 안내는 둘 다 "가져오지 못했습니다. 같은 파일로 다시 가져오면 이어집니다." — 같은 자리에서 다시 실패하고, 저장소 가득은 공간 안내가 없다 | robust 5 `deep`. 데이터 손실은 없음(앞 묶음 남음·멱등). 방향: `quota` 는 따로 문구(공간 확보·캐시 끄고 다시) |
+| 5 | 낮음 | 결과 줄 "파일에 적힌 개수와 실제 개수가 다릅니다(**)**." — 괄호가 빈다: 파일에 모르는 스토어 줄(`blobs`·`pages`)이 있으면 `mismatch` 에 잡히지만 `PART_OF` 에 없어 이름이 빠짐 | `run-imp` evil 결과 줄. 방향: 모르는 스토어는 `mismatch` 에서 빼거나(이미 `skip`) 이름이 없으면 그 줄 생략 |
+| 6 | 낮음 (시험 틈) | 변이 R2(term 대상 언어 거름)·R3(끝 줄 뒤 레코드)·R5(틀린 키 put)가 repo 시험에서 살아남음 | 9c2R-6. 방향: I7 에 "같은 낱말·다른 대상 언어 기기 항목" 한 줄 · I8 또는 I10 에 "끝 줄 뒤 레코드"·"키가 틀린 줄(객체 키·sectionId 없음)" 한 줄 |
+| 7 | 낮음 (실기기) | 떠나기 확인이 `window.confirm` — 설계와 어긋나지 않고(캐시 지우기·서재 삭제와 같은 장치) 동작도 맞다([아니요] 머묾·[예] 멈춤·새로 불러옴). 다만 단추 문구·RTL 은 브라우저 몫이고, 뒤로 가기·음성(해시 경로)은 라우터가 목적지 화면을 먼저 그린 뒤 확인이 뜬다 | 9c2R-3. 실기기 목록(Build 9절 셋째 줄)에 "Android 뒤로 제스처 때 확인 창이 실제로 뜨는가(Chrome 이 막지 않는가)·ar 에서 읽히는가" |
+| 8 | 낮음 | gzip **트레일러만** 잘린 파일(레코드·끝 줄 모두 있음)도 "파일 뒷부분이 잘렸거나 손상되어 그 앞까지 가져왔습니다" — 실제로는 전부 들어감(400/400·`ended`) | robust 1(99.9%). 방향: `broken && ended` 면 "끝까지 들어갔지만 파일 끝이 손상" 정도로 또는 알리지 않음 |
+| 9 | 낮음 (HEAD) | 남은 1 — 리더가 쪽을 열 때 `lastLineId` 를 첫 흐름 줄(또는 텍스트 전이면 `null`)로 덮음. 읽는 곳 0·`lastPage` 보존 → 진도 손실 아님. 수용 기준 "같은 줄"은 지금 리더로 지킬 수 없음 | 9c2R-5. 방향: 기준 문구를 "p.3" 으로 고치거나 줄 이어 읽기를 기능으로(리더 단계) |
+| 10 | 정보 | term 내용이 파일 쪽으로 바뀌면 `updatedAt` = 가져온 시각(`importPlan` 의 `max(nowMs, …)`) — 뒤로 가지 않고 멱등(B·safety). Build 보고 4절 "파일 시각을 지금으로 자름"은 "지금으로 올림"이 정확 | safety `B_termUpdatedAt.isNow true` |
+| 11 | 정보 | 가져오기는 **값** 속 키 모양을 다시 지우지 않는다(설정만 행째 건너뜀, 필기·단어 문맥·캐시 결과는 그대로). 앱이 만든 파일은 내보낼 때 이미 지움 — 사람이 손으로 만든 파일에서만 | `keyval.mjs`. 기록 |
+| 12 | 정보 | 손댄 파일에서만: 문서 줄이 파일 뒤에 오면 앞 레코드는 바꿔 쓰이지 않음(`old1` 키가 남음) · 깊이 33 넘는 속성 이름 키 모양은 남음(`dropKeyNames` 깊이 32) · 같은 id·다른 대상 언어 항목은 들어오지 않음 | safety `D_docsLast` · robust 6 · safety E. 앱 파일 꼴에서는 생기지 않음 |
+| 13 | 정보 | `links.medical` 의 `javascript:`·`data:`·`http:` 항목은 DB 에 그대로 저장되고(다음 내보내기에도 실림) 쓸 때만 `effectiveLinks` 가 거른다 — 18 설계("이상한 값이 `href` 가 되지 않게")대로. 가져올 때 `checkLink` 로 빼면 더 깨끗 | robust 7 · evil headless |
+| 14 | 정보 | Build 보고 다시 잼 — 1719 ×2 · stamp 79 · `diff --check` 0 · 힙(+45.1 vs +49.0/+37.1 · 남는 0.16) · 본문 해시 2개 · KEY 57/61·31/40·CMDT 0 · 두 프로필 꼴(설정 켬·끔) · 떠나기 확인 · 8조합 · 콘솔 0 모두 맞음 | 9c2R-1~7 |
+
+**실기기 목록(Build 9절)에 더할 것**: #7(뒤로 제스처 때 확인 창이 실제로 뜨는가·ar) · 미리보기 뒤 화면 읽기 도구가 미리보기 줄을 읽는가(초점이 `[이 파일 가져오기]` 로 바로 감 — 목록은 `aria-live` 밖).
+
+## 9c2R-9. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 파일로 쓰고 따로 읽음). **막힌 명령 0.** 서버 띄움 0(8000 접속도 0) · 프로세스 조회·디버깅 포트 0 · 진짜 키 0(꼴만 맞춘 지어낸 글자) · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 인용 0(합성 PDF·지어낸 글자만, CMDT 덤프는 수만 셈) · `b9c2/`·`b9c1/`·`r9c1c/`·`p14/` 읽기만 · 새 150MB 합성 0 · C: 남은 91GB. 변이 7개 모두 bak 과 바이트 같음·`cmp` 0, 앱 파일 `git status` 처음과 같음(이 절 덧붙임만).
+
+스크래치 `r9c2/`: `safety.mjs`·`robust.mjs`·`keyval.mjs`·`fp.mjs`·`cfg-head.mjs`(HEAD config 사본) · `mut.mjs`·`mut2.mjs`·`m-R1`–`m-R7.txt`·`m2-R2x/R3x/R5x.txt`·`bak/` · `common.mjs`(Build 하네스 사본 — 경로·가짜 키만 바꿈)·`gen.mjs`·`dl/`(`mid`·`evil`·`rt-cache`·`rt-nocache` `.jsonl.gz`) · `run-imp.mjs`·`imp1.json`(중간 끊김)·`imp2.json` · `run-lay.mjs`·`lay1.json`·`shots/` · `run-line.mjs`·`line-cur.json`·`line-head.json` · `run-body.mjs`·`body-cur.json`·`body-head.json` · `run-rt.mjs`·`rt1.json` · `run-h.mjs`·`h1.json` · `full1.txt`·`full2.txt` · 프로필 `p1`·`p2`·`pl1`·`pn1`·`pn2`·`pbc`·`pbh`·`pr1`·`ph1` · `section.md`(이 절)·`append.mjs`.
+
+**배포 가능** — 기기 데이터 조용한 덮기·잃음·중복 0, 멱등·끊긴 뒤 다시 = 한 번에, 같은 책 다른 id 키 바꿔 쓰기 세 꼴, 파생·blobs 쓰기 0, 오염·XSS·위험 `href` 0, 키 속성 이름 빠짐, 회귀 0(본문 바이트 같음), 힙 +45MB·남는 0.16MB, 콘솔 오류 0. 낮음 9 중 #1(다시 불러오기 전 [내보내기] 무반응)·#5(빈 괄호)·#6(시험 세 줄)은 작은 다듬기, #2 는 운영자 판단 거리, #3·#4·#8 은 손댄 파일·안내 문구, #7·#9 는 실기기·리더 단계 몫.

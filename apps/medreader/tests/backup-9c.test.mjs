@@ -301,6 +301,17 @@ test('K4b 지우개는 키 꼴에만(9c-1b — 9c1R #1) — 합성어·"Bearer o
   keep('bearer bonds and other instruments');
   keep('BEARER of the mutation');
   keep('the stretcher-bearer-team-of-four');
+  // 9c-2(9c1cR #2) — JSON 밖 이스케이프(\xXX·8진)·%uXXXX·이중 퍼센트 인코딩·quoted-printable 바로 뒤 sk- 도 지운다
+  for (const pre of ['\\x22', '\\x3D', '\\012', '%u0022', '%2522', '%252F', '=3D']) {
+    assert.equal(B.scrubText('q ' + pre + SKP + ' z'), 'q ' + pre + '[KEY] z', pre);
+  }
+  // 9c-2(9c1cR #3) — Bearer 왼쪽 경계: 하이픈 합성어·낱말 안 bearer 뒤 긴 낱말은 그대로 · %XX·글자 그대로 이스케이프 뒤는 여전히 지움
+  keep('the standard-bearer evidence-based-medicine-guidelines');
+  keep('weight-bearer non-weight-bearing-exercises');
+  keep('pallbearer: heterozygous-familial-hypercholesterolemia');
+  assert.equal(B.scrubText('x%0ABearer ' + 'fake.token.9c1c'), 'x%0A[KEY]');
+  assert.equal(B.scrubText('{"h":"a\\nBearer ' + 'fake.token.9c1c"}'), '{"h":"a\\n[KEY]"}');
+  assert.equal(B.scrubText('Authorization: Bearer ' + 'fake.token.9c1c'), 'Authorization: [KEY]');
   // search.recent — 정상 검색어 목록은 행째 남고, 키가 하나 끼면 행째 빠진다
   const recent = ['low-risk-to-moderate-risk', 'Bearer of', 'sk-learn', 'dyspnea'];
   assert.deepEqual(B.settingsForBackup([{ key: 'search.recent', value: recent }]), [{ key: 'search.recent', value: recent }]);

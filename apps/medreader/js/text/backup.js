@@ -166,28 +166,54 @@ export function readHead(s) {
 /**
  * 글자 조각 → 줄(17-4-1 5 메모리). 조각 경계에 걸친 줄은 이어 붙이고, `\r\n` 의 `\r` 은 뗀다(경계에 걸쳐도).
  * 빈 줄은 내지 않는다. 바이트 → 글자는 **호출자 몫**(UTF-8 다바이트 글자가 조각 경계에 걸리는 것은 디코더가 잇는다).
- * @returns {{push:(chunk:string)=>string[], end:()=>string[]}}
+ * `[9c-2 — 9c1R #10]` 줄 하나가 `maxLine`(기본 `BACKUP.MAX_LINE_CHARS`) 글자를 넘으면 그 줄은 **버리고**(다음 줄바꿈까지 읽지 않고 흘림)
+ * `long` 을 하나 올린다 — 줄바꿈 없는 큰 파일을 조각마다 처음부터 다시 잇던 일(10MB 279ms·100MB 수십 초)이 없다. 이어지는 조각은
+ * 목록에 모았다가 줄바꿈을 만날 때 한 번만 잇는다.
+ * @param {{maxLine?:number}} [opts]
+ * @returns {{push:(chunk:string)=>string[], end:()=>string[], readonly long:number}}
  */
-export function lineSplitter() {
-  let rest = '';
+export function lineSplitter(opts) {
+  const max = opts && Number(opts.maxLine) > 0 ? Number(opts.maxLine) : BACKUP.MAX_LINE_CHARS;
+  let pend = [];          // 아직 줄바꿈을 못 만난 조각들
+  let pendLen = 0;
+  let skipping = false;   // 상한을 넘은 줄 — 다음 줄바꿈까지 버린다
+  let long = 0;
   const clean = (x) => (x.charCodeAt(x.length - 1) === 13 ? x.slice(0, -1) : x);
+  const keep = (piece) => {
+    if (skipping || !piece) return;
+    pend.push(piece);
+    pendLen += piece.length;
+    if (pendLen > max) { skipping = true; long++; pend = []; pendLen = 0; }
+  };
+  const take = (out, last) => {
+    if (skipping) { skipping = false; return; }
+    const l = clean(pend.length ? pend.join('') + last : last);
+    pend = [];
+    pendLen = 0;
+    if (l.length > max) { long++; return; }
+    if (l.trim()) out.push(l);
+  };
   return {
     push(chunk) {
-      const s = rest + (chunk == null ? '' : String(chunk));
-      const parts = s.split('\n');
-      rest = parts.pop();
+      const s = chunk == null ? '' : String(chunk);
       const out = [];
-      for (let i = 0; i < parts.length; i++) {
-        const l = clean(parts[i]);
-        if (l.trim()) out.push(l);
+      let from = 0;
+      for (;;) {
+        const nl = s.indexOf('\n', from);
+        if (nl < 0) { keep(from ? s.slice(from) : s); break; }
+        if (skipping) skipping = false;
+        else take(out, s.slice(from, nl));
+        from = nl + 1;
       }
       return out;
     },
     end() {
-      const l = clean(rest);
-      rest = '';
-      return l.trim() ? [l] : [];
-    }
+      const out = [];
+      take(out, '');
+      skipping = false;
+      return out;
+    },
+    get long() { return long; }
   };
 }
 

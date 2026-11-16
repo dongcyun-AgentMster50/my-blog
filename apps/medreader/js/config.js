@@ -921,13 +921,19 @@ export const BACKUP = Object.freeze({
      `[9c-1c — 9c1bR #1·#2·#4]` `sk-` 경계에 "URL 인코딩 `%XX` 바로 뒤"·"글자 그대로 적힌 이스케이프(`\n`·`\t`·`\r`·`\b`·`\f`·`\"`·`\'`·`\/`·`\uXXXX`) 바로 뒤"를
      더한다 — 한 글자 경계는 `%20` 의 `0`·`\n` 의 `n` 을 영숫자로 봐서 `%20sk-…`·붙여 넣은 JSON 의 `\nsk-…` 를 놓쳤다. 영숫자·하이픈에 바로 붙은 꼴
      (`abcsk-…`·`api-key-sk-…`)은 합성어와 구별이 안 돼 남긴다(기록). `Bearer` 는 대소문자 무시·`%20`·`:` 뒤도 보고, 토큰은 "숫자 하나 이상(12자 이상)
-     **또는** 20자 이상" — 숫자 없는 긴 토큰(접두 없는 32자 키)도 지운다. "Bearer responsibilities"(16자)·"bearer bonds" 는 그대로. */
+     **또는** 20자 이상" — 숫자 없는 긴 토큰(접두 없는 32자 키)도 지운다. "Bearer responsibilities"(16자)·"bearer bonds" 는 그대로.
+     `[9c-2 — 9c1cR #2·#3]` `sk-` 경계에 JSON 밖 이스케이프·이중 인코딩 뒤를 더한다 — `\xXX`·8진 `\ooo`·`%uXXXX`·이중 퍼센트 인코딩
+     `%25XX`·quoted-printable `=XX`(9c-1 판은 지웠고 9c-1c 판은 놓쳤다). `Bearer` 에는 왼쪽 경계 — 앞이 글자·하이픈이면 보지 않는다
+     (`standard-bearer`·`weight-bearer`·`pallbearer` 뒤 긴 낱말 오탐). 단 `%XX`·글자 그대로 적힌 이스케이프(`\n` 등) 바로 뒤는 `sk-` 와 같이 본다. */
   KEY_PATTERNS: Object.freeze([
     KEY_SHAPES.GOOGLE_AIZA,
     KEY_SHAPES.GOOGLE_AQ,
-    '[Bb][Ee][Aa][Rr][Ee][Rr](?:\\s+|%20|:\\s*)(?:(?=[A-Za-z0-9._~+/=\\-]*[0-9])[A-Za-z0-9._~+/=\\-]{12,}|[A-Za-z0-9._~+/=\\-]{20,})',
-    '(?:(?<![A-Za-z0-9\\-])|(?<=%[0-9A-Fa-f]{2})|(?<=\\\\[nrtbf"\'/])|(?<=\\\\u[0-9A-Fa-f]{4}))sk-[A-Za-z0-9_\\-]{20,}'
+    '(?:(?<![A-Za-z\\-])|(?<=%[0-9A-Fa-f]{2})|(?<=\\\\[nrtbf"\'/]))[Bb][Ee][Aa][Rr][Ee][Rr](?:\\s+|%20|:\\s*)(?:(?=[A-Za-z0-9._~+/=\\-]*[0-9])[A-Za-z0-9._~+/=\\-]{12,}|[A-Za-z0-9._~+/=\\-]{20,})',
+    '(?:(?<![A-Za-z0-9\\-])|(?<=%(?:25)?[0-9A-Fa-f]{2})|(?<=\\\\[nrtbf"\'/])|(?<=\\\\u[0-9A-Fa-f]{4})|(?<=\\\\x[0-9A-Fa-f]{2})|(?<=%u[0-9A-Fa-f]{4})|(?<=\\\\[0-7]{3})|(?<==[0-9A-F]{2}))sk-[A-Za-z0-9_\\-]{20,}'
   ]),
+  /* `[9c-2 — 9c1R #10]` 가져오기 줄 하나의 글자 수 상한. 줄바꿈 없는 엉뚱한 파일(PDF 를 잘못 고름 등)을 끝까지 이어 붙이지 않는다 —
+     첫 줄 전에 넘으면 "백업 파일이 아님", 그 뒤면 그 줄만 버린다. 이 앱의 가장 긴 줄(큰 책의 개요·긴 필기)도 수백 KB 다. */
+  MAX_LINE_CHARS: 8 * 1024 * 1024,
   /* `documents` 의 사용자 몫 필드(17-4-1 2). `extraction`·`sectionIndex*` 와 모르는 필드는 담지 않는다.
      `outlineV` 는 `outline` 을 읽은 판(search/outline.js) — 없으면 개요를 "아직 못 읽음"으로 본다(9c-1 Build 정정). */
   DOC_FIELDS: Object.freeze(['id', 'title', 'fileName', 'size', 'pageCount', 'fileHash', 'addedAt', 'lastOpenedAt', 'lastPage',
