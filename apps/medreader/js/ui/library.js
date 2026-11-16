@@ -38,7 +38,7 @@ import { fileIdentityHash } from '../hash.js';
 import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
-import { go, replace, readerHash, vocabHash, libraryHash } from '../router.js';
+import { go, replace, readerHash, vocabHash, summariesHash, libraryHash } from '../router.js';
 import { fromStored } from '../text/store.js';
 import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
@@ -450,6 +450,11 @@ function langPanel(doc, panelId) {
   vb.type = 'button';
   vb.setAttribute('data-action', 'vocab');
   panel.appendChild(vb);
+  // `[11-3 — spec 17-2-1 4-6 · 11-D14]` "이 책의 저장한 요약" — 같은 패널, 같은 위임. 호출 0.
+  const sb = el('button', 'doc-summaries', t('library.card.summaries'));
+  sb.type = 'button';
+  sb.setAttribute('data-action', 'summaries');
+  panel.appendChild(sb);
 
   // `[배포 안전장치]` 9-4 [텍스트 다시 추출] — 같은 [⋯] 패널, 같은 위임(`data-action`).
   const rx = el('div', 'doc-reextract');
@@ -1264,6 +1269,11 @@ async function onListClick(ev) {
 
   if (btn.getAttribute('data-action') === 'vocab') {
     go(vocabHash(docId));          // `[8f-3]` 이 책의 단어장
+    return;
+  }
+
+  if (btn.getAttribute('data-action') === 'summaries') {
+    go(summariesHash(docId));      // `[11-3]` 이 책의 저장한 요약
     return;
   }
 

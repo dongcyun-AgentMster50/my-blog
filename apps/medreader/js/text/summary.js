@@ -251,18 +251,23 @@ export function relocate(rec, paras) {
  * 저장한 요약·개요 → `.txt` 글(호출 0 — 4-6). UTF-8 BOM, CRLF, 책 제목 → (개요는 범위 머리에) → 쪽 라벨 → 요지 / 원문 언어 요지 /
  * 요점(들여쓰기 2칸씩) / 용어 "원어 — 대상 말". 화면 문구는 `labels` 로 받는다(이 계층은 i18n 을 모른다).
  * ★ 레코드의 요약 필드만 읽는다 — 원문 문단 글·캐시·키를 보지 않는다.
+ * `[11-3]` `labels.notice` 가 있으면 BOM 바로 뒤 첫 줄에 그 한 줄 + 빈 줄(11-D18 "AI 요약 — 교육용, 원문 확인" — 파일만 따로 돌아도 보이게).
+ *   `labels.title(rec)` 가 있으면 책 제목 줄을 그것으로(화면이 문서 레코드의 지금 제목을 준다 — 없으면 레코드의 `docTitle` 사본).
+ *   줄 안의 CR·LF·줄 구분 문자(U+2028·U+2029)는 공백 하나로 접는다(`clean`) — 파일의 줄 구조는 이 함수만 만든다.
  * @param {Object[]} list `summary`·`outline` 레코드
- * @param {{page?:(rec:Object)=>string, range?:(rec:Object)=>string, untitled?:string, terms?:string}} [labels]
+ * @param {{page?:(rec:Object)=>string, range?:(rec:Object)=>string, title?:(rec:Object)=>string, untitled?:string, terms?:string,
+ *          notice?:string}} [labels]
  * @returns {string}
  */
 export function exportText(list, labels) {
   const L = labels || {};
   const page = typeof L.page === 'function' ? L.page : (r) => 'p. ' + (r.pageNo == null ? '?' : r.pageNo);
   const range = typeof L.range === 'function' ? L.range : (r) => (r.range && r.range.label) || page(r);
+  const titleOf = typeof L.title === 'function' ? L.title : (r) => r.docTitle;
   const books = new Map();
   for (const r of Array.isArray(list) ? list : []) {
     if (!r || (r.kind !== 'summary' && r.kind !== 'outline')) continue;
-    const title = clean(r.docTitle) || L.untitled || '';
+    const title = clean(titleOf(r)) || clean(r.docTitle) || clean(L.untitled) || '';
     const k = String(r.docId == null ? '' : r.docId) + '\u0001' + title;
     if (!books.has(k)) books.set(k, { title: title, recs: [] });
     books.get(k).recs.push(r);
@@ -275,6 +280,7 @@ export function exportText(list, labels) {
       if (n && typeof n === 'object') tree(n.sub, depth + 1);
     }
   };
+  const head = clean(L.notice);
   for (const b of books.values()) {
     if (lines.length) lines.push('');
     lines.push(b.title);
@@ -288,21 +294,22 @@ export function exportText(list, labels) {
     for (const r of recs) {
       lines.push('');
       if (r.kind === 'outline') {
-        lines.push('[' + range(r) + ']');
+        lines.push('[' + clean(range(r)) + ']');
         if (clean(r.title)) lines.push(clean(r.title));
         tree(r.points, 1);
         continue;
       }
-      lines.push('[' + page(r) + ']');
+      lines.push('[' + clean(page(r)) + ']');
       if (clean(r.gist)) lines.push(clean(r.gist));
       if (clean(r.gistSrc)) lines.push(clean(r.gistSrc));
       tree(r.points, 1);
       const terms = (Array.isArray(r.terms) ? r.terms : []).filter((t) => t && clean(t.src) && clean(t.tr));
       if (terms.length) {
-        if (L.terms) lines.push(L.terms);
+        if (clean(L.terms)) lines.push(clean(L.terms));
         for (const t of terms) lines.push('  ' + clean(t.src) + ' — ' + clean(t.tr));
       }
     }
   }
-  return '﻿' + lines.join('\r\n') + '\r\n';
+  if (head) lines.unshift(head, '');
+  return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }

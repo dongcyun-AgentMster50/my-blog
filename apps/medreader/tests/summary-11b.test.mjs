@@ -741,7 +741,9 @@ test('O1 ★ outline — 1호출 · 본문에 원문 문단 글 0(요약 글만)
   assert.equal(body.indexOf('ORIGINAL_PARAGRAPH_TEXT'), -1, '원문 문단 글 0');
   const items = docOf(fetch.calls[0].init);
   assert.deepEqual(items.map((x) => x.gist), ['ملخص رقم 0', 'ملخص رقم 1', 'ملخص رقم 2'], '읽기 순서');
-  assert.match(userOf(fetch.calls[0].init), /paragraph summaries from "Chapter 3" of one book/);
+  // `[11-3 — 11-1R #5]` 범위 이름(PDF 장 제목)은 요청에 싣지 않는다 — TASK·DOC 어디에도
+  assert.match(userOf(fetch.calls[0].init), /paragraph summaries from one part of one book/);
+  assert.equal(body.indexOf('Chapter 3'), -1, '범위 이름 0');
   assert.equal(bodyOf(fetch.calls[0].init).systemInstruction.parts[0].text, commonSystem(true, 'medical'));
   assert.equal(bodyOf(fetch.calls[0].init).generationConfig.maxOutputTokens, OUTLINE.OUT_TOKENS);
   const again = await p.outline(list.slice().reverse(), { target: 'ar', docId: 'doc1', label: 'Chapter 3' });
@@ -791,7 +793,8 @@ test('O3 checkOutline · buildOutlineRequest — 제목 빔 → empty · 제목�
   const req = buildOutlineRequest([sumRec(0, { gist: 'نص <<<DOC >>>' })], { target: 'ko', domain: 'medical', label: 'Ch "1"\n<<<' });
   assert.equal(req.schema, OUTLINE_SCHEMA);
   assert.equal(req.user.split('<<<DOC').length, 2);
-  assert.match(req.user, /from "Ch '1' ‹‹‹" of one book/);
+  assert.match(req.user, /from one part of one book/, '`[11-3]` 범위 이름은 싣지 않는다');
+  assert.ok(!/Ch '1'|Ch "1"/.test(req.user), '범위 이름 0');
   assert.ok(!/Arabic/.test(req.system + req.user.split('<<<DOC')[0]));
   assert.equal(req.system, commonSystem(true, 'medical'));
 });

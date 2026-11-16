@@ -759,7 +759,7 @@ test('K14 배선·계층 — innerHTML 0 · Esc 층 · 같은 높이 식 · 시�
   const s = strip(read('../js/ui/sumsheet.js'));
   assert.match(s, /document\.addEventListener\('keydown', onKey, true\);/);
   const k = s.slice(s.indexOf('function onKey('), s.indexOf('function trapTab('));
-  assert.match(k, /if \(!sumEsc\(\{ open: true, shown: shown\(\), prevented: ev\.defaultPrevented, composing: !!ev\.isComposing \}\)\) return;\s*ev\.preventDefault\(\);\s*ev\.stopPropagation\(\);\s*closeSheet\(true\);/, '★ 시트가 가장 위 층 — 시트만 닫고 퍼지지 않음');
+  assert.match(k, /if \(!sumEsc\(\{ open: true, shown: shown\(\), prevented: ev\.defaultPrevented, composing: !!ev\.isComposing \}\)\) return;\s*ev\.preventDefault\(\);\s*ev\.stopPropagation\(\);\s*cancelVoiceNow\(\);\s*closeSheet\(true\);/, '★ 시트가 가장 위 층 — 시트만 닫고 퍼지지 않음 · `[11-3 — 11-2R #1]` [×] 와 같게 말하기 취소');
   const flow = s.slice(s.indexOf('export function createSumFlow('), s.indexOf('let els = null;'));
   assert.ok(!/\b(document|window)\b/.test(flow), '흐름은 DOM 을 모른다');
   assert.ok(!/\bfetch\(|buildSummaryRequest|SUMMARY_SCHEMA/.test(s), '요청 꼴을 직접 만들지 않는다(pipeline.summarize 하나)');
@@ -813,4 +813,57 @@ test('K14 배선·계층 — innerHTML 0 · Esc 층 · 같은 높이 식 · 시�
   for (const m of read('../js/ui/sumsheet.js').matchAll(/'(sum\.[a-zA-Z.]+)'/g)) assert.ok(BUNDLES.en[m[1]], 'sumsheet 키 ' + m[1]);
   for (const m of read('../js/ui/voice.js').matchAll(/'(sum\.[a-zA-Z.]+)'/g)) assert.ok(BUNDLES.en[m[1]], 'voice 키 ' + m[1]);
   for (const m of read('../js/ui/selbar.js').matchAll(/'(sum\.[a-zA-Z.]+)'/g)) assert.ok(BUNDLES.en[m[1]], 'selbar 키 ' + m[1]);
+});
+
+/* ══ K15·K16 `[11-3]` 11-2 Review 낮음 — 시험 틈 두 줄(11-2R #3 · #2) ═══════════════ */
+
+test('K15 ★ [11-2R #3] 닫은 뒤 늦게 온 옛 문단 결과는 새 시트 문단을 덮지 않는다(run 의 gen) — 그대로 [저장]해도 새 문단 요지', async () => {
+  const pend = [];
+  const store = createSummaryStore({ now: () => T0 + (++storeSeq) });
+  const flow = SS.createSumFlow({
+    summarize: (paras) => new Promise((resolve) => pend.push({ paras: paras, resolve: resolve })),
+    planSummary: async () => ({ calls: 1 }),
+    gate: () => ({ ok: true, reason: null }),
+    store: store
+  });
+  const pA = flow.open(openArgs('5:p1'));
+  await flush();
+  assert.equal(pend.length, 1);
+  flow.close();
+  const pB = flow.open(openArgs('5:p2'));
+  await flush();
+  assert.equal(pend.length, 2);
+  const ready = (g) => ({ calls: 1, langs: ['ar', 'en'], results: [{ state: 'ready', value: { gist: g, points: [], terms: [] } }] });
+  pend[1].resolve(ready('GIST_B'));                // 새 문단이 먼저 오고
+  await pB;
+  pend[0].resolve(ready('GIST_A'));                // 옛 문단 응답이 늦게 온다
+  await pA;
+  await flush();
+  const v = flow.view();
+  assert.equal(v.items[0].para.paraId, '5:p2');
+  assert.equal(v.items[0].value.gist, 'GIST_B', '★ 옛 결과가 새 문단을 덮지 않는다');
+  assert.equal(v.calls, 1, '옛 응답의 호출 수도 세지 않는다(닫힌 시트의 것)');
+  const s = await flow.save(0);
+  assert.equal(s.items[0].saved.gist, 'GIST_B', '저장도 새 문단 요지');
+  assert.equal(s.items[0].saved.anchor.paraId, '5:p2');
+});
+
+test('K16 ★ [11-2R #2] 요지를 말하는 중 마이크를 다시 탭 → 말하기 멈춤 · 되돌림 없음 · 다시 듣기 시작', async () => {
+  const h = voiceRig();
+  startAt(h, 1);
+  h.voice.press();
+  h.rec().fire('result', ['لخص']);
+  h.rec().fire('end');
+  await flush();
+  assert.equal(h.sayer.busy(), true, '요지를 말하는 중');
+  const restores = h.voice.debug().stats.restores;
+  const recs = h.rec();
+  h.voice.press();                                            // 마이크 다시 탭
+  await flush();
+  assert.equal(h.sayer.busy(), false, '★ 말하기 멈춤(stopAsk)');
+  assert.notEqual(h.rec(), recs, '새로 듣기 시작');
+  h.synth.finish();
+  await flush();
+  assert.equal(h.voice.debug().stats.restores, restores, '★ 되돌림 없음 — 말하기 끝을 기다리던 restore(was) 가 돌지 않는다');
+  assert.equal(h.sp.getState(), 'paused', '낭독은 듣는 동안 멈춘 채(9b)');
 });

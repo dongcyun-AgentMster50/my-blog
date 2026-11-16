@@ -1387,6 +1387,103 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 }
 .word-sheet .ws-vocab[hidden] { display: none; }
 
+/* ── `[11-3 — spec 17-2-1 4-6]` 저장한 요약 화면 · 요약 시트 링크 ───────────────────
+   ★ 논리 속성만(16-H) — 줄 방향은 UI, 요지는 그 레코드의 대상 언어 방향(`dir` 속성), 원문 언어 요지는 원문 방향(아랍어 UI 에서도 ltr).
+   ★ 줄(`<summary>`)·단추·칸 48px 이상(16-G). 360px 가로 스크롤 0 — 칸은 `min-inline-size: 0`, 긴 글은 `overflow-wrap: anywhere`.
+   ★ 펼침은 `<details>` 기본 동작(JS 없음 — 11-D17). 삭제 확인은 `.confirm-dialog` 그대로. */
+/* 요약 시트 링크 "이 책의 저장한 요약 (n)" — reader.css 의 `display:flex` 가 [hidden] 을 이기지 않게(문서가 없으면 숨김) */
+.sum-sheet .sum-link[hidden] { display: none; }
+.sums-tools { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block: var(--sp-3); }
+.sums-select,
+.sums-num {
+  flex: 1 1 12em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.sums-range .sums-select { inline-size: 100%; }
+.sums-status { margin-block: 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.sums-status:empty { display: none; }
+.sums-range { margin-block: var(--sp-2) var(--sp-3); }
+.sums-range[hidden] { display: none; }
+.sums-range h2 { font-size: var(--fs-base); margin-block-end: var(--sp-2); }
+.sums-label { display: block; font-size: var(--fs-sm); color: var(--c-text-dim); margin-block: var(--sp-2) var(--sp-1); }
+.sums-pages { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--sp-2); align-items: end; }
+.sums-pages[hidden] { display: none; }
+.sums-pages .sums-label:nth-of-type(1) { grid-column: 1; grid-row: 1; }
+.sums-pages .sums-num:nth-of-type(1) { grid-column: 1; grid-row: 2; }
+.sums-pages .sums-label:nth-of-type(2) { grid-column: 2; grid-row: 1; }
+.sums-pages .sums-num:nth-of-type(2) { grid-column: 2; grid-row: 2; }
+.sums-range-n { margin-block: var(--sp-2); overflow-wrap: anywhere; }
+.sums-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block: var(--sp-2) 0; }
+.sums-row button { flex: 1 1 8em; min-inline-size: 0; min-block-size: var(--tap); }
+.sums-row button[hidden] { display: none; }
+.summaries-screen button[aria-disabled="true"] { opacity: 0.5; }
+.sums-outline { margin-block-start: var(--sp-2); padding-block-start: var(--sp-2); border-block-start: 1px solid var(--c-border); }
+.sums-outline[hidden] { display: none; }
+.sums-out-title { font-size: var(--fs-base); margin-block: 0 var(--sp-2); text-align: start; overflow-wrap: anywhere; }
+.sums-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block-end: var(--sp-2); }
+.sums-actions button { flex: 1 1 8em; min-inline-size: 0; }
+.sums-actions button[hidden],
+.sums-share[hidden] { display: none; }
+.sums-disclaimer { margin-block: 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.sums-book { margin-block-end: var(--sp-4); }
+.sums-book-title { font-size: var(--fs-base); margin-block: var(--sp-3) var(--sp-1); text-align: start; overflow-wrap: anywhere; }
+.sums-head {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--c-text-dim);
+  margin-block: var(--sp-3) 0;
+  padding-block: var(--sp-1);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.sums-items { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--c-border); }
+.sums-items > li { margin: 0; border-block-end: 1px solid var(--c-border); }
+.sums-sum {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px var(--sp-3);
+  align-items: baseline;
+  min-block-size: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  list-style: none;
+}
+.sums-sum::-webkit-details-marker { display: none; }
+.sums-sum:focus-visible { outline: 3px solid var(--c-focus); outline-offset: -3px; }
+.sums-page { font-size: var(--fs-sm); color: var(--c-text-dim); white-space: nowrap; }
+.sums-tag { white-space: normal; grid-column: 1 / -1; overflow-wrap: anywhere; }
+.sums-gist { text-align: start; overflow-wrap: anywhere; }
+.sums-gist:lang(ar),
+.sums-term-tr:lang(ar),
+.sums-out-title:lang(ar),
+.sums-items .sum-tree:lang(ar),
+.sums-out-tree .sum-tree:lang(ar) { font-family: var(--font-ar); }
+.sums-item[open] > .sums-sum { background: var(--c-surface-2); }
+.sums-body { padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+.sums-gist-src { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--c-text-dim); overflow-wrap: anywhere; }
+/* 원문 언어 요지(ltr)는 UI 쪽 가장자리에 붙인다 — 아랍어 UI 에서는 ltr 글자의 끝(end)이 오른쪽(물리 속성 없이) */
+:root[dir="rtl"] .sums-gist-src { text-align: end; }
+.sums-label + .sums-terms { margin-block-start: 0; }
+.sums-terms { list-style: none; margin: 0 0 var(--sp-2); padding: 0; font-size: var(--fs-sm); }
+.sums-terms li { margin-block: var(--sp-1); overflow-wrap: anywhere; }
+.sums-items .sum-tree,
+.sums-out-tree .sum-tree { margin: 0 0 var(--sp-2); padding-inline-start: var(--sp-4); overflow-wrap: anywhere; }
+.sums-items .sum-tree-sub,
+.sums-out-tree .sum-tree-sub { margin: 0; padding-inline-start: var(--sp-4); }
+.sums-items .sum-tree summary,
+.sums-out-tree .sum-tree summary { min-block-size: var(--tap); display: list-item; cursor: pointer; padding-block: var(--sp-2); }
+.sums-items .sum-tree li,
+.sums-out-tree .sum-tree li { margin-block: var(--sp-1); }
+.sums-btn { min-block-size: var(--tap); }
+
 /* ── `[8c-2 — spec 15절 · 17-7-6 4-7]` 사용량 화면 ───────────────────
    ★ 논리 속성만(16-H) — 막대 31칸·종류 줄은 UI 방향을 따른다(아랍어 UI 는 1일이 오른쪽). 숫자 글자는 i18n 이 고른다.
    ★ 단추 48px 이상(16-G). 360px 가로 스크롤 0 — 긴 줄은 `overflow-wrap: anywhere`, 막대는 칸 폭을 나눠 쓴다(라이브러리 없음). */

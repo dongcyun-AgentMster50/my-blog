@@ -84,6 +84,7 @@ export default {
   'library.card.deleteConfirmVocab': 'ستبقى {n} من كلمات القائمة',   // `[8f-2]` [검토 — Nour·운영자]
   'library.card.deleteConfirmSummaries': 'ستبقى {n} من الملخصات المحفوظة',   // `[11-2]` [검토 — Nour·운영자]
   'library.card.vocab': 'قائمة كلمات هذا الكتاب',   // `[8f-3]` [검토 — Nour·운영자]
+  'library.card.summaries': "الملخصات المحفوظة لهذا الكتاب",   // `[11-3]` [검토 — Nour·운영자]
 
   /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
   'library.card.srcLang': 'لغة الأصل: {lang}',
@@ -392,7 +393,7 @@ export default {
   'sum.unsaveYes': "حذف",
   'sum.keep': "إبقاؤه",
   'sum.listen': "▶ استماع",
-  'sum.pageAll': "تلخيص الصفحة كلها (فقرات {n} · طلبات {k})",
+  'sum.pageAll': "تلخيص الصفحة كلها · {page} (فقرات {n} · طلبات {k})",   // `[11-3 — 11-2R #6]` 연 쪽 라벨 [검토 — Nour·운영자]
   'sum.saveAll': "حفظ الكل ({n})",
   'sum.savedAll': "حُفظ {n} من الملخصات.",
   'sum.redo': "إعادة التلخيص",
@@ -403,6 +404,40 @@ export default {
   'sum.savedNote': "تم الحفظ.",
   'sum.saveFailed': "تعذّر الحفظ.",
   'sum.removed': "حُذف الملخص المحفوظ.",
+  'summaries.title': "الملخصات المحفوظة",   // `[11-3]` [검토 — Nour·운영자]
+  'summaries.titleDoc': "الملخصات المحفوظة — {title}",
+  'summaries.scope.label': "اختر كتابًا",
+  'summaries.scope.all': "كل الكتب ({n})",
+  'summaries.scope.doc': "‏{title} ({n})",
+  'summaries.scope.gone': "{title} — ملف PDF غير موجود على هذا الجهاز ({n})",
+  'summaries.empty': "لا توجد ملخصات محفوظة بعد. أثناء القراءة اضغط مطولًا على النص ← [⋯] ← [ملخص] ← [حفظ].",
+  'summaries.emptyDoc': "لا توجد ملخصات محفوظة لهذا الكتاب.",
+  'summaries.goto': "اذهب إلى النص",
+  'summaries.moved': "تغيّر موضع الفقرة (أُعيد استخراج النص) — نعرض أعلى الصفحة.",
+  'summaries.delete': "حذف",
+  'summaries.delete.title': "حذف هذا الملخص المحفوظ؟ لا يمكن التراجع.",
+  'summaries.delete.ok': "حذف",
+  'summaries.deleted': "حُذف.",
+  'summaries.range.title': "مخطط جزء من الكتاب",
+  'summaries.range.label': "الجزء",
+  'summaries.range.chapter': "{title} (ص. {from}–{to})",
+  'summaries.range.pages': "اختيار الصفحات…",
+  'summaries.range.from': "من صفحة",
+  'summaries.range.to': "إلى صفحة",
+  'summaries.range.count': "الملخصات المحفوظة في هذا الجزء: {n}",
+  'summaries.outline.make': "إنشاء مخطط (طلب واحد)",
+  'summaries.outline.pending': "جارٍ إنشاء المخطط…",
+  'summaries.outline.failed': "تعذّر إنشاء المخطط.",
+  'summaries.outline.tag': "مخطط",
+  'summaries.outline.saved': "حُفظ المخطط.",
+  'summaries.tooBig': "أطول من أن يُرسل مرة واحدة — صغّر الجزء ({n} ملخصات · نحو {m} حرف).",
+  'summaries.export': "تصدير كنص",
+  'summaries.export.share': "يحتوي الملف على ملخصات لمحتوى الكتاب — انتبه عند مشاركته.",
+  'summaries.export.done': "تم تنزيل {name}",
+  'summaries.export.failed': "تعذّر إنشاء الملف",
+  'summaries.untitled': "(كتاب بلا عنوان)",
+  'summaries.goneHead': "{title} — ملف PDF غير موجود على هذا الجهاز",
+  'summaries.outlineRange': "ص. {from}–{to}",
   /* `[18 — spec 17-9]` مواقع طبية · [ابحث] — [검토 — Nour·운영자] 아랍어 문구 전부. أسماء الروابط لا تُترجم. */
   'sel.lookup': "ابحث",
   'links.tooLong': "للبحث، حدّد ست كلمات على الأكثر (ستين حرفًا)",

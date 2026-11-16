@@ -88,6 +88,7 @@ export default {
   'library.card.deleteConfirmVocab': '{n} entrées du lexique seront conservées',   // `[8f-2]` [검토 — Nour·운영자]
   'library.card.deleteConfirmSummaries': '{n} résumés enregistrés seront conservés',   // `[11-2]` [검토 — Nour·운영자]
   'library.card.vocab': 'Lexique de ce livre',   // `[8f-3]` [검토 — Nour·운영자]
+  'library.card.summaries': "Résumés enregistrés de ce livre",   // `[11-3]` [검토 — Nour·운영자]
 
   /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
   'library.card.srcLang': 'Langue d’origine : {lang}',
@@ -396,7 +397,7 @@ export default {
   'sum.unsaveYes': "Supprimer",
   'sum.keep': "Le garder",
   'sum.listen': "▶ Écouter",
-  'sum.pageAll': "Résumer toute la page (paragraphes {n} · appels {k})",
+  'sum.pageAll': "Résumer toute la page · {page} (paragraphes {n} · appels {k})",   // `[11-3 — 11-2R #6]` 연 쪽 라벨 [검토 — Nour·운영자]
   'sum.saveAll': "Tout enregistrer ({n})",
   'sum.savedAll': "{n} résumés enregistrés.",
   'sum.redo': "Résumer à nouveau",
@@ -407,6 +408,40 @@ export default {
   'sum.savedNote': "Enregistré.",
   'sum.saveFailed': "Enregistrement impossible.",
   'sum.removed': "Résumé enregistré supprimé.",
+  'summaries.title': "Résumés enregistrés",   // `[11-3]` [검토 — Nour·운영자]
+  'summaries.titleDoc': "Résumés enregistrés — {title}",
+  'summaries.scope.label': "Choisir un livre",
+  'summaries.scope.all': "Tous les livres ({n})",
+  'summaries.scope.doc': "{title} ({n})",
+  'summaries.scope.gone': "{title} — PDF absent de cet appareil ({n})",
+  'summaries.empty': "Aucun résumé enregistré. Pendant la lecture, appuyez longuement sur le texte → [⋯] → [Résumé] → [Enregistrer].",
+  'summaries.emptyDoc': "Aucun résumé enregistré pour ce livre.",
+  'summaries.goto': "Aller au texte",
+  'summaries.moved': "Le paragraphe a changé de place (texte extrait à nouveau) — affichage du haut de la page.",
+  'summaries.delete': "Supprimer",
+  'summaries.delete.title': "Supprimer ce résumé enregistré ? Action irréversible.",
+  'summaries.delete.ok': "Supprimer",
+  'summaries.deleted': "Supprimé.",
+  'summaries.range.title': "Plan d’une partie",
+  'summaries.range.label': "Partie",
+  'summaries.range.chapter': "{title} (p. {from}–{to})",
+  'summaries.range.pages': "Choisir les pages…",
+  'summaries.range.from': "Page de début",
+  'summaries.range.to': "Page de fin",
+  'summaries.range.count': "Résumés enregistrés dans cette partie : {n}",
+  'summaries.outline.make': "Créer le plan (1 appel)",
+  'summaries.outline.pending': "Création du plan…",
+  'summaries.outline.failed': "Impossible de créer le plan.",
+  'summaries.outline.tag': "Plan",
+  'summaries.outline.saved': "Plan enregistré.",
+  'summaries.tooBig': "Trop long pour un seul envoi — réduisez la partie ({n} résumés · environ {m} caractères).",
+  'summaries.export': "Exporter en texte",
+  'summaries.export.share': "Le fichier contient des résumés du manuel — attention au partage.",
+  'summaries.export.done': "{name} téléchargé",
+  'summaries.export.failed': "Impossible de créer le fichier",
+  'summaries.untitled': "(livre sans titre)",
+  'summaries.goneHead': "{title} — PDF absent de cet appareil",
+  'summaries.outlineRange': "p. {from}–{to}",
   /* `[18 — spec 17-9]` sites médicaux · [Chercher] — [검토 — Nour·운영자] */
   'sel.lookup': "Chercher",
   'links.tooLong': "Pour chercher, sélectionnez au plus 6 mots (60 caractères)",

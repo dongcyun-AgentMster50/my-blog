@@ -29,6 +29,7 @@ import * as db from '../db.js';
 import { eligible } from '../text/summary.js';
 import { summaryStore, textHashOf } from '../notes/summaries.js';
 import { printedLabel } from '../search/outline.js';
+import { summariesHash } from '../router.js';
 import { appendBidiText } from './bididom.js';
 import { renderTree, setAllOpen, anyOpen, treeShape } from './tree.js';
 import { GATE_KEYS, RETRYABLE_REMOTE, TAP_BANNER_NOW, noteKeyFor, noticeBanner } from './trband.js';
@@ -448,6 +449,10 @@ let openedLine = null;
 let labelSeq = 0;
 let pageLabel = '';
 let lastView = null;
+/** `[11-3]` 저장소(링크 "이 책의 저장한 요약 (n)"의 n) · 링크 다시 셀 때 늦은 결과 거르기. */
+let sheetStore = null;
+let linkRev = -1;
+let linkSeq = 0;
 
 /**
  * @param {{pipeline:Object, gate:()=>{ok:boolean, reason?:string}, listen:(text:string, lang:string)=>*,
@@ -468,6 +473,7 @@ export function initSumSheet(d) {
   deps = x;
   const pl = x.pipeline;
   const store = x.store || summaryStore();
+  sheetStore = store;
   flow = createSumFlow({
     summarize: function (paras, o) { return pl.summarize(paras, o); },
     planSummary: function (paras, o) { return typeof pl.planSummary === 'function' ? pl.planSummary(paras, o) : Promise.resolve({ calls: null }); },
@@ -486,6 +492,17 @@ export function initSumSheet(d) {
 }
 
 function api() { return { open: openSheet, close: closeSheet, isOpen: isOpen, view: function () { return flow ? flow.view() : null; } }; }
+
+/**
+ * `[11-3 — spec 17-2-1 4-6]` 모아 보기 화면(`ui/summaries.js`)이 쓰는 서비스 — 이 시트가 controls 에서 받은 **같은** 파이프라인
+ * (상태 기계·상한·사용량·진행 중 공유가 한 벌 — 11-D9). 시트가 준비되지 않았으면 null(그 화면은 [개요 만들기]를 숨긴다).
+ * 8f-3 `wordsheet.termServices()` 와 같은 꼴.
+ * @returns {?{pipeline:Object, store:Object}}
+ */
+export function sumServices() {
+  if (!deps || !deps.pipeline || typeof deps.pipeline.outline !== 'function') return null;
+  return { pipeline: deps.pipeline, store: sheetStore || summaryStore() };
+}
 
 /**
  * 시트를 열고 그 문단을 요약한다(`ask.js` 가 대상·문지기·쪽 문단을 넘긴다). 돌려주는 약속은 요약이 끝난 뒤의 상태.
@@ -535,6 +552,8 @@ function onKey(ev) {
     if (!sumEsc({ open: true, shown: shown(), prevented: ev.defaultPrevented, composing: !!ev.isComposing })) return;
     ev.preventDefault();
     ev.stopPropagation();              // 시트가 가장 위 층 — 아래 층(띠·팝오버)의 Esc 로 퍼지지 않게
+    // `[11-3 — 11-2R #1]` [×] 와 같은 길 — 음성 "요약"의 요지를 말하는 중이면 끊는다(손이 이긴다 · 되돌림 없음).
+    cancelVoiceNow();
     closeSheet(true);
     return;
   }
@@ -568,7 +587,7 @@ function onClick(ev) {
 /** 단추 하나 — 첫 줄에서 듣기·말하기를 취소한다(손이 이긴다 — 17-7-6 2절 1). [▶ 듣기]는 그다음 새로 말한다. */
 function act(id, i) {
   if (!flow) return null;
-  if (typeof deps.cancelVoice === 'function') { try { deps.cancelVoice(); } catch (e) { /* 듣기 없음 */ } }
+  cancelVoiceNow();
   let p = null;
   switch (id) {
     case 'close': closeSheet(true); return null;
@@ -592,6 +611,11 @@ function act(id, i) {
     default: return null;
   }
   return p;
+}
+
+/** 듣기·말하기 취소(controls `cancelVoice` = voice.cancel + sayer.stop) — 시트 단추·[×]·Esc 가 같은 이 한 줄을 지난다. */
+function cancelVoiceNow() {
+  if (deps && typeof deps.cancelVoice === 'function') { try { deps.cancelVoice(); } catch (e) { /* 듣기 없음 */ } }
 }
 
 /** no-key·consent — 사용자가 요약을 불렀으므로 상태 바 배너를 바로(탭 번역·단어 시트와 같은 문구 — trband `noticeBanner`). */
@@ -621,6 +645,19 @@ function paintLabel() {
   if (!els || !flow) return;
   const v = flow.view();
   els.title.textContent = t(v.mode === 'page' ? 'sum.titlePage' : 'sum.title', { page: pageLabel });
+  paintPageAll();
+}
+
+/**
+ * `[11-3 — 11-2R #6]` [… 전체 요약 · {쪽} (문단 n · 호출 k)] — 단추 이름에 **연 때의 쪽 라벨**(머리와 같은 것)을 넣는다.
+ * 쪽이 바뀌어도 시트는 연 쪽의 문단을 요약한다(4-3 정정 ⑤) — "이 쪽"이 보이는 쪽과 어긋나지 않게 이름이 그 쪽을 말한다.
+ */
+function paintPageAll() {
+  if (!els) return;
+  const pa = els.actions.querySelector('[data-sum-action="pageAll"]');
+  const v = lastView;
+  if (!pa || !v || !v.plan) return;
+  pa.textContent = t('sum.pageAll', { n: formatNumber(v.plan.n), k: formatNumber(v.plan.calls == null ? 0 : v.plan.calls), page: pageLabel });
 }
 
 function setLangDir(el, lang) {
@@ -667,11 +704,11 @@ function render(v) {
     b.hidden = show.indexOf(id) < 0;
     if (v.busy) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
   }
-  const pa = els.actions.querySelector('[data-sum-action="pageAll"]');
-  if (pa && v.plan) pa.textContent = t('sum.pageAll', { n: formatNumber(v.plan.n), k: formatNumber(v.plan.calls == null ? 0 : v.plan.calls) });
-  const sa = els.actions.querySelector('[data-sum-action="saveAll"]');
+  paintPageAll();
+  const sa =els.actions.querySelector('[data-sum-action="saveAll"]');
   if (sa) sa.textContent = t('sum.saveAll', { n: formatNumber(v.items.filter((it) => it.state === 'ready' && !it.saved).length) });
   paintFold();
+  paintLink(v);
   // 포커스 — 질문이 뜨면 [취소]/[그대로 두기]로(실수로 다시 요약·지우지 않게), 단추가 숨어 포커스를 잃었으면 머리로
   if (v.ask) { try { els.askNo.focus({ preventScroll: true }); } catch (e) { /* 그대로 */ } }
   else if (had && (had.hidden || !els.sheet.contains(had) || had.getClientRects().length === 0)) {
@@ -773,6 +810,30 @@ function paintPage(v, c, tdir) {
     }
     els.body.appendChild(box);
   });
+}
+
+/**
+ * `[11-3 — 11-D14]` 링크 "이 책의 저장한 요약 (n)" — 열린 시트에 문서가 있으면 `#/summaries/:docId` 와 그 책의 저장 수(요약 + 개요).
+ * 읽기만(호출 0). 저장·지우기 뒤(상태 판 `rev` 가 바뀌면) 다시 센다. 8f-3 단어 시트 링크와 같은 꼴.
+ */
+function paintLink(v) {
+  if (!els || !els.link) return;
+  const c = (v && v.ctx) || {};
+  const on = !!(v && v.open) && c.docId != null && c.docId !== '';
+  els.link.hidden = !on;
+  if (!on) return;
+  els.link.setAttribute('href', summariesHash(c.docId));
+  if (v.rev === linkRev) return;
+  linkRev = v.rev;
+  const my = ++linkSeq;
+  Promise.resolve(sheetStore && typeof sheetStore.count === 'function' ? sheetStore.count(c.docId) : 0)
+    .catch(() => 0)
+    .then((n) => {
+      if (my !== linkSeq || !els) return;
+      const k = Math.max(0, Math.floor(Number(n) || 0));
+      els.link.setAttribute('data-i18n-n', String(k));
+      els.link.textContent = t('sum.savedLink', { n: formatNumber(k) });
+    });
 }
 
 /** [모두 접기]/[모두 펼치기] — 한 단추, 글자는 지금 트리 상태에서. */

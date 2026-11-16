@@ -22,7 +22,7 @@
 import { PIPELINE, VOCAB, SUMMARY, OUTLINE } from '../config.js';
 import { estimateTokens } from './tokens.js';
 // `[11-1]` 요약·개요 응답 다듬기(트리 상한·숫자 거름)는 순수 `text/summary.js` 한 벌 — 같은 순수 계층(3-2 첫 행).
-import { clean, cutText, trimTree, pruneForeignNumbers, hasForeignNumber, outlineInput } from '../text/summary.js';
+import { clean, trimTree, pruneForeignNumbers, hasForeignNumber, outlineInput } from '../text/summary.js';
 
 /**
  * 10-1 — 프롬프트 판본. 캐시 값(`aiCache.promptVersion`)에 기록한다(키에는 넣지 않는다 — 7-5).
@@ -827,24 +827,21 @@ export const OUTLINE_SCHEMA = Object.freeze({
   propertyOrdering: Object.freeze(['title', 'points', 'notes'])
 });
 
-/** 범위 이름(장 제목·쪽 범위 — 화면이 준다)을 지시문에 넣을 꼴로: 한 줄 · 80자 · 구분자 탈출 · 큰따옴표 없음. */
-function labelText(label) {
-  return cutText(escapeDoc(clean(label)).replace(/"/g, "'"), 80);
-}
-
 /**
  * 4-6 TASK. 대상 언어 하나(입력 = 저장한 요약 — 이미 대상 언어). 의학이면 대상 언어 문체(`TARGET_STYLE`), 일반이면 `TARGET_STYLE_GENERAL`.
+ * `[11-3 — 11-1R #5]` **범위 이름(PDF 에서 온 장 제목)은 지시문에 넣지 않는다** — DOC 밖 TASK 자리는 앱이 쓴 글만(인젝션 자리 0).
+ * 쪽 숫자도 넣지 않는다: 숫자 거름(`checkOutline`)의 기준은 요약 글뿐이라 모델이 제목에 장 번호·쪽 번호를 옮기면 개요가 `digits` 로
+ * 실패한다. 범위 이름은 화면 머리와 저장 레코드 `range.label` 에만 둔다(셋째 인자는 옛 호출을 위해 받기만 하고 쓰지 않는다).
  * @returns {string|null}
  */
-export function outlineInstruction(targetLang, domain, label) {
+export function outlineInstruction(targetLang, domain) {
   const tgt = langName(targetLang);
   if (!tgt) return null;
   const tc = codeOf(targetLang);
-  const lab = labelText(label);
   const L = OUTLINE.MAX_POINTS;
   const styleTable = normalizeDomain(domain) === 'general' ? TARGET_STYLE_GENERAL : TARGET_STYLE;
   const style = styleSentence(tgt, styleTable[tc]);
-  return 'TASK: The DOC contains paragraph summaries from ' + (lab ? '"' + lab + '"' : 'one part') + ' of one book, in reading order. ' +
+  return 'TASK: The DOC contains paragraph summaries from one part of one book, in reading order. ' +
     'Merge them into ONE outline in ' + tgt + ': a short title, up to ' + L[0] + ' top points, each with up to ' + L[1] +
     ' sub points, each sub with up to ' + L[2] + ' sub points. Use ONLY what the summaries say. Keep numbers and terms as written. ' +
     'Do not add causes, treatments, doses or advice.' + style;
@@ -864,13 +861,15 @@ export function outlinePayload(summaries, opts) {
 
 /**
  * 4-6 범위 개요 요청. 입력 = **저장한 요약**(요지 + 요점 — `outlineInput`). 원문 문단 글은 보내지 않는다.
+ * `[11-3 — 11-1R #5]` `label`(범위 이름 — PDF 장 제목)은 **보내지 않는다**(TASK·DOC 어디에도 — `outlineInstruction` 주석).
+ * 파이프라인이 넘겨도 읽지 않는다 — 요청 본문은 요약 글과 앱이 쓴 지시문뿐.
  * @param {Object[]} summaries 저장한 `summary` 레코드
  * @param {{target:string, domain?:string, label?:string, points?:boolean}} opts `points:false` = 요지만(입력 초과 때)
  * @returns {{system:string, user:string, json:true, schema:Object, maxOutputTokens:number, temperature:number}|null}
  */
 export function buildOutlineRequest(summaries, opts) {
   const o = opts || {};
-  const task = outlineInstruction(o.target, o.domain, o.label);
+  const task = outlineInstruction(o.target, o.domain);
   const input = outlineInput(summaries, { points: o.points !== false });
   if (!task || !input.items.length) return null;
   return {

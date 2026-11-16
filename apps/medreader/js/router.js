@@ -11,7 +11,7 @@
 
 /** 화면 이름 — `index.html` 의 `data-screen` 값과 1:1 이다. */
 export const SCREENS = Object.freeze([
-  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab'
+  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab', 'summaries'
 ]);
 
 /** 알 수 없는 해시가 떨어지는 곳(12-1). */
@@ -26,6 +26,7 @@ export const DEFAULT_ROUTE = 'library';
  *   `#/search`                       → {name:'search', params:{}}          ← `[8g-4a]` 서재 전체 범위
  *   `#/search/:docId`                → {name:'search', params:{docId}}     ← 이 책 범위. **검색어는 URL 에 없다**(S28)
  *   `#/vocab` · `#/vocab/:docId`     → {name:'vocab', params:{docId?}}      ← `[8f-3]` 단어장(전체 · 그 책). 찾기·정렬은 URL 에 없다
+ *   `#/summaries` · `#/summaries/:docId` → {name:'summaries', params:{docId?}} ← `[11-3]` 저장한 요약(전체 · 그 책). 범위·펼침은 URL 에 없다
  *   `#/settings` `#/usage` `#/about` `#/onboarding`
  *   빈 해시                          → {name:'', params:{}}  ← 호출자가 온보딩 여부로 정한다
  *   그 밖                            → {name:'library', params:{}}
@@ -80,6 +81,10 @@ export function parseRoute(hash) {
       // `[8f-3 — spec 17-7-6 4-6]` 단어장 — 전체 또는 그 책. 찾기 칸·정렬은 화면 메모리(해시에 넣지 않는다).
       return { name: 'vocab', params: parts[1] ? { docId: parts[1] } : {}, raw: raw };
 
+    case 'summaries':
+      // `[11-3 — spec 17-2-1 4-6]` 저장한 요약 — 전체 또는 그 책. 고른 범위·펼친 줄은 화면 메모리(해시에 넣지 않는다).
+      return { name: 'summaries', params: parts[1] ? { docId: parts[1] } : {}, raw: raw };
+
     case 'usage':
       return { name: 'usage', params: {}, raw: raw };
 
@@ -117,6 +122,10 @@ export function searchHash(docId) {
 /** `[8f-3]` 단어장 — docId 가 있으면 그 책, 없으면 전체. */
 export function vocabHash(docId) {
   return docId == null || docId === '' ? '#/vocab' : '#/vocab/' + encodeURIComponent(docId);
+}
+/** `[11-3]` 저장한 요약 — docId 가 있으면 그 책, 없으면 전체. */
+export function summariesHash(docId) {
+  return docId == null || docId === '' ? '#/summaries' : '#/summaries/' + encodeURIComponent(docId);
 }
 export function quizHash(docId, sectionId) {
   return '#/quiz/' + encodeURIComponent(docId) + '/' + encodeURIComponent(sectionId);

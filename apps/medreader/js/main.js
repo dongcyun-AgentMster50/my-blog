@@ -20,6 +20,7 @@ import { initReader, showReader, leaveReader } from './ui/reader.js';
 import { initQuizScreen, showQuiz, leaveQuiz } from './ui/quiz.js';
 import { initSettingsScreen, showSettings, leaveSettings } from './ui/settings.js';
 import { initVocab, showVocab, leaveVocab } from './ui/vocab.js';
+import { initSummaries, showSummaries, leaveSummaries } from './ui/summaries.js';   // `[11-3]` 저장한 요약(17-2-1 4-6)
 import { initUsage, showUsage } from './ui/usage.js';   // `[8c-2]` 사용량 화면(17-7-6 4-7)
 
 /* ────────────────────────────────────────────────────────
@@ -200,6 +201,7 @@ async function boot() {
   initQuizScreen();
   initSettingsScreen();
   initVocab();          // `[8f-3]` 단어장 화면(17-7-6 4-6)
+  initSummaries();      // `[11-3]` 저장한 요약 · 범위 개요 · 내보내기(17-2-1 4-6)
   initUsage();          // `[8c-2]` 사용량 화면 — 읽기만(호출 0)
 
   // 정적 이동 버튼 — 해시만 바꾼다(뒤로가기가 그대로 동작한다).
@@ -270,6 +272,7 @@ function onRoute(route) {
   // 설정을 떠나면 진행 중인 호출을 끊고 입력칸의 원문 키를 지운다(13절).
   if (route.name !== 'settings') leaveSettings();
   if (route.name !== 'vocab') leaveVocab();       // `[8f-3]` 편집·확인 대화·미리보기·낭독([▶])을 거둔다
+  if (route.name !== 'summaries') leaveSummaries(); // `[11-3]` 삭제 확인 대화를 거둔다(개요 결과는 메모리에 둔다)
 
   switch (route.name) {
     case 'onboarding':
@@ -291,6 +294,7 @@ function onRoute(route) {
       showSettings(route.params);
       break;
     case 'vocab': showVocab(route.params); break;   // `[8f-3]` 단어장(전체 · 그 책)
+    case 'summaries': showSummaries(route.params); break;   // `[11-3]` 저장한 요약(전체 · 그 책)
     case 'usage': showUsage(); break;               // `[8c-2]` 사용량 — 열 때 다시 읽고 90일 지난 행을 지운다
     default:
       break;

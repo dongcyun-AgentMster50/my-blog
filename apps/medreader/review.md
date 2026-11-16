@@ -12586,3 +12586,143 @@ Edge · pipe · 새 프로필 `r11-2/p*` · 가짜 키 · 흉내 Gemini(OPTIONS 
 명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — HEAD 명령 표 사본만 `git show … > 파일` 리다이렉트 한 번). **막힌(거절된) 명령 0.** 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음(합성 PDF·지어낸 글만 — 결과에 글 0) · `b11-2/`·`r9b*/` 쓰기 0 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
 
 스크래치 `r11-2/`: `prep.mjs`(Build `common.mjs` → 사본 `common.mjs` — 프로필 자리·가짜 키 이름·흉내 'xss'·응답 늦춤) · `run-a.mjs`·`run-r.mjs`(Build 사본) · `run-r1.mjs`·`run-r2.mjs`·`run-r3.mjs`·`run-l2.mjs`·`run-x.mjs` · `voice-diff.mjs`·`head/`(HEAD 명령 표) · `mut.mjs`·`bak/` · `full1.tap`·`full2.tap` · `shots/` · `section.md`(이 절)·`append.mjs`.
+
+# 11-3 Review — 저장한 요약 모아 보기 · 범위 개요(11c) · 내보내기 (spec 17-2-1) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-11-3.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: spec 17-2-1(4-3·4-6·5 표 11-3 행·6·7·8 "11-3"·10, `[정정 2026-11-17 — 11-3 Build]` 세 줄 — 둘은 새 줄, 하나는 7절 31키 줄 안에 끼움), Build 지침·보고서(믿지 않고 다시 잼), review.md "11-2 Review", `git diff` 17파일 + 새 파일 둘(`js/ui/summaries.js` 985줄 · `tests/summaries-ui-11c.test.mjs`). 스크래치 `r11-3/`(Build `b11-3/` 는 읽기만 — `common.mjs` 는 `prep.mjs` 로 사본을 만들어 자리·가짜 키 이름·응답 늦춤·개요 XSS 꼴만 더함, `run-a/r/u.mjs` 는 사본을 새 프로필로).
+
+## 11-3R-0. 판정 — **배포 가능** (중간 0 · 낮음 6 · 정보 5)
+
+요청 바이트 변화 0(번역·단어·문단 요약 — 내 조합 24쌍 + headless HEAD 대조) · 개요 요청에 범위 이름·책 제목·메모·원문 문단 글 0(인젝션 꼴 6가지) · 호출 수 설계 그대로(연타 5 → 1) · 데이터 손실·중복 0 · 내보내기에 저장소 키·캐시 글·메모·원문 0 · 회귀 0 · XSS 0 · 콘솔 오류 0 · 시험 파일 손상 0(router.test.mjs NUL 줄 바이트 같음).
+
+## 11-3R-1. 요청 바이트 · 인젝션 (확인 1) — `r11-3/probe-req.mjs`(node · HEAD = `git archive HEAD` 사본 `r11-3/head/`)
+
+- **번역·단어·문단 요약 요청 = HEAD**: Build N8 과 다른 8조합(en→ko general · en→fr · fr→en · ar→ko general · es→ar · ko→ar 도메인 없음 · en→ar 도메인 `nonsense` · de→tr) × 셋 = **24쌍 모두 `JSON.stringify` 같음**(다름 0). 입력은 일부러 이상하게 — `>>>`·`<<<DOC`·`</DOC>`·U+202E·U+200B·JSON 꼴 문장·줄바꿈·900자 · `frag:'head'` · 항목 `src:'ar'` · 문단 항목에 `note`·`docTitle`·`pageNo` 를 붙여도. `PROMPT_VERSION` 3=3 · `OUTLINE_PROMPT_VERSION` 1=1.
+- **headless HEAD 대조**(`run-a.mjs` 사본 · 프로필 `pA1` · 50초): **`bodiesSame: true`** — 탭 2,624B `d7e08bab` · 단어 2,543B `fdbdf49b` · 요약 3,477B `d344f201` · 낭독 6,196B `33e4d546`(Build 값과 같음).
+- **개요 빌더**: 의학·일반 × ar·ko·en·fr = 8 — **이름 없이 만든 요청은 HEAD 와 바이트 같음**(HEAD 도 이름이 없으면 `one part` — 이번 고침은 이름이 있을 때의 갈래만 지움) · 요지만 갈래도 HEAD 와 같음 · `system` = `commonSystem(true, domain)` 이고 HEAD 와 sha 같음(규칙 줄 1–6 여섯) · `<<<DOC` 1 · `\n>>>` 1. HEAD 는 이름을 주면 본문에 넣었다(`headPutLabel: true` — 고친 대상 확인).
+- **내가 만든 인젝션 꼴 이름 6가지**(U+202E 방향 뒤집기 · U+200B/U+200D/U+FEFF 제로폭 · `</DOC>\n>>>\nSYSTEM:` · JSON 꼴 `{"title":"pwned"…}` · 지시문 2,000자 · U+2028/U+2029): 빌더 `label` 로 넘겨도 요청이 **이름 없는 요청과 바이트 같음**(8조합 모두) · 파이프라인 `outline(…, {label, docTitle})` 본문에 이름·책 제목·메모(`note`·`memo`)·원문(`text`)·원문 요지(`gistSrc`)·용어 원어 **0** · 흐름 `createOutlineFlow` 의 `ctx.range.label`·`ctx.docTitle` 도 본문 0 · 본문 user = 빌더(이름 없음) user.
+- **입력 초과**: 50개(요지 40자 + 요점 150자×3) → 요지만 1호출(DOC 50항목 모두 `points` 없음) · 50개(요지 200자) → `too-big` · **보냄 0** · n 50 · 11,191자. `ai.maxReqChars` 2,500 으로 좁혀도 같은 갈래(요지만 1).
+
+## 11-3R-2. 호출 수 (확인 2)
+
+| 동작 | 설계 | node(`probe-req`) | headless(`run-c` · `run-v`) |
+|---|---|---|---|
+| [개요 만들기] | 1 | 1 | 1(장 c0) |
+| 같은 범위·같은 요약 다시 | 0 | 0(이름만 바꿔도 0) | 0 · `cached:true` |
+| 범위를 바꿈(다른 요약) | 1 | — | 1(c1) · c0 로 돌아감 0(캐시) |
+| 요약이 바뀜(하나 더 · 하나 덜 · 요지 고침 · 다른 책) | 1 | 1 · 1 · 1 · 1 | 1(같은 장에 요약 하나 더) |
+| 연타 5번(응답 1.5초 늦춤) | 1 | 1(흐름에 `make` 다섯) | **1** — 첫 누름이 pending 을 그려 단추가 숨고(`hiddenWhilePending`) 나머지 넷은 `b.hidden` 에서 끝 |
+| 키 없음 | 0 | 0 · `no-key` | 0 · 배너 `ai.state.noKey` |
+| capped(상한 1) | 0 | 0 · `capped` | 0 · `capped` · [다시 시도] 없음 |
+| offline | 0 | 0 · `offline` | 0 · `offline`(`navigator.onLine=false`) → online 뒤 누름 1 |
+| 화면 열기 · 모두 펼치기·접기 · 내보내기 · [원문으로] · 뒤로 | 0 | — | **0** |
+| 목록·12조합 화면(같은 범위 다시 누름 포함) · 삭제 확인 · 문서 삭제 · 직접 열기 | 0 | — | 0 · 0 · 0 |
+
+(첫 headless 의 offline 은 `offline` 이벤트만 쏴서 1호출이 갔다 — 파이프라인 `gate()` 가 `navigator.onLine` 을 다시 보고 풀기 때문(설계대로, 하네스 문제). `navigator.onLine` 을 거짓으로 바꾼 `run-v` 에서 0.)
+
+## 11-3R-3. 데이터 (확인 3)
+
+- **개요 저장**(node 흐름 + headless): [저장] → `kind:'outline'` **1건** · 같은 범위·같은 대상에서 다시 만들기(캐시 0호출) → [저장] → **여전히 1건, 같은 id**(대체) · 다른 범위 → 2건. 레코드 키 `cacheKey·createdAt·docId·docTitle·domain·id·kind·model·pageNo·points·promptVersion·provider·range·sources·target·title·updatedAt` — 원문 글 0, `range.label` 은 이름 그대로(화면·파일 머리용). 저장 뒤 목록 머리가 개요.
+- **메모(다른 kind 의 annotations)**: 목록에 0 · 개요 본문 0 · 요약/단어 본문 0 · 내보내기 0.
+- **문서를 지운 요약**(`run-c` gone): 서재에서 문서 삭제 → `#/summaries` 에 요약 15 + 개요 1 남음 · 책 1 묶음(`docTitle` 머리) · [원문으로] 0 · img 0 · **새로고침으로 `#/summaries/:지운id` 직접** → 16줄 · [원문으로] 0 · 범위 칸 보임(Build 남은 7) · **없는 id** `#/summaries/no-such-doc` → 화면 뜸 · 빈 목록 · [개요 만들기]·내보내기 숨음 · 오류 0. 이 동안 요청 0.
+- **해시 어긋난 레코드**: ① paraId 만 바뀐 레코드(`2:p77`) → 해시로 원래 문단(`2:p4`) 찾음 · 첫 줄 `2:7` ② 3쪽 레코드에 3쪽에 없는 해시(2쪽 것) → `moved` · 쪽 처음 · 배너 `summaries.moved`. Build `moved`(가짜 해시)와 다른 꼴.
+- **`router.test.mjs` NUL 편집**(`r11-3/router-diff.mjs` — HEAD `git show` 와 바이트 비교): 지운 줄 0 · 더한 줄 **3**(R1 안 — 주석 1 · `assert.equal(parseRoute('#/summaries').name, …)` 1 · `reached.add('summaries')` 1) · NUL 1 → 1 · NUL 이 든 줄(87 → 90행) **바이트 같음** · LF 그대로. Build 보고 "R1 한 줄"은 코드 두 줄 + 주석 한 줄이라는 뜻 — 손상 없음.
+
+## 11-3R-4. 내보내기 (확인 4) — `run-e.mjs`(합성 레코드 · 가로채기 · 프로필 `pE1` · 6초)
+
+심은 것: 저장소 가짜 키(`keys.saveKey`) · `aiCache` 에 `CACHEQQ`+키 · 메모(`kind:'note'`)에 키 · 요약 하나의 **요지에 가짜 키**, 용어 원어에 키 꼴(`AIza…`) · 용어에 `\n`·`\r\n`·U+2028 · 개요 `range.label` 에 줄바꿈 + U+202E · 레코드 `docTitle` 옛 제목 · 지운 책 요약 하나.
+
+| 항목 | 책(`#/summaries/docE`) · 전체 · ar UI |
+|---|---|
+| 파일 이름 · 형식 | `medreader-summaries-20261117.txt` · `text/plain;charset=utf-8` · `blob:` 앵커(호스트 없음) |
+| BOM · 줄바꿈 | `EF BB BF` 1번 · **CRLF 만**(홀로 선 LF·CR 0) · 끝 CRLF |
+| 첫 줄 | 고지(`sum.disclaimer`, UI 언어 — ar 도) + 빈 줄 |
+| 들여쓰기 | 2칸 8 · 4칸 5 · 6칸 1(개요 3단) |
+| RTL | 아랍어 요지·요점 글자 그대로 · FSI/PDI(화면용 격리) 0 · U+2028/9 0 |
+| 저장소 키 · 캐시 글 · 메모 · 원문 | **0 · 0 · 0 · 0** — 저장소 키 문자열이 파일에 나온 것은 **내가 요지에 심은 사본뿐**(아래 #1) |
+| 제목 | 지금 문서 제목(옛 `docTitle` 0) · 전체는 지운 책 포함 · 책 화면은 그 책만 |
+| 요청 · revoke | 0 · 30초 뒤(확인 시점 0 — 설계) |
+
+사용자 Downloads: 앵커 `click` 을 가로채 파일이 생기지 않음 — 작업 중 Downloads 에 새 파일 0(가장 최근 파일이 이 작업 전 시각).
+
+## 11-3R-5. 11-2R 처리 (확인 5) — `run-v.mjs`(프로필 `pV2` · 28초)
+
+- **Esc = [×]**: 음성 «لخص» 요지를 말하는 중 닫기 — Esc: 시트 닫힘 · sayer 멈춤 · 되돌림 0 · 낭독 paused / [×]: **같음**(닫힘 · 멈춤 · 0 · paused).
+- **늦은 결과 버림**: 2:p1(응답 1.5초 늦음) 열고 Esc → 2:p2 열기(ready) → 1.8초 뒤 시트 문단 `2:p2` · ready · [저장] 레코드 `2:p2` 하나(옛 문단 0) · 요약 요청 = A 1 + B 1.
+- **"쪽 전체 요약 · p. N"**: 2쪽에서 연 시트를 3쪽으로 넘겨도 열린 채, 단추 이름은 2쪽 라벨 그대로(넘기기 전후 같음) · 머리도 2쪽. 링크 "이 책의 저장한 요약 (1)" 보임 · 48px · `href=#/summaries/:docId`.
+- **`.sum-link[hidden]` 한 줄(screens.css)**: 선택자 `.sum-sheet .sum-link[hidden]` 는 `#sumLink` 하나에만 맞음(grep — `sum-link` 는 reader.css 1038·screens.css 1395·index.html 573 뿐). headless 에서 **보이는 `[hidden]` 요소 0** — 시트 열림(리더) · 요약 화면 · 지운 문서 화면 셋 모두.
+
+## 11-3R-6. 회귀 (확인 6)
+
+- `run-r.mjs` 사본(`pR1` · 28초): 18 [⋯] → 링크 둘 · Esc 층(메뉴 → 띠 / 단어 시트 → 띠 / 요약 시트 → 띠) · 손가락 탭 · 9a 이어폰 play(stops 1 → speaking) · 9b «التالي» 0→1 · «توقف» paused · 8e 915×412 겹침 0·가로 스크롤 0 — 11-2·Build 값과 같음.
+- `run-u.mjs` 사본(`pU1` · 10초): 카드 [⋯] `…vocab, summaries, reextract` · 8f-3 단어장(카드 → `#/vocab`·전체) · 8c-2 사용량 · 알 수 없는 해시 → 서재 · 뒤로 · 요청 0.
+- 라우터(`run-v`): [원문으로] → 리더 → **뒤로** → `#/summaries/:docId` 목록 3줄 → **앞으로** → 리더 · **새로고침**으로 `#/summaries/:docId` 직접 → 3줄·범위 칸·측정 훅 · 책 고르기 "모든 책" → `#/summaries`(replace) · 요청 0.
+- **9c 백업 내보내기**(`run-v` backup): gzip 풀어 읽음 — annotations 3 = 요약 2 + 개요 1 = DB 수와 같음 · 키 0.
+
+## 11-3R-7. 화면 (확인 7) — `run-l2.mjs`(360×740·412×915·915×412 × ko·ar·en·fr = 12조합 · `pL1` · 18초)
+
+- 12조합 모두 `allOk` — 가로 넘침 0 · 화면 밖 요소 0 · 보이는 단추·칸·`summary` 32개 모두 48px 이상 · ar `dir=rtl` · 요지 `dir=rtl`(대상 ar) · 원문 언어 요지 `dir=ltr`(ar UI 포함) · 개요 결과 칸 보임 · 상태 줄 둘 `role=status`+`aria-live=polite` · 이 동안 요청 0(같은 범위 다시 누름은 캐시).
+- **긴 장 이름**(아랍어+라틴 140자): 범위 칸 선택지 최장 55자(40자 줄임 + `(p. a–b) · n`) · FSI/PDI 격리 · 칸이 화면 안(294/346/694px). 360 ar 스크린숏(`r11-3/shots/r-summaries-ar-360x740.png`)에서 범위 칸은 아랍어 머리가 보이고 라틴 꼬리가 잘림 — 읽힘. **책 고르기 칸은 긴 책 제목을 줄이지 않아 360 ar 에서 제목 앞이 잘리고 꼬리만 보인다**(#4).
+- **XSS**: 책 제목·장 이름·요지·원문 요지·요점·용어에 `<img onerror>`·`<script>`·`<b>`·`<i>`, 개요 응답 제목·요점에도 → 화면 `img/script/b/i` **0** · 발동 0 · 글자로 보임(개요 제목에 `<img` 글자). `innerHTML`·`insertAdjacentHTML`·`outerHTML` grep: js 전체에 주석뿐.
+- **삭제 확인**(360 ar): 화면 안 · 단추 48·48 · 처음 포커스 [취소] · Esc → 닫힘·지움 0·대상 지움.
+
+## 11-3R-8. 시험 · 점검 (확인 8)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,810/1,810 · 1,810/1,810**(fail 0 · 10.8초 · 10.7초 · `r11-3/full1.tap`·`full2.tap` — 2회차는 변이 복원 뒤).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 86개 · CSS 4개)" · `git diff --check` 0 · 새 파일 둘 `--no-index --check` 0.
+
+## 11-3R-9. 변이 (확인 9) — `r11-3/mut.mjs`(Build M1–M9 와 다른 곳 · 원본 바이트를 `r11-3/bak/` 에 쓰고 한 곳만 바꿈 → 전체 시험 → `bak/` 를 읽어 되씀 → 바이트 비교 · 끝에 `cmp` 2파일 0)
+
+stamp 시험 셋(IM2·IM6·IM7b)은 파일 해시가 바뀌면 늘 빨강이라 판정에서 뺐다.
+
+| # | 변이 | 결과 |
+|---|---|---|
+| Y1 | `inRange` 대상 언어 거름 빼기(다른 언어 요약이 개요 입력에) | **빨강** N4 |
+| Y4 | `collectExport` 책 범위 무시(그 책 화면에서 모든 책 내보냄) | **빨강** N2 |
+| Y5 | `chaptersOf` 맨 위 깊이 대신 모든 깊이를 장으로 | **빨강** N3·N4 |
+| Y2 | `createOutlineFlow.make` pending 중 다시 누름 막기 빼기 | 살아남음 — 화면 층(pending 이면 단추 숨김 + `onClick` 의 `b.hidden`)이 같은 일 · headless 연타 5 → 1(#3) |
+| Y3 | `exportText` 개요 범위 머리 `clean` 빼기 | 살아남음 — 거의 동치(화면의 `exportLabels.range` 가 이미 `clean`) · headless 줄바꿈 0(#3) |
+| Y6 | `showSummaries` 책이 바뀌어도 개요 흐름을 거두지 않음 | 살아남음 — **시험 틈**(#3) |
+| Y7 | `exportText` 지금 문서 제목 대신 레코드 사본 제목 | 살아남음 — **시험 틈**(#3) · headless 는 지금 제목 확인 |
+
+모두 `restored: true` · `cmp` summaries.js·summary.js ↔ `bak/` 차이 0. headless 변이는 하지 않았다.
+
+## 11-3R-10. headless (확인 10)
+
+Edge · pipe · 새 프로필 `r11-3/p*` · 가짜 키(`…review_r11_3`) · 흉내 Gemini(OPTIONS 204 + CORS · `responseSchema` 갈래) · `setCacheEnabled(false)` · **서버 띄우지 않음**(가로채기) · 합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 · 한 번에 하나.
+
+| 실행 | 프로필 | 시간 | 콘솔 오류 · pageerror · 외부 · 없는 파일 · 흉내 오류 |
+|---|---|---|---|
+| `run-a.mjs`(Build 사본 — HEAD 대조) | pA1 | 50초 | 0 · 0 · 0 · 0 · 0 |
+| `run-c.mjs`(호출·인젝션·데이터·XSS) | pC1 | 25초 | 0 · 0 · 0 · 0 · 0 |
+| `run-e.mjs`(내보내기) | pE1 | 6초 | 0 |
+| `run-r.mjs`(Build 사본 — 11-2·18·9a·9b·8e) | pR1 | 28초 | 0 |
+| `run-u.mjs`(Build 사본 — 단어장·사용량·카드) | pU1 | 10초 | 0 |
+| `run-v.mjs`(11-2R·라우터·offline·백업) | pV1 · pV2 | 20초 · 28초 | 0(pV1 은 하네스가 3쪽에서 2쪽 줄을 찾다 멈춤 — 쪽 열기 한 줄 더해 pV2) |
+| `run-l2.mjs`(12조합·XSS·삭제 확인) | pL1 | 18초 | 0 |
+
+스크린샷 `r11-3/shots/`: `r-summaries-ar-360x740.png` · `r-summaries-en-915x412.png`.
+
+## 11-3R-11. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(내보내기 키 꼴 — 저장소 키는 0) | `.txt` 내보내기는 요약 글을 **그대로** 쓴다 — 요지·용어에 키 꼴 문자열이 들어 있으면 파일에 남는다(9c 백업은 `text/backup.js` `scrubText` 로 모든 글자 값의 키 꼴을 `[KEY]` 로 지움). 저장소의 키·캐시 글·메모는 파일에 0. 요지에 키가 들어가는 길은 PDF 문단에 키가 있고 모델이 그대로 옮긴 경우뿐(숫자 거름은 문단에 있는 숫자를 허용) — 현실성 매우 낮고 8f-3 단어장 CSV 도 같은 태도 | 11-3R-4. 방향: `exportText` 결과(또는 `exportLabels`)에 9c 의 `scrubText` 한 줄 — 같은 키 꼴 표(`BACKUP.KEY_PATTERNS`)를 쓰면 문단 글의 하이픈 낱말을 지우지 않는다 |
+| 2 | 낮음(파일 방향 문자) | 개요 범위 이름(PDF 장 제목)에 U+202E 같은 방향 제어 문자가 있으면 파일 머리 줄에 날것으로 들어간다(화면은 FSI/PDI 로 가둠). 줄마다 CRLF 라 그 한 줄만 뒤집혀 보이고 다른 줄은 영향 없음 | 11-3R-4 `bidiMarks` 는 심은 U+202E 하나뿐. 방향: 파일의 이름 줄에서 U+202A–E·U+2066–9 를 빼거나 그대로 둠을 spec 정정 줄에 |
+| 3 | 낮음(시험 틈) | Y6(책이 바뀌면 개요 흐름 `reset`)·Y7(파일 제목 = 지금 문서 제목)을 지키는 시험 없음. Y6 이 빠지면 A 책 개요 결과가 B 책 화면에 뜬다(저장은 A 의 ctx 로 — 엉뚱한 책 저장은 아님). Y2·Y3 은 화면 층이 같은 일을 해 동치에 가깝다 | 11-3R-9. 방향: N5c 에 "make(A) → `showSummaries({docId:B})` → A 도착 → idle" 한 줄 · N2 에 "labels.title 이 docTitle 을 이긴다" 한 줄 |
+| 4 | 낮음(실기기 거리 — Build 남은 4 와 같은 결) | 책 고르기 칸(`#sumsScope`)은 책 제목을 줄이지 않아 360 ar 에서 긴 라틴 제목의 앞이 잘리고 꼬리만 보인다(범위 칸은 40자 줄임이라 머리가 보임) | 11-3R-7 스크린숏. 방향: `scopeOptions` 이름에도 `shortLabel(…, 40)` |
+| 5 | 낮음(문안) | 개요를 [저장]한 뒤 같은 범위를 다시 열면(화면 재진입) 결과가 캐시로 다시 보이지만 단추는 [저장](저장됨 아님) — 다시 누르면 같은 레코드를 대체할 뿐(중복 0) | 11-3R-3 · 7 스크린숏 |
+| 6 | 낮음(손질) | `sumsheet.js` `render()` 의 `const sa =els.actions…`(`=` 뒤 공백 빠짐) — 동작 무관 | `git diff` sumsheet.js |
+| 7 | 정보(설계보다 나음) | 범위를 바꿔도 **같은 요약 묶음**이면 0호출(캐시 키 = 요약 id + 보낼 항목 — 범위·이름은 키에 없음). "범위·요약이 바뀌면 1"은 묶음이 바뀔 때 1 | 11-3R-2 |
+| 8 | 정보 | `router.test.mjs` 는 R1 에 3줄(주석 1 · 코드 2) 더한 것뿐 · NUL 줄 바이트 같음 | 11-3R-3 |
+| 9 | 정보 | capped 개요에는 [다시 시도]가 없다(11-2 X8 규칙 그대로 — 원격 막힘만) | 11-3R-2 |
+| 10 | 정보 | 하네스 메모: 합성 `offline` 이벤트만으로는 파이프라인이 `navigator.onLine` 을 다시 보고 풀린다 — 앱 동작이 맞고, 시험은 `navigator.onLine` 을 바꿔야 한다 | 11-3R-2 |
+| 11 | 정보 | Build 보고 다시 잼 — 1,810×2 · stamp 86·4 · `bodiesSame` · 18 sha 대신 내 24쌍 · 12조합(Build 8) · Esc · 링크 · 콘솔 — 모두 맞음. 쓰기 도구가 내 스크립트의 `\u` 정규식을 글자로 바꿔 `run-e` 를 한 번 고쳐 씀(앱 무관) | — |
+
+**판정: 배포 가능** — 중간 이상 0. #1(키 꼴 지우개)·#3(시험 두 줄)은 다음 다듬기에 한 줄씩 권함.
+
+## 11-3R-12. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0). **막힌(거절된) 명령 0.** `tar -xf C:/…` 가 "Cannot connect to C:" 로 실패(거절 아님 — 드라이브 문자를 원격 호스트로 읽음) → `--force-local` 로 풀었다. 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음(합성 PDF·지어낸 글만 — 결과에 글 0) · `b11-3/` 쓰기 0 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
+
+스크래치 `r11-3/`: `head.tar`·`head/`(HEAD 사본) · `probe-req.mjs` · `prep.mjs` → `common.mjs` · `run-a/r/u.mjs`(Build 사본) · `run-c.mjs`·`run-e.mjs`(+`fix-e.mjs`)·`run-v.mjs`·`run-l2.mjs` · `router-diff.mjs` · `mut.mjs`·`bak/`·`mut/` · `full1.tap`·`full2.tap` · `shots/` · `section.md`(이 절)·`append.mjs` · 프로필 `pA1`·`pC1`·`pE1`·`pR1`·`pU1`·`pV1`·`pV2`·`pL1`.

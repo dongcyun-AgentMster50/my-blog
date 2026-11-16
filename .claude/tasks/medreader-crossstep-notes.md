@@ -90,6 +90,11 @@
 
 - 11-2(Review 11-2R): "sum up"·"no summary" 가 긴 문장 안에서도 summarize(2낱말 동의어 — 9b 의 "speed up" 과 같은 동작, "no" 부정어 목록 밖) · 360 en·fr [문장 번역] 두 줄 · 마이크 재탭 `stopAsk` 시험 틈(X6) · ko `library.card.*` 다른 문구 영어(HEAD 부터).
 
+- **16 (11-3 Build 남은 8)**: 저장한 개요를 입력으로 받을 때 `range.label`(PDF 장 제목)을 지시문 자리에 넣지 말 것(11-3 이 개요 요청에서 범위 이름을 뺀 이유 — 인젝션·숫자 거름).
+- 11-3: `reader.css` 의 `.sum-sheet .sum-link{display:flex}` 가 `[hidden]` 을 이기던 것을 `screens.css` 한 줄로 막음 → 다듬기 때 `reader.css` 로 옮김 · `hashParasOf` 가 speaker `langKey` 규칙 사본.
+
+- 11-3(Review 11-3R): 요약 `.txt` 내보내기에 `scrubText` 한 줄(요지·용어 속 키 꼴 — 9c 와 같게) · 내보내기 머리 줄의 범위 이름 방향 제어 문자(U+202E) · 시험 틈 Y6(책 바꿈 개요 흐름 reset)·Y7(파일 제목) · 책 고르기 칸 긴 제목 `shortLabel` 40자 · 개요 저장 뒤 다시 들어오면 [저장]("저장됨" 아님) · `sumsheet.js` `const sa =els` 공백.
+
 ## 14 결정 (2026-11-16, 8i-4-0 측정 뒤 — 위임 권장안)
 - 8i-4-0 시험용 절반: 정밀도 100%·오탐 0 이지만 행 74.2%·칸 73.9%·머리 74.1% — 문턱 못 넘음. → **8i-4 넣지 않음, 14 = 8q 단독(algoVersion 13)**. 다시 연다면 pdf.js 연산자 목록의 괘선·칸 배경 사각형을 쓰는 측정(8i-4-0b)부터, 새 시험 표본으로.
 - `dev/measure-table-8i4.mjs`·보고서는 8q Review 가 함께 본다(측정 결론 재확인) 뒤 8q 와 같이 커밋. 정답표 JSON 은 레포에 두지 않는다(원서 머리 글).
