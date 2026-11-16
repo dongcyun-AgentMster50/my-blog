@@ -22,7 +22,7 @@
 
 import * as realDb from '../db.js';
 import { hashHex } from '../hash.js';
-import { normalizeTerm, newTermEntry, TERM_CONTENT_FIELDS } from '../text/vocab.js';
+import { normalizeTerm, newTermEntry, fieldValue, baseOf, TERM_CONTENT_FIELDS } from '../text/vocab.js';
 
 /** 사용자가 고칠 수 있는 필드(17-7-3 — 번역·뜻·메모, 원어 오타). `update` 가 이 밖은 받지 않는다. */
 const EDITABLE = Object.freeze(TERM_CONTENT_FIELDS.concat(['docTitle', 'pageNo', 'lineId', 'origin', 'suspended', 'docId']));
@@ -100,27 +100,37 @@ export function createVocabStore(deps) {
   /**
    * 고치기. `EDITABLE` 필드만 받는다(`id`·`kind`·`term`·복습 필드·`createdAt` 은 무시). `surface` 가 바뀌면 `term` 을 다시 만든다.
    * 내용 필드가 실제로 바뀌면 `updatedAt = now`, `opts.user` 면 `edited:true`. 바뀐 것이 없으면 쓰지 않는다.
-   * @returns {Promise<Object|null>} 고친(또는 그대로인) 레코드, 없거나 term 이 아니면 null
+   * `[8f-3 — crossstep "8f-1 Review" ②]` 내용 값은 `fieldValue`(가져오기·CSV 와 **같은 규칙**)로 정규화한 뒤 비교·저장한다 —
+   * 겹공백·끝 줄바꿈만 다른 값은 "바뀌지 않음"(edited·updatedAt 그대로), 그래서 내보낸 CSV 를 그대로 가져와도 "그대로".
+   * `[8f-3 — 8f-2 남은 문제 2]` 사용자 수정이 아닐 때(`opts.user` 아님) patch 의 `edited`(참/거짓)를 받는다 — 사용자가 받아들인
+   * 다시 번역([이 문맥으로 다시 번역]·[번역 안 된 것 모두 번역])은 `edited:false` 로 고친 표시를 내린다. `edited` 가 바뀌어도 `updatedAt`.
+   * `[8f-3b — 8f3R-10 #4]` `opts.ifBase`(= `baseOf(요청 때 항목)`)를 주면 같은 트랜잭션 안에서 기기 레코드의 지문을 다시 보고, 다르면
+   * (그사이 사용자가 고침) **쓰지 않고 null** — [번역 안 된 것 모두 번역] 응답이 그사이 직접 친 번역을 덮지 않게.
+   * @returns {Promise<Object|null>} 고친(또는 그대로인) 레코드, 없거나 term 이 아니거나 `ifBase` 가 어긋나면 null
    */
   async function update(id, patch, opts) {
     const o = opts || {};
     const p = patch || {};
+    let stale = false;
     const r = await db.patch('cards', id, (cur) => {
       if (!cur || cur.kind !== 'term') return null;
+      if (typeof o.ifBase === 'string' && baseOf(cur) !== o.ifBase) { stale = true; return null; }
       const next = {};
       let content = false;
       for (const k of EDITABLE) {
         if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
-        const v = p[k];
-        if (cur[k] === v) continue;
+        const isContent = CONTENT.has(k);
+        const v = isContent ? fieldValue(k, p[k]) : p[k];
+        if (isContent ? fieldValue(k, cur[k]) === v : cur[k] === v) continue;
         next[k] = v;
-        if (CONTENT.has(k)) content = true;
+        if (isContent) content = true;
       }
       if (Object.prototype.hasOwnProperty.call(next, 'surface')) {
         const t = normalizeTerm(next.surface);
         if (!t) return null;                      // 원어를 비울 수는 없다
         if (t !== cur.term) next.term = t;
       }
+      if (!o.user && typeof p.edited === 'boolean' && p.edited !== !!cur.edited) { next.edited = p.edited; content = true; }
       if (!Object.keys(next).length) return null;
       if (content) {
         next.updatedAt = now();
@@ -128,7 +138,7 @@ export function createVocabStore(deps) {
       }
       return next;
     });
-    if (!r.rec || r.rec.kind !== 'term') return null;
+    if (stale || !r.rec || r.rec.kind !== 'term') return null;
     return r.rec;
   }
 
@@ -180,6 +190,9 @@ export function createVocabStore(deps) {
    *   그사이 생겼으면 건너뛴다(`skipped`).
    * - `change` → 기존 레코드에 `patch` 의 **내용 필드·term·edited·updatedAt 만** 합친다. `sm2`·`dueAt`·`reviewedAt`·
    *   `introducedAt`·`createdAt`·`id`·`kind`·`docId` 는 **기기 값 그대로**(12-D18).
+   * - `[8f-3b — 8f3R-10 #2]` `change[k].base`(계획 때 `baseOf(기기 항목)`)가 있고 지금 레코드의 지문과 다르면 — 미리보기 뒤에 사용자가
+   *   그 항목을 고쳤다 — **쓰지 않고 건너뛴다**(`skipped`). `updatedAt` 은 `max(기기, patch)` — 어떤 경우에도 뒤로 가지 않는다.
+   *   `skipped` 는 모두 "계획 뒤 그사이 바뀜"이다(그사이 생긴 같은 낱말·지워진 항목·고친 항목) — 화면이 "그사이 바뀜 — 건너뜀 n".
    * @returns {Promise<{added:number, changed:number, skipped:number}>}
    */
   async function applyImport(plan) {
@@ -220,9 +233,11 @@ export function createVocabStore(deps) {
         const c = changes[i] || {};
         const cur = await rq(store.get(c.id));
         if (!cur || cur.kind !== 'term') { skipped++; continue; }
+        if (typeof c.base === 'string' && baseOf(cur) !== c.base) { skipped++; continue; }   // ★ 그사이 바뀜 — 덮지 않는다
         const next = Object.assign({}, cur);
         const patch = c.patch || {};
         for (const k of Object.keys(patch)) if (ALLOWED.has(k)) next[k] = patch[k];
+        if (Object.prototype.hasOwnProperty.call(patch, 'updatedAt')) next.updatedAt = Math.max(Number(cur.updatedAt) || 0, Number(patch.updatedAt) || 0);
         await rq(store.put(next));
         changed++;
       }

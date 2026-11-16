@@ -38,7 +38,7 @@ import { fileIdentityHash } from '../hash.js';
 import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
-import { go, readerHash } from '../router.js';
+import { go, readerHash, vocabHash } from '../router.js';
 import { fromStored } from '../text/store.js';
 import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
@@ -304,6 +304,12 @@ function langPanel(doc, panelId) {
   dm.appendChild(dchoices);
   panel.appendChild(dm);
   paintDomainChoices(panel, doc);
+
+  // `[8f-3 — spec 17-7-6 4-6 · 8cf-D8]` "이 책의 단어장" — 같은 [⋯] 패널, 같은 위임(`data-action`). 호출 0.
+  const vb = el('button', 'doc-vocab', t('library.card.vocab'));
+  vb.type = 'button';
+  vb.setAttribute('data-action', 'vocab');
+  panel.appendChild(vb);
 
   // `[배포 안전장치]` 9-4 [텍스트 다시 추출] — 같은 [⋯] 패널, 같은 위임(`data-action`).
   const rx = el('div', 'doc-reextract');
@@ -991,6 +997,11 @@ async function onListClick(ev) {
     const open = panel.hidden;
     panel.hidden = !open;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return;
+  }
+
+  if (btn.getAttribute('data-action') === 'vocab') {
+    go(vocabHash(docId));          // `[8f-3]` 이 책의 단어장
     return;
   }
 

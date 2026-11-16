@@ -19,6 +19,7 @@ import { initLibrary, showLibrary, openFilePicker, relabel } from './ui/library.
 import { initReader, showReader, leaveReader } from './ui/reader.js';
 import { initQuizScreen, showQuiz, leaveQuiz } from './ui/quiz.js';
 import { initSettingsScreen, showSettings, leaveSettings } from './ui/settings.js';
+import { initVocab, showVocab, leaveVocab } from './ui/vocab.js';
 
 /* ────────────────────────────────────────────────────────
    14절 배너 — 서비스 계층이 낸 **코드**를 여기서 문장으로 바꾼다(3-2).
@@ -197,6 +198,7 @@ async function boot() {
   initReader();
   initQuizScreen();
   initSettingsScreen();
+  initVocab();          // `[8f-3]` 단어장 화면(17-7-6 4-6)
 
   // 정적 이동 버튼 — 해시만 바꾼다(뒤로가기가 그대로 동작한다).
   document.addEventListener('click', (ev) => {
@@ -265,6 +267,7 @@ function onRoute(route) {
   if (route.name !== 'quiz') leaveQuiz();
   // 설정을 떠나면 진행 중인 호출을 끊고 입력칸의 원문 키를 지운다(13절).
   if (route.name !== 'settings') leaveSettings();
+  if (route.name !== 'vocab') leaveVocab();       // `[8f-3]` 편집·확인 대화·미리보기·낭독([▶])을 거둔다
 
   switch (route.name) {
     case 'onboarding':
@@ -285,6 +288,7 @@ function onRoute(route) {
       // 7b — 설정 AI 탭(12-7). `#/settings` 와 `#/settings/ai` 가 같은 화면이다.
       showSettings(route.params);
       break;
+    case 'vocab': showVocab(route.params); break;   // `[8f-3]` 단어장(전체 · 그 책)
     default:
       break;
   }

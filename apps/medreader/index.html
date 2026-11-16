@@ -53,8 +53,8 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=7ff71180ec">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=492dcd0b3d">
-<link rel="stylesheet" href="css/reader.css?v=c4926b85e2">
+<link rel="stylesheet" href="css/screens.css?v=82c9c05802">
+<link rel="stylesheet" href="css/reader.css?v=a531f97813">
 <script type="importmap">
 {
   "imports": {
@@ -70,12 +70,12 @@
     "./js/config.js": "./js/config.js?v=a8f008abcd",
     "./js/db.js": "./js/db.js?v=2b36013d63",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=6af51d42f8",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=5da0dd2776",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=0d13fd0f12",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=95448e7f98",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=d39933339e",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=e3b077ff88",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=37083b276e",
-    "./js/main.js": "./js/main.js?v=4397e74713",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=e02fb6b515",
+    "./js/main.js": "./js/main.js?v=c471ea04a3",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
     "./js/pdf/render.js": "./js/pdf/render.js?v=381bf3bc23",
@@ -83,7 +83,7 @@
     "./js/privacy/redact.js": "./js/privacy/redact.js?v=10e447456b",
     "./js/quiz/engine.js": "./js/quiz/engine.js?v=8408641fcc",
     "./js/quiz/parser.js": "./js/quiz/parser.js?v=c2403f9857",
-    "./js/router.js": "./js/router.js?v=936e01879d",
+    "./js/router.js": "./js/router.js?v=808197bad0",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
     "./js/settings.js": "./js/settings.js?v=f45bf8256a",
@@ -103,7 +103,7 @@
     "./js/text/select.js": "./js/text/select.js?v=9b0c8204cd",
     "./js/text/specialty.js": "./js/text/specialty.js?v=cfb1a910f6",
     "./js/text/store.js": "./js/text/store.js?v=0e6752a027",
-    "./js/text/vocab.js": "./js/text/vocab.js?v=65964321f4",
+    "./js/text/vocab.js": "./js/text/vocab.js?v=59cc1c79e3",
     "./js/tts/speaker.js": "./js/tts/speaker.js?v=bfb10b8e3d",
     "./js/tts/text.js": "./js/tts/text.js?v=fb5bc74285",
     "./js/tts/voices.js": "./js/tts/voices.js?v=67fb29c15a",
@@ -113,7 +113,7 @@
     "./js/ui/controls.js": "./js/ui/controls.js?v=1df22a6636",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
     "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=0fe335b7ac",
-    "./js/ui/library.js": "./js/ui/library.js?v=8ac017d603",
+    "./js/ui/library.js": "./js/ui/library.js?v=0fcd5c5379",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=e840a78947",
@@ -124,9 +124,10 @@
     "./js/ui/settings.js": "./js/ui/settings.js?v=9ef03f7182",
     "./js/ui/trband.js": "./js/ui/trband.js?v=109a7de297",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=2ccd2e6cd1",
+    "./js/ui/vocab.js": "./js/ui/vocab.js?v=dff0c8e87c",
     "./js/ui/voice.js": "./js/ui/voice.js?v=4e91faa4bd",
-    "./js/ui/wordsheet.js": "./js/ui/wordsheet.js?v=adb69d12f5",
-    "./js/vocab/store.js": "./js/vocab/store.js?v=ca00134bd1",
+    "./js/ui/wordsheet.js": "./js/ui/wordsheet.js?v=e1bb841a16",
+    "./js/vocab/store.js": "./js/vocab/store.js?v=713a2bee78",
     "./js/voice/commands.js": "./js/voice/commands.js?v=a5507bc3f4",
     "./js/voice/listen.js": "./js/voice/listen.js?v=194d4c7d9c"
   }
@@ -306,6 +307,8 @@
   <section class="screen" data-screen="library" hidden>
     <div class="row" style="justify-content: space-between">
       <h1 data-i18n="library.title" style="flex: 1 1 auto"></h1>
+      <!-- `[8f-3 — spec 17-7-6 4-6 · 8cf-D8]` 단어장 입구(전체) — 이동은 `data-nav` 전역 위임. 책별은 카드 [⋯] "이 책의 단어장". -->
+      <button type="button" id="libraryVocabBtn" data-i18n="vocab.open" data-nav="#/vocab"></button>
       <!-- 7b ⑤ 입구 — 설정 AI 탭. 동작은 `data-nav` 전역 위임 하나뿐이다. -->
       <button type="button" data-i18n="nav.settings" data-nav="#/settings/ai"></button>
       <button type="button" data-i18n="nav.about" data-nav="#/about"></button>
@@ -509,7 +512,9 @@
 
     <!-- `[8f-2 — spec 17-7-6 4-5]` 단어 시트 — 선택 동작 줄 [단어 번역]. 팝오버와 같은 아래 붙임·높이 식, [닫기] sticky.
          찾는 순서는 호출 0 먼저(단어장 → 문장 번역의 괄호 원어) — [AI 로 번역]은 누를 때만. 글자는 `js/ui/wordsheet.js` 가
-         textContent/appendBidiText 로만 넣는다. 동작은 시트 하나의 위임 리스너(`data-ws-action`). 단어장 링크는 8f-3 이 켠다. -->
+         textContent/appendBidiText 로만 넣는다. 동작은 시트 하나의 위임 리스너(`data-ws-action`).
+         `[8f-3 — 8f2R-8 #7]` 질문 줄·단추 줄은 번역 칸 **바로 아래**(짧은 뜻·긴 문장 번역 위) — 가로 compact(약 213px)에서도 안 스크롤 없이 닿게.
+         `[8f-3 — 8f2R-8 #3]` 질문 줄은 live(글은 보일 때 JS 가 넣는다), 단어장 링크는 문서가 있을 때 JS 가 켠다(`#/vocab/:docId`). -->
     <div class="word-sheet" id="wordSheet" role="dialog" aria-modal="false" aria-labelledby="wsTerm" hidden>
       <p class="ws-term" id="wsTerm" tabindex="-1" dir="ltr"></p>
       <p class="ws-status" id="wsStatus" role="status" aria-live="polite"></p>
@@ -517,17 +522,8 @@
         <label class="ws-label" for="wsTr" data-i18n="vs.translation"></label>
         <input type="text" class="ws-input" id="wsTr" autocomplete="off" spellcheck="false" enterkeyhint="done">
       </div>
-      <div class="ws-row" id="wsGlossRow" hidden>
-        <p class="ws-label" data-i18n="vs.gloss"></p>
-        <p class="ws-gloss" id="wsGloss"></p>
-      </div>
-      <p class="ws-memo" id="wsMemo" dir="auto" hidden></p>
-      <div class="ws-row" id="wsCtxRow" hidden>
-        <p class="ws-label" data-i18n="vs.context"></p>
-        <p class="ws-ctx" id="wsCtx"></p>
-      </div>
-      <div class="ws-ask" id="wsAsk" hidden>
-        <p class="ws-ask-q" data-i18n="vs.overwriteAsk"></p>
+      <div class="ws-ask" id="wsAsk" role="group" aria-labelledby="wsAskQ" aria-live="polite" hidden>
+        <p class="ws-ask-q" id="wsAskQ"></p>
         <div class="ws-actions-row">
           <button type="button" class="ws-btn" data-ws-action="askYes" data-i18n="vs.overwriteYes"></button>
           <button type="button" class="ws-btn" data-ws-action="askNo" data-i18n="vs.overwriteNo"></button>
@@ -540,8 +536,17 @@
         <button type="button" class="ws-btn" data-ws-action="retranslate" data-i18n="vs.retranslate" hidden></button>
         <button type="button" class="ws-btn" data-ws-action="useContext" data-i18n="vs.useContext" hidden></button>
       </div>
+      <div class="ws-row" id="wsGlossRow" hidden>
+        <p class="ws-label" data-i18n="vs.gloss"></p>
+        <p class="ws-gloss" id="wsGloss"></p>
+      </div>
+      <p class="ws-memo" id="wsMemo" dir="auto" hidden></p>
+      <div class="ws-row" id="wsCtxRow" hidden>
+        <p class="ws-label" data-i18n="vs.context"></p>
+        <p class="ws-ctx" id="wsCtx"></p>
+      </div>
       <p class="ws-hint" id="wsHint" data-i18n="vs.hint" hidden></p>
-      <!-- 8f-3 이 켠다(`#/vocab/:docId`, 문구 `vs.vocabLink`). -->
+      <!-- `[8f-3]` 문서가 있을 때 JS 가 켠다(`href` = `#/vocab/:docId`, `data-i18n-n` = 그 책의 단어장 수). -->
       <a class="ws-vocab" id="wsVocab" href="#/vocab" data-i18n="vs.vocabLink" hidden></a>
       <button type="button" class="primary ws-close" data-ws-action="close" data-i18n="common.close"></button>
     </div>
@@ -832,6 +837,124 @@
       <div class="voice-langs" id="ttsVoiceLangs"></div>
       <p class="muted" id="ttsVoiceHint" data-i18n="settings.tts.voiceHint"></p>
     </div>
+  </section>
+
+  <!-- ════ 단어장 (spec 17-7-3 화면 · 17-7-4 · 17-7-6 4-6) — 8f-3 ════════════
+       `#/vocab`(전체) · `#/vocab/:docId`(그 책). 목록·편집·삭제·내보내기·가져오기는 **호출 0**(6절) —
+       [번역 안 된 것 모두 번역 (n)] 만 누를 때 1호출(≤ 20개). 글자는 전부 `js/ui/vocab.js` 가 textContent/appendBidiText 로.
+       동작은 섹션 하나의 위임 리스너(`data-va`). 확인은 `confirm()` 이 아니라 페이지 안 `<dialog>`(서재 다시 추출과 같은 장치).
+       원어 칸만 `dir="ltr"`(UI 가 아랍어여도), 번역 칸은 대상 언어 방향. -->
+  <section class="screen vocab-screen" data-screen="vocab" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" id="vocabTitle" data-i18n="vocab.title"></h1>
+    </div>
+    <div class="vocab-tools">
+      <label class="sr-only" for="vocabScope" data-i18n="vocab.scope.label"></label>
+      <select id="vocabScope" class="vocab-scope"></select>
+      <label class="sr-only" for="vocabFind" data-i18n="vocab.find.label"></label>
+      <input type="search" id="vocabFind" class="vocab-find" dir="auto" enterkeyhint="search" autocomplete="off"
+             autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="60"
+             data-i18n="vocab.find.placeholder" data-i18n-attr="placeholder">
+      <div class="vocab-sort" id="vocabSort" role="group" data-i18n-aria="vocab.sort.label">
+        <button type="button" data-va="sort" data-sort="added" aria-pressed="true" data-i18n="vocab.sort.added"></button>
+        <button type="button" data-va="sort" data-sort="alpha" aria-pressed="false" data-i18n="vocab.sort.alpha"></button>
+      </div>
+    </div>
+    <div class="vocab-actions">
+      <button type="button" class="primary" id="vocabBulk" data-va="bulk" hidden></button>
+      <button type="button" id="vocabExportBtn" data-va="export" aria-expanded="false" aria-controls="vocabExport" data-i18n="vocab.export"></button>
+      <button type="button" id="vocabImportBtn" data-va="import" data-i18n="vocab.import"></button>
+      <input type="file" class="file-input" id="vocabFile" accept=".csv,text/csv,text/comma-separated-values,text/plain">
+    </div>
+    <p class="muted vocab-changed" id="vocabChanged"></p>
+    <p class="vocab-status" id="vocabStatus" role="status" aria-live="polite"></p>
+
+    <!-- 내보내기 고르기 — CSV(엑셀) · Anki. 파일에 교과서 문장이 든다는 한 줄(8cf-Q2 기본값). -->
+    <div class="card vocab-panel" id="vocabExport" hidden>
+      <p class="vocab-export-what" id="vocabExportWhat"></p>
+      <p class="warn-note" data-i18n="vocab.export.share"></p>
+      <div class="row">
+        <button type="button" data-va="export-csv" data-i18n="vocab.export.csv"></button>
+        <button type="button" data-va="export-anki" data-i18n="vocab.export.anki"></button>
+      </div>
+    </div>
+
+    <!-- 가져오기 미리보기 — 새·바뀜·그대로·충돌·거절과 사유. [가져오기]를 눌러야 쓴다. 충돌은 고르기 전 기기 값 그대로. -->
+    <div class="card vocab-panel" id="vocabPreview" role="region" aria-labelledby="vocabPreviewTitle" hidden>
+      <h2 id="vocabPreviewTitle" data-i18n="vocab.import.title"></h2>
+      <p class="vocab-counts" id="vocabCounts"></p>
+      <ul class="vocab-rejects" id="vocabRejects"></ul>
+      <div class="vocab-conflicts" id="vocabConflicts" hidden>
+        <p class="warn-note" data-i18n="vocab.import.conflictHelp"></p>
+        <ul class="vocab-conflict-list" id="vocabConflictList"></ul>
+      </div>
+      <div class="row">
+        <button type="button" class="primary" data-va="import-apply" data-i18n="vocab.import.apply"></button>
+        <button type="button" data-va="import-cancel" data-i18n="vocab.import.cancel"></button>
+      </div>
+    </div>
+
+    <p class="muted vocab-count" id="vocabCount"></p>
+    <ul class="vocab-list" id="vocabList"></ul>
+    <button type="button" class="vocab-more" id="vocabMore" data-va="more" hidden></button>
+    <div class="placeholder" id="vocabEmpty" hidden>
+      <p id="vocabEmptyText"></p>
+    </div>
+
+    <!-- 편집 — 원어(오타만) · 번역 · 짧은 뜻 · 품사 · 문맥 문장(원문 + 그 번역) · 메모 · [▶] · [원문 쪽으로 가기] · [삭제]. -->
+    <dialog class="vocab-edit" id="vocabEdit" aria-labelledby="vocabEditHead">
+      <form class="vocab-edit-form" id="vocabEditForm" method="dialog" novalidate>
+        <h2 class="vocab-edit-head" id="vocabEditHead" dir="ltr" tabindex="-1"></h2>
+        <p class="muted vocab-edit-src" id="vocabEditSrc"></p>
+        <div class="field">
+          <label for="vocabEditTerm" data-i18n="vocab.edit.term"></label>
+          <input type="text" id="vocabEditTerm" dir="ltr" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="vocabEditTr" data-i18n="vs.translation"></label>
+          <input type="text" id="vocabEditTr" autocomplete="off" spellcheck="false" maxlength="200">
+        </div>
+        <div class="field">
+          <label for="vocabEditGloss" data-i18n="vs.gloss"></label>
+          <input type="text" id="vocabEditGloss" autocomplete="off" spellcheck="false" maxlength="300">
+        </div>
+        <div class="field">
+          <label for="vocabEditPos" data-i18n="vocab.edit.pos"></label>
+          <select id="vocabEditPos"></select>
+        </div>
+        <div class="field vocab-edit-ctx" id="vocabEditCtxRow">
+          <span class="field-label" data-i18n="vocab.edit.context"></span>
+          <p class="vocab-ctx-src" id="vocabEditCtx" dir="ltr"></p>
+          <p class="vocab-ctx-tr" id="vocabEditCtxTr" hidden></p>
+        </div>
+        <div class="field">
+          <label for="vocabEditNote" data-i18n="vocab.edit.note"></label>
+          <textarea id="vocabEditNote" dir="auto" rows="3" maxlength="2000"></textarea>
+        </div>
+        <div class="row vocab-edit-play">
+          <button type="button" data-va="play-term" data-i18n="vocab.edit.playTerm"></button>
+          <button type="button" data-va="play-tr" data-i18n="vocab.edit.playTr"></button>
+        </div>
+        <button type="button" class="link vocab-goto" id="vocabGoto" data-va="goto" data-i18n="vocab.edit.goto" hidden></button>
+        <p class="vocab-status" id="vocabEditStatus" role="status" aria-live="polite"></p>
+        <div class="confirm-actions">
+          <button type="button" class="primary" data-va="edit-save" data-i18n="vs.save"></button>
+          <button type="button" class="danger" data-va="edit-delete" data-i18n="vocab.edit.delete"></button>
+          <button type="button" data-va="edit-close" data-i18n="common.close"></button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- 삭제 확인 — 페이지 안 대화(`confirm()` 쓰지 않음). 첫 초점은 [취소]. -->
+    <dialog class="confirm-dialog" id="vocabDelDialog" aria-labelledby="vocabDelTitle" aria-describedby="vocabDelBody">
+      <h2 id="vocabDelTitle"></h2>
+      <p id="vocabDelBody" data-i18n="vocab.delete.body"></p>
+      <div class="confirm-actions">
+        <button type="button" data-dialog="cancel" data-i18n="vocab.delete.cancel"></button>
+        <button type="button" class="danger" data-dialog="ok" data-i18n="vocab.delete.ok"></button>
+      </div>
+    </dialog>
   </section>
 
   <!-- ════ 사용량 — 자리표시자. 8단계. ══════════════════ -->

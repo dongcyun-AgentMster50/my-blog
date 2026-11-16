@@ -1196,3 +1196,174 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 .voice-list ul { margin-block: 0; padding-inline-start: var(--sp-4); font-size: var(--fs-sm); }
 .voice-list li { margin-block: var(--sp-1); overflow-wrap: anywhere; }
 .voice-list li [lang="ar"] { font-family: var(--font-ar); }
+
+/* ── `[8f-3 — spec 17-7-3 화면 · 17-7-6 4-6]` 단어장 화면 ───────────────────
+   ★ 논리 속성만(16-H) — 표 방향은 UI 를 따르고 원어 칸만 `dir=ltr`(그 칸 안 정렬은 UI 쪽 가장자리 — 아랍어 UI 는 `text-align: end`).
+   ★ 줄·단추·칸 48px 이상(16-G). 360px 가로 스크롤 0 — 칸은 `min-inline-size: 0`, 긴 낱말·문장은 `overflow-wrap: anywhere`.
+   ★ 편집·삭제 확인은 페이지 안 `<dialog>`(서재 다시 추출과 같은 장치 — 삭제는 `.confirm-dialog` 그대로). */
+.vocab-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-block: var(--sp-3);
+}
+.vocab-tools select,
+.vocab-tools input[type="search"] {
+  flex: 1 1 12em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.vocab-sort { display: flex; gap: var(--sp-2); flex: 1 1 100%; }
+.vocab-sort button { flex: 1 1 0; min-inline-size: 0; }
+.vocab-sort button[aria-pressed="true"] {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+}
+.vocab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-block-end: var(--sp-2);
+}
+.vocab-actions button { flex: 1 1 8em; min-inline-size: 0; }
+.vocab-actions button[hidden] { display: none; }
+.vocab-actions button[aria-disabled="true"],
+.vocab-screen button[aria-disabled="true"] { opacity: 0.5; }
+.vocab-changed,
+.vocab-count { margin-block: 0 var(--sp-2); }
+.vocab-status { margin-block: 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.vocab-status:empty { display: none; }
+.vocab-panel {
+  margin-block: var(--sp-2) var(--sp-3);
+  /* 미리보기를 보이게 굴릴 때 sticky 상단바 밑에 숨지 않게 */
+  scroll-margin-block-start: calc(var(--bar-top) + var(--sp-2));
+}
+.vocab-panel[hidden] { display: none; }
+.vocab-panel h2 { font-size: var(--fs-base); margin-block-end: var(--sp-2); }
+.vocab-panel .row button { flex: 1 1 8em; min-inline-size: 0; }
+.vocab-counts { font-weight: 600; overflow-wrap: anywhere; }
+.vocab-rejects { margin-block: 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.vocab-rejects:empty { display: none; }
+.vocab-conflicts[hidden] { display: none; }
+.vocab-conflict-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; }
+.vocab-conflict { padding-block: var(--sp-2); border-block-start: 1px solid var(--c-border); }
+.vocab-conflict-term { margin: 0 0 var(--sp-1); font-weight: 600; text-align: start; overflow-wrap: anywhere; }
+.vocab-conflict-field { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.vocab-conflict-label { color: var(--c-text-dim); }
+.vocab-conflict-val [lang="ar"] { font-family: var(--font-ar); }
+/* `[8f-3b — 8f3R-10 #3]` 바뀔 항목(기기 → 파일) — 충돌 목록과 같은 줄 꼴, 체크 없음. 화면 밖으로 길어지지 않게 앞 30개만(JS). */
+.vocab-changes[hidden] { display: none; }
+.vocab-changes-head { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
+.vocab-change-more { padding-block: var(--sp-2); font-size: var(--fs-sm); color: var(--c-text-dim); border-block-start: 1px solid var(--c-border); }
+.vocab-rejects .vocab-columns { color: var(--c-text-dim); }
+.vocab-check {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--tap);
+  cursor: pointer;
+}
+
+/* 목록 — 줄 하나가 단추 하나(48px 이상). 원어 · 번역 한 줄, 품사·쪽·책은 그 아래. */
+.vocab-list { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--c-border); }
+.vocab-list li { margin: 0; }
+.vocab-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2px var(--sp-3);
+  align-items: baseline;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-block-end: 1px solid var(--c-border);
+  border-radius: 0;
+  background: transparent;
+  text-align: start;
+}
+.vocab-term { font-weight: 600; text-align: start; overflow-wrap: anywhere; }
+.vocab-tr { text-align: start; overflow-wrap: anywhere; }
+/* 원어(`dir=ltr`)는 UI 쪽 가장자리에 붙인다 — 아랍어 UI 에서는 ltr 글자의 끝(end)이 오른쪽(물리 속성 없이) */
+:root[dir="rtl"] .vocab-term,
+:root[dir="rtl"] .vocab-edit-head,
+:root[dir="rtl"] .vocab-conflict-term { text-align: end; }
+.vocab-tr:lang(ar) { font-family: var(--font-ar); }
+.vocab-none { color: var(--c-text-dim); }
+.vocab-meta { grid-column: 1 / -1; font-size: var(--fs-sm); color: var(--c-text-dim); text-align: start; overflow-wrap: anywhere; }
+.vocab-more { inline-size: 100%; margin-block-start: var(--sp-3); }
+.vocab-more[hidden] { display: none; }
+
+/* 편집 대화 */
+.vocab-edit {
+  inline-size: min(34em, calc(100vw - 2 * var(--sp-4)));
+  max-block-size: calc(100dvh - 2 * var(--sp-4));
+  overflow: auto;
+  padding: var(--sp-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.vocab-edit::backdrop { background: rgba(0, 0, 0, 0.45); }
+.vocab-edit-head { font-size: var(--fs-lg); margin-block-end: var(--sp-1); text-align: start; overflow-wrap: anywhere; }
+.vocab-edit-head:focus { outline: none; }
+.vocab-edit-head:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+.vocab-edit .field { margin-block-end: var(--sp-3); }
+.vocab-edit .field > label,
+.vocab-edit .field-label {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  margin-block-end: var(--sp-1);
+}
+.vocab-edit input[type="text"],
+.vocab-edit select,
+.vocab-edit textarea {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.vocab-edit textarea { min-block-size: calc(var(--tap) * 2); resize: vertical; }
+.vocab-edit input:lang(ar),
+.vocab-ctx-tr:lang(ar) { font-family: var(--font-ar); }
+.vocab-edit-ctx[hidden],
+.vocab-ctx-tr[hidden],
+.vocab-goto[hidden] { display: none; }
+.vocab-ctx-src,
+.vocab-ctx-tr {
+  margin: 0 0 var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.vocab-edit-play { gap: var(--sp-2); margin-block-end: var(--sp-2); }
+.vocab-edit-play button { flex: 1 1 8em; min-inline-size: 0; }
+.vocab-goto { min-block-size: var(--tap); }
+.vocab-edit .confirm-actions button { flex: 1 1 6em; min-inline-size: 0; }
+
+/* `[8f-3]` 단어 시트 맨 아래 "이 책의 단어장 (n)" — 48px 누를 곳(시트 CSS 는 reader.css, 링크가 켜진 것은 이 단계). */
+.word-sheet .ws-vocab {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  margin-block-end: var(--sp-1);
+}
+.word-sheet .ws-vocab[hidden] { display: none; }

@@ -1664,3 +1664,37 @@ body[data-reader-view="original"] .original-scroll {
     white-space: nowrap;
   }
 }
+
+/* ── `[8f-3b — 8f3R-10 #8]` 단어 시트 compact(가로 휴대폰 915×412 — 시트 약 213px) ──────────────
+   예전: sticky [닫기](아래)가 단추 줄(48px 중 4px 만 보임)을 덮어 단추 가운데를 누르면 [닫기]가 눌려 시트가 닫혔다.
+   ★ 시트만 바꾼다(위 8e 블록·팝오버 규칙 무변). 폭은 팝오버 compact 와 같은 880, 2열 격자 — 내용은 시작 쪽 열, [닫기]는 끝 쪽 열
+     (위에 sticky — 열 하나를 통째로 차지해 내용과 겹치지 않는다). 번역 칸 라벨은 칸 옆으로. 그래서 원어·상태·번역 칸·단추 줄이
+     213px 안에 다 들어온다(안 스크롤 없이). 판정은 8e 와 같은 글자 `(max-height: 520px)`. 논리 속성만(아랍어는 저절로 거울). */
+@media (max-height: 520px) {
+  .word-sheet {
+    max-inline-size: 880px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--sp-3);
+    align-content: start;
+    padding-block: var(--sp-3);
+  }
+  .word-sheet > * { grid-column: 1; min-inline-size: 0; }
+  /* [닫기] — 끝 쪽 열을 위에서부터 차지(내용 줄 수보다 넉넉히 span — 숨은 줄은 자리를 차지하지 않는다), 그 안에서 위에 sticky */
+  .word-sheet > .ws-close {
+    grid-column: 2;
+    grid-row: 1 / span 12;
+    align-self: start;
+    position: sticky;
+    inset-block-start: 0;
+    inset-block-end: auto;
+    inline-size: auto;
+    min-inline-size: var(--tap);
+    margin-block-start: 0;
+    padding-inline: var(--sp-4);
+    box-shadow: none;
+  }
+  .word-sheet .ws-field:not([hidden]) { display: flex; align-items: center; gap: var(--sp-2); }
+  .word-sheet .ws-field > .ws-label { flex: 0 0 auto; margin: 0; }
+  .word-sheet .ws-field > .ws-input { flex: 1 1 auto; min-inline-size: 0; }
+}

@@ -17,7 +17,10 @@
    ★ Esc — 시트가 **가장 위 층**(8c-1c 의 Esc 층 순서): 시트가 보이면 시트만 닫는다(띠·팝오버는 그다음 Esc).
      띠는 `[role="dialog"]` 를 위층으로 세므로(trband `upperLayers`) 시트가 열린 동안 손대지 않는다.
      Tab 은 시트 안에서 돈다(포커스 가둠). 닫으면 포커스를 선택했던 줄로.
-   ★ 단어장 화면 링크(`#/vocab/:docId`)는 마크업만 — 8f-3 이 켠다.
+   ★ `[8f-3]` 맨 아래 "이 책의 단어장 (n)" 링크(`#/vocab/:docId` — 문서가 있을 때만, n 은 `countByDoc` 읽기만 · 호출 0).
+     단어장 화면의 [번역 안 된 것 모두 번역]은 이 시트가 받은 **같은 파이프라인**을 `termServices()` 로 쓴다(상태 기계 한 벌).
+   ★ `[8f-3 — 8f2R-8 #2·#3·#7]` 단추 세트가 바뀌어 포커스가 숨은 단추에 남으면 시트 안 다음 알맞은 단추로(질문 → [그대로 두기]) ·
+     덮어쓰기 질문은 상태 줄(live)에 그대로 두고 질문 줄 `#wsAsk` 도 live · 단추 줄은 번역 칸 바로 아래(긴 문장 번역 위).
    ★ 논리(`createSheetFlow`)는 DOM 을 모른다 — `tests/wordsheet-8f.test.mjs` 가 가짜 저장소·가짜 파이프라인으로 잰다.
    ============================================================ */
 
@@ -27,6 +30,7 @@ import { expandWord, clampSelection, unitAt } from '../text/select.js';
 import { vocabStore } from '../vocab/store.js';
 import { appendBidiText } from './bididom.js';
 import { GATE_KEYS, BLOCKED_KEYS, TAP_BANNER_NOW, noticeBanner } from './trband.js';
+import { vocabHash } from '../router.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분
@@ -47,10 +51,11 @@ function trimWord(s) {
  * 스냅숏 → 저장할 꼴(`surface`). 17-7-1 — 낱말 경계로 넓히고, 하이픈 결합 낱말은 결합된 꼴로.
  *   · 한 줄 안 선택: `expandWord(줄 글자, start, end, 다음 줄 첫 글자(이 줄 끝이 `.hy` 일 때만), 세그멘터)`.
  *     낱말이 줄 첫머리에서 시작하고 앞 줄이 `.hy` 로 끝나면 앞 줄 끝 낱말을 앞에 잇는다(`cardio-` | `vascular` 의 뒤쪽을 골라도 같은 꼴).
- *   · 여러 줄에 걸친 선택(`multi`): 브라우저 선택 글자(`.hy` 는 `display:none` 이라 빠진다) + 시작 줄에서 낱말 앞쪽으로 넓힌 몫.
+ *   · 여러 줄에 걸친 선택(`multi`): 브라우저 선택 글자(`.hy` 는 `display:none` 이라 빠진다) + 시작 줄에서 낱말 앞쪽으로 넓힌 몫
+ *     + `[8f-3 — 8f2R-8 #10]` 끝 줄에서 낱말 뒤쪽으로 넓힌 몫(`endTail` — 선택 끝이 낱말 가운데일 때만, `wordTailAt`).
  * 순수 함수.
  * @param {{lineText:string, start:number, end:number, multi?:boolean, selText?:string, nextHead?:?string,
- *          prevTail?:?string, segFn?:?Function}} o
+ *          prevTail?:?string, endTail?:?string, segFn?:?Function}} o
  * @returns {string}
  */
 export function pickSurface(o) {
@@ -61,12 +66,31 @@ export function pickSurface(o) {
     const s = Math.max(0, Math.min(line.length, Math.floor(Number(x.start) || 0)));
     const head = expandWord(line, s, s, null, seg);
     const pre = head.start < s ? line.slice(head.start, s) : '';
-    return trimWord(pre + String(x.selText == null ? '' : x.selText));
+    const sel = String(x.selText == null ? '' : x.selText);
+    const tail = typeof x.endTail === 'string' && /[\p{L}\p{M}\p{N}]$/u.test(sel) ? x.endTail : '';
+    return trimWord(pre + sel + tail);
   }
   const r = expandWord(line, x.start, x.end, typeof x.nextHead === 'string' && x.nextHead ? x.nextHead : null, seg);
   let w = r.word;
   if (w && r.start === 0 && typeof x.prevTail === 'string' && x.prevTail) w = x.prevTail + w;
   return trimWord(w);
+}
+
+/**
+ * `[8f-3 — 8f2R-8 #10]` 선택 끝(`off`)이 낱말 **가운데**면 그 낱말의 나머지 글자(뒤쪽). 끝 앞뒤 글자가 둘 다 낱말 글자일 때만 —
+ * 낱말 끝·공백 뒤에서 끝난 선택은 ''. 순수 함수(줄 글자를 받는다).
+ * @param {string} text  끝 줄의 첫 글자 노드 글자
+ * @param {number} off   선택 끝 오프셋
+ * @returns {string}
+ */
+export function wordTailAt(text, off) {
+  const s = String(text == null ? '' : text);
+  const o = Math.floor(Number(off));
+  if (!(o > 0 && o < s.length)) return '';
+  const W = /[\p{L}\p{M}\p{N}]/u;
+  if (!W.test(s[o - 1]) || !W.test(s[o])) return '';
+  const m = s.slice(o).match(/^[\p{L}\p{M}\p{N}]+(?:['’-][\p{L}\p{M}\p{N}]+)*/u);
+  return m ? m[0] : '';
 }
 
 /**
@@ -236,14 +260,15 @@ export function createSheetFlow(deps) {
     if (r && r.state === 'ready' && r.value) {
       const v = draftOf(r.value);
       if (st.path === 'saved' && st.entry) {
-        // [이 문맥으로 다시 번역] — 번역·뜻·품사·기본형과 문맥을 이 문장으로(사용자 수정이 아니다 → edited 를 새로 세우지 않는다)
+        // [이 문맥으로 다시 번역] — 번역·뜻·품사·기본형과 문맥을 이 문장으로(사용자 수정이 아니다 → edited 를 새로 세우지 않는다).
+        // `[8f-3 — 8f-2 남은 문제 2]` 사용자가 다시 번역을 받아들였다(고친 항목은 묻고 [바꾸기]) → 고친 표시를 내린다(`edited:false`).
         let tr = st.contextTr;
         try { tr = clean(await d.sentenceTr(q.unit || null)) || ''; } catch (e) { tr = ''; }
         if (my !== gen) return view();
         let rec = null;
         try {
           rec = await d.store.update(st.entry.id, { translation: v.translation, gloss: v.gloss, pos: v.pos, lemma: v.lemma,
-            origin: 'ai', context: q.context, contextTr: tr, docId: q.docId, docTitle: q.docTitle, pageNo: q.pageNo, lineId: q.lineId }, { user: false });
+            origin: 'ai', edited: false, context: q.context, contextTr: tr, docId: q.docId, docTitle: q.docTitle, pageNo: q.pageNo, lineId: q.lineId }, { user: false });
         } catch (e) { rec = null; }
         if (my !== gen) return view();
         if (rec) st.entry = rec;
@@ -267,10 +292,13 @@ export function createSheetFlow(deps) {
     return view();
   }
 
-  /** [이 문맥으로 다시 번역] — 고친 항목(`edited`)이면 먼저 묻는다(17-7-3 "고친 번역을 바꿀까요?"). */
+  /**
+   * [이 문맥으로 다시 번역] — 고친 항목(`edited`)이면 먼저 묻는다(17-7-3 "고친 번역을 바꿀까요?").
+   * `[8f-3 — 8f2R-8 #4]` 질문 중에 다시 불리면 **아무것도 하지 않는다** — 묻지 않고 force 로 보내는 길은 [바꾸기](`confirmAsk`) 하나.
+   */
   function retranslate() {
-    if (!st.open || st.busy || st.path !== 'saved' || !st.entry) return Promise.resolve(view());
-    if (st.entry.edited && !st.ask) {
+    if (!st.open || st.busy || st.path !== 'saved' || !st.entry || st.ask) return Promise.resolve(view());
+    if (st.entry.edited) {
       st.ask = true;
       st.note = { key: 'vs.overwriteAsk' };
       emit();
@@ -379,9 +407,13 @@ export function createSheetFlow(deps) {
 let els = null;
 let deps = null;
 let flow = null;
+let sheetStore = null;
 /** 열 때 선택했던 줄 — 닫으면 포커스를 돌려놓는다. */
 let openedLine = null;
 let paintedRev = -1;
+/** `[8f-3]` 단어장 링크의 셈을 마지막으로 읽은 흐름 판(rev) — 저장 뒤 다시 센다. */
+let linkRev = -1;
+let linkSeq = 0;
 
 /**
  * @param {{pipeline:Object, readalong:Object, units:()=>Array, ctx:()=>Object, lineElement:(id:string)=>?Element,
@@ -407,13 +439,16 @@ export function initWordSheet(d) {
     ctxRow: sheet.querySelector('#wsCtxRow'),
     ctx: sheet.querySelector('#wsCtx'),
     ask: sheet.querySelector('#wsAsk'),
-    hint: sheet.querySelector('#wsHint')
+    askQ: sheet.querySelector('#wsAskQ'),
+    hint: sheet.querySelector('#wsHint'),
+    link: sheet.querySelector('#wsVocab')
   };
   deps = x;
   const ra = x.readalong;
   const pl = x.pipeline;
+  sheetStore = x.store || vocabStore;
   flow = createSheetFlow({
-    store: x.store || vocabStore,
+    store: sheetStore,
     translateTerms: function (items, opts) { return pl.translateTerms(items, opts); },
     sentenceTr: sentenceTrOf,
     gate: function () { return ra.tapGate(); },
@@ -432,6 +467,16 @@ export function initWordSheet(d) {
 }
 
 function api() { return { open: openSnap, close: closeSheet, isOpen: isOpen }; }
+
+/**
+ * `[8f-3]` 단어장 화면이 쓰는 번역 서비스 — 이 시트가 controls 에서 받은 **같은** 파이프라인·readalong(상태 기계·실패 기억·
+ * 진행 중 공유가 한 벌). 시트가 준비되지 않았으면 null(단어장 화면은 [번역 안 된 것 모두 번역]을 숨긴다).
+ * @returns {?{pipeline:Object, readalong:Object}}
+ */
+export function termServices() {
+  if (!deps || !deps.pipeline || typeof deps.pipeline.translateTerms !== 'function') return null;
+  return { pipeline: deps.pipeline, readalong: deps.readalong || null };
+}
 
 /** 문장 번역 — readalong 메모리 → 캐시 읽기만(요청하지 않는다 · 호출 0). */
 async function sentenceTrOf(u) {
@@ -474,7 +519,25 @@ function surfaceOf(snap, lang) {
     }
   }
   return pickSurface({ lineText: text, start: snap.start, end: snap.end, multi: !!snap.multi, selText: snap.text,
-    nextHead: nextHead, prevTail: prevTail, segFn: segmenterFor(lang) });
+    nextHead: nextHead, prevTail: prevTail, endTail: snap.multi ? endTailOf(line) : null, segFn: segmenterFor(lang) });
+}
+
+/**
+ * `[8f-3 — 8f2R-8 #10]` 여러 줄 선택의 끝이 낱말 가운데면 그 낱말의 나머지. 스냅숏에는 끝 줄이 없어 **아직 남아 있는** 선택에서만
+ * 읽는다(시작 줄이 스냅숏 줄과 같을 때 — 다른 선택이면 손대지 않는다). 선택이 이미 풀렸으면(Android 단추 탭) ''.
+ */
+function endTailOf(line) {
+  try {
+    const sel = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
+    if (!line || !sel || !sel.rangeCount) return '';
+    const r = sel.getRangeAt(0);
+    const sEl = r.startContainer.nodeType === 3 ? r.startContainer.parentNode : r.startContainer;
+    if (!sEl || !sEl.closest || sEl.closest('span.line[data-flow="1"]') !== line) return '';
+    const end = r.endContainer;
+    const endLine = end && end.parentNode && end.parentNode.closest ? end.parentNode.closest('span.line[data-flow="1"]') : null;
+    if (end.nodeType !== 3 || !endLine || endLine.firstChild !== end) return '';
+    return wordTailAt(end.data, r.endOffset);
+  } catch (e) { return ''; }
 }
 
 /** 선택 줄 [단어 번역] → 시트. 스냅숏만 쓴다(선택은 지운다 — 시트가 열린 동안 선택 줄은 숨는다). */
@@ -488,6 +551,7 @@ function openSnap(snap) {
   if (typeof deps.clearSelection === 'function') { try { deps.clearSelection(); } catch (e) { /* 선택 없음 */ } }
   openedLine = snap.lineId;
   paintedRev = -1;
+  linkRev = -1;
   const pageNo = Number.isFinite(Number(snap.page)) && snap.page != null ? Number(snap.page) : c.page;
   const p = flow.open({ surface: surface, srcLang: srcLang, docLang: c.docLang || srcLang, targetLang: c.target || '',
     context: unit ? unit.src : '', unit: unit, docId: c.docId == null ? null : c.docId, docTitle: c.docTitle || '',
@@ -592,8 +656,12 @@ function render(v) {
   // 원어 — 원문 언어의 방향(17-7-3 "원어 칸만 dir=ltr" — 원문 언어가 라틴이면 ltr)
   els.term.textContent = q.surface || '';
   setLangDir(els.term, q.srcLang || '');
-  // 상태 한 줄(덮어쓰기 질문 중에는 질문 줄이 단추 옆에 있으므로 비운다 — 같은 글이 두 번 보이지 않게)
-  els.status.textContent = v.ask ? '' : v.note ? t(v.note.key, v.note.params || undefined) : (v.busy ? t('readalong.pending') : '');
+  // 포커스가 시트 안에 있었나(단추 세트가 바뀌어 그 단추가 숨으면 아래 `keepFocus` 가 옮긴다 — 8f2R-8 #2)
+  const hadFocus = typeof document !== 'undefined' && els.sheet.contains(document.activeElement);
+  // 상태 한 줄(live). `[8f-3 — 8f2R-8 #3]` 덮어쓰기 질문 중에도 비우지 않는다 — 이 낱말의 상태("단어장에 있는 낱말")를 그대로 두고,
+  // 질문 문구는 질문 줄 `#wsAsk`(live · [그대로 두기]로 포커스)가 읽힌다(같은 글이 두 번 보이거나 두 번 읽히지 않게).
+  els.status.textContent = v.ask ? t('vs.found.saved')
+    : v.note ? t(v.note.key, v.note.params || undefined) : (v.busy ? t('readalong.pending') : '');
   // 번역 칸 — 대상 언어 방향. 값은 흐름이 새 초안을 낼 때만 다시 넣는다(사용자가 치는 중에 덮지 않게)
   const editable = !!v.open && !!v.path && !v.tooLong && !v.sameLang;
   els.field.hidden = !editable;
@@ -628,8 +696,9 @@ function render(v) {
       appendBidiText(els.ctx, tr, tdir);
     }
   }
-  // 덮어쓰기 질문
+  // 덮어쓰기 질문 — 질문 줄은 live(`#wsAsk`) · 글은 보일 때만 넣는다(보이는 영역 안의 글 바뀜이 읽히게)
   els.ask.hidden = !v.ask;
+  if (els.askQ) els.askQ.textContent = v.ask ? t('vs.overwriteAsk') : '';
   // 단추
   const show = v.buttons || [];
   for (const b of els.sheet.querySelectorAll('.ws-actions [data-ws-action]')) {
@@ -639,6 +708,47 @@ function render(v) {
   }
   // 안내 한 줄 — 찾지 못했을 때만(17-7-2 3)
   els.hint.hidden = !(v.open && v.path === 'none' && !v.busy);
+  // `[8f-3]` "이 책의 단어장 (n)" — 문서가 있을 때만. 셈은 읽기만(호출 0), 흐름 판이 바뀌면(저장 등) 다시 센다.
+  paintLink(v);
+  if (hadFocus) keepFocus(v);
+}
+
+/**
+ * `[8f-3 — 8f2R-8 #2]` 단추 세트가 바뀌어(키보드 Enter 로 [이 문맥으로 다시 번역]·[AI 로 번역]·[번역 없이 저장]) 포커스가 숨은 단추에
+ * 남았거나 BODY 로 빠졌으면 시트 안 다음 알맞은 곳으로: 질문 중 → [그대로 두기](실수로 덮지 않게), 아니면 보이는 첫 단추, 없으면 원어 머리.
+ */
+function keepFocus(v) {
+  const a = document.activeElement;
+  const lost = !a || a === document.body || (els.sheet.contains(a) && (a.hidden || a.getClientRects().length === 0));
+  if (!lost || els.sheet.hidden) return;
+  const visible = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+  let next = null;
+  if (v.ask) next = els.ask.querySelector('[data-ws-action="askNo"]');
+  if (!visible(next)) next = Array.from(els.sheet.querySelectorAll('.ws-actions [data-ws-action]')).find(visible) || null;
+  if (!visible(next)) next = els.term;
+  try { next.focus({ preventScroll: true }); } catch (e) { /* 포커스를 못 옮겨도 시트는 돈다 */ }
+}
+
+/** `[8f-3]` 단어장 링크 — 열린 시트에 문서가 있으면 `#/vocab/:docId` 와 그 문서의 단어장 수. */
+function paintLink(v) {
+  if (!els.link) return;
+  const q = v.q || {};
+  const on = !!v.open && q.docId != null && q.docId !== '';
+  els.link.hidden = !on;
+  if (!on) return;
+  els.link.setAttribute('href', vocabHash(q.docId));
+  if (v.rev === linkRev) return;
+  linkRev = v.rev;
+  const my = ++linkSeq;
+  const docId = q.docId;
+  Promise.resolve(sheetStore && typeof sheetStore.countByDoc === 'function' ? sheetStore.countByDoc(docId) : 0)
+    .catch(() => 0)
+    .then((n) => {
+      if (my !== linkSeq || !els) return;
+      const c = Math.max(0, Math.floor(Number(n) || 0));
+      els.link.setAttribute('data-i18n-n', String(c));
+      els.link.textContent = t('vs.vocabLink', { n: c });
+    });
 }
 
 /* ── `[D]` 측정 훅 — 글자는 담지 않는다(길이·길·문구 키·단추만) ── */
@@ -655,7 +765,11 @@ function attachDebugHook() {
         buttons: v.buttons, calls: v.calls, tooLong: v.tooLong, sameLang: v.sameLang, hit: !!v.hit,
         termLen: v.q && v.q.surface ? v.q.surface.length : 0, inputLen: els.input.value.length,
         inputDir: els.input.getAttribute('dir'), ctxLen: els.ctx.textContent.length,
-        entry: v.entry ? { origin: v.entry.origin, edited: !!v.entry.edited, hasTr: !!v.entry.translation, hasCtxTr: !!v.entry.contextTr } : null };
+        entry: v.entry ? { origin: v.entry.origin, edited: !!v.entry.edited, hasTr: !!v.entry.translation, hasCtxTr: !!v.entry.contextTr } : null,
+        // `[8f-3]` 단어장 링크 · 포커스 자리(단추 이름 또는 id — 글자 없음)
+        link: els.link ? { shown: !els.link.hidden, href: els.link.getAttribute('href'), n: els.link.getAttribute('data-i18n-n') } : null,
+        focus: (function () { const a = document.activeElement; return !a ? null : a === document.body ? 'BODY'
+          : a.getAttribute('data-ws-action') || a.id || a.tagName; })() };
     },
     /** 스냅숏을 바로 넣는다(선택 모사 없이 — 측정용). */
     openSnap: function (s) { return openSnap(s); }
