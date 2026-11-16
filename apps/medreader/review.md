@@ -12005,3 +12005,214 @@ Edge `--enable-precise-memory-info`·`--expose-gc` · pipe · 새 프로필 `r9c
 스크래치 `r9c2/`: `safety.mjs`·`robust.mjs`·`keyval.mjs`·`fp.mjs`·`cfg-head.mjs`(HEAD config 사본) · `mut.mjs`·`mut2.mjs`·`m-R1`–`m-R7.txt`·`m2-R2x/R3x/R5x.txt`·`bak/` · `common.mjs`(Build 하네스 사본 — 경로·가짜 키만 바꿈)·`gen.mjs`·`dl/`(`mid`·`evil`·`rt-cache`·`rt-nocache` `.jsonl.gz`) · `run-imp.mjs`·`imp1.json`(중간 끊김)·`imp2.json` · `run-lay.mjs`·`lay1.json`·`shots/` · `run-line.mjs`·`line-cur.json`·`line-head.json` · `run-body.mjs`·`body-cur.json`·`body-head.json` · `run-rt.mjs`·`rt1.json` · `run-h.mjs`·`h1.json` · `full1.txt`·`full2.txt` · 프로필 `p1`·`p2`·`pl1`·`pn1`·`pn2`·`pbc`·`pbh`·`pr1`·`ph1` · `section.md`(이 절)·`append.mjs`.
 
 **배포 가능** — 기기 데이터 조용한 덮기·잃음·중복 0, 멱등·끊긴 뒤 다시 = 한 번에, 같은 책 다른 id 키 바꿔 쓰기 세 꼴, 파생·blobs 쓰기 0, 오염·XSS·위험 `href` 0, 키 속성 이름 빠짐, 회귀 0(본문 바이트 같음), 힙 +45MB·남는 0.16MB, 콘솔 오류 0. 낮음 9 중 #1(다시 불러오기 전 [내보내기] 무반응)·#5(빈 괄호)·#6(시험 세 줄)은 작은 다듬기, #2 는 운영자 판단 거리, #3·#4·#8 은 손댄 파일·안내 문구, #7·#9 는 실기기·리더 단계 몫.
+
+---
+
+# 9c-3 Review — "PDF 필요" 상태 · 재사용 경로 (+ 9c2R 고침) (spec 17-4-1) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-9c3-needpdf.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: spec 17-4-1(6 "PDF 필요"·"재사용 경로"·7 표 9c-3 행·"9c-3 수용 기준"·`[정정 2026-11-17 — 9c-3 Build]`·9c-2 기준 정정), Build 지침·보고서(믿지 않고 다시 잼), 이 파일 "9c-2 Review" 절, `git diff`(15파일 +567 −38) + 새 `tests/needpdf-9c3.test.mjs`. 리뷰 스크립트는 모두 스크래치 `r9c3/`, Build 의 `b9c3/`·`b9c2/` 는 읽기만(합성 PDF `b9c2/syn.pdf`·다른 판 `b9c3/other.pdf`·A 백업 `b9c2/dl/A.jsonl.gz`·`a-state.json`·하네스 원본).
+
+## 9c3R-0. 판정 — **고친 뒤 배포** (중간 1 — 좁은 경우 · 낮음 3 · 정보 5)
+
+가장 중요한 서재 가져오기 회귀는 **0**: 새 PDF·같은 PDF(원본 있음/없음)·변형 키·다른 판·같은 파일 두 번 연달아·가져오는 중 다른 PDF·CMDT 2026(1,967쪽)에서 지금 판과 HEAD 판(`git show HEAD:`)을 같은 순서로 돌려 문서 수·id·진도·언어·`domain`·`readStats`·추출이 모두 같고, 다른 것은 **설계대로 원본이 생긴 것뿐**(HEAD 는 원본 0 → 새로 불러온 뒤 빈 리더). 입구 다섯·두 프로필 종단·6조합 화면·번역 요청 본문 바이트·회귀 화면 모두 맞고 콘솔 오류 0.
+중간 1 은 9c2R #3 "문서 미래 시각 자르기"(#1): 파일의 문서 시각이 이 기기 시계보다 **미래**일 때만(시계가 앞선 기기에서 만든 파일·손댄 파일) 같은 파일을 다시 가져올 때마다 문서가 다시 바뀐다(**멱등이 깨짐** — HEAD 는 둘째부터 그대로). 진도 손실은 HEAD 와 같은 양(추가 손실 0)이지만 판정 기준 "9c2R 고침이 멱등을 깸"에 걸린다. 고침은 몇 줄 + 시험 한 줄. 운영자가 이 좁은 경우를 받아들이면 **배포 가능**으로 내려도 된다.
+
+## 9c3R-1. 서재 가져오기 회귀 (확인 1 — 가장 중요) ★ `run-imp.mjs`(`pI1` 지금 · `pI2` HEAD) · `cmp-imp.mjs` · `run-big.mjs`(`pBig1`·`pBig2`)
+
+같은 순서를 두 판에서 — id 를 이름표로 바꿔 나란히 비교, 다른 칸만:
+
+| 단계 | 지금 판 | HEAD 판 | 같은가 |
+|---|---|---|---|
+| S1 새 PDF | 문서 1·원본 10,431B·추출 끝·`#/reader/ID/1` | 같음 | ✔ |
+| S2 같은 PDF(원본 있음) | 같은 id·문서 1·원본 1 | 같음 | ✔ |
+| S3 같은 PDF(원본 없음 — 진도 3·`fr`/user·`domain`·`readStats` 넣고 원본만 지움) | 카드 "PDF 필요" → 가져오기 → 같은 id·`#/reader/ID/3`·진도·언어·domain·readStats **그대로**·원본 생김 → 새로 불러온 뒤 보통 카드 | 카드 [계속] · 같은 id·같은 필드 · **원본 0**(새로 불러와도 0) | 원본만 다름(고침) |
+| S3b 원본 없을 때 같은 파일 두 번(같은 틱) | 문서 1·원본 1 | 문서 1·원본 0 | 원본만 다름 |
+| S4 같은 해시·다른 쪽수(쪽수 7 문서를 심어 둠) → 변형 키 `…:n5` 새 문서 · 다시 → 같은 변형 · 변형 원본 지움(진도 2) → 다시 | 변형 같은 id·`#/reader/ID/2`·원본 생김·새로 불러온 뒤 보통 카드 · 심은 문서(`seed7`) 무변 | 같은 id·원본 0 | 원본만 다름 |
+| S5 가져오는 중 다른 PDF(같은 틱) | 문서 2·원본 2 | 같음 | ✔(정렬 순서만) |
+| S6 새 PDF 두 번 연달아 | 문서 1·원본 1·배너 0 | 같음 | ✔ |
+| **CMDT 2026**(107MB·1,967쪽, 읽기만) 새로 → 진도 120·원본 지움 → 같은 PDF | 리더까지 614ms·같은 id·`#/reader/ID/120`·추출 이어짐(216→221쪽)·원본 106,843,404B·새로 불러온 뒤 보통 카드 | 618ms·같은 id·120·추출 이어짐·**원본 0** | 원본만 다름 · 재사용 경로 비용 +184ms(615 vs 431ms) |
+
+- `ensureBlob`·`attachBlobFor` 는 문서의 다른 필드를 덮지 않음: S3·S4 필드 그대로, 카드 경로(종단 4절)는 바뀐 필드가 `lastOpenedAt` 과 추출·리더 몫(`extraction`·`sectionIndex*`·`lastLineId` — 9c2R-9)뿐.
+- 원본이 생긴 뒤 "PDF 필요"가 다시 뜨지 않음(새로 불러온 뒤 S3·S4·CMDT·종단 모두 [계속]).
+
+## 9c3R-2. 입구 다섯 (확인 2) — `run-ent.mjs`(`pE2`)
+
+책 A = 합성 PDF 를 가져온 뒤 `resetDerived`+원본 지움(백업에서 온 책과 같은 꼴), 책 B = 다른 판(원본 있음).
+
+| 입구 | 결과 |
+|---|---|
+| 서재 → 리더 주소 `#/reader/A/3` | `#/library`·화면 library 만·초점 [PDF 가져오기](카드 안·화면 안)·알림 54자·리더 줄 0 · 히스토리 +1(주소를 바꾼 그 한 번) · 뒤로 = `#/library`(리더로 다시 튕기지 않음) |
+| 설정 → 리더 주소 → 뒤로 | 서재 그 카드 → 뒤로 = **`#/settings`** |
+| 검색 주소 `#/search/A` · 퀴즈 주소 `#/quiz/A/I` | 둘 다 같은 꼴(서재·초점·알림) |
+| 첫 부팅이 리더·검색·퀴즈 주소 | 셋 다 같은 꼴 |
+| 서재 범위 검색 [이어서 준비] | 서재 그 카드 · 뒤로 = `#/search`(결과 목록, 단추 다시 켜짐) |
+| 원본 **있는** B | 리더 `#/reader/B/2` 바로 그려짐 · 검색 `#/search/B` 그대로 |
+| `#/vocab/A`·`#/usage` | 영향 없음(그 화면에 머묾) |
+| **경합** — 리더/검색/퀴즈 주소로 간 바로 다음 틱에 `#/usage` | 검색: `#/usage` 머묾 ✔ · **리더·퀴즈: `#/library` 로 끌려감**(#2) |
+
+## 9c3R-3. 9c2R 고침 (확인 3) — `fix9c2.mjs`(fake-idb, 21 단정 초록) · `future-cmp.mjs`(HEAD 판 `import.js` 를 절대 경로로 바꾼 사본 `head-import.mjs`)
+
+- **합집합**(`unionSetting`): 주소 trim 으로 겹침 제거·기기 먼저 · id 충돌이면 **기기 id 그대로**·파일 항목이 새 id(`i1`) · 두 번 = 한 번 · 기기 30개면 파일 항목 0(기기 항목은 자르지 않음) · 기기 `null` → 파일 값 · 파일 `null`/`[]` → 기기 · 기기 `[]` → 파일 항목을 받음(Build 남은 4 그대로) · 최근 검색어 기기 먼저·상한 5·글자만 · 파일 값 꼴이 틀리면 기기 · url 없는 기기 항목도 남김 · [설정도 가져오기] 끔이면 합집합도 0.
+- **설정 꼴 검사**: `importBackup` 을 부르는 곳은 `ui/backup.js` 하나뿐이고 `defaults: settings.DEFAULTS` 를 넘김 → 꺼지는 경로 0. `DEFAULTS` 모든 키의 기본값 자신 통과 · 앱이 실제로 쓰는 꼴 15가지(소수 `tts.rate`·`0`·ISO 시각·`[]`·`null` 등) 통과 · 틀린 꼴 9가지(`'1.2'`·`NaN`·객체·불리언·모르는 키·`__proto__`) 거절. 실제 앱 파일(A)을 두 번째 가져올 때 "건너뜀 0" — 앱이 만든 설정은 하나도 안 걸림.
+- **미래 시각 자르기**: 빈 기기에 미래 시각 파일 → 지금 ✔ · 같은 파일·같은 `now` 두 번 = 한 번 ✔ · **같은 파일·다른 `now`(실제 앱 — 매번 `Date.now`) → 매번 patch**, HEAD 는 둘째부터 keep · 그사이 기기에서 열어 p.10 까지 읽고 다시 가져오면 **p.3**(HEAD 도 p.3 — 추가 손실 0) → #1.
+- `term` 없는(숫자·공백) 단어장 항목 거절·문장 카드 그대로 · `lastPage`(1 이상 정수)·`pageCount`(0 이상 정수) 꼴 · `0`·`null` 은 그대로 · 못 읽는 시각 글자는 그대로.
+- **다시 불러오기 전 [내보내기]·캐시 체크 꺼짐**: 종단 `exportOff [true,true]`.
+- **문구 생략 두 곳**: gzip 트레일러만 잘림 → `ended:true·broken:true·truncated:false` → `r.truncated || (r.broken && !r.ended)` 거짓(손상 줄 없음, 문서 1 들어감) · 가운데 잘림 → `ended:false` → 손상 줄 남음 ✔. 모르는 스토어 이름 거르기는 코드로 확인(`names.length` 가 0 이면 줄 생략).
+- **멱등**: 실제 앱 파일 A 를 붙인 뒤 같은 파일 한 번 더 → "새로 0 · 바뀜 0 · 그대로 49 · 건너뜀 0", 문서 필드 차이 0, 원본·카드 그대로(종단 4절).
+
+## 9c3R-4. 두 프로필 종단 (확인 4) — `run-e2e.mjs`(`pB2`, UI ar)
+
+A = 9c-2 Build A(3쪽 낭독 동반 번역 POST 2·캐시 36·단어 2·`lastPage 3`·사용량 calls 2). 빈 프로필 B: 미리보기 5줄 → 가져오기 → [내보내기]·캐시 체크 꺼짐 → 다시 불러오기 → 카드 "PDF 필요"(`need-pdf,delete,more`, 문서 1·원본 0·쪽 0, 미래 시각 0) → 카드 [PDF 가져오기]에 **다른 판**(파일 고르기 창) → 알림 68자·`#/library` 머묾·초점 단추·문서 JSON 같음·전 스토어 개수 같음 → **같은 PDF** → `#/reader/A/3` → 추출 끝까지 POST **0** → 새로 불러옴 → 보통 카드·원본 10,431B → 3쪽 [▶] 7초 POST **0** → 캐시 36·단어 2·사용량 calls 2(A 와 같음)·문서 1 → 같은 백업 한 번 더 → 그대로 49·문서 차이 0.
+
+## 9c3R-5. 화면 (확인 5) — `run-lay.mjs`(`pL2`) · 스크린샷 `r9c3/shots/`
+
+360×740·412×915 × ko·ar + 360 en·412 fr, 각 "서재로 옴" 알림·"다른 판" 알림: 문서 가로 넘침 0 · 카드 넘침 0 · 카드 밖 요소 0 · 단추 모두 높이 48(`need-pdf` 138–179 · 삭제 76–110 · ⋯ 48×48) · ar `dir=rtl`/`lang=ar` · 알림 `role=status`·`aria-live=polite`·2–4줄 · 초점 = [PDF 가져오기]·`:focus-visible`·`outline solid 3px` · `aria-describedby` 두 id 모두 있음 · 배지 보임 · 빈 `data-i18n` 0 · 배너 0 · 감춘 카드 input `tabIndex -1`·안 보임. 변경분 `innerHTML`·`insertAdjacentHTML`·`outerHTML` 0(diff grep).
+
+## 9c3R-6. 회귀 (확인 6) — `run-body.mjs`(`pBodyC`·`pBodyH`)
+
+- **번역 요청 본문 바이트**: 지금 판 `4f2e6b6ac89f9d78`(2,729B)·`356e9e3f5ef34de4`(6,090B) = HEAD 판(260파일 `git show HEAD:`) — Build·9c2R 와도 같은 둘.
+- 보통 열기(원본 있는 책): 검색(이 책)·퀴즈(없는 장 — 퀴즈 화면 머묾)·단어장·사용량(8c-2)·설정·백업·서재 카드 `[계속]`·18 의료 사이트 카드(`DETAILS`) — 모두 그 화면, 가로 넘침 0 · 9c-1 내보내기(캐시 끔) 13줄·head/end·aiCache 0 · 9c-2 가져오기(종단·멱등).
+- `quiz.js`: 작업본 1,067줄 **모두 CRLF**(LF 만 0·CR 만 0 — 섞임 0) · index LF·`eol=lf` 라 커밋 때 LF · `git diff` 5+/1− 만(파일 통째 바뀜 아님).
+
+## 9c3R-7. 시험 · 검사 · 변이 (확인 7·8)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **1회차 1727/1727(10.4초) · 2회차 1727/1727(10.5초)**(`r9c3/full1.txt`·`full2.txt`) · `stamp-importmap --check` "그대로다 (모듈 79개 · CSS 4개)" · `git diff --check` 0(경고 하나 — `quiz.js` 줄 끝, 위).
+- **변이 6개**(Build M1–M8 과 다른 곳 — `r9c3/mut.mjs`: 원본을 읽어 `r9c3/bak/` 에 쓰고 정확히 1곳만 바꿈 → `needpdf-9c3`·`backup-import-9c`·`library` 시험 → finally 원본 바이트로 되씀 → 바이트 비교, 끝에 `cmp` 0):
+
+| # | 변이 | repo 시험 | headless |
+|---|---|---|---|
+| R1 | `ensureBlob` 이 문서가 있는지 보지 않음(지워진 문서에 원본) | **빨강** N2 | — |
+| R2 | `attachBlobFor` 가 아는 쪽수도 덮음 | 살아남음 — **동치 변이**(`needPdfMatch` 가 쪽수 같음을 먼저 보장, #4) | — |
+| R3 | `goNeedPdf` 가 히스토리를 바꿔 쓰지 않고 쌓음 | 살아남음(#3) | **빨강** `ent-R3`: 설정 → 리더 주소 → 뒤로 = `#/library`(기대 `#/settings`) |
+| R4 | 최근 검색어 합집합이 파일 먼저 | **빨강** I17 | — |
+| R5 | `hasPdf` 가 못 읽으면 막음 | **빨강** N4 | — |
+| R6 | 기본 `null` 키가 아무 꼴이나 받음 | **빨강** I18 | — |
+
+6개 모두 bak 과 같은 바이트로 되돌림(`cmp` 0), 앱 파일 `git status` 처음과 같음.
+
+## 9c3R-8. headless (확인 9)
+
+Edge · pipe · 새 프로필 `r9c3/p*` · 가짜 키(세션·로컬) · 흉내 Gemini(OPTIONS 204 + CORS) · 흉내 음성 · `setCacheEnabled(false)` · **한 번에 하나씩** · **서버 띄움 0**(출처 이름만 빌리고 앱 요청은 모두 가로채 작업 트리 또는 `git show HEAD:` 에서). 실행: `imp-cur`(pI1)·`imp-head`(pI2)·`big-cur`(pBig1)·`big-head`(pBig2)·`ent1`(pE1 — 하네스 `uploadFile` 기다림이 60초 넘어 중간 끊김, 바이트 `DataTransfer` 로 바꿔 `ent2` pE2 로 다시)·`ent-R3`(pE3, 변이)·`e2e1`(pB1)·`e2e2`(pB2)·`lay1`(pL1)·`lay2`(pL2)·`body-cur`(pBodyC)·`body-head`(pBodyH). `e2e1`·`lay1` 은 하네스가 다른 판 경로를 `…/r9c3/../b9c3/other.pdf` 로 넘겨 브라우저가 파일을 못 읽음 → 앱은 카드 알림 "가져오지 못했습니다: ERR"+배너·문서 무변(읽기 실패 처리는 맞음) — 경로를 고쳐 `e2e2`·`lay2` 로 다시 잼(위 결과). **모든 실행 콘솔 오류 0 · pageerror 0 · 새 탭 0 · 외부 요청 0**(pdf.js CDN 만 — 앱이 원래 쓰는 라이브러리) · missing 0 · 4xx 0. Gemini POST 는 본문 대조 2개씩만.
+
+## 9c3R-9. 발견 사항
+
+| # | 심각도 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | **중간**(좁음) | **9c2R #3 미래 시각 자르기가 멱등을 깸 · 목적도 못 이룸** — 파일 문서 `lastOpenedAt` 이 이 기기 시계보다 미래면 가져올 때마다 "지금"(`nowMs` = 그때의 `Date.now`)으로 잘려 늘 기기보다 새로움 → 같은 파일을 다시 넣을 때마다 문서 patch(HEAD: 둘째부터 keep). 그사이 기기에서 더 읽은 진도는 다시 가져올 때 파일 쪽으로(p.10 → p.3) — HEAD 도 같아 추가 손실은 0. 코드 주석의 "모든 다음 병합을 차지하지 않게"는 이루지 못함. 시계가 앞선 기기에서 만든 파일·손댄 파일에서만(앱 파일 일반 경우 0). Build 남은 6 은 "앱 파일에서는 생기지 않음"이라 했지만 시계가 틀린 기기의 앱 파일도 해당 | `fix9c2` i3·i4 · `future-cmp`(head `docOps3 keep` · cur `patch`). 방향: 파일 시각이 `nowMs` 보다 미래면 **비교에서 기기 유지**(단어장 8f-3b "미래 시각 = 충돌 → 기기" 와 같은 규칙) · 새 문서일 때만 지금으로 자름 → 멱등·진도 둘 다. I18 에 "다른 `now` 로 두 번 = 한 번" 한 줄 |
+| 2 | 낮음 | 리더·퀴즈 입구가 `const from = location.hash` 를 **`await db.get` 뒤에** 잡아 "기다리는 사이 주소가 바뀌면 가지 않는다"가 `db.get` 구간을 못 덮음 — 리더/퀴즈 주소 바로 다음 틱에 다른 화면으로 가면 서재로 끌려가고 `replace` 가 그 화면 히스토리 항목까지 덮음. 검색은 `await` 앞에서 잡아 머묾 | `run-ent` 경합 `race_reader`·`race_quiz` = `#/library`, `race_search` = `#/usage`. 창은 `db.get` 시간(수 ms~수십 ms)이라 실사용에서 드묾·데이터 무관. 방향: 두 곳 모두 `from` 을 함수 첫 `await` 앞으로(N5 정규식은 위치를 안 봄) |
+| 3 | 낮음(시험 틈) | 변이 R3(`goNeedPdf` 가 `replace` 대신 `go`)이 repo 시험에서 살아남음 — "뒤로 가기가 다시 튕기지 않음"을 지키는 줄인데 headless 만 잡음 | 9c3R-7. 방향: N5 에 `goNeedPdf` 본문의 `replace(libraryHash())` 단정 한 줄(또는 라우터 주입) |
+| 4 | 정보 | R2(`attachBlobFor` 가 아는 쪽수도 덮음)는 동치 변이 — 붙이기 전 `needPdfMatch` 가 쪽수 같음(또는 0)을 보장 | 기록 |
+| 5 | 낮음(문구) | ko "다른 판" 알림이 "위의 [Import a PDF] 단추" — ko 맨 위 단추가 아직 영어(Build 남은 2)라 화면 이름과는 맞음. 같은 카드 안 "서재로 옴" 알림은 "[PDF 가져오기]"(카드 단추) | `lay2` 360/412 ko. ko 맨 위 단추 번역은 별도 다듬기 |
+| 6 | 정보 | 큰 책 재사용 경로 비용: 107MB 원본 `put` 이 리더까지 +184ms(615 vs 431ms) — 한 번뿐 | `big-cur`·`big-head` |
+| 7 | 정보 | `quiz.js` 작업본 전체 CRLF(섞임 0) — `eol=lf` 라 커밋 때 LF, diff 는 고친 줄만 | 9c3R-6 |
+| 8 | 정보 | 카드 [PDF 가져오기]에서 파일을 못 읽으면(브라우저 읽기 실패) 배너 + 카드 알림 "가져오지 못했습니다: ERR" · 문서 무변 — 실패 처리 맞음, 다만 코드가 `ERR` 뿐이라 사용자에게 이유가 안 보임(실기기에서 클라우드 파일 고르기 실패 때 볼 문구) | `e2e1`·`lay1`(하네스 경로 실수로 드러남). 실기기 목록에 "Drive 등 클라우드 파일을 고를 때" 한 줄 |
+| 9 | 정보 | Build 보고 다시 잼 — 1727 ×2 · stamp 79·4 · `diff --check` 0 · 본문 해시 2개 · 종단(POST 0·캐시 36·단어 2·calls 2) · 입구 다섯·뒤로 · 6조합 넘침 0·48px·RTL · 9c2R ①②③⑤⑧ 모두 맞음. 다른 것은 #1(남은 6 의 범위)·#2(보고서 "기다리는 사이 주소가 바뀌었으면 가지 않는다"가 리더·퀴즈에서는 일부만) | 9c3R-1~8 |
+
+**실기기 목록(Build 8절)에 더할 것**: #8(클라우드·메신저 파일을 [PDF 가져오기]로 고를 때 읽기 실패 문구).
+
+## 9c3R-10. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 파일로 쓰고 따로 읽음). **막힌 명령 0.** 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · CMDT 는 서재 가져오기로 읽기만(원서 글자 읽음·인용 0 — 문서 수·id·쪽 번호·크기만) · Downloads 목록 0 · `b9c3/`·`b9c2/` 읽기만 · C: 남은 96GB.
+
+스크래치 `r9c3/`: `common.mjs`(Build 하네스 사본 — 경로·가짜 키만) · `run-imp.mjs`·`cmp-imp.mjs`·`imp-cur/head.json` · `run-big.mjs`·`big-cur/head.json` · `run-ent.mjs`·`ent1`·`ent2`·`ent-R3.json` · `run-e2e.mjs`·`e2e1`·`e2e2.json` · `run-lay.mjs`·`lay1`·`lay2.json`·`shots/` · `run-body.mjs`·`body-cur/head.json` · `fix9c2.mjs` · `future-cmp.mjs`·`head-import-raw.js`·`head-import.mjs` · `mut.mjs`·`m-R1`–`m-R6.txt`·`bak/` · `full1.txt`·`full2.txt` · 프로필 `pI1`·`pI2`·`pBig1`·`pBig2`·`pE1`·`pE2`·`pE3`·`pB1`·`pB2`·`pL1`·`pL2`·`pBodyC`·`pBodyH` · `section.md`(이 절)·`append.mjs`.
+
+**고친 뒤 배포** — 서재 가져오기 회귀 0(HEAD 와 같은 문서·id·진도·추출, 다른 것은 원본이 생긴 것뿐 — 9c-2 남은 2 고쳐짐), 다른 PDF 붙음 0, 빈 리더 남는 입구 0, 원본 있는 책 튕김 0, 두 프로필 종단 POST 0, 회귀 0(본문 바이트 같음), 콘솔 오류 0, XSS 0. 남은 것은 #1(9c2R #3 미래 시각 — 시계가 앞선 기기 파일에서 다시 가져오기 멱등 깨짐, 몇 줄 고침 + 시험 한 줄; 운영자가 받아들이면 배포 가능) 하나, #2·#3·#5 는 작은 다듬기.
+
+# 9c-3b 재검증 — 9c3R #1–#3 고친 곳만 (spec 17-4-1 `[정정 2026-11-17 — 9c-3b]`) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-9c3b.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: 위 "9c-3 Review" 절, Build 지침 `medreader-build-9c3b-fix.md`·보고서(믿지 않고 다시 잼), spec 17-4-1 `[정정 2026-11-17 — 9c-3b]`, 9c-3b 몫 변경(`b9c3b/bak` 고치기 전 판과 줄 대조 — `import.js` `isFuture`·`docTimesFor`·`cleanRecord`·`docStep` 세 곳 · `reader.js`·`quiz.js` `from` 줄 위치 · N5 9줄 · I18 +16줄 · `index.html` `?v=` 3줄 · spec 1줄 — 지침 범위 그대로). 스크래치 `r9c3b/`, `r9c3/`·`b9c3b/` 는 읽기만(스크립트 실행·복사).
+
+## 9c3bR-0. 판정 — **배포 가능** (중간 0 · 낮음 3 · 정보 4)
+
+중간-1(미래 시각 자르기가 멱등을 깸)은 **닫힘**: 같은 id·같은 `fileHash` 두 갈래 모두 다른 `now` 로 2·3번 가져오기 = 한 번(keep), 그사이 기기에서 더 읽은 진도 유지, 새 문서만 지금으로 자름. 리더·퀴즈 경합은 지연 0·1·5ms 모두 머묾. 회귀 0(종단 칸이 9c-3 Review 와 모두 같음 · 번역 본문 바이트 HEAD 와 같음), 시험 1727×2, 콘솔 오류 0. 새 부작용 하나(시계가 **뒤처진** 기기에서 파일의 정당한 진도를 바로 받지 않음)는 설계 규칙(8f-3b "미래 시각 = 충돌 → 기기", 허용 오차 없음)대로이고 기기 값을 지우지 않아 **낮음**. 나머지 둘은 시험 틈.
+
+## 9c3bR-1. 중간-1 닫힘 (확인 1) — `fut.mjs`(fake-idb · HEAD=`r9c3/head-import.mjs` · 9c-3=`b9c3b/bak` 판을 절대 경로로 바꾼 `pre-import.mjs` · 지금 판, 같은 순서)
+
+파일 문서 `lastOpenedAt` = T0+30일(p.7), 가져오기 지금 = T0+1s → +5s → +8s, 그 뒤 기기에서 p.10(T0+9s) → +12s 에 다시.
+
+| 경우 | HEAD(9c-2) | 9c-3 | **9c-3b(지금)** |
+|---|---|---|---|
+| S1 같은 id·빈 기기 — 첫 결과 | p.7 · 시각 +30일 | p.7 · 지금 | p.7 · **지금**(새 문서 자르기) |
+| S1 둘째·셋째(다른 now) | keep·keep | **patch·patch**(같음 ✗) | **keep·keep**(스냅숏 같음 ✔) |
+| S1 기기 p.10 뒤 다시 | p.7(되돌아감) | p.7(되돌아감) | **p.10** |
+| S2 같은 `fileHash`·다른 id(기기 p.3) — 첫 | patch → p.7 | patch → p.7 | **keep → p.3**(기기 유지) |
+| S2 둘째·셋째 · 기기 p.10 뒤 | keep·keep · p.7 | patch·patch · p.7 | **keep·keep · p.10** · 문서 1 · id `devA` 그대로 |
+| S4 미래 시각 + 사용자 언어 fr·`domain`·`readStats` | patch(전부) · 둘째 keep | patch · 둘째 patch | patch(언어·domain·readStats 들어옴, 진도 p.3 유지) · **둘째 keep** |
+| S5 ISO 글자 미래 시각(`2999-…`) | patch → p.9 | patch·patch | **keep·keep**(기기 p.3) |
+| S6 새 문서 `lastOpenedAt`·`addedAt` 모두 미래 | 그대로(+30·+40일) | 지금 · 둘째 patch | **지금·지금 · 둘째 keep** |
+| S7 경계(파일 T0+3s — 첫 지금보다 뒤·둘째보다 앞) | keep·keep | patch·keep | patch·keep(Build 보고 경계와 같음 — 수렴) |
+
+- `r9c3/fix9c2.mjs` 다시: fails 0 · i3 `same true · keep 1 · lastOpenedAt 1000` · i4 **p.10** · d1 `lastOpenedAt === now` false(의도된 변화 — 자르기 자리가 `docTimesFor` 로). `future-cmp`: cur `afterFirst 1000 · page 10 · keep · keep`(Build 보고와 같음).
+- **새 부작용 — 시계가 뒤처진 기기**(S3: 기기 T0·p.3, 바른 시계 기기에서 만든 파일 T0+60s·p.20, 가져오는 기기의 지금 T0+30s):
+
+| | HEAD | 9c-3 | 9c-3b |
+|---|---|---|---|
+| 뒤처진 지금(T0+30s)에 가져오기 | p.20 | p.20 | **p.3**(keep — 파일 진도 안 받음) |
+| 기기 시계가 파일 시각을 지난 뒤(T0+120s) 다시 | p.20 | p.20 | **p.20**(patch — 그때 받음) |
+| 같은 갈래, `fileHash` 갈래(S3h) | p.20 | p.20 | p.3 → 뒤에 p.20 |
+| 그사이 이 기기에서 그 책을 열었다(기기 시각 T0+90s, S3b) | 기기 열기가 늦은 쪽 | 같음 | 같음 — 파일 p.20 은 끝내 안 들어옴(열기가 늦은 쪽 규칙, HEAD 와 같은 규칙) |
+
+  → "영영"은 아니다: 기기 시계가 파일 시각을 지난 뒤 다시 가져오면 받는다. 다만 그 전에 그 기기에서 책을 열면 그 열기가 늦은 쪽이 되어 받지 않는다(열면 p.3 에서 이어 읽게 됨). 데이터를 지우지 않고(파일에 남음·기기 값 유지) 창은 "기기 시계 뒤처짐 > 원래 기기에서 마지막으로 연 뒤 가져오기까지 걸린 시간"일 때뿐(자동 시각 맞춤 기기에서 드묾). spec 문구("기기 값 유지 — 단어장 8f-3b 와 같은 결")와 맞음 — 8f-3b 도 "허용 오차 없음"으로 같은 쪽을 골랐다. 다른 점은 CSV 는 미리보기에서 충돌을 보여 주지만 백업은 조용히 keep 으로 센다는 것 → #1 낮음.
+
+## 9c3bR-2. 리더·퀴즈 `from` (확인 2) — `run-ent.mjs`(새 프로필 `pR1`)
+
+책 A = 합성 PDF 를 가져온 뒤 `resetDerived` + 원본 지움 + `lastPage 3`, 책 B = 다른 판(원본 있음).
+
+| 경우 | 결과 |
+|---|---|
+| 경합 — 리더 주소 뒤 지연 **0·1·5ms** 에 `#/usage`(각 2번) | 6번 모두 `#/usage`·화면 usage — 서재로 끌리지 않음 · 히스토리 +2(주소 둘 다 남음 — `replace` 가 사용량 항목을 덮지 않음) |
+| 경합 — 퀴즈 주소 · 같은 지연 | 6번 모두 `#/usage` · 히스토리 +2(앞 둘; 뒤 넷은 +0 — 아래 정보 #6) |
+| 경합 — 검색 주소 · 0ms 2번 | 2번 모두 `#/usage`(그대로) |
+| 경합 뒤 뒤로 | 리더 주소 항목으로 돌아가 → 서재 그 카드(그 항목이 바뀌어 쓰임) |
+| 경합 없음 — 서재 → 리더 / 퀴즈 / 검색 주소 | 셋 다 `#/library`·화면 library·초점 = 그 카드 [PDF 가져오기](`need-pdf`, 카드 안)·알림 54자 · 히스토리 +1 · 뒤로 = `#/library`(다시 튕기지 않음) |
+| 설정 → 리더 주소 / 퀴즈 주소 → 뒤로 | 둘 다 서재 그 카드 → 뒤로 = **`#/settings`** |
+| 원본 있는 B 리더 `#/reader/B/2` | 바로 그려짐(줄 있음) |
+
+## 9c3bR-3. 회귀 (확인 3)
+
+- 시험: 9c-2(`backup-import-9c`)·9c-3(`needpdf-9c3`) 포함 전체 초록(아래).
+- **두 프로필 종단** `r9c3/run-e2e.mjs` 사본(새 프로필 `pB`, UI ar): 9c-3 Review `e2e2.json` 과 **시간 빼고 모든 칸 같음** — 미리보기 5줄 · [내보내기]·캐시 체크 꺼짐 · "PDF 필요" 카드 · 다른 판 무변(알림 68자·문서 JSON 같음) · 같은 PDF → `#/reader/A/3` · 추출 POST **0** · 3쪽 [▶] POST **0** · 캐시 36·단어 2·calls 2 · 같은 백업 한 번 더 "새로 0 · 바뀜 0 · 그대로 49 · 건너뜀 0"·문서 차이 0.
+- **번역 요청 본문 바이트** `r9c3/run-body.mjs` 사본(새 프로필 `pBodyC`): `4f2e6b6ac89f9d78`(2,729B)·`356e9e3f5ef34de4`(6,090B) = 9c-3 Review 의 HEAD 판 값(`body-head.json`). 보통 열기 7화면·서재 카드 `continue,delete,more`·9c-1 내보내기 13줄·aiCache 0 도 같음.
+
+## 9c3bR-4. 시험 · 검사 (확인 4)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **1회차 1727/1727(10.3초) · 2회차 1727/1727(10.4초)**(`r9c3b/full1.txt`·`full2.txt`).
+- `stamp-importmap --check` "그대로다 (모듈 79개 · CSS 4개)" · `git diff --check` 오류 0(경고 하나 — `quiz.js` 작업본 CRLF).
+- 줄 끝(`b9c3b/eol.mjs` 읽기만 실행): `quiz.js` 1,068줄 모두 CRLF·섞임 0, 나머지 6파일 LF 만.
+
+## 9c3bR-5. 변이 (확인 5) — `r9c3b/mut.mjs`(Build M1–M4 와 다른 곳 · 원본 바이트를 `r9c3b/bak/` 에 쓰고 1곳만 바꿈 → `needpdf-9c3`·`backup-import-9c`·`library` 시험 → finally 되씀 → 바이트 비교 + `cmp` 따로)
+
+| # | 변이 | repo 시험 | 다른 확인 |
+|---|---|---|---|
+| V1 | 같은 `fileHash` 갈래가 `docTimesFor` 를 거치지 않음(`remapRecord(…, v, …)`) | **살아남음**(32/32) → #2 | `fut.mjs` S2 **빨강**: 첫 가져오기 patch(p.3→p.7) · 기기 p.10 → **p.7 로 되돌아감** |
+| V2 | 리더가 잡은 `from` 대신 그때 주소를 넘김(`fromHash: location.hash` — `from` 줄 위치는 그대로) | **빨강** N5(입구 정규식) | — |
+| V3 | `goNeedPdf` 의 `fromHash` 지킴이 줄 지움 | **살아남음**(32/32) → #3 | headless 경합만 지킴(9c3bR-2) |
+| V4 | 새 문서 `addedAt` 미래 시각을 자르지 않음 | **빨강** I18 | — |
+
+4개 모두 `restored: true` · `cmp` import.js·reader.js·library.js ↔ `r9c3b/bak/V*` 0 · 변이 전후 `git diff --stat` 같음(`cmp` 0).
+
+## 9c3bR-6. headless (확인 6)
+
+Edge · pipe · 새 프로필(`r9c3b/pR1`·`pB`·`pBodyC`) · 가짜 키(세션·로컬, 꼬리표 `r9c3b`) · 흉내 Gemini(OPTIONS 204 + CORS) · 흉내 음성 · `setCacheEnabled(false)` · **한 번에 하나씩, 각 한 번** · **서버 띄움 0**(앱 요청은 모두 가로채 작업 트리에서). 하네스 = `r9c3/common.mjs` 사본(프로필 폴더·키 꼬리표만 — `mkcommon.mjs`). 세 실행 모두 **콘솔 오류 0 · pageerror 0 · 새 탭 0 · 외부 요청 0**(pdf.js CDN 만) · missing 0 · 4xx 0 · 흉내 오류 0 · stderr 0바이트. Gemini POST 는 `ent` 0 · 종단 0 · 본문 대조 2.
+
+## 9c3bR-7. 발견 사항
+
+| # | 심각도 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(설계 한계 — 새 부작용) | **시계가 뒤처진 기기**에서 바른 시계 기기의 파일을 가져오면, 파일 `lastOpenedAt` 이 "미래"로 보여 읽던 자리를 받지 않음(HEAD·9c-3 은 받음). 기기 시계가 파일 시각을 지나면 다시 가져올 때 받지만, 그 전에 그 기기에서 책을 열면 열기가 늦은 쪽이 되어 끝내 안 들어옴. 기기 값을 지우지 않음·파일에 남음 · 8f-3b(허용 오차 없음)와 같은 규칙 · 결과는 조용히 keep(CSV 와 달리 안내 없음) | `fut.mjs` S3·S3b·S3h. 방향(선택): spec 9c-3b 정정 줄에 이 경우 한 줄 기록 · 가져오기 끝 문구에 "미래 시각이라 읽던 자리는 기기 유지 n권" 같은 안내(8f-3b `conflictHelp` 결) — 실기기 목록에 "두 기기 시계가 다를 때" 한 줄 |
+| 2 | 낮음(시험 틈) | 보고서 "같은 id·같은 `fileHash` 두 갈래"인데 I18 은 같은 id 갈래만 — V1(`fileHash` 갈래가 `docTimesFor` 를 건너뜀)이 repo 시험에서 살아남고, 그 변이는 기기 진도를 되돌림(p.10→p.7) | 9c3bR-5 V1. 방향: I18 에 "기기에 다른 id·같은 `fileHash` 문서 → 미래 시각 파일 두 번 = 한 번 · 진도 유지" 한 줄 |
+| 3 | 낮음(시험 틈) | V3(`goNeedPdf` 의 `fromHash` 지킴이 지움)가 repo 시험에서 살아남음 — 9c-3b #2 고침이 기대는 줄인데 headless 경합만 잡음. N5 는 `from` 위치와 `fromHash: from` 넘김만 봄 | 9c3bR-5 V3. 방향: N5 에 `location.hash !== o.fromHash) return;` 단정 한 줄(또는 `location` 흉내로 `goNeedPdf` 단위 시험) |
+| 4 | 정보 | `docTimesFor` 기존 문서 갈래의 `delete x.lastPage`·`lastLineId` 는 안전망 — `mergeDoc` 은 파일 시각이 늦을 때만 진도를 옮기므로 `lastOpenedAt` 만 빼도 같음(동치). I18 이 세 필드를 모두 단정하므로 지우면 빨강 | 코드 읽기(`text/backup.js` `mergeDoc`) |
+| 5 | 정보 | `cleanRecord` 는 이제 `nowMs` 를 쓰지 않지만 `importBackup` 이 여전히 넘김 — 무해 | 코드 읽기 |
+| 6 | 정보 | headless 퀴즈 경합 뒤 넷·검색 경합의 "히스토리 +0"은 세션 히스토리 50개 상한(부팅을 거듭해 꽉 참)에 닿은 측정 한계 — 리더 6번·퀴즈 앞 2번은 +2, 경합 뒤 뒤로도 리더 항목이 남아 있음을 보여 `replace` 덮음 0 | `ent.json` |
+| 7 | 정보 | Build 보고 다시 잼 — 1727×2 · stamp 79·4 · `diff --check` 0 · CRLF 섞임 0 · i3·i4·future-cmp 값 · 경합 `#/usage` · 대조(서재 카드·뒤로 = 설정) 모두 맞음. 다른 것은 "두 갈래 모두"의 시험 범위(#2). 9c3R #5(ko 맨 위 단추 영어)·#8(클라우드 파일 읽기 실패 문구)은 범위 밖 그대로 | 9c3bR-1~6 |
+
+**실기기 목록에 더할 것**: #1(두 기기 시계가 다를 때 백업으로 진도 옮기기 — 받는 기기가 뒤처지면 그 자리에서 진도가 안 옮겨짐).
+
+## 9c3bR-8. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 파일로 쓰고 따로 읽음). **막힌 명령 0**(`git status --output` 은 없는 옵션이라 한 번 거절 — 리디렉션으로 다시, 권한 막힘 아님). 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · `r9c3/`·`b9c3b/` 쓰기 0 · 앱 파일 `git status` 처음과 같음.
+
+스크래치 `r9c3b/`: `mkpre.mjs`·`pre-import.mjs` · `fut.mjs`·`fut.json` · `fix9c2.json`·`future-cmp.json` · `mut.mjs`·`mut.json`·`m-V1`–`m-V4.txt`·`m-V1-fut.json`·`bak/` · `full1.txt`·`full2.txt` · `scope.mjs` · `status-before.txt`·`diffstat-before/after-mut.txt` · `mkcommon.mjs`·`common.mjs`·`run-ent.mjs`·`ent.json`·`run-e2e.mjs`·`e2e.json`·`run-body.mjs`·`body-cur.json`(+ `.err` 0바이트) · 프로필 `pR1`·`pB`·`pBodyC` · `section.md`(이 절)·`append.mjs`.
+
+**배포 가능** — 중간-1 닫힘(두 갈래 모두 다른 now 로 2·3번 = 한 번, 기기 진도 유지, 새 문서만 지금으로), 리더·퀴즈 경합 머묾(0·1·5ms), 회귀 0(종단 칸 모두 같음·본문 바이트 HEAD 와 같음), 시험 1727×2, 콘솔 오류 0. 남은 것은 낮음 셋(#1 시계가 뒤처진 기기 — 설계 규칙대로·기기 값 유지 · #2·#3 시험 한 줄씩).

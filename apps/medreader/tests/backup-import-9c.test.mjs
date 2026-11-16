@@ -589,3 +589,122 @@ test('I15 화면 — 가져오기 단추·파일 고르기(accept 없음)·미�
   assert.ok(!/아직 가져오기가 없습니다/.test(BUNDLES.ko['backup.howto']));
   assert.match(BUNDLES.ko['backup.howto'], /같은 PDF/);
 });
+
+/* ══ I16 `[9c-3 — 9c2R #6]` 시험 틈 R2·R3·R5 ═══════════════════ */
+test('I16 [9c2R #6] 같은 낱말·다른 대상 언어 기기 항목은 따로 · 끝 줄 뒤 레코드는 넣지 않음 · 키가 틀린 줄은 그 줄만 건너뜀', async () => {
+  const f = await seedAndExport();
+  // R2 — term 인덱스로 찾을 때 대상 언어까지 본다: 기기의 fr 항목(다른 id)은 그대로, 파일의 ar 항목은 따로 들어온다
+  await reset();
+  await db.put('cards', term({ id: 'vt:fnv:fr:1', targetLang: 'fr', translation: 'dyspnée', updatedAt: 5, createdAt: 5, docId: null }));
+  const r = await imp(f.gz);
+  assert.equal(r.ok, true);
+  const dys = (await collect('cards')).filter((c) => c.kind === 'term' && c.term === 'dyspnea');
+  assert.deepEqual(dys.map((c) => c.targetLang).sort(), ['ar', 'fr'], '대상 언어가 다르면 다른 항목');
+  assert.equal((await db.get('cards', 'vt:fnv:fr:1')).translation, 'dyspnée', '기기 fr 항목 내용 그대로');
+  // R3 — 끝 줄 뒤에 붙은 레코드(손댄 파일)는 넣지 않는다
+  await reset();
+  const text = (await f.plain.text()).replace(/\n+$/, '');
+  const after = JSON.stringify({ t: 'rec', s: 'annotations', v: { id: 'after-end', docId: 'docA', text: 'x', updatedAt: T0 } });
+  const r3 = await imp(fileOf(text + '\n' + after + '\n'));
+  assert.equal(r3.ok, true);
+  assert.equal(await db.get('annotations', 'after-end'), undefined, '끝 줄 뒤 레코드 0');
+  assert.equal(r3.bad, 1);
+  // R5 — 키가 틀린 줄(sectionId 없는 진도·객체 키 사용량)은 그 줄만 건너뛰고, 묶음 트랜잭션은 무너지지 않는다(뒤 줄까지 들어감)
+  await reset();
+  const ls = text.split('\n');
+  const badKeys = [
+    JSON.stringify({ t: 'rec', s: 'progress', v: { docId: 'docA', score: 1, updatedAt: T0 } }),
+    JSON.stringify({ t: 'rec', s: 'usage', v: { day: { x: 1 }, calls: 1 } })
+  ];
+  ls.splice(2, 0, ...badKeys);
+  const r5 = await imp(fileOf(ls.join('\n')));
+  assert.equal(r5.ok, true, '쓰기 실패 없음 ' + r5.code);
+  assert.ok(r5.ops.progress.skip >= 1 && r5.ops.usage.skip >= 1);
+  assert.equal(Number(await db.count('aiCache')), f.head.counts.aiCache, '마지막 캐시 줄까지 들어감');
+});
+
+/* ══ I17 `[9c-3 — 9c2R #2·#3]` 설정 합집합 · 타입·범위 ════════════ */
+const { LINKS, SEARCH } = await import('../js/config.js');
+const { DEFAULTS } = await import('../js/settings.js');
+
+test('I17 [9c2R #2] 의료 사이트·최근 검색어는 합집합(기기 먼저·주소로 겹침 제거·상한) · null(기본 목록) 쪽 · 멱등', async () => {
+  const L = (id, url) => ({ id: id, name: id, url: url });
+  const mine = [L('pubmed', 'https://pubmed.ncbi.nlm.nih.gov/?term={q}'), L('mine', 'https://mine.example/?q={q}')];
+  const theirs = [L('pubmed', 'https://pubmed.ncbi.nlm.nih.gov/?term={q}'), L('mine', 'https://other.example/?q={q}'), L('t3', 'https://t3.example/{q}')];
+  const u = IM.unionSetting('links.medical', mine, theirs);
+  assert.deepEqual(u.map((x) => x.url), ['https://pubmed.ncbi.nlm.nih.gov/?term={q}', 'https://mine.example/?q={q}', 'https://other.example/?q={q}', 'https://t3.example/{q}'], '기기 순서 먼저, 주소로 겹침 제거');
+  assert.equal(new Set(u.map((x) => x.id)).size, u.length, '겹친 id 는 새 id');
+  assert.deepEqual(u.slice(0, 2), mine, '기기 항목은 그대로');
+  assert.deepEqual(IM.unionSetting('links.medical', u, theirs), u, '멱등');
+  assert.deepEqual(IM.unionSetting('links.medical', null, theirs), theirs, '기기 = 기본 목록(null) → 파일 값(새 휴대폰)');
+  assert.deepEqual(IM.unionSetting('links.medical', mine, null), mine, '파일 = 기본 목록 → 기기 그대로');
+  const many = Array.from({ length: 40 }, (_, i) => L('x' + i, 'https://x' + i + '.example/{q}'));
+  assert.equal(IM.unionSetting('links.medical', mine, many).length, LINKS.MAX, '상한');
+  assert.deepEqual(IM.unionSetting('search.recent', ['b', 'a'], ['a', 'c', 'd', 'e', 'f']), ['b', 'a', 'c', 'd', 'e'].slice(0, SEARCH.RECENT_MAX));
+  assert.deepEqual(IM.unionSetting('search.recent', [], ['q']), ['q']);
+  assert.equal(IM.unionSetting('ui.lang', 'ko', 'ar'), 'ar', '그 밖 설정은 파일 값(덮기)');
+  // 실제 가져오기 — 기기에만 있던 의료 사이트·최근 검색어가 남는다 · 두 번 = 한 번
+  const f = await seedAndExport();
+  await reset();
+  await db.put('settings', { key: 'links.medical', value: [L('mine', 'https://mine.example/?q={q}')] });
+  await db.put('settings', { key: 'search.recent', value: ['asthma'] });
+  await db.put('settings', { key: 'ui.lang', value: 'en' });
+  const r = await imp(f.gz);
+  assert.equal(r.ok, true);
+  const links = (await db.get('settings', 'links.medical')).value;
+  assert.deepEqual(links.map((x) => x.url), ['https://mine.example/?q={q}', 'https://pubmed.ncbi.nlm.nih.gov/?term={q}']);
+  assert.equal((await db.get('settings', 'ui.lang')).value, 'ar', '그 밖 설정은 파일 값');
+  const s1 = await snap();
+  await imp(f.gz);
+  assert.equal(await snap(), s1, '같은 파일 두 번 = 한 번');
+});
+
+test('I18 [9c2R #3 · 9c3R #1] 타입·범위 — 설정은 DEFAULTS 와 같은 꼴일 때만 · 문서 미래 시각은 새 문서만 지금으로(기존 문서는 기기 유지) · lastPage·pageCount 꼴 · term 없는 항목 거절', async () => {
+  assert.equal(IM.settingTypeOk('reader.fontSize', 24, DEFAULTS), true);
+  assert.equal(IM.settingTypeOk('reader.fontSize', 'huge', DEFAULTS), false);
+  assert.equal(IM.settingTypeOk('ai.dailyCap', 'unlimited', DEFAULTS), false);
+  assert.equal(IM.settingTypeOk('ai.dailyCap', Infinity, DEFAULTS), false);
+  assert.equal(IM.settingTypeOk('reader.showDone', 'yes', DEFAULTS), false);
+  assert.equal(IM.settingTypeOk('search.recent', 'a', DEFAULTS), false);
+  assert.equal(IM.settingTypeOk('ui.lang', 'ar', DEFAULTS), true, '기본 null 키는 글자도');
+  assert.equal(IM.settingTypeOk('links.medical', [], DEFAULTS), true);
+  assert.equal(IM.settingTypeOk('links.medical', { a: 1 }, DEFAULTS), false);
+  assert.equal(IM.settingTypeOk('vocab.lastExportAt', 1700000000000, DEFAULTS), true);
+  assert.equal(IM.settingTypeOk('reader.fontSize', 'huge', null), true, 'defaults 없으면 보지 않는다');
+  const fut = { id: 'd', lastOpenedAt: NOW + 9e9, addedAt: '9999-01-01T00:00:00Z', lastPage: 'abc', pageCount: 'many' };
+  const d = IM.cleanRecord('documents', fut, { nowMs: NOW });
+  assert.deepEqual([d.lastOpenedAt, d.addedAt, 'lastPage' in d, 'pageCount' in d], [NOW + 9e9, fut.addedAt, false, false], 'cleanRecord 는 꼴만(시각은 docStep 몫)');
+  const n = IM.docTimesFor(d, NOW, true);
+  assert.deepEqual([n.lastOpenedAt, n.addedAt], [NOW, NOW], '새 문서 — 미래 시각은 지금으로');
+  const e = IM.docTimesFor({ id: 'd', lastOpenedAt: NOW + 9e9, lastPage: 7, lastLineId: '7:1', lang: 'fr' }, NOW, false);
+  assert.deepEqual(['lastOpenedAt' in e, 'lastPage' in e, 'lastLineId' in e, e.lang], [false, false, false, 'fr'], '기존 문서 — 읽던 자리는 기기 유지');
+  const ok = { id: 'd', lastOpenedAt: NOW - 5, addedAt: NOW - 9, lastPage: 3, pageCount: 40 };
+  assert.equal(IM.cleanRecord('documents', ok, { nowMs: NOW }), ok, '맞는 레코드는 같은 객체');
+  assert.equal(IM.docTimesFor(ok, NOW, true), ok);
+  assert.equal(IM.docTimesFor(ok, NOW, false), ok);
+  assert.equal(IM.cleanRecord('cards', { id: 'vt:x', kind: 'term', term: '  ', targetLang: 'ar' }), null);
+  assert.equal(IM.cleanRecord('cards', { id: 'vt:x', kind: 'term', targetLang: 'ar' }), null);
+  assert.equal(IM.cleanRecord('settings', { key: 'reader.fontSize', value: 'huge' }, { defaults: DEFAULTS }), null);
+  // 실제 가져오기 — 손댄 파일
+  const f = await seedAndExport();
+  await reset();
+  const ls = (await f.plain.text()).split('\n').map((l) => (l.includes('"s":"documents"') && l.includes('"docA"')
+    ? l.replace(/"lastOpenedAt":\d+/, '"lastOpenedAt":253370764800000') : l));
+  ls.splice(3, 0,
+    JSON.stringify({ t: 'rec', s: 'settings', v: { key: 'reader.fontSize', value: 'huge' } }),
+    JSON.stringify({ t: 'rec', s: 'cards', v: { id: 'vt:noterm', kind: 'term', targetLang: 'ar', translation: 'x' } }));
+  const r = await imp(fileOf(ls.join('\n')), { defaults: DEFAULTS });
+  assert.equal(r.ok, true);
+  assert.equal((await db.get('documents', 'docA')).lastOpenedAt, NOW, '미래 시각은 지금으로');
+  assert.equal((await db.get('settings', 'reader.fontSize')).value, 24, '틀린 꼴은 건너뛰고 파일의 맞는 값');
+  assert.equal(await db.get('cards', 'vt:noterm'), undefined);
+  // `[9c-3b — 9c3R #1]` 다른 now 로 두 번 가져오기 = 한 번(두 번째 keep) · 그사이 기기 진도가 앞섰으면 되돌아가지 않음
+  const ff = fileOf(ls.join('\n'));
+  const s1 = await snap();
+  const r2 = await imp(ff, { defaults: DEFAULTS, now: NOW + 5000 });
+  assert.equal(await snap(), s1, '다른 now 로 두 번 = 한 번');
+  assert.deepEqual([r2.ops.documents.keep, r2.ops.documents.patch], [2, 0], '두 번째는 keep');
+  await db.patch('documents', 'docA', { lastOpenedAt: NOW + 6000, lastPage: 10 });
+  await imp(ff, { defaults: DEFAULTS, now: NOW + 9000 });
+  assert.equal((await db.get('documents', 'docA')).lastPage, 10, '그사이 더 읽은 진도는 되돌아가지 않음');
+});

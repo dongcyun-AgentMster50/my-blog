@@ -12,7 +12,7 @@
    ══════════════════════════════════════════════════════════════════════ */
 
 import * as realDb from '../db.js';
-import { BACKUP } from '../config.js';
+import { BACKUP, LINKS, SEARCH } from '../config.js';
 import { hasSubtle } from '../hash.js';
 import { TERM_CONTENT_FIELDS } from '../text/vocab.js';
 import { lineSplitter, readHead, parseLine, remapRecord, mergeRecord, hasKeyShape } from '../text/backup.js';
@@ -105,12 +105,133 @@ export function cleanLinkIds(list) {
   return out || list;
 }
 
-/** 가져올 레코드 다듬기 — 키 모양 속성 이름 빼기 · 의료 사이트 id 꼴. */
-export function cleanRecord(store, v) {
+/* ── `[9c-3 — 9c-2 Review 9c2R #2·#3]` 가져온 값의 타입·범위 · 사용자 목록 설정은 합집합 ───────────── */
+
+/** 값의 꼴 이름 — `null`·`array`·`number`(유한)·그 밖 `typeof`. */
+function kindOf(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'array';
+  if (typeof v === 'number') return Number.isFinite(v) ? 'number' : 'bad';
+  return typeof v;
+}
+
+/**
+ * 설정 값이 그 키의 기본값(`settings.js` `DEFAULTS`)과 같은 꼴인가 — 손댄 파일의 `reader.fontSize:'huge'`·`ai.dailyCap:'unlimited'` 를 막는다.
+ * 기본값이 `null` 인 키(`ui.lang`·`vocab.lastExportAt`·`links.medical`)는 "아직 없음"이라 null·글자·유한한 수·배열을 받는다(객체·불리언은 아님).
+ * `defaults` 를 넘기지 않으면 보지 않는다(서비스는 `settings.js` 를 import 하지 않는다 — 화면이 넘긴다).
+ * @returns {boolean}
+ */
+export function settingTypeOk(key, value, defaults) {
+  if (!defaults || typeof defaults !== 'object') return true;
+  if (!Object.prototype.hasOwnProperty.call(defaults, key)) return false;
+  const want = kindOf(defaults[key]);
+  const got = kindOf(value);
+  if (got === 'bad' || got === 'undefined') return false;
+  if (want === 'null') return got === 'null' || got === 'string' || got === 'number' || got === 'array';
+  return got === want;
+}
+
+/**
+ * 사용자 목록 설정을 **합집합**으로(9c2R #2 — 파일 값으로 통째 덮으면 이 기기에만 있던 의료 사이트·최근 검색어가 사라진다). 순수.
+ * - `links.medical`: 둘 다 사용자 목록(배열)이면 **기기 순서 먼저** + 파일 항목 중 주소가 겹치지 않는 것 · `LINKS.MAX`(30)개까지 · 겹친 id 는
+ *   `cleanLinkIds` 의 결정적 새 id. 기기가 `null`(= 기본 목록 — 손대지 않음)이면 파일 값 그대로(새 휴대폰), 파일이 `null` 이면 기기 그대로.
+ * - `search.recent`: 기기 먼저 + 파일의 새 글자 · `SEARCH.RECENT_MAX` 개까지.
+ * 같은 파일을 두 번 넣어도 같다(이미 들어간 항목은 겹침으로 빠진다). 그 밖 키는 파일 값 그대로(덮기).
+ * @returns {*} 쓸 값(기기와 깊게 같으면 병합이 `keep`)
+ */
+export function unionSetting(key, mine, theirs) {
+  if (key === 'links.medical' || key === 'search.recent') {
+    if (!Array.isArray(mine)) return theirs;          // 기기 = 기본 목록(null — 손대지 않음) → 파일 값
+    if (!Array.isArray(theirs)) return mine;          // 파일 = 기본 목록(또는 꼴이 틀림) → 기기 그대로
+  }
+  if (key === 'links.medical') {
+    const seen = new Set();
+    const out = [];
+    const urlOf = (it) => (it && typeof it === 'object' && typeof it.url === 'string' ? it.url.trim() : null);
+    for (const it of mine) { const u = urlOf(it); if (u !== null) seen.add(u); out.push(it); }
+    for (const it of theirs) {
+      const u = urlOf(it);
+      if (u === null || seen.has(u)) continue;
+      seen.add(u);
+      out.push(it);
+    }
+    return cleanLinkIds(out.slice(0, LINKS.MAX));
+  }
+  if (key === 'search.recent') {
+    const out = [];
+    for (const q of [].concat(mine, theirs)) if (typeof q === 'string' && q && out.indexOf(q) < 0) out.push(q);
+    return out.slice(0, SEARCH.RECENT_MAX);
+  }
+  return theirs;
+}
+
+/** 시각 값(ms 숫자·ISO 글자)이 `nowMs` 보다 늦은가. 못 읽으면 false. */
+function isFuture(v, nowMs) {
+  const t = typeof v === 'number' ? v : typeof v === 'string' && v ? Date.parse(v) : NaN;
+  return Number.isFinite(t) && t > nowMs;
+}
+
+/**
+ * `[9c-3b — 9c3R #1]` 파일 문서의 **미래 시각**(이 기기 `nowMs` 보다 늦음 — 시계가 앞선 기기에서 만든 파일·손댄 파일) 다루기. 순수.
+ * - 새 문서(`isNew`): `lastOpenedAt`·`addedAt` 을 지금으로 자른다(미래 시각이 서재 맨 위를 차지하지 않게).
+ * - 기기에 있는 문서: 미래 `lastOpenedAt` 은 읽던 자리 비교에서 **기기 값 유지**(단어장 8f-3b "미래 시각 = 충돌 → 기기"와 같은 결) —
+ *   `lastOpenedAt`·`lastPage`·`lastLineId` 를 빼고 병합한다. 지금으로 자르면 가져올 때마다 "지금"이 달라 늘 기기보다 새로워진다
+ *   (같은 파일 두 번 ≠ 한 번 · 그사이 이 기기에서 더 읽은 진도가 파일 쪽으로 되돌아감).
+ * 바꿀 것이 없으면 같은 객체.
+ * @param {Object} v 파일 문서(`cleanRecord` 를 거친 것)
+ * @param {number} nowMs
+ * @param {boolean} isNew 이 기기에 같은 문서가 없다
+ * @returns {Object}
+ */
+export function docTimesFor(v, nowMs, isNew) {
+  if (!v || typeof v !== 'object' || !Number.isFinite(Number(nowMs))) return v;
+  const now = Number(nowMs);
+  if (isNew) {
+    const p = {};
+    for (const k of ['lastOpenedAt', 'addedAt']) if (v[k] !== undefined && isFuture(v[k], now)) p[k] = now;
+    return Object.keys(p).length ? Object.assign({}, v, p) : v;
+  }
+  if (!isFuture(v.lastOpenedAt, now)) return v;
+  const x = Object.assign({}, v);
+  delete x.lastOpenedAt;
+  delete x.lastPage;
+  delete x.lastLineId;
+  return x;
+}
+
+/** 0 이상 정수인가(쪽수) · 1 이상 정수인가(쪽 번호). */
+function natural(v, min) { return typeof v === 'number' && Number.isInteger(v) && v >= min; }
+
+/**
+ * 가져올 레코드 다듬기 — 키 모양 속성 이름 빼기 · 의료 사이트 id 꼴 ·
+ * `[9c-3 — 9c2R #3]` 문서 `lastPage`/`pageCount` 꼴이 틀리면 그 필드를 뺌(미래 시각은 여기서 자르지 않는다 — 새 문서인지 알아야 해서
+ * `docStep` 이 `docTimesFor` 로, 9c-3b) ·
+ * 설정은 `DEFAULTS` 와 같은 꼴일 때만(아니면 null — 그 줄 건너뜀) · `term` 이 없는 단어장 항목은 null(건너뜀).
+ * @param {string} store
+ * @param {*} v
+ * @param {{nowMs?:number, defaults?:Object}} [o]
+ * @returns {*} 다듬은 레코드(넣지 않을 것이면 null)
+ */
+export function cleanRecord(store, v, o) {
+  const opt = o || {};
   let x = dropKeyNames(v, 0);
-  if (store === 'settings' && x && x.key === 'links.medical') {
-    const fixed = cleanLinkIds(x.value);
-    if (fixed !== x.value) x = Object.assign({}, x, { value: fixed });
+  if (!x || typeof x !== 'object') return x;
+  if (store === 'settings') {
+    if (!settingTypeOk(x.key, x.value, opt.defaults)) return null;
+    if (x.key === 'links.medical') {
+      const fixed = cleanLinkIds(x.value);
+      if (fixed !== x.value) x = Object.assign({}, x, { value: fixed });
+    }
+  } else if (store === 'documents') {
+    const drop = [];
+    if (x.lastPage !== undefined && x.lastPage !== null && !natural(x.lastPage, 1)) drop.push('lastPage');
+    if (x.pageCount !== undefined && x.pageCount !== null && !natural(x.pageCount, 0)) drop.push('pageCount');
+    if (drop.length) {
+      x = Object.assign({}, x);
+      for (const k of drop) delete x[k];
+    }
+  } else if (store === 'cards' && x.kind === 'term') {
+    if (typeof x.term !== 'string' || !x.term.trim()) return null;
   }
   return x;
 }
@@ -270,7 +391,9 @@ function docStep(s, v, ctx, next, fail) {
   const st = s.documents;
   if (typeof v.id !== 'string' || !v.id) { tally(ctx, 'documents', 'skip'); next(); return; }
   reqGet(st, v.id, (cur) => {
-    if (cur) { apply(st, 'documents', cur, mergeRecord('documents', cur, v, { nowMs: ctx.nowMs }), ctx); next(); return; }
+    // `[9c-3b]` 기기에 있는 문서 — 파일의 미래 `lastOpenedAt` 은 읽던 자리 비교에서 빠진다(기기 유지 · 멱등)
+    const old = docTimesFor(v, ctx.nowMs, false);
+    if (cur) { apply(st, 'documents', cur, mergeRecord('documents', cur, old, { nowMs: ctx.nowMs }), ctx); next(); return; }
     const c = docHashCandidates(v.fileHash, v.pageCount);
     const taken = new Map();
     let i = 0;
@@ -281,7 +404,7 @@ function docStep(s, v, ctx, next, fail) {
         taken.set(h, hit || null);
         if (hit && samePdf(hit, v)) {
           ctx.remap.set(v.id, hit.id);
-          const theirs = remapRecord('documents', v, ctx.remap);
+          const theirs = remapRecord('documents', old, ctx.remap);
           apply(st, 'documents', hit, mergeRecord('documents', hit, theirs, { nowMs: ctx.nowMs }), ctx);
           next();
           return;
@@ -290,7 +413,8 @@ function docStep(s, v, ctx, next, fail) {
       }, fail);
     };
     const addNew = () => {
-      const r = mergeRecord('documents', null, v, { nowMs: ctx.nowMs, docReset: ctx.docReset });
+      // `[9c-3b]` 새 문서만 미래 시각을 지금으로 자른다
+      const r = mergeRecord('documents', null, docTimesFor(v, ctx.nowMs, true), { nowMs: ctx.nowMs, docReset: ctx.docReset });
       if (r.op === 'add' && c.base) {
         r.value.fileHash = !taken.get(c.base) ? c.base : (c.variant || v.fileHash);
         if (taken.get(r.value.fileHash)) { tally(ctx, 'documents', 'skip'); next(); return; }   // 쪽수를 모르는 변형까지 찼다 — 넣지 않는다
@@ -345,7 +469,10 @@ function plainStep(s, d, store, v, ctx, next, fail) {
   const key = keyOf(keyPathOf(d, store), v);
   if (!validKey(key)) { tally(ctx, store, 'skip'); next(); return; }
   reqGet(s[store], key, (cur) => {
-    apply(s[store], store, cur === undefined ? null : cur, mergeRecord(store, cur === undefined ? null : cur, v, { nowMs: ctx.nowMs }), ctx);
+    const mine = cur === undefined ? null : cur;
+    // `[9c-3 — 9c2R #2]` 의료 사이트·최근 검색어는 기기 것과 합친다(그 밖 설정은 파일 값으로 덮기 — 17-4-1 5 표)
+    const theirs = store === 'settings' && mine ? Object.assign({}, v, { value: unionSetting(v.key, mine.value, v.value) }) : v;
+    apply(s[store], store, mine, mergeRecord(store, mine, theirs, { nowMs: ctx.nowMs }), ctx);
     next();
   }, fail);
 }
@@ -361,7 +488,7 @@ function writeBatch(d, recs, ctx) {
         if (!STORE_SET.has(store)) { tally(ctx, store, 'skip'); continue; }
         if (store === 'settings' && !ctx.withSettings) { tally(ctx, store, 'skip'); continue; }
         // documents 가 아닌 레코드는 이 순간의 docId 바꿔 쓰기 표로(문서 줄이 파일 앞에 있다 — 같은 묶음 안에서도 앞에서 이미 채워졌다)
-        let v = cleanRecord(store, rec.v);
+        let v = cleanRecord(store, rec.v, { nowMs: ctx.nowMs, defaults: ctx.defaults });
         if (!v || typeof v !== 'object') { tally(ctx, store, 'skip'); continue; }
         if (store === 'documents') { docStep(s, v, ctx, next, reject); return; }
         v = remapRecord(store, v, ctx.remap);
@@ -388,7 +515,8 @@ function writeBatch(d, recs, ctx) {
  *
  * @param {Blob} file
  * @param {{withSettings?:boolean, now?:number, batch?:number, db?:Object, signal?:{aborted:boolean},
- *          onProgress?:(p:{done:number, total:number, store:string})=>void}} [opts]
+ *          defaults?:Object, onProgress?:(p:{done:number, total:number, store:string})=>void}} [opts]
+ *   `defaults` — `settings.js` `DEFAULTS`(화면이 넘긴다 — 설정 값이 같은 꼴일 때만 넣는다, 9c2R #3). 없으면 꼴을 보지 않는다.
  * @returns {Promise<{ok:boolean, code:string|null, gz:boolean, head:Object|null, lines:number, records:number, bad:number, long:number,
  *   ended:boolean, truncated:boolean, broken:boolean, stopped:boolean, endCounts:Object|null, seen:Object<string,number>,
  *   ops:Object<string,{add:number, put:number, patch:number, keep:number, skip:number}>, remap:Object<string,string>, dup:number,
@@ -407,6 +535,7 @@ export async function importBackup(file, opts) {
   };
   const ctx = {
     remap: new Map(), withSettings: o.withSettings !== false, nowMs: Number(o.now) || Date.now(),
+    defaults: o.defaults && typeof o.defaults === 'object' ? o.defaults : null,
     docReset: (d.derivedDocReset || realDb.derivedDocReset)(), ops: res.ops, dup: 0
   };
 

@@ -103,6 +103,25 @@
 }
 .doc-badge[hidden] { display: none; }
 
+/* `[9c-3 — spec 17-4-1 6]` "PDF 필요" 카드(백업에서 온 책) — 진행 줄 대신 배지 + 안내 한 줄 + 알림 한 줄. 색은 기존 주의 토큰. */
+.doc-badge[data-kind="needpdf"] { font-weight: 600; }
+.doc-need-hint {
+  margin: 0 0 var(--sp-3);
+  color: var(--c-text-dim);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.doc-need-msg {
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--c-warn-bg);
+  color: var(--c-warn-text);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.doc-need-msg[hidden] { display: none; }
+
 .doc-meta {
   display: flex;
   flex-wrap: wrap;

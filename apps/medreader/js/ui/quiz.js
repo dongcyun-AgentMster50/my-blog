@@ -30,7 +30,7 @@ import * as render from '../pdf/render.js';
 import * as charhl from './charhl.js';
 import { createSpeaker } from '../tts/speaker.js';
 import { loadVoices, resolveSpeech, speechPref } from '../tts/voices.js';
-import { openDoc, extractorFor } from './library.js';
+import { openDoc, extractorFor, hasPdf, goNeedPdf } from './library.js';
 
 /* ────────────────────────────────────────────────────────
    0. 상태
@@ -151,6 +151,8 @@ export async function showQuiz(params) {
   clear(e.mount);
   e.mount.appendChild(noticeCard(t('common.loading')));
 
+  // `[9c-3b — 9c3R #2]` 들어온 주소는 첫 `await` **앞**에서 잡는다(검색과 같게) — 기다리는 사이 다른 화면으로 가면 서재로 끌지 않는다.
+  const from = location.hash;
   let doc = null;
   try {
     doc = await db.get('documents', docId);
@@ -162,6 +164,9 @@ export async function showQuiz(params) {
   }
   if (token !== state.token) return;
   if (!doc) { go(libraryHash()); return; }
+  // `[9c-3 — spec 17-4-1 6]` PDF 원본이 없는 책(백업에서 옴) — 빈 퀴즈 대신 서재 그 카드로.
+  if (!(await hasPdf(docId))) { if (token === state.token) goNeedPdf(docId, { fromHash: from }); return; }
+  if (token !== state.token) return;
   state.doc = doc;
   state.entry = entryOf(doc, sectionId);
   paintTitle();

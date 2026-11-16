@@ -44,7 +44,7 @@ import { t, applyTranslations, formatNumber, onLangChange } from '../i18n/index.
 import { fromStored } from '../text/store.js';
 import { FOLD_ROLES, REF_ROLE, describePage, flowParasOf } from '../text/screen.js';
 import { go, replace, readerHash, libraryHash, quizHash, parseRoute } from '../router.js';
-import { openDoc, extractorFor, markScanNoticed } from './library.js';
+import { openDoc, extractorFor, markScanNoticed, hasPdf, goNeedPdf } from './library.js';
 // `[8l]` 스캔본·글자 깨짐 안내 띠(17-5-1 3 · 19-1-3 §3-3) — 판정·키는 순수 `text/scan.js`.
 import { bandKey } from '../text/scan.js';
 import { initTypeset, closeTypeset, syncControls } from './typeset.js';
@@ -755,6 +755,8 @@ export async function showReader(params) {
   if (!els) return;
   const docId = params && params.docId;
   if (!docId) { go(libraryHash()); return; }
+  // `[9c-3b — 9c3R #2]` 들어온 주소는 첫 `await` **앞**에서 잡는다(검색과 같게) — 기다리는 사이 다른 화면으로 가면 서재로 끌지 않는다.
+  const from = location.hash;
 
   let doc = null;
   try {
@@ -764,6 +766,8 @@ export async function showReader(params) {
     return;
   }
   if (!doc) { go(libraryHash()); return; }
+  // `[9c-3 — spec 17-4-1 6]` PDF 원본이 없는 책(백업에서 옴) — 조용히 빈 리더 대신 서재 그 카드로(`[PDF 가져오기]` 에 초점).
+  if (!(await hasPdf(docId))) { goNeedPdf(docId, { fromHash: from }); return; }
 
   const pageCount = Number(doc.pageCount) || 0;
   const wanted = clampPage(params.page, pageCount);

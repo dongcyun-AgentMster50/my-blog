@@ -38,7 +38,7 @@ import { fileIdentityHash } from '../hash.js';
 import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
-import { go, readerHash, vocabHash } from '../router.js';
+import { go, replace, readerHash, vocabHash, libraryHash } from '../router.js';
 import { fromStored } from '../text/store.js';
 import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
@@ -100,6 +100,30 @@ export function variantIdentity(fileHash, pageCount) {
   return String(fileHash) + ':n' + (Number(pageCount) || 0);
 }
 
+/* ── `[9c-3 — spec 17-4-1 6 · 결정 9c-D9]` "PDF 필요" — 고른 파일이 **그 문서의** PDF 인가 ──────────
+   백업에서 온 문서는 `blobs` 가 없다(17-4-1 2 — PDF 는 파일에 담지 않는다). 카드 `[PDF 가져오기]` 로 고른 파일은
+   `identityFor` 와 **같은 판단**으로만 받는다: 문서의 `fileHash` 가 파일 해시 그대로이거나 그 쪽수 변형 키이고, 쪽수가 맞을 때(`reuse`).
+   맞지 않으면 문서를 건드리지 않는다(새 문서로 가져올지 묻지 않는다 — 서재 [가져오기] 몫). */
+
+/** pdf.js 를 열기 전에 거를 수 있는가 — 해시가 그대로도, 그 변형(`해시:n…`)도 아니면 쪽수를 볼 것도 없이 다른 파일. */
+export function hashMayMatch(docHash, fileHash) {
+  const d = String(docHash || '');
+  const f = String(fileHash || '');
+  if (!d || !f) return false;
+  return d === f || (d.indexOf(f + ':n') === 0 && /^\d+$/.test(d.slice(f.length + 2)));
+}
+
+/**
+ * 고른 파일이 그 문서의 PDF 인가 — 순수. `fileHash` 는 고른 파일의 `fileIdentityHash`, `pageCount` 는 **고른 PDF 의** 실제 쪽수.
+ * @returns {boolean}
+ */
+export function needPdfMatch(doc, fileHash, pageCount) {
+  if (!doc || !hashMayMatch(doc.fileHash, fileHash)) return false;
+  // 변형 키는 쪽수까지 키에 들어 있다 — 그 쪽수와 지금 PDF 의 쪽수가 같아야 한다
+  if (doc.fileHash !== fileHash && doc.fileHash !== variantIdentity(fileHash, pageCount)) return false;
+  return identityFor(doc, doc.fileHash, pageCount).reuse;
+}
+
 /* ────────────────────────────────────────────────────────
    2. 상태
    ──────────────────────────────────────────────────────── */
@@ -110,6 +134,10 @@ let els = null;
 const extractors = new Map();
 /** docId → 마지막 progress detail. 카드를 다시 그릴 때 쓴다. */
 const progressByDoc = new Map();
+/** `[9c-3]` "PDF 필요" 카드 — 다음 서재 그리기에서 초점을 줄 문서 · 카드 한 줄 알림(docId → {key, params}) · `[PDF 가져오기]` 가 고르는 문서. */
+let pendingFocus = null;
+const needMsg = new Map();
+let needPick = null;
 
 export function initLibrary() {
   root = document.querySelector('[data-screen="library"]');
@@ -134,6 +162,22 @@ export function initLibrary() {
 
   els.list.addEventListener('click', onListClick);
 
+  // `[9c-3]` "PDF 필요" 카드의 `[PDF 가져오기]` — 서재 [가져오기]와 따로 감춘 input(고른 파일은 그 문서에만 붙인다). `index.html` 은 무변.
+  els.needFile = document.createElement('input');
+  els.needFile.type = 'file';
+  els.needFile.className = 'file-input';
+  els.needFile.accept = 'application/pdf,.pdf';
+  els.needFile.tabIndex = -1;
+  els.needFile.setAttribute('aria-hidden', 'true');
+  els.file.insertAdjacentElement('afterend', els.needFile);
+  els.needFile.addEventListener('change', async () => {
+    const f = els.needFile.files && els.needFile.files[0];
+    const docId = needPick;
+    els.needFile.value = '';
+    needPick = null;
+    if (f && docId) await attachNeedPdf(docId, f);
+  });
+
   // `[8g-4a]` [검색] → `#/search`. 이동은 `data-nav` 전역 위임 하나(12-7) — 여기서는 보이기만 정한다.
   const searchBtn = root.querySelector('#librarySearchBtn');
   if (searchBtn) searchBtn.hidden = !SEARCH.ENABLED;
@@ -155,13 +199,17 @@ export async function showLibrary() {
   if (!root) return;
   renderLibraryLinks();   // `[18]` 설정에서 고친 목록을 다시 읽는다(호출 0 — 설정 메모리)
   await renderList();
+  focusPending();
   await renderStorage();
 }
 
 async function renderList() {
   const docs = [];
+  let withPdf = null;
   try {
     await db.iterate('documents', { index: 'lastOpenedAt', direction: 'prev' }, (v) => { docs.push(v); });
+    // `[9c-3]` PDF 원본이 있는 문서 — 키만(Blob 을 올리지 않는다). 못 읽으면 전부 "있음"으로 본다(카드를 막지 않는다).
+    try { withPdf = new Set(await db.keysOf('blobs')); } catch (e) { withPdf = null; }
   } catch (e) {
     banner(e);
     return;
@@ -170,16 +218,23 @@ async function renderList() {
   clear(els.list);
   els.empty.hidden = docs.length > 0;
 
-  for (let i = 0; i < docs.length; i++) els.list.appendChild(docCard(docs[i]));
+  for (let i = 0; i < docs.length; i++) {
+    const need = !!withPdf && !withPdf.has(docs[i].id) && !extractors.has(docs[i].id);
+    if (!need) needMsg.delete(docs[i].id);
+    els.list.appendChild(docCard(docs[i], need));
+  }
 }
 
-function docCard(doc) {
+function docCard(doc, needPdf) {
   const card = el('div', 'card doc-card');
   card.setAttribute('data-doc-id', doc.id);
 
   const title = el('h2', 'doc-title');
   title.textContent = doc.title || doc.fileName || doc.id;
   card.appendChild(title);
+
+  // `[9c-3]` PDF 원본이 없다(백업에서 온 책) — 진행 줄 대신 "PDF 필요" 배지 + 안내 한 줄, `[계속]` 자리에 `[PDF 가져오기]`.
+  if (needPdf) return needPdfCard(card, doc);
 
   // `[8l]` 스캔본·깨짐 배지(17-5-1 3 · 19-1-3 §3-3). 추출 진행 줄은 그대로 둔다.
   card.appendChild(scanBadge(doc));
@@ -221,6 +276,86 @@ function docCard(doc) {
   return card;
 }
 
+/**
+ * `[9c-3 — spec 17-4-1 6]` "PDF 필요" 카드 — 제목·배지·메타(마지막 읽은 쪽 그대로)·안내 한 줄·알림 한 줄·`[PDF 가져오기]`·`[삭제]`·`[⋯]`.
+ * `[계속]` 은 없다(열면 빈 리더 — 그 길을 없앤다). 배지·안내는 단추의 `aria-describedby`.
+ */
+function needPdfCard(card, doc) {
+  card.setAttribute('data-need-pdf', '');
+  const base = 'needPdf-' + String(doc.id);
+  const badge = el('p', 'doc-badge', t('library.needPdf'));
+  badge.id = base + '-b';
+  badge.setAttribute('data-kind', 'needpdf');
+  badge.setAttribute('data-i18n', 'library.needPdf');
+  card.appendChild(badge);
+
+  const meta = el('div', 'doc-meta');
+  meta.appendChild(el('span', null, t('library.card.pages', { n: Number(doc.pageCount) || 0 })));
+  meta.appendChild(el('span', null, Number(doc.lastPage) > 1
+    ? t('library.card.lastRead', { page: formatNumber(doc.lastPage) })
+    : t('library.card.neverRead')));
+  meta.appendChild(el('span', 'doc-src-lang', srcLangText(doc)));
+  card.appendChild(meta);
+
+  const hint = el('p', 'doc-need-hint', t('library.needPdf.hint'));
+  hint.id = base + '-h';
+  card.appendChild(hint);
+  const note = el('p', 'doc-need-msg');
+  note.setAttribute('role', 'status');
+  note.setAttribute('aria-live', 'polite');
+  paintNeedMsg(note, doc.id);
+  card.appendChild(note);
+
+  const actions = el('div', 'doc-actions');
+  const pick = el('button', 'primary', t('library.needPdf.import'));
+  pick.type = 'button';
+  pick.setAttribute('data-action', 'need-pdf');
+  pick.setAttribute('aria-describedby', badge.id + ' ' + hint.id);
+  const delBtn = el('button', 'danger', t('library.card.delete'));
+  delBtn.type = 'button';
+  delBtn.setAttribute('data-action', 'delete');
+  const panelId = 'docLang-' + String(doc.id);
+  const more = el('button', 'doc-more', '⋯');
+  more.type = 'button';
+  more.setAttribute('data-action', 'more');
+  more.setAttribute('aria-expanded', 'false');
+  more.setAttribute('aria-controls', panelId);
+  more.setAttribute('aria-label', t('library.card.more'));
+  actions.appendChild(pick);
+  actions.appendChild(delBtn);
+  actions.appendChild(more);
+  card.appendChild(actions);
+  card.appendChild(langPanel(doc, panelId));
+  return card;
+}
+
+function paintNeedMsg(node, docId) {
+  const m = needMsg.get(docId);
+  node.textContent = m ? t(m.key, m.params) : '';
+  node.hidden = !m;
+}
+
+/** 그 카드의 알림 한 줄만 고친다(다시 그리지 않는다 — 초점이 단추에 남는다). */
+function setNeedMsg(docId, key, params) {
+  if (key) needMsg.set(docId, { key: key, params: params || null }); else needMsg.delete(docId);
+  const card = els && els.list && els.list.querySelector('[data-doc-id="' + cssEscape(docId) + '"]');
+  const node = card && card.querySelector('.doc-need-msg');
+  if (node) paintNeedMsg(node, docId);
+}
+
+/** 서재가 그려진 뒤 — 리더·검색·퀴즈에서 PDF 없는 책으로 왔으면 그 카드의 `[PDF 가져오기]` 에 초점. */
+function focusPending() {
+  const id = pendingFocus;
+  pendingFocus = null;
+  if (id == null || !els || !els.list) return;
+  const card = els.list.querySelector('[data-doc-id="' + cssEscape(id) + '"]');
+  const btn = card && card.querySelector('button[data-action="need-pdf"]');
+  if (!btn) return;
+  setNeedMsg(id, 'library.needPdf.opened', { button: t('library.needPdf.import') });
+  try { card.scrollIntoView({ block: 'center' }); } catch (e) { /* 그대로 */ }
+  try { btn.focus({ preventScroll: true }); } catch (e) { /* 그대로 */ }
+}
+
 /** `[8l]` 카드 배지 — 판정이 없거나 `text` 면 숨긴 채로 자리만 둔다(판정이 나중에 오면 `paintScanBadge`). */
 function scanBadge(doc) {
   const b = el('p', 'doc-badge');
@@ -246,7 +381,7 @@ function paintBadgeInto(b, doc) {
 function paintScanBadge(doc) {
   if (!els || !els.list || !doc) return;
   const card = els.list.querySelector('[data-doc-id="' + cssEscape(doc.id) + '"]');
-  const b = card && card.querySelector('.doc-badge');
+  const b = card && !card.hasAttribute('data-need-pdf') && card.querySelector('.doc-badge');
   if (b) paintBadgeInto(b, doc);
 }
 
@@ -442,6 +577,8 @@ async function importFile(file) {
     if (decision.reuse) {
       // `[P1 경합]` 자기 필드(쪽수가 비었을 때의 `pageCount`·`lastOpenedAt`)만 합친다.
       doc = await touchDuplicate(existing, pageCount);
+      // `[9c-3]` 백업에서 온 문서는 PDF 원본이 없다 — 그 자리에서 넣는다(안 넣으면 이 세션에서만 읽히고 새로 불러오면 다시 "PDF 필요").
+      await ensureBlob(doc.id, file);
       setStatus(t('library.import.duplicate'));
     } else {
       // 같은 해시의 변형이 이미 있으면 그것을 재사용한다(같은 파일을 다시 가져온 경우).
@@ -449,6 +586,7 @@ async function importFile(file) {
       if (prior) {
         // 예전 코드는 여기서 쪽수를 채우지 않았다 — 변형 키는 쪽수가 같아야 찾아지므로 채울 일이 없다.
         doc = await touchDuplicate(prior, null);
+        await ensureBlob(doc.id, file);      // `[9c-3]` 위와 같다(변형 키 문서)
         setStatus(t('library.import.duplicate'));
       } else {
         doc = newDocument(file, decision.identity, pageCount);
@@ -491,6 +629,117 @@ function newDocument(file, identity, pageCount) {
     columnsHint: null,
     sectionIndex: []
   };
+}
+
+/* ────────────────────────────────────────────────────────
+   4-1. `[9c-3 — spec 17-4-1 6 · 결정 9c-D9]` PDF 원본 없는 문서(백업에서 옴)
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 서재 [가져오기] 재사용 경로 — 그 문서에 PDF 원본이 없으면 넣는다. **한 readwrite 트랜잭션**에서 확인하고 쓴다
+ * (두 탭이 함께 넣어도 하나). 문서가 그사이 지워졌으면 넣지 않는다(문서 없는 blob 을 남기지 않는다).
+ * @param {string} docId
+ * @param {Blob} file
+ * @param {{withTx:Function}} [dbx] 시험 주입(기본 `db.js`)
+ * @returns {Promise<boolean>} 넣었으면 true
+ */
+export function ensureBlob(docId, file, dbx) {
+  const d = dbx || db;
+  return d.withTx(['documents', 'blobs'], 'readwrite', (tx, s) => new Promise((resolve, reject) => {
+    const c = s.blobs.count(docId);
+    c.onerror = () => reject(c.error);
+    c.onsuccess = () => {
+      if (Number(c.result) > 0) { resolve(false); return; }
+      const g = s.documents.get(docId);
+      g.onerror = () => reject(g.error);
+      g.onsuccess = () => {
+        if (!g.result) { resolve(false); return; }
+        const w = s.blobs.put({ docId: docId, blob: file });
+        w.onerror = () => reject(w.error);
+        w.onsuccess = () => resolve(true);
+      };
+    };
+  }));
+}
+
+/**
+ * 카드 `[PDF 가져오기]` 가 맞는 PDF 를 받았다 — **한 트랜잭션**에서 문서를 다시 읽고(그사이 지워졌으면 아무것도 쓰지 않는다)
+ * 원본을 넣고 자기 필드(`lastOpenedAt`, 쪽수를 몰랐으면 `pageCount`)만 합친다. 진도·원문 언어 등 다른 필드는 그대로.
+ * @returns {Promise<Object|null>} 지금 저장된 문서(지워졌으면 null)
+ */
+export function attachBlobFor(docId, file, numPages, dbx, now) {
+  const d = dbx || db;
+  const at = Number.isFinite(now) ? now : Date.now();
+  return d.withTx(['documents', 'blobs'], 'readwrite', (tx, s) => new Promise((resolve, reject) => {
+    const g = s.documents.get(docId);
+    g.onerror = () => reject(g.error);
+    g.onsuccess = () => {
+      const cur = g.result;
+      if (!cur) { resolve(null); return; }
+      const next = Object.assign({}, cur, { lastOpenedAt: at });
+      if (!Number(cur.pageCount)) next.pageCount = numPages;
+      s.blobs.put({ docId: docId, blob: file });
+      const w = s.documents.put(next);
+      w.onerror = () => reject(w.error);
+      w.onsuccess = () => resolve(next);
+    };
+  }));
+}
+
+/**
+ * 이 문서를 열 수 있는가(PDF 원본이 있는가) — 추출기가 붙어 있으면 있다. 키 개수만 센다(Blob 을 올리지 않는다).
+ * 못 읽으면 true(여는 길을 막지 않는다 — 열기가 따로 실패를 알린다).
+ */
+export async function hasPdf(docId, dbx) {
+  if (extractors.has(docId)) return true;
+  try { return Number(await (dbx || db).count('blobs', docId)) > 0; } catch (e) { return true; }
+}
+
+/**
+ * 리더·검색·퀴즈가 PDF 없는 책을 열려 했다 — 빈 화면 대신 서재 그 카드로(초점 + 한 줄). 주소로 온 것은 히스토리를 바꿔 쓴다
+ * (뒤로 가기가 같은 곳으로 다시 튕기지 않게). `fromHash` 가 있고 그사이 주소가 바뀌었으면(사용자가 다른 곳으로 감) 가지 않는다.
+ * @param {string} docId
+ * @param {{push?:boolean, fromHash?:string}} [opts]
+ */
+export function goNeedPdf(docId, opts) {
+  const o = opts || {};
+  if (typeof location !== 'undefined' && o.fromHash != null && location.hash !== o.fromHash) return;
+  pendingFocus = docId;
+  if (o.push) go(libraryHash()); else replace(libraryHash());
+}
+
+/** 카드 `[PDF 가져오기]` — 그 문서의 PDF 인지 확인하고 붙인다. 맞지 않으면 한 줄 알림, 문서는 그대로. */
+async function attachNeedPdf(docId, file) {
+  const looksPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  if (!looksPdf) { setNeedMsg(docId, 'library.import.notPdf'); return; }
+  let pdfDoc = null;
+  try {
+    const doc = await db.get('documents', docId);
+    if (!doc) { await renderList(); return; }
+    setNeedMsg(docId, 'library.import.hashing');
+    const fileHash = await fileIdentityHash(file);
+    const wrong = () => setNeedMsg(docId, 'library.needPdf.wrong', { button: t('library.import') });
+    if (!hashMayMatch(doc.fileHash, fileHash)) { wrong(); return; }      // pdf.js 를 열 것도 없다
+    setNeedMsg(docId, 'library.import.opening');
+    pdfDoc = await openDocument(file);
+    if (!needPdfMatch(doc, fileHash, pdfDoc.numPages)) {
+      const p = pdfDoc;
+      pdfDoc = null;
+      try { p.destroy(); } catch (e) { /* 정리 실패는 무해 */ }
+      wrong();
+      return;
+    }
+    const rec = await attachBlobFor(docId, file, pdfDoc.numPages);
+    if (!rec) { await renderList(); return; }        // 그사이 지워짐 — 쓴 것 없음
+    needMsg.delete(docId);
+    await attach(rec, pdfDoc);
+    await renderList();
+    await renderStorage();
+    go(readerHash(docId, rec.lastPage || 1));
+  } catch (e) {
+    banner(e);
+    setNeedMsg(docId, 'err.importFailed', { code: (e && e.code) || 'ERR' });
+  }
 }
 
 /* ────────────────────────────────────────────────────────
@@ -994,6 +1243,14 @@ async function onListClick(ev) {
     return;
   }
 
+  if (btn.getAttribute('data-action') === 'need-pdf') {
+    // `[9c-3]` 이 책의 PDF 고르기 — 고른 파일은 `attachNeedPdf` 가 해시·쪽수로 확인한다.
+    needPick = docId;
+    setNeedMsg(docId, null);
+    if (els.needFile) els.needFile.click();
+    return;
+  }
+
   if (btn.getAttribute('data-action') === 'more') {
     const panel = card.querySelector('.doc-lang-panel');
     if (!panel) return;
@@ -1047,6 +1304,7 @@ async function onListClick(ev) {
     if (ex) { ex.stop(); extractors.delete(docId); }
     unwatchLangGuess(docId);
     progressByDoc.delete(docId);
+    needMsg.delete(docId);
     try {
       await db.deleteDocument(docId);
       searchInvalidate(docId);   // `[8g-2]`

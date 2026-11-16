@@ -757,5 +757,12 @@ export default {
   'backup.imported': "가져오기 끝 — 새로 불러옵니다.",
   'backup.import.result': "새로 {add} · 바뀜 {changed} · 그대로 {kept} · 건너뜀 {skipped}",
   'backup.import.broken': "파일 뒷부분이 잘렸거나 손상되어 그 앞까지 가져왔습니다.",
-  'backup.import.countsDiffer': "파일에 적힌 개수와 실제 개수가 다릅니다({parts})."
+  'backup.import.countsDiffer': "파일에 적힌 개수와 실제 개수가 다릅니다({parts}).",
+  'backup.import.quota': "기기 저장 공간이 모자라 멈췄습니다. 공간을 비운 뒤 같은 파일로 다시 가져오면 이어집니다.",
+  /* `[9c-3 — spec 17-4-1 6]` 서재 "PDF 필요"(백업에서 온 책) */
+  'library.needPdf': "PDF 필요",
+  'library.needPdf.hint': "이 기기에는 이 책의 PDF 원본이 없습니다. 같은 PDF 를 고르면 읽던 쪽과 저장된 번역이 이어집니다.",
+  'library.needPdf.import': "PDF 가져오기",
+  'library.needPdf.wrong': "이 책의 PDF 가 아닙니다(다른 판일 수 있습니다). 새 책으로 넣으려면 위의 [{button}] 단추를 쓰세요.",
+  'library.needPdf.opened': "이 책을 열려면 PDF 원본이 필요합니다 — [{button}] 단추로 같은 PDF 를 고르세요."
 };

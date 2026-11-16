@@ -759,5 +759,12 @@ export default {
   'backup.imported': "Import finished — reloading the app.",
   'backup.import.result': "New {add} · changed {changed} · unchanged {kept} · skipped {skipped}",
   'backup.import.broken': "The end of the file is cut off or damaged — imported up to that point.",
-  'backup.import.countsDiffer': "The counts written in the file differ from what was found ({parts})."
+  'backup.import.countsDiffer': "The counts written in the file differ from what was found ({parts}).",
+  'backup.import.quota': "Stopped because the device storage is full. Free up space, then import the same file again to continue.",
+  /* `[9c-3 — spec 17-4-1 6]` library "PDF needed" (a book that came from a backup) */
+  'library.needPdf': "PDF needed",
+  'library.needPdf.hint': "This book's original PDF is not on this device. Choose the same PDF to continue from your page, with your saved translations.",
+  'library.needPdf.import': "Choose the PDF",
+  'library.needPdf.wrong': "This is not this book's PDF (it may be a different edition). To add it as a new book, use [{button}] above.",
+  'library.needPdf.opened': "This book needs its original PDF to open — use [{button}] to choose the same PDF."
 };

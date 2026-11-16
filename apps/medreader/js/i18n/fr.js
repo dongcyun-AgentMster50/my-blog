@@ -757,5 +757,12 @@ export default {
   'backup.imported': "Importation terminée — rechargement de l'application.",
   'backup.import.result': "Nouveaux {add} · modifiés {changed} · inchangés {kept} · ignorés {skipped}",
   'backup.import.broken': "La fin du fichier est coupée ou abîmée — importation jusqu'à ce point.",
-  'backup.import.countsDiffer': "Les nombres indiqués dans le fichier diffèrent de ce qui a été trouvé ({parts})."
+  'backup.import.countsDiffer': "Les nombres indiqués dans le fichier diffèrent de ce qui a été trouvé ({parts}).",
+  'backup.import.quota': "Arrêté : l'espace de stockage de l'appareil est plein. Libérez de l'espace, puis importez à nouveau le même fichier pour continuer.",
+  /* `[9c-3 — spec 17-4-1 6]` bibliothèque « PDF requis » (livre venu d'une sauvegarde) — [검토 — Nour·운영자] */
+  'library.needPdf': "PDF requis",
+  'library.needPdf.hint': "Le PDF original de ce livre n'est pas sur cet appareil. Choisissez le même PDF pour reprendre à votre page, avec vos traductions enregistrées.",
+  'library.needPdf.import': "Choisir le PDF",
+  'library.needPdf.wrong': "Ce n'est pas le PDF de ce livre (il peut s'agir d'une autre édition). Pour l'ajouter comme nouveau livre, utilisez [{button}] plus haut.",
+  'library.needPdf.opened': "Ce livre a besoin de son PDF original pour s'ouvrir — utilisez [{button}] pour choisir le même PDF."
 };

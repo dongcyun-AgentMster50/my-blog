@@ -56,7 +56,7 @@ import {
   revealLine, revealRegion, revealTop, noteSearchJump, setViewAnchorHint
 } from './reader.js';
 import { pauseForJump, cueAt, speechState, onSpeechChange } from './controls.js';
-import { openDoc, extractorFor } from './library.js';
+import { openDoc, extractorFor, hasPdf, goNeedPdf } from './library.js';
 
 /* ════════════════════════════════════════════════════════
    1. 순수 부분 — tests/search-ui-8g.test.mjs 가 고정한다.
@@ -980,8 +980,11 @@ async function showSearch(params) {
   restoreScroll();
   if (docId) {
     const had = !!S.doc;
+    const from = location.hash;
     try { S.doc = await db.get('documents', docId); } catch (e) { S.doc = null; }
     if (!S.shown || S.docId !== docId) return;
+    // `[9c-3 — spec 17-4-1 6]` PDF 원본이 없는 책(백업에서 옴) — 빈 검색 대신 서재 그 카드로.
+    if (S.doc && !(await hasPdf(docId))) { if (S.shown && S.docId === docId) goNeedPdf(docId, { fromHash: from }); return; }
     if (S.doc) S.docRecs.set(docId, S.doc);
     paintScope();
     if (S.tab === 'toc' && S.toc && S.toc.data) paintToc();
@@ -1728,7 +1731,9 @@ function onResultsClick(ev) {
   const prep = ev.target.closest('button[data-prep]');
   if (prep) {
     prep.disabled = true;
-    openDoc(prep.getAttribute('data-prep')).catch(() => { prep.disabled = false; });
+    const id = prep.getAttribute('data-prep');
+    // `[9c-3]` PDF 원본이 없는 책은 준비할 수 없다 — 조용히 아무 일 없음 대신 서재 그 카드로(뒤로 = 이 결과 목록).
+    hasPdf(id).then((ok) => (ok ? openDoc(id) : goNeedPdf(id, { push: true }))).catch(() => { prep.disabled = false; });
     return;
   }
   // `[8g-7]` "장" 묶음 줄 → 목차 탭과 같은 길(그 장 첫 쪽 맨 위)

@@ -256,7 +256,7 @@ async function onExport() {
    `[9c-2]` 가져오기 — 미리보기 · 진행 · 떠나기 확인 · 다시 불러오기
    ──────────────────────────────────────────────────────── */
 
-const PREVIEW_ERR = Object.freeze({ newer: 'backup.newer', 'not-backup': 'backup.notBackup' });
+const PREVIEW_ERR = Object.freeze({ newer: 'backup.newer', 'not-backup': 'backup.notBackup', quota: 'backup.import.quota' });
 
 function onPickFile() {
   if (busy || needReload || !el.file) return;
@@ -335,6 +335,8 @@ function paintImport() {
   el.pv.hidden = !pick || !!importing;
   el.reload.hidden = !needReload;
   el.imp.disabled = busy || needReload;
+  // `[9c-3 — 9c2R #1]` 가져온 뒤 다시 불러오기 전에는 [내보내기]도 끈다(메모리가 옛 값 — 눌러도 아무 일 없던 단추를 남기지 않는다)
+  if (needReload) { el.btn.disabled = true; el.cache.disabled = true; }
   paintPreview();
 }
 
@@ -442,6 +444,7 @@ async function onImportGo() {
   try {
     r = await importBackup(file, {
       withSettings: withSettings,
+      defaults: settings.DEFAULTS,               // `[9c-3 — 9c2R #3]` 설정은 기본값과 같은 꼴일 때만
       signal: importing.signal,
       onProgress: (p) => { prog = { store: p.store || (prog && prog.store) || 'documents', done: p.done, total: p.total, phase: 'import' }; paintProgress(false); }
     });
@@ -457,17 +460,19 @@ async function onImportGo() {
   if (stop.signal.aborted && stop.leaveTo !== null) { reloadAt(stop.leaveTo); return; }
   if (!needReload) guard(false);
   if (!el) return;
-  el.btn.disabled = false;
-  el.cache.disabled = false;
+  el.btn.disabled = needReload;
+  el.cache.disabled = needReload;
   paintProgress(true);
   if (r && r.head && !r.code) {
     const s = sumOps(r.ops);
     const parts = [{ key: 'backup.imported' },
       { key: 'backup.import.result', params: { add: formatNumber(s.add), changed: formatNumber(s.changed), kept: formatNumber(s.kept), skipped: formatNumber(s.skipped) } }];
-    if (r.truncated || r.broken) parts.push({ key: 'backup.import.broken' });
+    // `[9c-3 — 9c2R #8]` gzip 꼬리(트레일러)만 잘렸고 끝 줄까지 들어왔으면 알리지 않는다 — 실제로 빠진 것이 없다
+    if (r.truncated || (r.broken && !r.ended)) parts.push({ key: 'backup.import.broken' });
     if (r.mismatch && r.mismatch.length) {
+      // `[9c-3 — 9c2R #5]` 이 앱이 모르는 스토어 줄(손댄 파일)은 이름이 없다 — 이름이 하나도 없으면 빈 괄호 문구를 내지 않는다
       const names = Array.from(new Set(r.mismatch.map((m) => PART_OF[m.store]).filter(Boolean)));
-      parts.push({ key: 'backup.import.countsDiffer', params: { parts: names.map((p) => t('backup.part.' + p)).join(', ') } });
+      if (names.length) parts.push({ key: 'backup.import.countsDiffer', params: { parts: names.map((p) => t('backup.part.' + p)).join(', ') } });
     }
     setMsg(parts);
   } else {
