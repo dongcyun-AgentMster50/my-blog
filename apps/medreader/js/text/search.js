@@ -111,9 +111,16 @@ const FOLD_MEMO_MAX = 4096;
 function fold1(ch) {
   const hit = FOLD_MEMO.get(ch);
   if (hit !== undefined) return hit;
-  let c = ch.toLowerCase();
+  // `[8g-6]` 전각 → 반각 **1:1**(U+FF01–FF5E → U+0021–007E, U+3000 → 공백). NFKC 는 쓰지 않는다 — `㎎`→`mg`
+  // 처럼 길이를 바꿔 오프셋 보존(17-8-4)을 깬다. 반각으로 바꾼 뒤 아래 접기(소문자·하이픈 → 공백)를 그대로 지난다.
+  const k = ch.charCodeAt(0);
+  let c = ch;
+  if (k >= 0xFF01 && k <= 0xFF5E) c = String.fromCharCode(k - 0xFEE0);
+  else if (k === 0x3000) c = ' ';
+  const w = c;
+  c = c.toLowerCase();
   // ★ 길이 가드 — `İ`.toLowerCase() 는 두 글자다. 길이가 바뀌면 그 글자만 원래대로(오프셋 보존).
-  if (c.length !== 1) c = ch;
+  if (c.length !== 1) c = w;
   const d = c.normalize('NFD');
   if (d.length > 1 && /^[a-z]$/.test(d[0]) && /^\p{M}+$/u.test(d.slice(1))) c = d[0];   // é → e
   if (DASH_RE.test(c)) c = ' ';
@@ -124,7 +131,8 @@ function fold1(ch) {
 }
 
 /**
- * 소문자·하이픈 → 공백·악센트 라틴 → 기본 글자·굽은 따옴표 → 곧은 따옴표. **길이를 바꾸지 않는다.**
+ * 소문자·하이픈 → 공백·악센트 라틴 → 기본 글자·굽은 따옴표 → 곧은 따옴표·`[8g-6]` 전각 ASCII → 반각(U+3000 → 공백).
+ * **길이를 바꾸지 않는다.**
  * 그리스 문자(`β`)는 그대로 둔다 — 검색어 쪽 변형이 `beta` 와 잇는다.
  * @param {string} s
  * @returns {string} `s.length` 와 같은 길이
@@ -156,11 +164,21 @@ export function compoundPrefixes(set = KEEP_HYPHEN_PREFIXES, min = SEARCH.COMPOU
 }
 const COMPOUND = Object.freeze(compoundPrefixes());
 
+/* `[8g-6 — spec 19-1-3 §8]` CJK·한국어 조사. **검색어 글자로만** 정한다(문서 언어로 정하지 않는다 — 8m 혼합 문서).
+   한자·가나는 낱말 사이에 공백이 없어 경계 검사가 늘 실패하므로 그쪽 끝은 검사하지 않는다(부분 일치). `ー`(U+30FC)는
+   Script=Common 이라 따로 넣는다. 한글로 끝나면 뒤에 조사가 붙으므로 뒤 경계를 연다(앞 경계는 그대로). */
+const CJK_HEAD = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
+const CJK_TAIL = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー]$/u;
+const CJK_ONE = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー]$/u;
+const HANGUL_TAIL = /\p{Script=Hangul}$/u;
+
 /**
- * 검색어 → `{q, cs, whole, variants}` 또는 `{error, q}`.
+ * 검색어 → `{q, cs, whole, variants, open?}` 또는 `{error, q}`.
  *   · 2~5자 전부 대문자(숫자 섞임 가능)면 **대소문자 구분 + 낱말 전체**(`MI` 가 mild·mi 를 덮지 않게)
  *   · 접은 길이 3자 이하면 낱말 전체, 4자 이상이면 **낱말 시작 접두**(뒤는 열림)
  *   · 그리스 문자 ↔ 이름 변형(`beta` ↔ `β`) · 합성어 변형(U7: `preeclampsia` ↔ `pre eclampsia`)
+ *   · `[8g-6]` 한글로 끝나면 길이와 무관하게 뒤 경계를 연다(`whole:false` — 조사 허용) · 한자·가나로 끝나면 뒤 경계를,
+ *     시작하면 앞 경계를 검사하지 않는다(`open:true`) · 한자·가나 **1자**는 허용(한글 1자는 그대로 짧음)
  * `cs` 면 원문에서, 아니면 `foldText(원문)` 에서 찾는다(`findIn`).
  * @param {string} q
  * @param {{compound?:boolean}} [opts] compound:false = 합성어 변형 없이(측정·비교용)
@@ -168,14 +186,16 @@ const COMPOUND = Object.freeze(compoundPrefixes());
 export function parseQuery(q, opts) {
   const compound = !(opts && opts.compound === false);
   const s = String(q == null ? '' : q).replace(/\s+/g, ' ').trim();
-  if (s.length < SEARCH.MIN_CHARS) return { error: SEARCH_ERR.SHORT, q: s };
+  const one = CJK_ONE.test(s);
+  if (s.length < SEARCH.MIN_CHARS && !one) return { error: SEARCH_ERR.SHORT, q: s };
   if (s.length > SEARCH.MAX_CHARS) return { error: SEARCH_ERR.LONG, q: s };
   if (/^[A-Z0-9]{2,5}$/.test(s) && /[A-Z]/.test(s)) return { q: s, cs: true, whole: true, variants: [s] };
 
   const f = foldText(s).replace(/\s+/g, ' ').trim();
   // 하이픈만인 검색어("--")는 접으면 비어 버린다 — 빈 변형으로 indexOf 를 돌리지 않는다.
-  if (f.length < SEARCH.MIN_CHARS) return { error: SEARCH_ERR.SHORT, q: s };
-  const whole = f.length <= 3;
+  if (f.length < SEARCH.MIN_CHARS && !one) return { error: SEARCH_ERR.SHORT, q: s };
+  const open = CJK_HEAD.test(f);
+  const whole = f.length <= 3 && !HANGUL_TAIL.test(f) && !CJK_TAIL.test(f);
   let vs = [''];
   const toks = f.split(' ');
   for (let k = 0; k < toks.length; k++) {
@@ -197,7 +217,9 @@ export function parseQuery(q, opts) {
     }
     vs = vs.concat(more);
   }
-  return { q: s, cs: false, whole: whole, variants: [...new Set(vs)] };
+  const out = { q: s, cs: false, whole: whole, variants: [...new Set(vs)] };
+  if (open) out.open = true;           // 라틴 검색어의 결과 모양은 8g 그대로(필드 없음)
+  return out;
 }
 
 /**
@@ -216,7 +238,7 @@ export function findIn(hay, pq, limit = Infinity) {
     if (!n) continue;
     let i = h.indexOf(v);
     while (i >= 0) {
-      if ((i === 0 || !isWordChar(h[i - 1])) && (!pq.whole || !isWordChar(h[i + n]))) out.push(i);
+      if ((pq.open || i === 0 || !isWordChar(h[i - 1])) && (!pq.whole || !isWordChar(h[i + n]))) out.push(i);
       i = h.indexOf(v, i + 1);
     }
   }
