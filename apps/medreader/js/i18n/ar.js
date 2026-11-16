@@ -602,6 +602,7 @@ export default {
   /* `[8g-7]` 19-1-4 2-4 — 사전으로 장 찾기 · scriptHint 의 언어 이름(UI 언어로) · [«الفهرس» 로]. `[검토 — Nour·운영자]` */
   'search.group.chapters': 'الفصول {n}',
   'search.dictFrom': 'من القاموس المدمج: {q} ← {to}',
+  'search.vocabFrom': 'بُحث عنها من قائمة الكلمات: {q} ← {to}',   // `[8f-4]` 17-8-9 (나) `[검토 — Nour·운영자]`
   'search.toToc': 'افتح «الفهرس»',
   'search.langName.ar': 'العربية',
   'search.langName.en': 'الإنجليزية',

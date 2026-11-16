@@ -607,6 +607,7 @@ export default {
   /* `[8g-7]` 19-1-4 2-4 — chapitres trouvés par le dictionnaire intégré · nom de langue dans la langue de l’interface. `[검토 — Nour·운영자]` */
   'search.group.chapters': 'Chapitres {n}',
   'search.dictFrom': 'Trouvé par le dictionnaire intégré : {q} → {to}',
+  'search.vocabFrom': 'Recherché via le lexique : {q} → {to}',   // `[8f-4]` 17-8-9 (b) `[검토 — Nour·운영자]`
   'search.toToc': 'Ouvrir « Sommaire »',
   'search.langName.ar': 'arabe',
   'search.langName.en': 'anglais',

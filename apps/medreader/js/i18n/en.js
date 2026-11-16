@@ -609,6 +609,7 @@ export default {
   /* `[8g-7]` 19-1-4 2-4 — chapters found with the built-in dictionary · language name in the UI language · [Contents] button */
   'search.group.chapters': 'Chapters {n}',
   'search.dictFrom': 'Found with the built-in dictionary: {q} → {to}',
+  'search.vocabFrom': 'Searched via your word list: {q} → {to}',   // `[8f-4]` 17-8-9 (b)
   'search.toToc': 'Open “Contents”',
   'search.langName.ar': 'Arabic',
   'search.langName.en': 'English',

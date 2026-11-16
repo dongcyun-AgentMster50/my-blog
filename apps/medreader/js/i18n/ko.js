@@ -607,6 +607,7 @@ export default {
   /* `[8g-7]` 19-1-4 2-4 — 내장 사전으로 찾은 장 · scriptHint 의 언어 이름(UI 언어로) · [«목차» 로] */
   'search.group.chapters': '장 {n}',
   'search.dictFrom': '내장 사전으로 찾음: {q} → {to}',
+  'search.vocabFrom': '단어장에서 바꿈: {q} → {to}',   // `[8f-4]` 17-8-9 (나) — {q} 검색어, {to} 단어장 원어
   'search.toToc': '«목차» 로',
   'search.langName.ar': '아랍어',
   'search.langName.en': '영어',

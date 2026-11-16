@@ -4,6 +4,9 @@
    `[8g-4b]` 목차 탭(이 책 범위 — 개요, 없거나 쓰레기 개요면 heading 폴백 + 머리 문구)도 여기 있다(5b절).
    `[8g-7]` 글자 체계가 다른 진료과 이름(예: 아랍어)으로 친 검색어 → 내장 사전(`text/specialty.js`) → 결과 맨 위 "장" 묶음,
    목차 탭 항목 옆 흐린 UI 언어 이름, 글자 체계 안내의 [«الفهرس» 로] 단추(spec 19-1-4 2-4 — 1절 `chapterGate`).
+   `[8f-4]` 아랍 문자 검색어가 이 책에서 0건이고 사전("장" 묶음)도 받지 않으면 → 단어장 `translation` 이 같은 항목의 `term` 으로
+   한 번 더 찾고 결과 위에 "단어장에서 바꿈" 한 줄(spec 17-8-9 (나) — 호출 0, 1절 `vocabRedirect`). `[8f-4b]` 그 원어도 0건이면
+   원래 검색어의 17-8-7 안내로 되돌린다(`vocabFallback`).
 
    UI 계층이다. 엔진(`search/engine.js`)은 결과·오류 **코드**만 낸다 — 문구는 여기서 i18n 으로 만든다(3-2).
    문서 글자는 전부 `textContent` 다(13절 — `innerHTML` 을 쓰지 않는다). 조각의 `<mark>` 도 글자 조각이다.
@@ -42,8 +45,11 @@ import { docLangOf } from '../text/lang.js';
 // `[8l]` 스캔본·깨짐 문서의 검색 안내 한 줄(17-5-1 3 · 19-1-3 §3-3) — 판정은 순수 `text/scan.js`.
 import { searchNotice } from '../text/scan.js';
 // `[8g-7]` 진료과·장기계 사전(순수 — 19-1-4 2-4) · 문서 `domain`(8p — 값 해석은 `ai/prompts.js` 한 곳)
-import { queryMatches, titleMatches, nameOf } from '../text/specialty.js';
+import { queryMatches, titleMatches, nameOf, foldArabic } from '../text/specialty.js';
 import { domainOf } from '../ai/prompts.js';
+// `[8f-4]` 단어장 대응(17-8-9 나) — 읽기만(`list`). 정규화는 단어장과 같은 `normalizeTerm` + 사전과 같은 `foldArabic`.
+import { vocabStore } from '../vocab/store.js';
+import { normalizeTerm } from '../text/vocab.js';
 import * as charhl from './charhl.js';
 import {
   onPageRender, onPageRepaint, onReaderLeave, readingSpot, currentScreen, lineElement,
@@ -341,6 +347,112 @@ export function tocDictName(title, docLang, uiLang, domain) {
     if (names.length >= 3) break;
   }
   return names.join(' · ');
+}
+
+/* ── `[8f-4]` 아랍어 검색어 → 단어장 대응 (spec 17-8-9 (나) · 8cf-D13 (가)) — 순수 부분 ──
+   **호출 0** — 단어장(IndexedDB `cards` `kind:'term'`)을 읽기만 한다. 저장 레코드·`SEARCH.VERSION`·DB 는 그대로.
+   **사전이 먼저**: 8g-7 "장" 묶음이 생기는 검색어는 결과가 있는 것이다 — 단어장을 보지 않는다(결과·안내 8g-7 그대로). */
+
+/** `[8f-4]` 단어장 번역 ↔ 검색어 비교 꼴 — **한 규칙**: `foldArabic`(사전·음성 명령과 같은 접기) → `normalizeTerm`(단어장 `term` 과 같은 정규화). 순수. */
+export function vocabKeyOf(s) {
+  return normalizeTerm(foldArabic(s));
+}
+
+/**
+ * `[8f-4]` 이 결과 모형에서 단어장 대응을 볼 때인가 — 이 책 범위 · 검색이 끝남 · 바꿔 찾은 모형이 아님(`m.via`) ·
+ * 검색어 오류 없음 · 적중 0 · 검색어에 아랍 문자 · 책 글자 체계와 다름(`scriptMismatch`) · 스캔본 "글자 없음" 안내가 아님. 순수.
+ * (한 모형에 한 번만 — 화면이 `m.vocab` 으로 지킨다.)
+ * @param {Object} m `newModel` 모형
+ * @param {{docLang:string, scanReplace?:boolean}} ctx
+ */
+export function vocabDue(m, ctx) {
+  const c = ctx || {};
+  if (!m || m.scope !== 'doc' || !m.final || m.error || m.via) return false;
+  const r = m.result;
+  if (!r || outcomeOf(r).type !== 'ok' || !Array.isArray(r.hits) || r.hits.length) return false;
+  if (c.scanReplace) return false;
+  return SCRIPT_RE.arabic.test(String(m.query || '')) && scriptMismatch(m.query, c.docLang);
+}
+
+/**
+ * `[8f-4]` 단어장 항목 중 `translation` 이 검색어와 **같은**(`vocabKeyOf`) 것 → 바꿔 찾을 원어.
+ * 후보: `kind:'term'` · 원어가 검색 규칙에 맞고 책 글자 체계와 같음 · 원어 ≠ 검색어. 먼저 **이 책 언어 → 지금 번역 대상 언어** 항목
+ * (`srcLang` 빈 것 포함)에서 고르고, 없으면 후보 전체(17-8-9 "그 문서 대상 언어 단어장, 없으면 전체"). 여럿이면 `updatedAt` 이 가장
+ * 최근인 하나(같으면 `createdAt`, 그다음 id) — 고칠수록 최근이라 사용자가 마지막으로 손본 번역이 이긴다. `others` = 고른 원어 밖의
+ * 서로 다른 원어 수(후보 전체 — 대상 언어만 다른 같은 원어는 하나). 없으면 null. 순수(입력을 바꾸지 않는다).
+ * @param {string} q
+ * @param {Array<Object>} entries `vocabStore.list()`
+ * @param {{docLang:string, target:string}} ctx
+ * @returns {null|{term:string, surface:string, id:(string|null), others:number}}
+ */
+export function vocabSwap(q, entries, ctx) {
+  const c = ctx || {};
+  const want = vocabKeyOf(q);
+  if (!want) return null;
+  const all = [];
+  for (const e of Array.isArray(entries) ? entries : []) {
+    if (!e || e.kind !== 'term' || typeof e.term !== 'string' || !e.term) continue;
+    if (vocabKeyOf(e.translation) !== want) continue;
+    if (vocabKeyOf(e.term) === want || parseQuery(e.term).error || scriptMismatch(e.term, c.docLang)) continue;
+    all.push(e);
+  }
+  if (!all.length) return null;
+  const pref = all.filter((e) => e.targetLang === c.target && (!e.srcLang || e.srcLang === c.docLang));
+  const pool = pref.length ? pref : all;
+  const num = (v) => Number(v) || 0;
+  let pick = pool[0];
+  for (const e of pool) {
+    const d = (num(e.updatedAt) - num(pick.updatedAt)) || (num(e.createdAt) - num(pick.createdAt)) || (String(e.id) > String(pick.id) ? 1 : 0);
+    if (d > 0) pick = e;
+  }
+  const terms = new Set(all.map((e) => e.term));
+  terms.delete(pick.term);
+  return { term: pick.term, surface: String(pick.surface || pick.term), id: pick.id == null ? null : String(pick.id), others: terms.size };
+}
+
+/**
+ * `[8f-4]` 빈 결과 → 단어장 대응 한 번. **사전이 먼저**: `deps.chapters()`(8g-7 "장" 묶음 — 목차를 다 읽은 뒤의 값)가 있으면 단어장을
+ * 읽지 않고 `{dict:true}`. 그다음 `deps.list()`(단어장 읽기) → `vocabSwap`. 볼 때가 아니면(`vocabDue`) null, 맞는 항목이 없으면 `{none:true}`.
+ * 화면은 `{swap}` 일 때 그 `term` 으로 한 번 더 찾는다. 네트워크·AI 를 부르지 않는다 — 주입받은 읽기 둘뿐.
+ * @param {Object} m
+ * @param {{docLang:string, target:string, scanReplace?:boolean, chapters?:function():Promise<*>, list:function():Promise<Array>}} deps
+ * @returns {Promise<null|{dict:true}|{none:true}|{swap:{term:string, surface:string, id:(string|null), others:number}}>}
+ */
+export async function vocabRedirect(m, deps) {
+  const d = deps || {};
+  if (!vocabDue(m, { docLang: d.docLang, scanReplace: d.scanReplace })) return null;
+  const ch = typeof d.chapters === 'function' ? await d.chapters() : null;
+  if (ch) return { dict: true };
+  let entries = [];
+  try { entries = await d.list(); } catch (e) { entries = []; }
+  const sw = vocabSwap(m.query, entries, { docLang: d.docLang, target: d.target });
+  return sw ? { swap: sw } : { none: true };
+}
+
+/**
+ * `[8f-4b]` 단어장 응답(`vocabRedirect` 결과)을 받았을 때 할 일. 순수(받은 상태를 바꾸지 않는다).
+ *   `'drop'`  — **낡은 결과**: 그사이 검색어·책이 바뀌었다(`st.model !== m || st.docId !== docId`) — 버린다
+ *   `'later'` — 화면을 떠났다 — 돌아와 그릴 때 다시 본다
+ *   `'dict'`·`'none'` — 바꾸지 않음(사전이 받음 · 맞는 항목 없음) — 지금 안내(17-8-7)
+ *   `'swap'`  — 그 원어로 바꿔 찾는다
+ * @param {{model:*, docId:*, shown:boolean}} st 화면 상태
+ */
+export function vocabSettle(st, m, docId, out) {
+  if (!st || st.model !== m || st.docId !== docId) return 'drop';
+  if (!st.shown) return 'later';
+  if (!out || !out.swap) return out && out.dict ? 'dict' : 'none';
+  return 'swap';
+}
+
+/**
+ * `[8f-4b]` 바꿔 찾은 모형(`via` · 원래 모형 `orig`)이 끝났는데 적중 0(또는 실패)이면 원래 검색어 모형 — 화면은 그 모형으로 되돌아가
+ * 17-8-7 안내(찾지 못했습니다 + 글자 체계 안내 + [«الفهرس» 로])를 HEAD 그대로 그린다(바꿈 줄 없음). 아니면 null. 순수.
+ */
+export function vocabFallback(m) {
+  if (!m || !m.via || !m.orig || !m.final) return null;
+  if (m.error) return m.orig;
+  const r = m.result;
+  return r && Array.isArray(r.hits) && r.hits.length ? null : m.orig;
 }
 
 /**
@@ -1036,6 +1148,9 @@ function onRunEvent(ev) {
     const d = chapToc();
     if (d && d.source === 'fallback' && chapterGate(S.model.query, docLang(S.docId), S.doc && S.doc.domain)) loadChapToc(true);
   }
+  // `[8f-4b]` 단어장으로 바꾼 원어도 0건 → 원래 검색어 모형으로 되돌린다(17-8-7 안내·[«الفهرس» 로] HEAD 그대로, 바꿈 줄 없음)
+  const back = vocabFallback(S.model);
+  if (back) S.model = back;
   if (ev.type === 'doc' && ev.result) ensureDocRec(ev.result.docId);
   if (ev.type === 'progress' && S.model.scope === 'library') { paintLibProgress(ev.progress); return; }
   if (ev.type === 'progress') { paintModelStatus(); return; }
@@ -1170,7 +1285,8 @@ function loadChapToc(force) {
   const my = { docId: docId, data: cur ? cur.data : null, loading: true, failed: false };
   S.chap = my;
   const before = tocKey(chapToc());
-  tocOf(docId).then((data) => {
+  // `[8f-4]` 읽기 약속을 둔다 — 단어장 대응이 "사전이 먼저"를 가리려고 목차가 다 읽히기를 기다린다(`settledChapters`)
+  my.wait = tocOf(docId).then((data) => {
     if (S.chap !== my) return;
     my.loading = false;
     if (!data) { my.failed = true; return; }
@@ -1199,6 +1315,70 @@ function currentChapters() {
   return data ? chapterGroup(m.query, data, { docLang: lang, domain: domain }) : null;
 }
 
+/* ── `[8f-4]` 빈 결과 → 단어장 대응(17-8-9 나 — 호출 0) ── */
+
+/** "장" 묶음 — 켜지는 검색어면 목차를 **다 읽은 뒤**(읽는 중이면 기다린다)의 값. 켜지지 않으면 null(읽기 0). */
+async function settledChapters(m, docId) {
+  if (!chapterGate(m.query, docLang(docId), S.doc && S.doc.domain)) return null;
+  for (let k = 0; k < 3; k++) {
+    const c = S.chap && S.chap.docId === docId ? S.chap : null;
+    if (c && !c.loading && (c.data || c.failed)) break;
+    if (!c || !c.loading) loadChapToc(false);
+    const w = S.chap && S.chap.docId === docId && S.chap.loading ? S.chap.wait : null;
+    if (!w) break;
+    await w;
+  }
+  if (S.model !== m || S.docId !== docId) return null;
+  return currentChapters();
+}
+
+/**
+ * 지금 모형이 볼 때면(`vocabDue`) 한 번 — 사전("장" 묶음) 다음 단어장. 맞으면 그 원어로 **새 모형**(`via` = 바꾼 사실)을 만들어
+ * 같은 검색 길(`run.doc`)로 찾는다(결과·조각·띠·리더 강조가 모두 원어를 쓴다). 없으면 지금 안내(17-8-7) 그대로.
+ */
+function kickVocab() {
+  const m = S.model;
+  const docId = S.docId;
+  if (!m || m.vocab || !docId || !run) return;
+  const sd = S.docRecs.get(docId) || S.doc;
+  const sn = scanNoticeFor(m, sd);
+  const deps = {
+    docLang: docLang(docId), target: settings.get('ai.translationLang'), scanReplace: !!(sn && sn.replace),
+    chapters: () => settledChapters(m, docId),
+    list: () => vocabStore.list()
+  };
+  if (!vocabDue(m, deps)) return;
+  m.vocab = 'looking';
+  vocabRedirect(m, deps).then((out) => {
+    const how = vocabSettle(S, m, docId, out);
+    if (how === 'drop') return;                          // 낡은 결과 — 그사이 검색어·책이 바뀌었다
+    if (how === 'later') { m.vocab = null; return; }     // 화면을 떠났다 — 돌아와 그릴 때 다시 본다
+    if (how !== 'swap') { m.vocab = how; paintModelStatus(); return; }
+    m.vocab = 'swapped';
+    const nm = newModel('doc', out.swap.term);
+    nm.via = { from: m.query, to: out.swap.surface, others: out.swap.others };
+    nm.orig = m;  // [8f-4b] 원어도 0건이면 이 모형으로(vocabFallback)
+    S.model = nm;
+    S.scrollY = 0;
+    paintModel();
+    run.doc(docId, out.swap.term);
+  }, () => {
+    if (S.model !== m) return;
+    m.vocab = 'none';
+    paintModelStatus();
+  });
+}
+
+/** "단어장에서 바꿈: «검색어» → 원어" — 검색어는 `<bdi dir=auto>`, 원어는 원서 글자(`dir=ltr` · lang = 문서 언어). 여럿이면 "… 외 n개". */
+function vocabFromNode(via, lang) {
+  const frag = isolatedParts('search.vocabFrom', {
+    q: { text: via.from, dir: 'auto' },
+    to: { text: via.to, dir: 'ltr', lang: lang }
+  });
+  if (via.others > 0) frag.appendChild(document.createTextNode(' ' + t('vocab.import.changesMore', { n: formatNumber(via.others) })));
+  return frag;
+}
+
 function paintModelStatus() {
   const m = S.model;
   if (!m) { paintStatus([]); return; }
@@ -1208,6 +1388,8 @@ function paintModelStatus() {
     const r = m.result;
     const pr = m.progress.get(S.docId);
     if (pr && pr.total > 0 && pr.done < pr.total) lines.push({ text: t('search.preparing', { done: formatNumber(pr.done), total: formatNumber(pr.total) }) });
+    // `[8f-4]` 단어장으로 바꿔 찾은 모형 — 결과 위에 "단어장에서 바꿈: «검색어» → 원어" 한 줄
+    if (m.via) lines.push({ node: vocabFromNode(m.via, docLang(S.docId)) });
     if (!r) { paintStatus(lines); return; }
     const oc = outcomeOf(r);
     if (oc.type === 'query') { lines.push({ text: t(oc.key) }); paintStatus(lines); return; }
@@ -1221,8 +1403,11 @@ function paintModelStatus() {
     if (sn && sn.replace) {
       lines.push({ text: t(sn.key) });
     } else if (m.final && !r.hits.length) {
+      // `[8f-4b]` 단어장을 보는 동안(수 ms)은 "찾지 못했습니다" 한 줄만 미룬다 — 바꿔 찾으면 깜빡이지 않게. 글자 체계 안내와
+      // [«الفهرس» 로] 는 바로(읽기가 매달려도 타이핑 없는 길이 남는다). 없으면 아래 그대로.
       // `[8g-7]` 사전으로 장을 찾았으면 "찾지 못했습니다"는 내지 않는다(결과가 있다) — 안내 줄과 [«الفهرس» 로] 는 그대로
       for (const k of emptyNotice(!!currentChapters(), scriptMismatch(m.query, docLang(S.docId)))) {
+        if (k === 'empty' && m.vocab === 'looking') continue;
         lines.push({ node: k === 'empty' ? isolated('search.empty', m.query) : scriptHintNode(docLang(S.docId), tocAllowed()) });
       }
     }
@@ -1248,6 +1433,7 @@ function paintModelStatus() {
 
 function paintModel() {
   if (!els) return;
+  kickVocab();
   paintModelStatus();
   clear(els.results);
   if (io) { io.disconnect(); }
