@@ -1523,3 +1523,56 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
   text-align: start;
 }
 .links-menu-item { flex: 0 0 auto; min-block-size: var(--tap); text-align: start; overflow-wrap: anywhere; }
+
+/* ── `[9c-1 — spec 17-4-1 6]` 백업·옮기기 카드 · 서재 저장 줄 옆 [백업] ─────────
+   ★ 논리 속성만(16-H). 누를 곳 48px(16-G). 파일 이름·책 제목은 `overflow-wrap: anywhere`(360px 가로 넘침 0).
+   ★ 30일 넘은 "마지막 백업" 줄만 주의 색(배너·알림 없음 — 9c-D8). 색만이 아니라 짧은 글자도 붙는다(`#backupStale`). */
+.storage-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--sp-3);
+  margin-block-start: var(--sp-4);
+}
+.storage-row > .storage-line { margin-block-start: 0; flex: 1 1 12em; min-inline-size: 0; }
+.backup-link { min-block-size: var(--tap); }
+/* 서재 [백업] → 카드로 굴릴 때 붙박이 상단바(sticky) 밑에 제목이 숨지 않게 */
+.backup-card { scroll-margin-block-start: calc(var(--bar-top) + var(--sp-2)); }
+.backup-last { font-weight: 600; overflow-wrap: anywhere; }
+.backup-last.backup-stale {
+  background: var(--c-warn-bg);
+  color: var(--c-warn-text);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+}
+.backup-stale-hint { font-weight: 400; }
+.backup-stale-hint[hidden] { display: none; }
+.backup-card > .primary { inline-size: 100%; margin-block: var(--sp-2); }
+.backup-progress { margin-block: var(--sp-2); }
+.backup-progress[hidden] { display: none; }
+.backup-progress .progress-track { inline-size: 100%; }
+.backup-progress-text { margin-block: var(--sp-1) 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#backupMsg { overflow-wrap: anywhere; }
+#backupMsg:empty { display: none; }
+.backup-pdfs > summary {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  cursor: pointer;
+  font-weight: 600;
+}
+.backup-pdfs > summary::after { content: "+"; margin-inline-start: auto; padding-inline: var(--sp-2); font-size: var(--fs-lg); color: var(--c-text-dim); }
+.backup-pdfs[open] > summary::after { content: "\2212"; }
+.backup-pdf-list { list-style: none; margin: var(--sp-2) 0; padding: 0; }
+.backup-pdf-list[hidden] { display: none; }
+.backup-pdf-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-block: var(--sp-2);
+  border-block-start: 1px solid var(--c-border);
+}
+.backup-pdf-text { flex: 1 1 10em; min-inline-size: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.backup-pdf-size { font-size: var(--fs-sm); color: var(--c-text-dim); font-variant-numeric: tabular-nums; }
+.backup-pdf-row button { margin-inline-start: auto; }

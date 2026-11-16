@@ -889,3 +889,69 @@ export const LINKS = Object.freeze({
     Object.freeze({ id: 'uptodate', name: 'UpToDate', url: 'https://www.uptodate.com/contents/search?search={q}', check: 'unverified', paid: true })
   ])
 });
+
+/* ────────────────────────────────────────────────────────
+   `[9c-1 — spec 17-4-1]` 백업·옮기기 — 한 파일 NDJSON(+gzip). 키는 절대 담지 않는다(17-4).
+   순수 `text/backup.js` 가 줄을 만들고, 서비스 `backup/export.js` 가 스토어를 커서로 읽어 이어 붙인다.
+   ★ 설정 허용 목록은 **명시 목록**이다 — 새 설정 키는 저절로 들어가지 않는다. `settings.js` `DEFAULTS` 의 모든 키가
+     `SETTINGS_KEYS`(담음)·`SETTINGS_SKIP`(안 담음) 둘 중 **하나에만** 있어야 한다(tests/backup-9c.test.mjs — 빠지면 빨강).
+     12·13(SRS·계획)의 `srs.*`·`reading.*`·`planner.exams` 는 아직 키가 없다 — 12-1·13-1 이 더한다.
+   ──────────────────────────────────────────────────────── */
+export const BACKUP = Object.freeze({
+  /* 파일 꼴의 판. 가져오기는 이보다 큰 판을 거절한다(17-4-1 3). */
+  FORMAT: 1,
+  APP: 'medreader',
+  /* 내보내기 — 한 트랜잭션에서 읽어 Blob 한 조각으로 만드는 줄 수(9c-D6). JS 힙에는 이만큼만 남는다. */
+  BATCH: 1000,
+  /* 가져오기(9c-2) — 한 트랜잭션에 쓰는 줄 수(9c-D6). */
+  IMPORT_BATCH: 500,
+  /* "마지막 백업 n일 전" 이 이 날 수를 넘으면 그 줄만 주의 색(9c-D8). */
+  STALE_DAYS: 30,
+  FILE_PREFIX: 'medreader-backup-',
+  /* 스토어 순서 — 파일도 이 순서(가져오기가 `documents` 로 docId 맞추기 표를 먼저 만든다). 담지 않는 것: blobs(책별 PDF 따로)·
+     pages·searchText·sections(파생 — 다시 추출) — 17-4-1 2. `questions` 는 `source:'ai'` 만. */
+  STORES: Object.freeze(['documents', 'settings', 'usage', 'progress', 'attempts', 'mistakes', 'questions', 'cards', 'annotations', 'aiCache']),
+  /* 캐시 끄기(17-4-1 6)로 빠지는 스토어 */
+  CACHE_STORE: 'aiCache',
+  /* `[9c-1b — 9c1R #1]` 백업 줄 지우개·설정 행 빼기의 키 모양(source 문자열 — 쓰는 쪽이 새로 컴파일). `REDACT_PATTERNS`(로그·오류·요청 검사)는
+     **넓은 그대로** 두고 백업만 좁힌다 — 백업은 사용자 글자(단어 문맥·필기·제목·검색어)를 담으므로 넓은 꼴이 낱말을 지우면 파일 글자가 영구히 바뀐다.
+     Google 꼴은 `KEY_SHAPES` 그대로. `sk-` 는 왼쪽 경계(앞이 영숫자·하이픈이 아님 — `low-risk-to-…`·`task-sk-…` 안에서 걸리지 않게)·
+     키 글자 집합·몸통 20자 이상. `Bearer` 는 뒤 토큰이 키 꼴일 때만 — 토큰 글자 집합(RFC 6750 b64token)·12자 이상·**숫자 하나 이상**
+     (낱말 "Bearer of …"·"Bearer responsibilities" 는 남는다. 무작위 토큰에 숫자가 없을 확률은 무시할 만하다).
+     `[9c-1c — 9c1bR #1·#2·#4]` `sk-` 경계에 "URL 인코딩 `%XX` 바로 뒤"·"글자 그대로 적힌 이스케이프(`\n`·`\t`·`\r`·`\b`·`\f`·`\"`·`\'`·`\/`·`\uXXXX`) 바로 뒤"를
+     더한다 — 한 글자 경계는 `%20` 의 `0`·`\n` 의 `n` 을 영숫자로 봐서 `%20sk-…`·붙여 넣은 JSON 의 `\nsk-…` 를 놓쳤다. 영숫자·하이픈에 바로 붙은 꼴
+     (`abcsk-…`·`api-key-sk-…`)은 합성어와 구별이 안 돼 남긴다(기록). `Bearer` 는 대소문자 무시·`%20`·`:` 뒤도 보고, 토큰은 "숫자 하나 이상(12자 이상)
+     **또는** 20자 이상" — 숫자 없는 긴 토큰(접두 없는 32자 키)도 지운다. "Bearer responsibilities"(16자)·"bearer bonds" 는 그대로. */
+  KEY_PATTERNS: Object.freeze([
+    KEY_SHAPES.GOOGLE_AIZA,
+    KEY_SHAPES.GOOGLE_AQ,
+    '[Bb][Ee][Aa][Rr][Ee][Rr](?:\\s+|%20|:\\s*)(?:(?=[A-Za-z0-9._~+/=\\-]*[0-9])[A-Za-z0-9._~+/=\\-]{12,}|[A-Za-z0-9._~+/=\\-]{20,})',
+    '(?:(?<![A-Za-z0-9\\-])|(?<=%[0-9A-Fa-f]{2})|(?<=\\\\[nrtbf"\'/])|(?<=\\\\u[0-9A-Fa-f]{4}))sk-[A-Za-z0-9_\\-]{20,}'
+  ]),
+  /* `documents` 의 사용자 몫 필드(17-4-1 2). `extraction`·`sectionIndex*` 와 모르는 필드는 담지 않는다.
+     `outlineV` 는 `outline` 을 읽은 판(search/outline.js) — 없으면 개요를 "아직 못 읽음"으로 본다(9c-1 Build 정정). */
+  DOC_FIELDS: Object.freeze(['id', 'title', 'fileName', 'size', 'pageCount', 'fileHash', 'addedAt', 'lastOpenedAt', 'lastPage',
+    'lastLineId', 'lang', 'langSource', 'langGuess', 'domain', 'readStats', 'outline', 'outlineV', 'pageLabels', 'scan', 'columnsHint']),
+  /* 담는다(17-4-1 4). `reader.*`·`readalong.*` 는 DEFAULTS 에서 펼친 목록. */
+  SETTINGS_KEYS: Object.freeze([
+    'ui.lang', 'ui.theme',
+    'reader.view', 'reader.fontSize', 'reader.lineHeight', 'reader.letterSpacing', 'reader.font', 'reader.showDone', 'reader.autoScroll',
+    'tts.rate', 'tts.unit', 'tts.repeat.count', 'tts.autoSummarize', 'tts.wakeLock', 'tts.readCitations', 'tts.scriptSwitch', 'tts.mediaKeys',
+    'voice.enabled', 'voice.cmdLang', 'voice.sayErrors',
+    'readalong.mode', 'readalong.speakSource', 'readalong.display', 'readalong.lastOn',
+    'search.recent', 'vocab.lastExportAt', 'links.medical',
+    'ai.provider', 'ai.model', 'ai.translationLang', 'ai.summaryLangs', 'ai.useOnDevice', 'ai.dailyCap', 'ai.warnAt',
+    'ai.cacheLimitMB', 'ai.maxReqChars',
+    'privacy.piiCheck'
+  ]),
+  /* 담지 않는다 — 기기 몫(목소리 URI·억양·인식 태그)·개인정보 몫(마이크 고지·AI 전송 동의·키 기억 여부 — 9c-D5)·
+     새 기기가 다시 볼 것(온보딩)·진단(`dev.debug`·`ai.proxyUrl`)·백업 자신(`backup.*`). */
+  SETTINGS_SKIP: Object.freeze([
+    'tts.voice.en', 'tts.voice.ar', 'tts.voice.fr', 'tts.voice.ko', 'tts.voice.es',
+    'tts.accent.en', 'tts.accent.ar', 'tts.accent.fr', 'tts.accent.ko', 'tts.accent.es',
+    'voice.tag', 'voice.noticeAt',
+    'privacy.consentedAt', 'privacy.rememberKey',
+    'onboarding.done', 'dev.debug', 'ai.proxyUrl',
+    'backup.lastExportAt'
+  ])
+});

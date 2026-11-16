@@ -11615,3 +11615,280 @@ Edge 한 번 · pipe · 새 프로필 `r8f4b/p1` · 가짜 키 · 흉내 Gemini(
 스크래치 `r18/`: `common.mjs`·`smoke.mjs`·`attack.mjs`·`run-a.mjs`·`run-l.mjs`·`run-r.mjs`·`run-body.mjs`·`run-label.mjs`·`mut.mjs`·`bak/`(R1–R6) · `full1.txt`·`full2.txt`·`m-R1`–`m-R6.txt`·`a-R3.json`·`a-R6.json` · `shots/` · `p0–p7`·`ph`·`pc` · `section.md`(이 절)·`append.mjs`.
 
 **배포 가능** — 위험한 주소 저장·열림 0, 새 탭 속성 넷 길 전부, 앱·외부 요청 0, XSS 0, 회귀 0, 콘솔 오류 0. 낮음 7(되돌리기 확인 · 360 줄 높이 · 목록 가림 · [편집] 너비 · ar 이름표 bidi · lookupPlan 재검사 시험 · 흐림 문구)은 다듬기 후보, 1번이 1순위.
+
+
+# 9c-1 Review — 백업 내보내기 (spec 17-4-1) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-9c1-export.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: spec 17-4-1 전부(+ `[정정 2026-11-17 — 9c-1 Build]`·⑦)·13절 백업 파일 행·3-2 `backup/*` 줄·9-3 `backup.lastExportAt` 줄, crossstep "9c" 줄 넷, Build 지침·보고서(믿지 않고 다시 잼), `git diff`(10파일 +295 −13) + 새 파일 넷(`js/text/backup.js`·`js/backup/export.js`·`js/ui/backup.js`·`tests/backup-9c.test.mjs`).
+
+## 9c1R-0. 판정 — **배포 가능** (중간 이상 0 · 낮음 10 · 정보 1)
+
+키·동의·기기 몫이 파일에 들어간 것 0(리뷰가 고른 자리 20여 곳 — 속성 이름 자리 하나만 예외, 앱 길 없음 #3), 금지 import 0(간접까지), 파일 꼴 설계대로(9c-2 `lineSplitter`·`parseLine`·`readHead` 로 다시 읽힘), `mergeRecord` 멱등·기기 값 보존(표본 둘), 화면 멈춤 0, 회귀 0, 콘솔 오류 0, 번역 요청 본문 HEAD 와 같음. **다만 #1(키 지우개 오탐 → 백업 글자 손실, 그리고 9c-2 에서 term 동률 규칙과 겹치면 기기 글자를 덮음)은 9c-2 착수 전에 고칠 것** — 지금 고치면 그동안 만들어질 백업 파일도 온전하다(두 줄짜리 고침).
+
+## 9c1R-1. 키 · 개인정보 (확인 1 — 가장 중요) ★
+
+**Node(fake-idb) `r9c1/k.mjs`** — Build K4 와 다른 몸통의 가짜 키 넷(`AQ.`(몸통에 `~+/=`)·`AIza`·`sk-proj-`·`Bearer⇥`)을 웹 저장소(세션·로컬 × gemini·openai·mistral)와 **리뷰가 고른 자리**에 심음: 문서 제목·파일 이름·`langGuess`·`readStats` 안·`outline` 안·`extraction`·`sectionIndex`·모르는 필드 · 단어 문맥·`docTitle` · 필기(깊은 객체 안 `\r\n` 섞어) · 사용량 행 글자 필드 · 진도 필드 · 퀴즈 `chosen` · 오답 필드 · AI 문항 · 원서 문항 · 캐시 결과 글자·객체·**캐시 키 `w=` 칸** · blob·pages(파생) · 설정 `search.recent`·`reader.font`·`links.medical`(주소)·허용 밖(동의·키 기억·`tts.voice.es`·`backup.lastExportAt`·온보딩·모르는 키).
+- gzip·평문 둘 다: 키 문자열·`REDACT_PATTERNS`·`KEY_SHAPES` 일치 **0** — **단 하나 예외**: 사용량 `byProvider` 의 **속성 이름**으로 심은 `AIza…` 는 그대로 남음(`JSON.stringify` 바꾸개는 값만 본다). 앱은 `byProvider`·`byKind` 에 코드값만 쓴다 — 사용자 글자가 속성 이름이 되는 길이 지금 없음 → #3.
+- `medreader.key.` 0 · 파생(blob·pages·searchText·sections) 0 · 원서 문항 0 · 설정은 허용 키만, 키 모양 값의 허용 키(`search.recent`·`reader.font`·`links.medical`)는 **행째** 빠짐 · 머리 줄 `docs` 제목도 `[KEY]`.
+- **headless `run-x`**(새 프로필 `px1`, ko 412×915): 세션·로컬 저장소에 가짜 키 셋 + 제목 `Bearer …`·파일 이름 `AIza….pdf`·`langGuess` 키·단어 문맥 `sk-…`·`docTitle`·필기·퀴즈 `chosen`·`search.recent`·`links.medical` 이름·캐시 결과 4개 → [내보내기] 잡은 gzip 을 Node 로 풀어 **키 0 · REDACT 0 · 저장소 이름 0**(캐시 포함 54줄 · 끔 14줄). 설정 줄 `ai.model`·`ai.translationLang`·`ai.useOnDevice`·`reader.fontSize`·`ui.lang` 다섯 — `tts.voice.ar`·`voice.tag`·`dev.debug`·`privacy.consentedAt`·`onboarding.done` 없음.
+
+**정적 import 그래프(간접까지, `r9c1/graph.mjs`)**: `backup/export.js` → `db`·`config`·`hash`·`text/layout`(→ `lines`·`columns`·`blocks`·`rowtable`·`hyphen`·`segment`)·`text/backup`(→ `config`·`text/vocab` → `bidi`). `db`·`hash`·`bidi` 는 import 0. **`privacy/`·`ai/`·`ui/` 0, 네트워크(`fetch`·XHR) 0**, `localStorage`·`sessionStorage` 낱말은 `config.js` **주석에만**(코드 0). `ui/backup.js` 사슬(+`settings`·`i18n/*`)에도 `ai/*` 0 → 8d D8 지켜짐(전체 시험의 D8 초록).
+
+**허용 목록(DEFAULTS 55 = 담음 37 + 안 담음 18, 빠짐·겹침 0)** — "기기 몫·개인정보 몫은 안 담음" 원칙에 맞다고 판단:
+- `ai.*` 9: `ai.provider`(코드)·`ai.model`(자유 글자지만 키 모양이면 행째 빠짐 — 위에서 확인)·`translationLang`·`summaryLangs`·`useOnDevice`·`dailyCap`·`warnAt`·`cacheLimitMB`·`maxReqChars` — 키 꼴 값이 정상으로 들어갈 자리는 `ai.model` 뿐이고 막혀 있음. 주소에 토큰이 들 수 있는 `ai.proxyUrl` 은 안 담음(맞음).
+- `search.recent` — 개인 검색 기록이지만 설계가 담음(17-4-1 4). 고지 문구에는 빠져 있음 → #7.
+- `links.medical` — 사용자 주소. Google 꼴 아닌 토큰(기관 로그인 토큰 등)은 지우개에 안 걸림 — 사용자가 직접 넣은 주소라 정보 수준(#7 에 함께).
+- `privacy.piiCheck` 담음 — 전송 전 개인정보 검사 켬/끔은 사용자 선호라 담는 쪽이 맞다. 다만 13절 행은 "`privacy.*` 없음"이라 적혀 있어 문구가 어긋남 → #6.
+
+## 9c1R-2. 파일 꼴 (확인 2)
+
+- 머리 → rec → 끝, 스토어 순서 `BACKUP.STORES` 그대로(빈 스토어는 건너뜀), 머리 `counts` = 끝 `counts` = 실제(10스토어 전부), `format 1`·`app`·`db 3`·`algo 12`·`hash s256`, 줄마다 `JSON.parse`, 줄 안 날 CR/LF 0, 파일 끝 LF. 값 속 `\n`·`\r\n`·U+2028·U+2029 는 한 줄 안에 남고 `lineSplitter` → `parseLine` 으로 같은 글자로 돌아옴.
+- **gzip 없을 때**(`CompressionStream` 지운 Node): `canGzip false` → `medreader-backup-20260102-0304.jsonl`·`application/x-ndjson`, 3줄 head/rec/end.
+- 파일 이름 지역 시간: `Asia/Seoul` 23:59:30 → `…-20261117-2359.jsonl.gz`(UTC 로 바뀌지 않음). `backupAge` 달력 날: 어제 23:59 → 오늘 00:01 = 1일 · 31일 → 주의 · 미래 시각 → "오늘" · 못 읽는 값 → never.
+- `docForBackup`: `extraction`·`sectionIndex`·`sectionIndexDone`·모르는 필드 0, 없는 필드는 만들지 않음. 정정에서 더한 셋 — `lastOpenedAt`(2절 원래 목록에 있음, 읽던 자리 비교의 기준) · `outlineV`(개요를 읽은 판 — `outline` 과 한 묶음, 없으면 새 기기가 PDF 에서 다시 읽음) · `columnsHint`(2절 원래 목록·9-2 표) — **모두 사용자 몫(또는 사용자 몫과 한 묶음)이 맞다.** `library.newDocument`·`extract.js`(extraction 만)·`outline.js`·`writeScan`·`updateDocLang`·`setDocDomain`·`touchOnOpen` 이 쓰는 필드를 모두 대조 — 빠진 사용자 필드 없음.
+
+## 9c1R-3. 순수 함수 — 리뷰 표본 (확인 3)
+
+| 함수 | 표본 | 결과 |
+|---|---|---|
+| `mergeRecord` usage | 객체 안 `a:1/0`·새 키 `b`·`capWarned` false/true · 기기 true/파일 false · 파일에만 있는 필드 | 큰 값·OR·새 필드 추가 ✔, 넘긴 객체 무변, 두 번째 keep |
+| documents | 기기 `lastOpenedAt` ISO·파일 ms · 둘 다 `langSource:user` · 기기 `domain` 있음 · 기기 `outline:[]` | 자리 + `lastOpenedAt` 함께, 언어·domain 기기 유지, 개요·`outlineV`·`scan` 은 기기에 없어 파일 → 적용 뒤 keep · 동률 → keep |
+| cards term | 자기 항목 그대로 · 다른 id(`vt:fnv:`)·더 늦은 같은 낱말(`suspended` 다름·복습 필드 없음) · 기기가 더 늦게 고침 · 파일 `updatedAt` ISO 글자 · 같은 id 문장 카드 | keep · 내용만 patch(`id`·`suspended`·`sm2`·`dueAt` 안 건드림) → 다른 `nowMs` 로 다시 keep · keep · 충돌 → keep · keep |
+| cards term + 지우개 | 문맥에 `low-risk-to-moderate-risk`(지어낸 문장) — 자기 백업 줄을 같은 기기에 | **patch** `context: "…low-ri[KEY]…"`·`updatedAt: 지금` — 기기의 바른 글자를 덮음 → #1 |
+| 문장 카드 | 기기 `reviewedAt 50`·reps 5 / 파일 `updatedAt 60`·`reviewedAt 20`·reps 1 | put(파일 통째) — 기기 복습이 옛것으로 → #8(12 몫) |
+| progress `@read` | 겹침·역순 `[12,10]`·비정수 `[2.7,3]` | `[[1,12]]`·pages 12, 두 번째 keep, 기기 배열 무변 |
+| 그 밖 | mistakes 기기 해결됨 · aiCache 다른 결과 · 동의 설정 · 키 모양 `search.recent` · 원서 문항 · annotations 동률 · 모르는 스토어 · id 없는 문서 | keep · keep · skip · skip · skip · keep · skip · skip |
+
+**멱등(전 스토어, `applyFile` 두 번)**: 리뷰 seed 에 `@read`·문장 카드 더해 내보낸 파일 → "더 새 값을 가진 기기"(다른 id 의 같은 낱말을 더 늦게 고침 · 사용량 99·`capWarned` · 다른 읽은 구간 · 더 늦은 자리 · 다른 테마)에 1회 `keep 15·put 2`, 2회 `keep 17`, 스냅숏 같음. 기기 낱말·사용량·자리 보존, 읽은 구간 합집합 `[[1,2],[5,6]]`, 설정은 설계대로 파일 값. 자기 파일 되가져오기(그 파일로 만든 상태) = 전부 keep.
+
+**`remapRecord`**: 캐시 키 셋째 칸만(해시·`w=old1:x` 의 `old1` 그대로) · 다른 문서 키 무변 · `questions.id` 접두 · `attempts.items` 하나만 바뀌고 나머지·`null` 은 같은 객체 · `progress.sectionId` 의 `old1:` 무변 · `old10:` 접두는 무변(정확히 같은 id 만) · `Map`·객체 둘 다 · `cards.id` 무변 · 3칸 키 무변. 원본 무변.
+
+**`lineSplitter`**: `\r\n` 꼴 4줄(é·아랍어·이모지, 마지막 줄 줄바꿈 없음)을 1–7바이트 조각 + `TextDecoder(stream)` 으로 → 7가지 모두 같은 줄 · 빈 줄·공백 줄·끝 `\r` 만 → 버림/뗌. 줄바꿈 없는 10MB → 279ms(#10).
+
+## 9c1R-4. 메모리 (확인 4) — 새 프로필 `r9c1/ph1`, Build `run-h` 의 생성기·재는 법 그대로
+
+- 심기: 15만 개 38.3초(`ph1` 은 Build 와 같은 생성기 — `b9c1/dl/h-150k.jsonl.gz` 는 IDB 에 넣는 길이 Build 하네스에 없어 쓰지 않음, 새 150MB 합성 파일도 만들지 않음). 캐시 줄 "약 214 MB".
+- **[내보내기] 두 번**: 읽기·줄 단계 최댓값 **+14.6MB · +14.6MB**(기준 ≤ +64) · 끝난 뒤 gc 3번 남는 양 **+0.3 · +0.3MB**(≤ +4) · 전체(압축 포함) +85.8 · +78.7MB · 7.3초 · 압축 단계 4.2초부터 · 평문 170,394,796B → gzip 22,784,816B, **압축률 0.134** · 150,006줄. Build 숫자(14.6·0.3·78.8·0.134)와 같다.
+- **⑦ 근거 실험(`exp7`)**: 50MB `ArrayBuffer` → `usedJSHeapSize` **+50.0**(바깥 메모리를 센다 — Build 말 맞음). 백업 평문 Blob(162.5MB)을 흐름으로 **읽기만**(조각마다 표본): 전부 **+124MB** · 절반 +59.3 · ¼ +40.7 · gzip 흘리기 전부 +124.8 · ¼ +40.6, 모두 gc 뒤 0 남음. → **"데이터 크기와 무관한 상한"은 이 측정에서 맞지 않다 — 평문 크기에 따라 커진다**(V8 바깥 메모리 문턱이 걷힐 때마다 다시 올라감). 기준을 (가)(나)로 나눈 판단 자체는 맞고(읽기 단계는 앱이 쥐는 양, 압축 조각은 쥐지 않고 gc 로 0), 남는 것도 0.
+- **폰 OOM 판단**: "거의 확실"은 아님 — 쥐고 있는 것이 아니라 걷히기 전 바깥 메모리이고, 기본 캐시 상한(200MB `sizeBytes` ≈ 평문 160MB)에서 최악이 약 +80–125MB 순간치. Fold 7 급에서는 여유, 저사양·상한을 올린 사용자에서 위험이 커짐 → **실기기 목록에 남김**(Build 7절 첫 줄) + 문구를 "캐시 크기에 비례"로(#2).
+
+## 9c1R-5. 화면 (확인 5)
+
+- **8조합**(`run-l`, 360×740·412×915 × ko·en·fr·ar, 띄어쓰기 없는 긴 아랍어 제목·긴 파일 이름·7000쪽·118MB): 문서·카드 가로 넘침 0, 카드 밖 요소 0, 단추(내보내기·PDF 내려받기·접는 제목) **높이·너비 48 이상**, 체크 상자 자체 24px 이지만 `label for` 줄 64–66px, ar `dir=rtl`, 빈 `data-i18n` 0, 진행 글자 `aria-live=polite` · 알림 `role=status` · 막대 `role=progressbar` + `aria-label`. fr 은 45일 전으로 주의 색 확인.
+- **내보내는 중**(360 ar, 캐시 6,000): 진행 막대 보임·넘침 0 · `aria-valuenow` 7가지 · 글자 바뀜 8번(1초·묶음 바뀜 규칙) · 끝나면 숨김 · `shots/card-360x740-ar-progress.png`.
+- **run-x**: 서재 [백업] 높이 48·저장 줄과 같은 줄 → `#/settings/backup` · h2 포커스 · 카드가 AI 위 · 기본 "아직 백업하지 않았습니다" · 캐시 체크 기본 켬 · 내보내기 → gzip Blob 1·`<a download>` `medreader-backup-YYYYMMDD-HHmm.jsonl.gz` · "마지막 백업: 오늘"·`lastExportAt` 숫자 · 단추 다시 켜짐 · 막대 숨김 · 캐시 끔 → `include.cache false`·aiCache 줄 0·머리 counts 에도 없음.
+- **책별 PDF**: blob 있는 책 1줄만(48px, `aria-label` 에 제목, 크기 `<bdi dir=ltr>` "4.9 KB") → 잡은 Blob **5,000B·`application/pdf`·바이트 전부 같음**·이름 `review-a.pdf`(= `fileName`). (IDB 가 돌려주는 Blob 핸들이라 객체는 다르지만 내용 그대로.)
+- **30일 주의**: 30일 전 → 보통 · 31일 전 → `backup-stale`(배경 `rgb(253,243,216)`) + 짧은 글자 보임.
+- `innerHTML` 0(`ui/backup.js`·`backup/*`·`text/backup.js` — 읽어서 확인, K13 도).
+- **설정 화면을 열 때 `cacheSize()`(15만 개)**: 숫자가 뜨기까지 **3.56초**, 그동안 긴 작업 1개(96ms — 부팅)·프레임 간격 최대 102ms·0.5초 뒤 [PDF 원본 따로 받기] 누름 → toggle **34ms**·힙 최대 9.7MB → **멈추지 않는다**. 다만 열 때마다 처음부터 다시 훑고 겹쳐 돌 수 있음 → #4.
+
+## 9c1R-6. 회귀 (확인 6)
+
+- `run-x` 뒤쪽: 8c-2 `#/settings/cache` → [캐시 지우기] 포커스·요약 글자 · 설정 카드 다섯(백업·AI·번역 따라가기·목소리·의료 사이트) 보임 · 18 `#/settings/links` 목록·포커스 · 사용량 화면(오늘·30일 막대 31·캐시) · 서재(카드 2·저장 줄·의료 사이트 카드·[백업]·가로 넘침 0) · **8f-3 단어장 CSV**(새 Blob `text/csv;charset=utf-8`·BOM `EF BB BF`·머리+1줄·`medreader-vocab-20261117.csv`·`vocab.lastExportAt` 숫자).
+- **8d D8 import 고리**: 전체 시험 초록 + 위 그래프(`ui/backup.js` 사슬에 `ai/*` 0).
+- **번역 요청 본문 바이트 HEAD 와 같음**(`run-body`, 실물 PDF·새 프로필 `pb1`·캐시 비우고 40쪽 [▶] 8초): 지금 판 POST 2개 `8f301ea7584678d4`(2,781B)·`1da11781b23e9ac3`(9,504B) = **HEAD 판**(앱 파일 246개를 `git show HEAD:` 로 내줌 — Build 의 `b9c1/head` 사본은 쓰지 않음, HEAD 판엔 `#settingsBackup` 없음) 같은 둘. Build·18 보고의 해시와도 같음(Build 의 2747/9426 은 글자 수, 여기는 바이트).
+
+## 9c1R-7. 시험 · 변이 (확인 7·8)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **1회차 1702/1702(10.2초) · 2회차 1702/1702(10.2초)**(`r9c1/full1.txt`·`full2.txt`). `stamp-importmap --check` "그대로다 (모듈 78개 · CSS 4개)"(변이 복원 뒤) · `git diff --check` 0 · 새 파일 넷 끝 공백 0 · `git status` 처음과 같음.
+- **변이 9개**(Build M1–M12 와 다른 곳 — `r9c1/mut.mjs`: 원본을 읽어 `r9c1/bak/` 에 쓰고 한 곳(정확히 1곳일 때만) 바꿈 → `tests/backup-9c.test.mjs` → finally 원본 바이트로 되씀 → bak 과 바이트 비교, 끝에 `cmp` 두 파일 0):
+
+| # | 변이 | 빨강 |
+|---|---|---|
+| V1 | 문서 자리를 파일로 할 때 `lastOpenedAt` 함께 옮기기 지움 | K10b |
+| V2 | usage 객체 안(`byKind`) 을 파일 값으로 덮음 | K10c |
+| V3 | `attempts.items[].questionId` 바꿔 쓰기 지움 | K9 |
+| V4 | 묶음 하한 포함(`lowerBound(last, false)` — 경계 두 번) | K3b |
+| V5 | 원서 문항(`book`)도 파일에 | K3 |
+| V6 | mistakes — 기기도 해결됐는데 파일로 덮음 | K10e |
+| V7 | 기기에서 사용자가 고른 원문 언어를 파일이 덮음 | K10b |
+| V8 | 주의 색 30일째부터(`>=`) | K12 |
+| V9 | 머리 `counts.settings` 를 거르기 전 수로 | K3 |
+
+9/9 빨강 — 시험에 이빨이 있다. (#1·#3 의 꼴은 시험이 없어 변이로는 못 잡는다 — 아래 방향에 시험 한 줄씩.)
+
+## 9c1R-8. headless (확인 9)
+
+Edge `--enable-precise-memory-info`·`--expose-gc` · pipe · 새 프로필 `r9c1/px1`(종단·회귀)·`pl1`(배치)·`ph1`(힙 — seed·scan·export×2·exp7)·`pb1`(본문 current·head) · 가짜 키(세션·로컬) · 흉내 Gemini(OPTIONS 204 + CORS, 가로채 응답) · 흉내 음성 · `setCacheEnabled(false)` · **한 번에 하나씩**. **서버 띄움 0·8000 접속 0**: 출처 이름만 빌리고 앱 요청은 모두 가로채 작업 트리(또는 `git show HEAD:`)에서 내줌(`missing` 0·4xx 0). 내려받기는 `URL.createObjectURL` 감싸 잡고 `<a>.click` 은 기록만 → 잡은 파일은 `r9c1/dl/` 에만. **콘솔 오류 0 · pageerror 0 · 새 탭 0 · Gemini POST 0**(본문 대조 run 만 2개) — 모든 실행. 외부 요청: `pb1` 의 pdf.js CDN(jsDelivr — 앱이 원래 쓰는 라이브러리, 실물 PDF 대조에만 통과, 6건)만, 나머지 0.
+
+## 9c1R-9. 발견 사항
+
+| # | 심각도 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음 (**9c-2 착수 전 고칠 것**) | **키 지우개 오탐이 사용자 글자를 바꾼다.** 모든 줄의 글자 값에 `REDACT_PATTERNS` 를 그대로 쓰므로 `sk-[A-Za-z0-9_-]{16,}` 가 하이픈 합성어 안에서(`low-risk-to-moderate-risk` → `low-ri[KEY]`, `risk-benefit-assessment` → `ri[KEY]`), `Bearer\s+\S+` 가 일반 낱말(`Bearer of the…` → `[KEY] the…`)에서 걸린다(지어낸 문장). 단어 문맥·필기·제목·캐시 키 `w=` 칸이 백업 파일에서 영구히 달라지고, 검색어 하나가 걸리면 `search.recent` 행이 통째로 빠진다. 게다가 term 병합은 `importPlan` 의 **동률 = 파일** 규칙을 그대로 따라, 같은 기기에 자기 백업을 다시 가져오면 기기의 바른 문맥을 `[KEY]` 글자로 덮고 `updatedAt` 을 지금으로 올린다(9c1R-3 표본) — 문장 카드·필기·문서는 동률 = 기기라 term 만 다르다 | 9c-1 단독(가져오기 없음)에선 파일 글자 손실만, 빈도 낮음 → 낮음. 방향: ① 사용자 글자용 지우개는 왼쪽 경계를 둔 꼴(`(?<![A-Za-z0-9])sk-…`)·`Bearer` 토큰 최소 길이(예: 20) 또는 Google 꼴(`KEY_SHAPES`)만 — 설정 행 빼기(`hasKeyShape`)도 같은 꼴로 ② `mergeTerm` 은 파일 `updatedAt` = 기기 `updatedAt` 이면 keep ③ K4·K10f 에 각 한 줄 |
+| 2 | 낮음 | spec 17-4-1 ⑦ 의 "데이터 크기와 무관한 V8 문턱 몫"은 맞지 않다 — 평문을 흐름으로 읽기만 해도 ¼ +41 · ½ +59 · 전체 +124MB 로 **크기에 따라 커진다**(gc 뒤 0). (가)(나) 두 기준과 실측(14.6·0.3)은 맞음. 폰 OOM 은 "거의 확실" 아님 | 9c1R-4. ⑦ 문장 정정(9c-2 가 같은 기준을 쓰므로) + 실기기 줄에 "캐시 크기에 비례 — 상한을 올린 사용자" 를. 줄이고 싶으면 읽기 단계에서 묶음마다 압축기에 바로 써서 평문 Blob 을 만들지 않는 길 |
+| 3 | 낮음 | 지우개는 **속성 이름**을 보지 않는다(`byProvider` 에 심은 키가 파일에 남음). 앱이 사용자 글자를 속성 이름으로 쓰는 길은 지금 없음 | 9c1R-1. 바꾸개에서 객체 키도 검사(키 모양이면 그 속성 빼기) + K4 한 줄. 9c-2 가져오기도 같은 검사 |
+| 4 | 낮음 | 설정 화면을 열 때마다 `cacheSize()` 가 캐시를 처음부터 훑는다(15만 개 3.6초). 멈추지는 않지만(긴 작업 0·클릭 34ms·힙 +9.7MB) 화면을 오가면 겹쳐 돈다. 8c-2 설정 요약은 `count` 만 | 9c1R-5. 한 번 센 값 기억 + 캐시 지우기·내보내기 때만 다시, 또는 진행 중이면 다시 시작하지 않기 |
+| 5 | 낮음 | 서재 [백업] 너비 32px(ko)·52(en) — 높이만 48(16-G 는 48×48). 18R #4 [편집]과 같은 꼴(같은 32px) | `r9c1/h-seed.json` `linkWidths`. `.link` 에 `min-inline-size: var(--tap)` 한 줄이면 둘 다 |
+| 6 | 낮음 | 13절 백업 파일 행은 "`privacy.*`·`dev.*` 없음"인데 허용 목록에 `privacy.piiCheck`(17-4-1 4 는 담음). 분류는 맞음(사용자 선호) | 13절 문구를 "`privacy.piiCheck` 말고는 `privacy.*` 없음" 으로 |
+| 7 | 낮음 | 고지 문구(6절 그대로)에 검색 기록(`search.recent`)·의료 사이트 주소·책 제목이 없다 — 파일에는 들어감(13절은 책 제목을 적음) | 문안 거리 — "…필기·퀴즈 기록·검색어가…" |
+| 8 | 낮음 | 문장 카드 병합은 레코드 통째(`max(updatedAt, reviewedAt)`) — 파일 내용이 더 늦고 기기 복습이 그 사이면 기기 복습 상태가 옛것으로(표본: `reviewedAt 50→20`, reps 5→1). term 은 복습 필드를 따로 본다 | crossstep 규칙 그대로라 결함 아님, 문장 카드는 아직 없음 → 12-1 이 term 처럼 내용·복습을 나눌지 정할 것(crossstep 줄) |
+| 9 | 낮음 | ar 복수형: `Intl.PluralRules('ar')` 는 3–10 을 `few` 로 고르는데 키는 `one`/`other` 뿐 → 3–10일도 "يومًا" 꼴 | 이미 `[검토 — Nour·운영자]` — 확인 때 `few`(أيام) 키를 더할지 |
+| 10 | 낮음 (9c-2 몫) | `lineSplitter` 에 줄 길이 상한이 없다 — 줄바꿈 없는 엉뚱한 파일(PDF 를 잘못 고름 등)이면 남은 글자를 조각마다 다시 이어 나눔: 10MB 279ms, 100MB 면 수십 초·큰 글자 | 9c-2 가 첫 줄 전에 길이 상한(수 MB) → `not-backup` |
+| 11 | 정보 | Build 보고 다시 잼 — 1702 ×2 · stamp · `diff --check` · 힙 14.6/0.3 ×2 · 압축률 0.134 · 본문 해시 · 키 0 · 콘솔 0 · 8조합 · 캐시 끔 · PDF · 30일 · 서재 [백업] 모두 맞음. Build 하네스는 8000 에 요청을 흘렸고(서버 의존), 이 Review 는 가로채 내줌 | 9c1R-1~8 |
+
+**실기기 목록(Build 7절)에 더할 것**: 압축 단계 순간 메모리가 캐시 크기에 비례(#2) · 아주 긴 하이픈 합성어가 든 단어 문맥을 백업 → 9c-2 로 가져와 같은지(#1 고친 뒤).
+
+## 9c1R-10. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 파일로 쓰고 따로 읽음). **막힌 명령 0.** 서버 띄움 0(8000 접속도 0) · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 인용 0(지어낸 글자만 — 본문 대조는 해시·바이트만) · `b9c1/` 읽기만 · C: 남은 93GB. 변이 9개 모두 bak 과 `cmp` 0, `git status` 처음과 같음.
+
+스크래치 `r9c1/`(420MB — 대부분 `ph1` 의 IndexedDB): `graph.mjs`·`graph.json`·`graph-ui.json` · `k.mjs`·`k.json` · `nogz.mjs` · `mut.mjs`·`mut.json`·`m-V1`–`m-V9.txt`·`bak/` · `common.mjs`·`run-x.mjs`·`x1.json`·`run-l.mjs`·`l1.json`·`run-h.mjs`·`h-seed.json`·`h-scan.json`·`h-exp1.json`·`h-exp2.json`·`h-exp7.json`·`run-body.mjs`·`body-cur.json`·`body-head.json` · `dl/`(`x-cache`·`x-nocache` `.jsonl.gz`) · `shots/` · `px1`·`pl1`·`ph1`·`pb1` · `full1.txt`·`full2.txt` · `section.md`(이 절)·`append.mjs`.
+
+**배포 가능** — 키·동의·기기 몫 0, 금지 import 0(간접까지), 파일 꼴 설계대로, 병합 멱등·기기 값 보존, 힙 (가)(나) 기준 안, 화면 멈춤 0, 회귀 0, 콘솔 오류 0. 낮음 10 중 **#1(지우개 오탐 + term 동률)은 9c-2 착수 전에 고칠 것**(지금 고치면 9c-1 기간의 백업 파일도 온전), 나머지는 다듬기·문구·9c-2/12 몫.
+
+---
+
+# 9c-1b 재검증 — 백업 키 지우개 좁히기 · term 동률 (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-9c1b.md`. 앱 코드·시험·spec 무변, 커밋 0, headless 0. 본 것: 9c-1 Review 절, Build 지침·보고서(믿지 않고 다시 잼), spec 17-4-1·13절 `[정정 2026-11-17 — 9c-1b]` 두 줄, `git diff`(config.js 는 추가만 — `REDACT_PATTERNS` 줄 무변), 9c-1 판 `text/backup.js`(9c-1 Review 가 남긴 `r9c1/bak/js__text__backup.js` — 읽기만, import 만 절대 경로로 바꾼 사본 `r9c1b/old-backup.mjs`)와 **같은 입력으로 나란히** 비교.
+
+## 9c1bR-0. 판정 — **고친 뒤 배포** (중간 1 · 낮음 4 · 정보 2)
+
+합성어·"Bearer of" 오탐은 사라졌고(지어낸 61개 중 9c-1 판이 지우던 30개 모두 그대로, 실물 CMDT 2026 본문 1,277만 자에서 걸림 0 — 9c-1 판 4), term 동률 = 기기는 의도대로·멱등이고, 다른 시각 경우는 9c-1 판과 결과가 같다. `REDACT_PATTERNS`·`privacy/redact.js` 무변(로그 쪽 시험 86/86). **다만 `sk-` 왼쪽 경계가 진짜 길이의 OpenAI·Anthropic 키를 놓치는 자리가 생겼다** — 앞에 URL 인코딩(`%20`·`%3D`·`%22`·`%3A`)이나 글자 그대로의 이스케이프(`\n`·`\t`·`\u0022`)가 붙거나 영숫자·하이픈에 바로 붙은 `sk-…`. 9c-1 판은 모두 지웠다 → 판정 기준 "9c-1 판이 막던 실제 키 꼴이 백업 파일에 남는 틈" = **중간**(#1). 고침은 정규식 한 줄(아래 #1 (a)안 — 정상 글·CMDT 걸림 0 확인).
+
+## 9c1bR-1. 키는 여전히 0건인가 (확인 1) — `r9c1b/probe.mjs` → `probe.json`
+
+가짜 키 꼴(꼴만 맞춘 지어낸 글자, 결정적 난수): `sk-`+48(옛 OpenAI) · `sk-proj-`+156 · `sk-svcacct-`+150 · `sk-ant-api03-`+95 · `sk-or-v1-`+64(hex) · `sk-` 몸통 19·20·21 · `AIza`+35 · `AQ.`+56(몸통에 `~+/=`). 접두 45가지(빈칸·줄바꿈·`\r\n`·탭·`-`·`_`·`=`·`"`·`'`·`(`·`[`·`<`·`` ` ``·`:`·`/`·`.`·`,`·한글·아랍어(붙임·띄움)·`a`·`Z`·`9`·`%20`·`%3D`·`%22`·`%3A`·글자 그대로 `\n`·`\t`·`\"`·`\u0022`·`?key=`·`&token=`·주소 쿼리·`Bearer `·`bearer `·`BEARER `·`Authorization: Bearer `·`Bearer%20`·`api-key-`·`OPENAI_API_KEY=`·`--api-key=`·`x-api-key:`) × 접미 6 = **2,700 조합**, 단어 문맥과 깊은 객체 안에 넣어 `recLine` 한 줄로 → 키 앞 24자가 줄에 남는지.
+
+- **Google 꼴(`AIza`·`AQ.`)**: 모든 조합 0 — 9c-1 판과 같음(같은 `KEY_SHAPES`).
+- **`sk-` 진짜 길이 다섯 꼴**: 대부분 0. 다만 접두 **13가지**에서 새로 샘(9c-1 판은 0) — `-`·`a`·`Z`·`9`·`%20`·`%3D`·`%22`·`%3A`·글자 그대로 `\n`·`\t`·`\u0022`·`Bearer%20`·`api-key-` → **5꼴 × 13 × 6 = 390 조합**. 원인: `(?<![A-Za-z0-9\-])` 가 바로 앞 한 글자만 본다 — `%20` 의 `0`, `\n` 의 `n` 이 영숫자. → **#1**.
+- `sk-` 몸통 20·21: 위와 같은 13 접두에서만 샘. 몸통 19: 모든 접두에서 안 지움(하한 20) — 실제 키 길이가 아니라 정보(#7).
+- **`Bearer`**: `Bearer `·탭·줄바꿈·두 칸 뒤 **숫자 든 12자 이상** 토큰은 지움(JWT 꼴 포함). 새로 남는 것(9c-1 판은 지움): 숫자 없는 토큰(지어낸 32자·40자 글자만), 11자 이하, b64token 밖 글자(`:`·`%2B`)가 든 토큰. 무작위 영숫자(base62)에 숫자가 없을 확률 — 12자 0.12 · 20자 0.030 · **32자 0.0036** · 40자 0.00088 · 64자 0.000013. Google·OpenAI·Anthropic 키는 `Bearer` 와 상관없이 자기 꼴로 지워지므로(`Bearer sk-…`·`Bearer AIza…` 0) 이 틈은 접두 없는 키(Mistral 꼴 32자 등)에만 해당 → **#2 낮음**.
+- 두 판 모두 못 잡음(기준선과 같음): `bearer `·`BEARER `·`Bearer%20`·`Bearer:` 뒤 접두 없는 토큰 → #4.
+- 문장 사이: 한글·아랍어 바로 뒤(붙임·띄움) 키는 모두 지움(한글·아랍 글자는 경계 집합 밖).
+- **JSON 이스케이프**: 바꾸개가 `JSON.stringify` **전의 날 글자**를 보므로 값 속 진짜 줄바꿈·탭·따옴표 뒤 키는 지운다. 사용자 글자 안에 **글자 그대로** 적힌 `\n`·`\u0022` 뒤 키는 #1 에 포함.
+- **`hasKeyShape`(설정 행 빼기)**: 배열·객체 값은 `JSON.stringify` 한 글자를 본다 → `search.recent` 항목 안 진짜 줄바꿈·탭 바로 뒤 `sk-proj-…` 는 `\n` 의 `n` 이 경계를 막아 **행이 빠지지 않고** 남는다(9c-1 판은 행째 뺌). 줄 지우개가 날 글자에서 다시 지우므로 **줄 속 키는 0** — `[KEY]` 가 든 검색어가 남을 뿐 → #3.
+
+## 9c1bR-2. 정상 글 보존 (확인 2)
+
+- **지어낸 글 61개**(의학·일반 하이픈 합성어 — `risk-`·`task-`·`mask-`·`disk-`·`flask-`·`asterisk-`·`whisk-`·`kiosk-`·`obelisk-`·`basilisk-`·`brisk-`·`husk-`·`musk-`·`tusk-`·`desk-`·`ask-` 로 시작하는 20자 넘는 꼴, 숫자 섞인 꼴, 한글·아랍어 문장 속, `Bearer of …`·`Bearer status …`·`bearer bonds`·`stretcher-bearer-…`·`weight-bearer-…`·`BEARER of …`, `sk-learn`·로캘 `sk-SK`·`SK-N-SH`·`SK-N-BE(2)-C-…`·`task-sk-1234567890abcdef`·`mask-1234567890abcdefghij`·`AQ.1 level`·`sk-`·`sk-1`): **57개 그대로**, 9c-1 판이 지우던 30개 모두 그대로. 남은 4개는 9c-1 판도 똑같이 지움(기준선과 같음): 낱말 처음 소문자 `sk-n-sh-cells-…`(경계 있음·20자 넘음) · 대문자 `Bearer` + 숫자 든 12자 넘는 하이픈 낱말 셋(`Bearer 2023-2024-…`·`Bearer BRCA1-…`·`Bearer HLA-B27-…`) → #5.
+- **`search.recent`**: 위 글 30개 목록 → 지금 판 **행 남음**(9c-1 판은 행째 빠짐).
+- **실물 빈도**(`r9c1b/corpus.mjs` — 앞선 작업의 CMDT 2026 본문 덤프 `p14/pt-cmdt26.json` 을 읽기만, 원문 인용 0 · 수만): 글 318,943개 · 12,768,741자에서 지금 판 걸림 **0**(AIza 0 · AQ 0 · Bearer 0 · sk 0), 9c-1 판 `sk-` **4**. 낱말 처음 소문자 `sk-`(경계 있음, 길이 무관) **0** · 대문자 낱말 `Bearer` **0**. → 보고서 남은 위험(`sk-learn-compatible-pipelines` 꼴 지워짐)은 **의학 글에서 사실상 0** — Build 판단 맞음.
+- 같은 기기 왕복: 문맥 `…low-risk-to-moderate-risk; the Bearer of the news; sk-learn-compatible-pipelines-v2` → 합성어·Bearer 는 그대로, 끝 낱말만 `[KEY]`, 병합 `keep`(기기 글자 보존).
+
+## 9c1bR-3. `mergeTerm` 동률 (확인 3) — 9c-1 판과 나란히 16경우
+
+| 경우 | 지금 | 9c-1 판 | 같음 | 두 번째 |
+|---|---|---|---|---|
+| 같은 시각·같은 내용 | keep | keep | ✔ | keep |
+| 같은 시각·문맥 `[KEY]` | **keep** | patch context,updatedAt | 의도한 변화 | keep |
+| 같은 시각·번역 다름 | **keep** | patch translation,edited,updatedAt | 의도한 변화 | keep |
+| 같은 시각·파일 복습 더 늦음 | patch 복습 넷만 | patch 내용 + 복습 | 의도(내용·복습 따로) | keep |
+| 파일 더 새로움·내용 다름 | patch translation,edited,updatedAt | 같음 | ✔ | keep |
+| 파일 더 새로움·내용 같음 | keep | keep | ✔ | keep |
+| 기기 더 새로움 | keep | keep | ✔ | keep |
+| 파일 시각 없음 · 미래 시각 · 대상 언어 다름 | keep | keep | ✔ | keep |
+| 다른 id 같은 낱말 더 새로움 | patch | patch | ✔ | keep |
+| 다른 id 같은 낱말 **같은 시각**·내용 다름 | keep | patch | 규칙 문구대로("시각이 같으면 기기") | keep |
+| 둘 다 0 · 숫자 글자 `"2000"` = 2000 | keep | patch | 같은 ms 로 읽힘 → 동률 | keep |
+| 둘 다 같은 ISO 글자 | keep | keep | ✔(ISO 는 `''` → importPlan 충돌 → keep) | keep |
+| 기기 ISO · 파일 ms 같은 순간 | patch | patch | ✔(동률로 안 봄 — 9c-1 과 같음, 앱은 ms 만 씀) | keep |
+
+- 다른 시각 경우는 모두 9c-1 판과 **같은 결과**, 바뀐 것은 동률 경우뿐이고 바뀐 쪽은 늘 "기기 유지" — 9c-1b 가 새로 만든 데이터 손실·병합 변화 없음. 모든 경우 patch 적용 뒤 두 번째 = keep(멱등).
+- `importPlan`(CSV): `text/vocab.js` HEAD 와 바이트 같음(`git diff --exit-code` 0), 8f 시험 전체 초록.
+
+## 9c1bR-4. `REDACT_PATTERNS`·로그 쪽 (확인 4)
+
+`git diff` 에서 config.js 는 891행 뒤 **추가만**(`REDACT_PATTERNS` 800–805행 무변), `js/privacy/` HEAD 와 같음(`--exit-code` 0). `text/backup.js` 는 `REDACT_PATTERNS` import 를 뺌(9c-1 판과 diff 로 확인 — `KEY_RE`·`KEY_TEST`·`msOrEmpty`·`mergeTerm` 넷만 다름). 로그 쪽 시험 `redact-7a`·`key-shape-p1`·`provider-7a` 따로 **86/86**.
+
+## 9c1bR-5. 시험 · 검사 (확인 5)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **1회차 1703/1703(10.3초) · 2회차 1703/1703(10.1초)**(`r9c1b/full1-spec.txt`·`full2.txt`) — Build 숫자와 같음.
+- `stamp-importmap --check` "그대로다 (모듈 78개 · CSS 4개)"(처음 · 변이 복원 뒤 두 번) · `git diff --check` 0 · `git status` 처음과 같음.
+
+## 9c1bR-6. 변이 (확인 6) — `r9c1b/mut.mjs`(Build M1–M4 와 다른 곳)
+
+원본을 읽어 `r9c1b/bak/` 에 쓰고, 찾을 글자가 정확히 1곳일 때만 바꿔 `tests/backup-9c.test.mjs` → finally 원본 바이트로 되씀 → bak 과 바이트 비교, 끝에 `cmp` 따로.
+
+| # | 변이 | 빨강 | 복원 |
+|---|---|---|---|
+| V1 | `sk-` 몸통 하한 20 → 21(경계 한 칸) | K4 · K4b | 같음 |
+| V2 | term 동률 판정 `===` → `>=`(파일이 더 새로워도 기기) | K10f · K11 | 같음 |
+| V3 | `Bearer\s+` → `Bearer +`(탭·줄바꿈 뒤 놓침) | K4b | 같음 |
+
+3/3 빨강. `cmp js/config.js bak/V1-js_config.js` 0 · `cmp js/text/backup.js bak/V2-js_text_backup.js` 0 · config.js 는 Build `b9c1b/bak/M1-js_config.js` 와도 `cmp` 0. (#1·#2 의 꼴은 시험이 없어 변이로는 못 잡는다 — 아래 방향에 시험 줄.)
+
+## 9c1bR-7. 발견 사항
+
+| # | 심각도 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | **중간** | **`sk-` 왼쪽 경계가 진짜 길이의 OpenAI·Anthropic·OpenRouter 키를 놓친다.** 바로 앞 한 글자가 영숫자·하이픈이면 지우지 않으므로, URL 인코딩(`%20sk-proj-…`·`token%3Dsk-…`·`%22sk-…`·`%3Ask-…`·`Bearer%20sk-…`), 사용자 글자 안 **글자 그대로**의 이스케이프(붙여 넣은 JSON·로그의 `\nsk-…`·`\u0022sk-…`), `api-key-sk-…`·`abcsk-…` 처럼 붙은 꼴이 백업 파일에 그대로 남는다(390 조합, 9c-1 판 0). 들어갈 자리는 단어 문맥·필기·제목·`links.medical` 주소 등 사용자 글자 — 빈도는 낮지만 판정 기준(9c-1 판이 막던 실제 키 꼴)에 해당 | 9c1bR-1. (a) 경계에 "퍼센트 인코딩·백슬래시 이스케이프 바로 뒤"를 더함: `(?:(?<![A-Za-z0-9\-])\|(?<=%[0-9A-Fa-f]{2})\|(?<=\\[nrtbf"'/])\|(?<=\\u[0-9A-Fa-f]{4}))sk-[A-Za-z0-9_\-]{20,}` — `r9c1b/fixa.mjs`: `%20`·`%3D`·`%22`·`%3A`·`Bearer%20`·`\n`·`\t`·`\"`·`\u0022` 뒤 모두 지움, 정상 글 10개(K4b 의 `task-sk-…`·`mask-…` 포함) 그대로, CMDT 1,277만 자 걸림 0. 이 꼴은 #3 도 함께 막는다(`hasKeyShape` 의 `\n` 뒤). 영숫자·하이픈에 바로 붙은 꼴은 합성어와 구별이 안 돼 남김(기록). K4b 에 `%20`·글자 그대로 `\n` 한 줄씩 |
+| 2 | 낮음 | `Bearer` 뒤 **숫자 없는** 토큰·11자 이하·b64token 밖 글자(`:`·`%`) 든 토큰은 이제 남는다(9c-1 판은 지움). Google·OpenAI·Anthropic 키는 자기 꼴로 지워져 해당 없음 — 접두 없는 키(Mistral 꼴 32자: 숫자 없을 확률 0.36%)만. 그 키는 `Bearer` 없이 쓰면 두 판 모두 못 잡는 원래 틈 | 9c1bR-1. 원하면 "숫자 하나 이상 **또는** 20자 이상": `Bearer\s+(?:(?=[…]*[0-9])[…]{12,}\|[…]{20,})` — `Bearer responsibilities`(16자)는 그대로 |
+| 3 | 낮음 | `hasKeyShape` 가 배열·객체 값을 `JSON.stringify` 글자로 봐서, 항목 안 진짜 줄바꿈·탭 바로 뒤 `sk-` 키는 판정에서 빠진다 → `search.recent` 행이 통째로 빠지지 않고 `[KEY]` 든 채 남음(줄 속 키는 0). 9c-1 판은 행째 뺌 | 9c1bR-1. #1 (a)안이면 함께 막힘(`\n` 뒤). 아니면 객체 값은 날 글자 값마다 `KEY_TEST` |
+| 4 | 낮음(기준선과 같음) | `bearer`·`BEARER`·`Bearer%20`·`Bearer:` 뒤 접두 없는 토큰은 두 판 모두 못 잡는다(HTTP 인증 방식 이름은 대소문자 무관). 9c-1b 가 만든 틈 아님 | 9c1bR-1. 넓히려면 `[Bb]earer\|BEARER` + `(?:\s+\|%20)` — #2 와 함께 정할 것 |
+| 5 | 낮음(기준선과 같음) | 남은 오탐 — 대문자 `Bearer` + 숫자 든 12자 넘는 하이픈 낱말(지어낸 `Bearer BRCA1-mutation-positive …`), 낱말 처음 소문자 `sk-` 20자 넘는 꼴(`sk-n-sh-cells-…`·보고서의 `sk-learn-compatible-pipelines`). 9c-1 판도 같음. 실물 CMDT 에서 0 | 9c1bR-2. 고칠 것 없음(기록) |
+| 6 | 정보 | term 동률 = 기기는 다른 id(같은 낱말)·`0`·숫자 글자 시각에도 적용, 기기 ISO·파일 ms 같은 순간은 동률로 안 봄(9c-1 과 같은 patch). 다른 시각은 모두 9c-1 판과 같은 결과·멱등 | 9c1bR-3. 설계 문구("시각이 같으면 기기")와 맞음 |
+| 7 | 정보 | `sk-` 몸통 16–19자는 이제 안 지움 — 실제 키 길이 아님(OpenAI 48+·`sk-proj-` 150 안팎·Anthropic 95 안팎·OpenRouter 64). Build 보고 다시 잼 — 1703 ×2 · stamp · `diff --check` · `REDACT_PATTERNS` 무변 · spec 두 줄 모두 맞음 | 9c1bR-1·4·5 |
+
+## 9c1bR-8. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 파일로 쓰고 따로 읽음). **막힌 명령 0.** headless 0 · 서버 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0(꼴만 맞춘 지어낸 글자) · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 인용 0(CMDT 덤프는 수만 셈) · `r9c1/`·`b9c1b/`·`p14/` 읽기만. 변이 3개 모두 bak 과 `cmp` 0, `git status` 처음과 같음.
+
+스크래치 `r9c1b/`: `mkold.mjs`·`old-backup.mjs`(9c-1 판 사본) · `probe.mjs`·`probe.json` · `corpus.mjs`·`corpus.json` · `fixa.mjs`·`fixa.json` · `mut.mjs`·`mut.json`·`m-V1`–`m-V3.txt`·`bak/` · `full1.txt`·`full1-spec.txt`·`full2.txt`·`log-side.txt` · `section.md`(이 절)·`append.mjs`.
+
+**고친 뒤 배포** — 합성어·"Bearer of" 오탐 해소(실물 0)·term 동률 의도대로·멱등·`REDACT_PATTERNS` 무변·1703 ×2 는 맞다. 다만 #1(`sk-` 경계가 `%20`·`\n` 등 뒤의 진짜 길이 키를 놓침 — 9c-1 판은 막음)은 9c-2 착수 전 정규식 한 줄((a)안) + K4b 두 줄로 고칠 것. #2–#5 는 낮음(선택).
+
+# 9c-1c 재검증 — `sk-` 왼쪽 경계 · Bearer 새 조건 (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-9c1c.md`. 앱 코드·시험·spec 무변, 커밋 0, headless 0. 본 것: "9c-1b 재검증" 절, Build 지침·보고서(믿지 않고 다시 잼), `git diff`(config.js 는 HEAD 대비 892행 뒤 **추가만** — `REDACT_PATTERNS` 무변), Build 가 남긴 9c-1b 판 사본 `b9c1c/bak/orig-js_config.js` 와 `diff` → `KEY_PATTERNS` 두 줄 + 주석 넷 줄만 다름, K4b 새 줄 10개. 9c-1 판(`r9c1b/old-backup.mjs`)·9c-1b 판과 **같은 입력으로 나란히** 비교(읽기만).
+
+## 9c1cR-0. 판정 — **배포 가능** (중간 0 · 낮음 4 · 정보 1)
+
+중간-1 은 닫혔다 — `%XX`·글자 그대로 적힌 JSON 이스케이프 뒤 진짜 길이 `sk-` 키는 모든 조합에서 지워지고, 남는 것은 영숫자·하이픈에 바로 붙은 꼴뿐(받아들인 틈)이다. Bearer 새 조건은 의도대로(대소문자·`%20`·`:`·숫자 없는 20자+) 지우며, 새 오탐은 "bearer + 구분 + 긴 합성어"를 일부러 겨냥해 지은 글에서만 나왔고 실물 CMDT 2026 본문(1,277만 자)에서는 걸림 0(`bearer` 낱말 자체 0). `REDACT_PATTERNS`·`js/privacy/` 무변, 1703 ×2 초록. 새로 찾은 것(#2 — JSON 밖 이스케이프·이중 인코딩 뒤 키)은 메커니즘상 받아들인 "영숫자 바로 뒤" 틈과 같은 갈래라 낮음.
+
+## 9c1cR-1. 중간-1 닫힘 (확인 1) — `r9c1c/probe.mjs` → `probe.json`
+
+`r9c1b/probe.mjs` 와 같은 씨앗·키 10꼴·접두 45·접미 6 = **2,700 조합** + 이번에 더 본 접두 23 × 10꼴 × 6 = **1,380 조합**(가짜 키 — 꼴만 맞춘 지어낸 글자). 단어 문맥과 깊은 객체 안에 넣어 `recLine` 한 줄로 → 키 앞 24자가 남는지.
+
+- **45 접두**: 진짜 길이 다섯 꼴(`sk-`+48 · `sk-proj-` · `sk-svcacct-` · `sk-ant-api03-` · `sk-or-v1-`)이 새는 접두는 **`-`·`a`·`Z`·`9`·`api-key-` 다섯뿐** → 5꼴 × 5 × 6 = 150 조합(+ 몸통 20·21 꼴 60 = 210 — Build 보고 210 과 같음). `%20`·`%3D`·`%22`·`%3A`·`Bearer%20`·글자 그대로 `\n`·`\t`·`\"`·`\u0022` 뒤는 **모두 지움**(9c-1b 판은 13 접두에서 샜다). 몸통 19 는 하한 20 그대로(정보 — 9c1bR #7). 9c-1 판이 남기던 것을 지금 판이 지우는 경우 0·지금 판이 새로 남기는 꼴은 위뿐. Google 꼴 0.
+- **더 본 접두 중 지움**: 글자 그대로 `\r`·`\b`·`\f`·`\'`·`\/`·이중 이스케이프 `\\n`·`\\`·`%0A`·`%2F`·`%2f`(소문자 16진)·`\u003D`·`\u003d`·`&quot;`·`&#34;`·`+`·`Bearer:%20` — 진짜 길이 키 모두 0.
+- **더 본 접두 중 샘(9c-1 판은 지움)**: `\x22`·`\x3D`(16진 이스케이프) · `\012`(8진) · `%u0022` · `%2522`·`%252F`(이중 퍼센트 인코딩) · `=3D`(quoted-printable) → 진짜 길이 5꼴 × 7 × 6 = **210 조합** → #2.
+- **`hasKeyShape`(설정 행 빼기)**: `search.recent` 항목 안 진짜 `\n`·`\t`·`\r`·`\b`·`\f`·`\`·`"`·`/`·빈칸·제어 문자 뒤 `sk-proj-…` → **10가지 모두 행째 빠짐**, 줄 속 키 0 → 9c1bR #3 닫힘.
+- **Bearer 새 조건**(토큰 9가지 × 앞붙이 16가지): `bearer `·`BEARER `·`BeArEr `·`Bearer%20`·`bearer%20`·`Bearer:`·`Bearer: `·`bearer:\t` 뒤 숫자 든 12자+·숫자 없는 20/32/40자·JWT → **모두 지움**(9c-1 판·9c-1b 판은 샘). `Bearer ` 뒤 숫자 없는 32·40자도 지움(#2 닫힘). 남는 것: 11자 이하, 숫자 없는 12–19자(9c1bR #2 에서 받아들임), `Bearer=`·`Bearer%3A`·`Bearer+` 뒤(9c-1 판도 샘 — 기준선) → #4.
+
+## 9c1cR-2. 받아들인 남은 틈 (확인 2)
+
+영숫자·하이픈에 바로 붙은 `…sk-`(`abcsk-…`·`9sk-…`·`api-key-sk-…`)는 합성어(`task-sk-…`·`mask-…`)와 구별이 안 된다 — 판정에서 중간으로 세지 않음(#1 낮음). 근거: 키는 설정·DB 에 저장되지 않고(`sessionStorage`/`localStorage` — 백업이 읽지 않음, K5 정적 시험이 `backup/*`·`text/backup.js` 의 웹 저장소 낱말 0 을 지킴), 이 지우개는 사용자가 글자로 붙여 넣은 키에 대한 두 번째 방어선이다.
+
+## 9c1cR-3. 새 조건의 정상 글 오탐 (확인 3) — `r9c1c/fp.mjs` → `fp.json`
+
+- **지어낸 글 40개**(bearer 를 겨냥 — `pallbearer(s)`·`Pallbearer:`·`bearer-dependent(-…)`·`Bearer: the patient …`·`Card bearer: John Smith`·`Bearer: 2`·`weight-/load-/standard-/ring-/cup-/torch-bearer`·`BEARER BOND`·`Factor V Leiden bearer status`·`mutation bearer …`·`HLA-B27 bearer: …`·`Bearer: MRN-…`·줄바꿈 뒤·한글·아랍어 괄호 속 등): **27개 그대로**, 9c-1b 판은 40개 그대로. 새로 지운 13개는 모두 "bearer + 구분 + (숫자 없는 **20자 넘는** 한 덩어리 | 숫자 든 12자 넘는 한 덩어리)" 꼴 — 하이픈 합성어(`heterozygous-familial-hypercholesterolemia`·`ankylosing-spondylitis-predisposition`·`SEE-ATTACHED-DOCUMENTATION-FOR-DETAILS` 등), 아주 긴 낱말(`electroencephalographically`), 번호(`MRN-2024-00012345`). 갈래별: 왼쪽 경계 없음(`weight-`·`load-`·`standard-bearer` ×2 = 4) · 소문자(`mutation bearer`·`bearer HLA-B27-…`·`bearer\n…` = 3) · `:` 갈래(6). `pallbearer`·`bearer-dependent`·`Bearer: the patient` 처럼 지침이 짚은 꼴은 **그대로**(뒤 토큰이 짧거나 `-` 는 구분이 아님).
+- **9c1bR 의 정상 글 61개**: **57개 그대로** — 9c-1b 판과 같은 4개만 지움(`sk-n-sh-cells-…`·`Bearer 2023-…`·`Bearer BRCA1-…`·`Bearer HLA-B27-…`), 새 오탐 0.
+- **실물 CMDT 2026 본문**(`p14/pt-cmdt26.json` 읽기만, 수만): 글 318,943개 · 12,768,741자 — 지금 판 걸림 **0**(AIza 0 · AQ 0 · Bearer 0 · sk 0, 합친 정규식 0), 9c-1b 판 0. 대소문자 무시 `bearer` **0**(`bearing` 109 — 걸리지 않음), `bearer` + 구분 0, bearer + 숫자 없는 20자+ 0. → 판정 기준 "CMDT 걸림 > 0" 아님 → #3 낮음.
+
+## 9c1cR-4. `REDACT_PATTERNS`·시험·검사 (확인 4)
+
+- `git diff -U0 -- js/config.js` 는 892행 뒤 추가 한 덩어리뿐(`REDACT_PATTERNS` 무변), `git diff --exit-code -- js/privacy/` 0, K4b 끝 단정(`REDACT_PATTERNS` 넓은 그대로)도 초록.
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **1회차 1703/1703(10.1초) · 2회차 1703/1703(10.1초)**(`r9c1c/full1.txt`·`full2.txt`) — Build 숫자와 같음.
+- `stamp-importmap --check` "그대로다 (모듈 78개 · CSS 4개)"(처음 · 변이 복원 뒤) · `git diff --check` 0 · `git status` 처음과 같음 · spec 17-4-1 `[정정 2026-11-17 — 9c-1c]` 한 줄 있음.
+
+## 9c1cR-5. 변이 (확인 5) — `r9c1c/mut.mjs`(Build M1·M2 와 다른 곳)
+
+원본을 읽어 `r9c1c/bak/` 에 쓰고, 찾을 글자가 정확히 1곳일 때만 바꿔 `tests/backup-9c.test.mjs` → finally 원본 바이트로 되씀 → bak 과 바이트 비교, 끝에 `cmp` 따로.
+
+| # | 변이 | 빨강 | 복원 |
+|---|---|---|---|
+| V1 | `sk-` 경계에서 글자 그대로 이스케이프 갈래(`\\[nrtbf"'/]`) 빼기 | K4b(`{"k":"x\nsk-…"}` 줄 — 키 남음) | 같음 |
+| V2 | Bearer 구분에서 `:` 갈래 빼기 | K4b(`Bearer:` 줄) | 같음 |
+| V3 | `[Bb][Ee][Aa][Rr][Ee][Rr]` → `Bearer`(대소문자 무시 빼기) | K4b(`bearer ` 줄) | 같음 |
+
+3/3 빨강(각각 의도한 단정에서). `cmp js/config.js bak/V1-js_config.js` 0 · `bak/V3-js_config.js` 0 · Build `b9c1c/bak/M1-js_config.js` 와도 0.
+
+## 9c1cR-6. 발견 사항
+
+| # | 심각도 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(받아들임) | 영숫자·하이픈에 바로 붙은 `…sk-`(`abcsk-…`·`9sk-…`·`api-key-sk-…`)는 남는다 — 합성어와 구별 불가 | 9c1cR-1·2. 키는 DB·설정에 없음(두 번째 방어선). 고칠 것 없음(기록) |
+| 2 | 낮음 | **JSON 밖 이스케이프·이중 인코딩 뒤** 진짜 길이 키가 남는다: `\x22`·`\x3D`·8진 `\012`·`%u0022`·`%2522`·`%252F`·quoted-printable `=3D`(210 조합, 9c-1 판은 지움). 지침이 정한 `%XX`·JSON 이스케이프 집합은 모두 닫혔고, 이 꼴은 앞 글자가 16진 숫자라 메커니즘상 #1 과 같은 갈래. 앱·브라우저가 한 번 인코딩(`JSON.stringify`·`encodeURIComponent`)해서는 생기지 않고, 사용자가 로그·메일 원문·이중 인코딩 주소를 붙여 넣을 때만 | 9c1cR-1. 원하면 경계에 `(?<=%(?:25)?[0-9A-Fa-f]{2})`·`(?<=\\x[0-9A-Fa-f]{2})`·`(?<=%u[0-9A-Fa-f]{4})`·`(?<=\\[0-7]{3})`·`(?<==[0-9A-F]{2})` 를 더함 — `r9c1c/fp.mjs` `optFix`: 일곱 꼴 모두 지움, 정상 61개 중 `sk-` 갈래 오탐은 지금 판과 같은 1개(`sk-n-sh-…`), 지어낸 40개 0, CMDT 0. 9c-2 와 함께 해도 됨 |
+| 3 | 낮음 | Bearer 새 조건의 오탐 — "bearer + 구분(빈칸·줄바꿈·`:`·`%20`) + 숫자 없는 20자 넘는 합성어·긴 낱말 / 숫자 든 12자 넘는 번호"면 지운다(지어낸 40개 중 13, 9c-1b 판 0). 왼쪽 경계가 없어 `weight-bearer`·`load-bearer`·`standard-bearer` 뒤도 해당. 실물 CMDT 0(`bearer` 낱말 0) | 9c1cR-3. 원하면 왼쪽 경계 `(?<![A-Za-z\-])` — 합성어 4개는 막힘(`Authorization: Bearer`·`"Bearer` 는 그대로). 나머지는 토큰 쪽이라 키와 구별 어려움 — 기록 |
+| 4 | 낮음(기준선과 같음) | Bearer 남는 것: 11자 이하·숫자 없는 12–19자(9c1bR #2 에서 받아들임), `Bearer=`·`Bearer%3A`·`Bearer+` 뒤(9c-1 판도 샘) | 9c1cR-1. 고칠 것 없음(기록) |
+| 5 | 정보 | Build 보고 다시 잼 — 2,700 조합 450/210 · 정상 61 중 57 · CMDT 0 · 1703 ×2 · stamp · `diff --check` · `REDACT_PATTERNS`·`privacy/` 무변 · spec 한 줄 · 9c1bR #3 행째 빠짐 모두 맞음 | 9c1cR-1·3·4 |
+
+## 9c1cR-7. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 파일로 쓰고 따로 읽음). **막힌 명령 0.** headless 0 · 서버 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0(꼴만 맞춘 지어낸 글자) · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 인용 0(CMDT 덤프는 수만 셈) · `r9c1b/`·`b9c1c/`·`p14/` 읽기만. 변이 3개 모두 bak 과 `cmp` 0, `git status` 처음과 같음.
+
+스크래치 `r9c1c/`: `probe.mjs`·`probe.json` · `fp.mjs`·`fp.json`·`cfg-9c1b.mjs`(9c-1b 판 config 사본) · `mut.mjs`·`mut.json`·`m-V1`–`m-V3.txt`·`bak/` · `full1.txt`·`full2.txt` · `section.md`(이 절)·`append.mjs`.
+
+**배포 가능** — 중간-1 닫힘(`%XX`·JSON 이스케이프 뒤 키 0), 새 Bearer 조건 의도대로·실물 오탐 0, `REDACT_PATTERNS` 무변, 1703 ×2. #1–#4 는 낮음(#2·#3 은 원하면 경계 한 줄씩).

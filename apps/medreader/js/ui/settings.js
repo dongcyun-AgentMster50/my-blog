@@ -48,6 +48,8 @@ import { parseAIJson } from '../ai/jsonrepair.js';
 import { buildVoiceSettings, recognitionOf } from './voice.js';
 // `[18 — spec 17-9]` "의료 사이트" 카드(추가·수정·삭제·순서) — 그리기·동작은 `ui/links.js`, 여기는 init·보이기·떠나기만.
 import { initLinksSettings, showLinksSettings, leaveLinksSettings } from './links.js';
+// `[9c-1 — spec 17-4-1 6]` 백업·옮기기 카드(내보내기 · 책별 PDF) — `#/settings/backup`
+import { initBackupCard, showBackupCard, leaveBackupCard } from './backup.js';
 
 const CODES = provider.CODES;
 
@@ -778,6 +780,7 @@ export function initSettingsScreen() {
   }
   if (els.voiceLangs) { els.voiceLangs.addEventListener('change', onVoicePick); els.voiceLangs.addEventListener('click', onVoicePick); }
   initLinksSettings();      // `[18]` 카드 그릇이 없으면(반쪽 캐시) 조용히 물러난다
+  initBackupCard();         // `[9c-1]` 같은 규칙(그릇이 없으면 물러난다)
   els.keyInput.addEventListener('input', paintFormatWarning);
   els.consentCheck.addEventListener('change', () => { if (els.consentCheck.checked) els.consentHint.hidden = true; });
 
@@ -861,6 +864,8 @@ export function showSettings(params) {
   }
   // `[18]` `#/settings/links` — 서재 "의료 사이트" 카드 [편집]에서 왔으면 그 카드로 굴린다.
   showLinksSettings(params && params.tab);
+  // `[9c-1]` `#/settings/backup` — 서재 저장 줄 옆 [백업]에서 왔으면 그 카드로 굴린다.
+  showBackupCard(params && params.tab);
 }
 
 /**
@@ -875,6 +880,7 @@ export function leaveSettings() {
   if (!els) return;
   if (els.voiceCmd) els.voiceCmd.leave();     // `[9b]` [말해 보기] 듣는 중이면 취소
   leaveLinksSettings();                        // `[18]` 열린 입력 칸·추천·확인 대화를 닫는다
+  leaveBackupCard();                           // `[9c-1]` 끝난 알림만 지운다(내보내는 중이면 끝까지 간다)
   els.keyInput.value = '';
   setKeyVisible(false);
   els.consentHint.hidden = true;

@@ -53,7 +53,7 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=7ff71180ec">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=5af498832f">
+<link rel="stylesheet" href="css/screens.css?v=a60040a735">
 <link rel="stylesheet" href="css/reader.css?v=a531f97813">
 <script type="importmap">
 {
@@ -67,14 +67,15 @@
     "./js/ai/provider.js": "./js/ai/provider.js?v=046931d5b2",
     "./js/ai/readalong.js": "./js/ai/readalong.js?v=6472c5f7cc",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
-    "./js/config.js": "./js/config.js?v=6f893f2fe0",
+    "./js/backup/export.js": "./js/backup/export.js?v=c85ea9bc8b",
+    "./js/config.js": "./js/config.js?v=cca20c8a1e",
     "./js/db.js": "./js/db.js?v=2b36013d63",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=6ee5d10458",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=cbe48a80d1",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=ee9d465919",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=d5130211a5",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=c0731e1472",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=079f59ba8e",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=51fef8ef75",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=4e92e4d6ae",
     "./js/main.js": "./js/main.js?v=f45e86f685",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -86,7 +87,8 @@
     "./js/router.js": "./js/router.js?v=808197bad0",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
-    "./js/settings.js": "./js/settings.js?v=78340ff443",
+    "./js/settings.js": "./js/settings.js?v=4fa3907fa0",
+    "./js/text/backup.js": "./js/text/backup.js?v=ccf3b0257a",
     "./js/text/bidi.js": "./js/text/bidi.js?v=2bda7b28c4",
     "./js/text/blocks.js": "./js/text/blocks.js?v=d1928663d6",
     "./js/text/cite.js": "./js/text/cite.js?v=259bcf49ea",
@@ -108,6 +110,7 @@
     "./js/tts/speaker.js": "./js/tts/speaker.js?v=bfb10b8e3d",
     "./js/tts/text.js": "./js/tts/text.js?v=fb5bc74285",
     "./js/tts/voices.js": "./js/tts/voices.js?v=67fb29c15a",
+    "./js/ui/backup.js": "./js/ui/backup.js?v=6a9a15231c",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
     "./js/ui/chrome.js": "./js/ui/chrome.js?v=ebc3657eb9",
@@ -123,7 +126,7 @@
     "./js/ui/reader.js": "./js/ui/reader.js?v=f19365aa4d",
     "./js/ui/search.js": "./js/ui/search.js?v=fd4c8242c4",
     "./js/ui/selbar.js": "./js/ui/selbar.js?v=867bd2fb91",
-    "./js/ui/settings.js": "./js/ui/settings.js?v=ce3439f316",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=a93e197aea",
     "./js/ui/trband.js": "./js/ui/trband.js?v=9879796ba1",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=2ccd2e6cd1",
     "./js/ui/usage.js": "./js/ui/usage.js?v=a5b6dde423",
@@ -345,7 +348,11 @@
       <button type="button" class="link links-edit" data-nav="#/settings/links" data-i18n="links.card.edit"></button>
     </details>
 
-    <p class="storage-line" id="storageLine"></p>
+    <!-- `[9c-1 — spec 17-4-1 6]` 저장 줄 옆 글자 링크 [백업] → `#/settings/backup`(상단 단추를 늘리지 않는다 · `data-nav` 전역 위임). -->
+    <div class="storage-row">
+      <p class="storage-line" id="storageLine"></p>
+      <button type="button" class="link backup-link" data-nav="#/settings/backup" data-i18n="backup.link"></button>
+    </div>
 
     <!-- 9-4 [텍스트 다시 추출] 확인 — **페이지 안 대화상자**(`confirm()` 을 쓰지 않는다).
          `ui/library.js` 의 `askReextract` 가 제목(문서 이름)을 채우고 연다. 첫 초점은 [취소]. -->
@@ -743,6 +750,32 @@
       </div>
       <p class="muted" id="aiConsentHint" hidden data-i18n="onboarding.consent.needCheck"></p>
       <button type="button" class="primary" data-action="consent-agree" data-i18n="settings.ai.consent.agree"></button>
+    </div>
+
+    <!-- `[9c-1 — spec 17-4-1 6]` 백업·옮기기 — AI 카드 위, `#/settings/backup`. 동작은 카드 하나의 위임 리스너(`data-ba`, `js/ui/backup.js`).
+         파일은 기기에 저장만 한다(업로드·동기화 없음 · 호출 0). 키는 담지 않는다. 가져오기는 9c-2.
+         책별 PDF 는 파일 안에 넣지 않고 따로 내려받는다(blob 이 있는 책만). 글자는 전부 textContent. -->
+    <div class="card settings-card backup-card" id="settingsBackup">
+      <h2 data-i18n="backup.title"></h2>
+      <p class="backup-last" id="backupLast"><span id="backupLastText"></span> <span class="backup-stale-hint" id="backupStale" data-i18n="backup.staleHint" hidden></span></p>
+      <div class="consent-row">
+        <input type="checkbox" id="backupCache" checked>
+        <label for="backupCache" id="backupCacheLabel"></label>
+      </div>
+      <button type="button" class="primary" id="backupExport" data-ba="export" data-i18n="backup.export"></button>
+      <div class="backup-progress" id="backupProgress" hidden>
+        <div class="progress-track" id="backupBar" role="progressbar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"
+             data-i18n-aria="backup.progressLabel"><div class="progress-fill" id="backupBarFill"></div></div>
+        <p class="muted backup-progress-text" id="backupProgressText" aria-live="polite"></p>
+      </div>
+      <p class="muted" id="backupMsg" role="status" aria-live="polite"></p>
+      <p class="muted" data-i18n="backup.notice"></p>
+      <details class="backup-pdfs" id="backupPdfs">
+        <summary data-i18n="backup.pdf.title"></summary>
+        <ul class="backup-pdf-list" id="backupPdfList"></ul>
+        <p class="muted" id="backupPdfEmpty" data-i18n="backup.pdf.none" hidden></p>
+      </details>
+      <p class="muted" data-i18n="backup.howto"></p>
     </div>
 
     <div class="card settings-card" id="settingsAi">

@@ -97,6 +97,10 @@ export const DEFAULTS = Object.freeze({
   /* `[18 — spec 17-9]` 의료 사이트 북마크 — null = 기본 목록(config.js `LINKS.DEFAULTS`), 배열 = 사용자 목록 `[{id, name, url}]`(빈 배열 = 목록 없음). DB 무관. */
   'links.medical': null,
 
+  /* `[9c-1 — spec 17-4-1 6 · 9-3]` 마지막 백업 내보내기 시각(ms). null = 아직 — 설정 카드 "마지막 백업 n일 전"(30일 넘으면 주의 색).
+     백업 파일에는 담지 않는다(`BACKUP.SETTINGS_SKIP` — 기기마다 따로 센다). DB 무관. */
+  'backup.lastExportAt': null,
+
   /* AI (7·8단계) */
   'ai.provider': 'gemini',
   'ai.model': '',
