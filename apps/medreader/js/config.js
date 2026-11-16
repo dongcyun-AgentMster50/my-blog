@@ -684,6 +684,41 @@ export const VOCAB = Object.freeze({
 });
 
 /* ────────────────────────────────────────────────────────
+   `[11-1]` 17-2-1 — 문단 요약(11b)·범위 개요(11c) 상수. **추가만** 했다.
+   ★ 무료 티어 한도 숫자는 여기에도 없다(15절). 출력 토큰은 요청 하나의 상한(`AI.MAX_REQ_TOKENS`) 안에서 묶음을 자르는 몫이다.
+   ──────────────────────────────────────────────────────── */
+export const SUMMARY = Object.freeze({
+  /* 17-2-1 3 `eligible` — 요약할 수 있는 문단(7-3 그대로): kind `body`·`list`, 문장 2개 이상, 글자 60자 이상 */
+  KINDS: Object.freeze(['body', 'list']),
+  MIN_SENTENCES: 2,
+  MIN_CHARS: 60,
+  /* 4-1 — `maxOutputTokens = 문단 수 × PER_PARA + PAD` */
+  OUT_TOKENS_PER_PARA: 700,
+  OUT_TOKENS_PAD: 200,
+  /* 4-1 `checkSummary` 상한 — 넘으면 **자른다**(실패 아님) */
+  GIST_MAX: 600,
+  MAX_POINTS: 4,
+  MAX_SUB: 3,
+  POINT_MAX: 200,
+  MAX_TERMS: 5,
+  TERM_MAX: 80,
+  /* 캐시 값·저장 레코드의 `promptVersion`(키에는 넣지 않는다 — 7-5). 번역 `PROMPT_VERSION` 과 따로 센다. */
+  PROMPT_VERSION: 1
+});
+
+export const OUTLINE = Object.freeze({
+  /* 4-6 — 깊이별 항목 상한(위 8 · 아래 4 · 그 아래 3). 깊이 3 고정(gemini 스키마는 재귀가 없다). */
+  MAX_POINTS: Object.freeze([8, 4, 3]),
+  TITLE_MAX: 200,
+  POINT_MAX: 200,
+  /* 요청 하나의 출력 상한 — 입력(저장한 요약 ≤ `ai.maxReqChars`) + 이것 ≤ `AI.MAX_REQ_TOKENS` 를 넘으면 보내지 않는다 */
+  OUT_TOKENS: 4000,
+  /* 캐시 키 `extra`(4-6 — `keyFor(docId, 입력 글, target, 'summarize', 'outline')`) */
+  KEY_EXTRA: 'outline',
+  PROMPT_VERSION: 1
+});
+
+/* ────────────────────────────────────────────────────────
    `[8a]` 7-6 · 10-2 · 7-5 — 번역 파이프라인 상수. **추가만** 했다.
    ★ 무료 티어 한도 숫자는 여기에도 없다(15절). 상한은 사용자의 `ai.dailyCap` 이다.
    ──────────────────────────────────────────────────────── */

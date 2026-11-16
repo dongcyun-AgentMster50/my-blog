@@ -41,13 +41,15 @@
    진행 중인 캐시 키의 요청이 또 오면 **진행 중인 Promise 를 공유한다**(호출 1건).
    ============================================================ */
 
-import { PIPELINE, AI, VOCAB } from '../config.js';
+import { PIPELINE, AI, VOCAB, OUTLINE } from '../config.js';
 import * as realProvider from './provider.js';
 import { CODES, localDay, bumpUsage } from './provider.js';
 import { parseAIJson } from './jsonrepair.js';
 import {
   buildTranslateRequest, checkTranslation, TRANSLATE_SCHEMA, PROMPT_VERSION, langName, normalizeDomain,
-  buildTermRequest, checkTerms, TERM_SCHEMA, TERM_PROMPT_VERSION
+  buildTermRequest, checkTerms, TERM_SCHEMA, TERM_PROMPT_VERSION,
+  buildSummaryRequest, checkSummary, SUMMARY_SCHEMA, SUMMARY_PROMPT_VERSION,
+  buildOutlineRequest, checkOutline, OUTLINE_SCHEMA, OUTLINE_PROMPT_VERSION, outlinePayload
 } from './prompts.js';
 import { keyFor, defaultCache } from './cache.js';
 import { exceedsRequestBudget } from './tokens.js';
@@ -89,8 +91,11 @@ export const FAIL = Object.freeze({
   LANG: 'LANG'            // 번역에 대상 언어 글자가 하나도 없다(다른 언어로 답함)
 });
 
-/** 결과 전체의 상태(원격 상태 말고). */
-export const STATUS = Object.freeze({ SAME_LANG: 'same-lang', UNSUPPORTED_LANG: 'unsupported-lang', EMPTY: 'empty' });
+/** 결과 전체의 상태(원격 상태 말고). `[11-1]` `too-big` — 범위 개요의 입력이 요지만으로도 요청 상한을 넘어 **보내지 않았다**(4-6). */
+export const STATUS = Object.freeze({ SAME_LANG: 'same-lang', UNSUPPORTED_LANG: 'unsupported-lang', EMPTY: 'empty', TOO_BIG: 'too-big' });
+
+/** `[11-1 — 17-2-1 4-2]` 요약·범위 개요의 사용량(`usage.byKind`)·캐시 `kind`. 9-2 의 고정 키(`AI.USAGE_KINDS`)다. */
+export const SUMMARY_KIND = 'summarize';
 
 /**
  * `[8f-1]` `skipped` 결과의 코드 — **한 번 부름 = 최대 1호출**인 job(단어 요청)에서 첫 묶음에 들지 못해
@@ -145,6 +150,7 @@ function charCount(s) {
      toResult(result)         → 결과 객체에 덧붙일 필드(번역 `{text}` · 그 밖 `{value}` — 문자열이 아닌 결과)
      promptVersion · size(item)(글자 상한 셈) · usageChars(chunk, ctx)(15절 글자 지표)
      ondevice(기기 내 번역을 거치는가) · maxItems(묶음 하나의 항목 상한, 0 = 없음) · maxChunks(한 번 부름의 호출 상한, 0 = 없음)
+     tailOf(chunk, value)?    → `[11-1b]` 잘린 응답의 마지막 항목 번호(-1 = 없음) — 있으면 그 항목은 MISSING(요약·개요만 · 번역·단어는 없음)
    11 의 요약·개요·설명은 job 하나씩을 더해 `runJob` 을 부른다.
    ──────────────────────────────────────────────────────── */
 
@@ -206,6 +212,135 @@ export const TERM_JOB = Object.freeze({
   usageChars: () => 0,
   ondevice: false,
   maxItems: VOCAB.BATCH_MAX,
+  maxChunks: 1
+});
+
+/** 깊은 사본(요약·개요 값은 배열이 겹친다 — 호출자가 고쳐도 캐시·다른 결과가 바뀌지 않게). */
+function deepCopy(v) {
+  return JSON.parse(JSON.stringify(v));
+}
+
+/**
+ * `[11-1b — 11-1R #1]` 응답이 잘렸는가 — provider 가 올려 보낸 `finishReason: 'MAX_TOKENS'`(gemini 어댑터가 그대로 넘김)
+ * 또는 `jsonrepair` 가 잘린 꼬리를 닫았다(`repairs` 에 `truncated`). `job.tailOf` 가 있는 job(요약·개요)만 묻는다.
+ */
+function cutShort(r, parsed) {
+  return !!(r && r.finishReason === 'MAX_TOKENS') || (Array.isArray(parsed.repairs) && parsed.repairs.indexOf('truncated') >= 0);
+}
+
+/**
+ * `[11-1b]` 잘린 응답 **원문**을 훑는다(문자열 안 괄호·이스케이프는 세지 않는다). `{items:[{…}]}` 꼴에서 깊이 3 의 `{` 가 항목 객체다.
+ * @returns {{depth:number, open:boolean, openI:(number|undefined)}} `depth` = 끝에서 닫히지 않은 괄호 수(0 = 루트까지 닫힘) ·
+ *   `open` = 열린 채 끝난 항목이 있다 · `openI` = 그 항목의 `i`(값이 끝난 것만 — `"i":12` 가 `"i":1` 로 잘린 것은 읽지 않는다),
+ *   `i` 가 아예 없으면 -1(정수 `i` 가 없는 항목은 `checkSummary` 를 지나지 못한다 — 살아남을 수 없다), `i` 값이 잘렸으면 undefined(모름)
+ *   (항목 안의 요점·용어 객체에는 `"i"` 키가 없다 · 글 안의 따옴표는 `\"` 라 `"i"` 로 읽히지 않는다)
+ */
+function scanCut(text) {
+  const s = String(text == null ? '' : text);
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let start = -1;
+  for (let k = 0; k < s.length; k++) {
+    const ch = s[k];
+    if (inStr) {
+      if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === '{' || ch === '[') { depth++; if (ch === '{' && depth === 3) start = k; }
+    else if (ch === '}' || ch === ']') { if (ch === '}' && depth === 3) start = -1; depth--; }
+  }
+  if (start < 0) return { depth: depth, open: false, openI: undefined };
+  const rest = s.slice(start);
+  const m = /"i"\s*:\s*(\d+)\s*[,}]/.exec(rest);
+  if (m) return { depth: depth, open: true, openI: Number(m[1]) };
+  return { depth: depth, open: true, openI: /"i"\s*:\s*\d+\s*$/.test(rest) ? undefined : -1 };
+}
+
+/**
+ * `[11-1 — 17-2-1 4-1 · 4-2 · 11-D9]` 문단 요약 job(`kind:'summarize'`). 상태 기계는 번역과 **한 벌**(`runJob`).
+ * 묶음 자르기는 번역과 같은 `chunksOf` — 누적 `ai.maxReqChars` 이하 · 요청(입력 + `maxOutputTokens` = 문단 × 700 + 200) ≤ 8,000 토큰.
+ * 한 번 부름의 호출 상한은 없다([이 쪽 전체 요약]이 1–2호출 — 누르기 전에 `planSummary` 로 센다). 기기 내 경로 없음(11-D6).
+ * 결과는 문자열이 아니다 — `{value:{gist, gistSrc?, points, terms}}`.
+ */
+export const SUMMARY_JOB = Object.freeze({
+  name: SUMMARY_KIND,
+  build: (chunk, ctx) => buildSummaryRequest(chunk, { src: ctx.src, target: ctx.target, domain: ctx.domain }),
+  schema: SUMMARY_SCHEMA,
+  check: (chunk, value, ctx) => {
+    const chk = checkSummary(chunk, value, { withSrc: ctx.src !== ctx.target });
+    return {
+      chunkFailed: false,
+      items: chk.items.map((it) => (it.state === 'ok'
+        ? { state: 'ok', value: it.value }
+        : { state: 'failed', code: failCodeOf(it.reason) }))
+    };
+  },
+  accepts: (v) => !!v && typeof v === 'object' && typeof v.gist === 'string' && v.gist.trim() !== '' &&
+    Array.isArray(v.points) && Array.isArray(v.terms),
+  toResult: (v) => ({ value: deepCopy(v) }),
+  /**
+   * `[11-1b — 11-1R #1]` 잘린 응답(`cutShort`)에서 **반쪽으로 살아난 마지막 항목**의 묶음 번호(없으면 -1) — `accept` 가 그 문단을
+   * `failed(MISSING)` 로(캐시 0 · 실패 기억 → [다시 시도]). `jsonrepair` 가 요점·용어 경계에서 끊긴 문단을 온전한 항목처럼
+   * 살리기 때문이다(요점 1개·용어 일부로 ready 되던 것).
+   *   - 원문(`scanCut`)에서 마지막 항목이 닫혔으면(`notes` 안에서 잘림 등) 반쪽이 없다 → -1. 열린 항목에 `i` 가 없으면(`…},{"i` 처럼
+   *     항목을 열자마자 잘림) 그 항목은 살아남지 못한다 → -1.
+   *   - 열린 항목의 `i` 를 읽었는데 응답 값의 마지막 항목이 그 `i` 가 아니면 — 열린 항목은 `slice` 로 잘려 나갔고 남은 마지막은
+   *     온전하다 → -1(요지 안에서 잘린 꼴 — 앞 문단을 버리지 않는다).
+   *   - 그 밖(열린 항목이 값에 살아남음 · `i` 값이 잘려 모름 — 모르면 안전 쪽)은 값의 마지막 항목. 단 그 `i` 의 **첫** 항목일 때만
+   *     (같은 `i` 두 번이면 `checkSummary` 가 앞의 것을 쓴다).
+   */
+  tailOf: (chunk, value, text) => {
+    const cut = scanCut(text);
+    if (!cut.open || cut.openI === -1) return -1;
+    const arr = value && Array.isArray(value.items) ? value.items : [];
+    const s = arr[arr.length - 1];
+    if (!s || !Number.isInteger(s.i) || s.i < 0 || s.i >= chunk.length) return -1;
+    if (cut.openI !== undefined && s.i !== cut.openI) return -1;
+    return arr.findIndex((x) => x && x.i === s.i) === arr.length - 1 ? s.i : -1;
+  },
+  promptVersion: SUMMARY_PROMPT_VERSION,
+  size: (it) => charCount(it.text),
+  usageChars: () => 0,
+  ondevice: false,
+  maxItems: 0,
+  maxChunks: 0
+});
+
+/**
+ * `[11-1 — 17-2-1 4-6 · 11-D19]` 범위 개요 job. 항목은 늘 하나(저장한 요약 묶음), **한 번 부름 = 최대 1호출**.
+ * 입력이 넘치면 `outline()` 이 보내기 전에 거른다(요지만 → 그래도 넘치면 `too-big`, 호출 0). 결과 `{value:{title, points}}`.
+ */
+export const OUTLINE_JOB = Object.freeze({
+  name: OUTLINE.KEY_EXTRA,
+  build: (chunk, ctx) => {
+    const it = chunk[0] || {};
+    return buildOutlineRequest(it.summaries, { target: ctx.target, domain: ctx.domain, label: it.label, points: it.points !== false });
+  },
+  schema: OUTLINE_SCHEMA,
+  check: (chunk, value) => {
+    const chk = checkOutline(chunk[0] && chunk[0].plain, value);
+    return {
+      chunkFailed: false,
+      items: chk.items.map((it) => (it.state === 'ok'
+        ? { state: 'ok', value: it.value }
+        : { state: 'failed', code: failCodeOf(it.reason) }))
+    };
+  },
+  accepts: (v) => !!v && typeof v === 'object' && typeof v.title === 'string' && v.title.trim() !== '' &&
+    Array.isArray(v.points) && v.points.length > 0,
+  toResult: (v) => ({ value: deepCopy(v) }),
+  /**
+   * `[11-1b — 11-1R #1]` 항목은 늘 하나 — 잘린 응답이면 그 개요가 반쪽이다(`failed(MISSING)` · 캐시 0).
+   * 원문이 루트까지 닫혔으면(`MAX_TOKENS` 라도 JSON 이 끝났다) 온전하다 → -1.
+   */
+  tailOf: (chunk, value, text) => (scanCut(text).depth <= 0 ? -1 : 0),
+  promptVersion: OUTLINE_PROMPT_VERSION,
+  size: (it) => it.size,
+  usageChars: () => 0,
+  ondevice: false,
+  maxItems: 1,
   maxChunks: 1
 });
 
@@ -524,10 +659,13 @@ export function createPipeline(deps) {
       await bumpUsage({ errors: 1 }, { db: db, now: now() });
       return chunk.map(() => ({ state: SEG.FAILED, code: FAIL.SHIFT }));
     }
+    // `[11-1b — 11-1R #1]` 잘린 응답의 마지막 항목은 반쪽일 수 있다 — `tailOf` 가 있는 job(요약·개요)만 그 항목을 MISSING 으로.
+    // 번역·단어 job 은 `tailOf` 가 없어 -1(이 갈래를 지나지 않는다 — 요청·결과 바이트 그대로).
+    const tail = typeof job.tailOf === 'function' && cutShort(r, parsed) ? job.tailOf(chunk, parsed.value, r && r.text) : -1;
     const out = [];
     const entries = [];
     for (let i = 0; i < chunk.length; i++) {
-      const it = chk.items[i];
+      const it = i === tail ? { state: 'failed', code: FAIL.MISSING } : chk.items[i];
       if (it.state === 'ok') {
         out.push(Object.assign({ state: SEG.READY }, job.toResult(it.value)));
         entries.push({
@@ -652,7 +790,9 @@ export function createPipeline(deps) {
    *   `kind` — 사용량(`usage.byKind`)과 캐시 값의 종류. `force` — 캐시 읽기를 건너뛰고 새로 받아 덮어쓴다(7-5 "다시 생성").
    * @returns {Promise<{status:string, calls:number, results:Object[]}>}
    */
-  async function runJob(job, list, keys, o) {
+  async function runJob(job, list, keys, opts) {
+    // `[11-1 — crossstep 8f1R]` 넷째 인자 없이 불러도 TypeError 가 나지 않게(기본 `{}`).
+    const o = opts || {};
     const results = new Array(list.length).fill(null);   // ★ 구멍 배열이면 every() 가 빈칸을 건너뛴다
 
     // 1. 캐시
@@ -773,6 +913,118 @@ export function createPipeline(deps) {
     return { status: out.status, calls: out.calls, results: results };
   }
 
+  /* ── `[11-1 — spec 17-2-1 4-2]` 문단 요약 · 범위 개요 ── */
+
+  /**
+   * 요약 요청 준비 — 언어·키·보낼 항목. 언어 = **대상 언어 + 문서 원문 언어**(같으면 하나 — 11-D4, `ai.summaryLangs` 는 읽지 않는다).
+   * ★ 같은 언어도 요약한다(번역의 `same-lang` 건너뛰기를 쓰지 않는다). 언어 이름이 없으면 `unsupported-lang`.
+   * 키 `keyFor(docId, 문단 글, target, 'summarize', 'l=' + langs.join('+'))` — `domain`·판본은 키에 없다(7-5).
+   */
+  async function summaryPrep(paras, o) {
+    const src = typeof o.src === 'string' ? o.src.trim() : '';
+    const target = typeof o.target === 'string' ? o.target.trim() : '';
+    // ★ 항목에서 문단 글(`text`)만 읽는다 — 저장 요약의 메모·책 제목·쪽은 항목에 있어도 옮겨 담지 않는다(4-2 "보내는 것").
+    const list = (Array.isArray(paras) ? paras : []).map((p) => ({ text: textOf(p).trim() }));
+    const skip = (status) => ({ state: SEG.SKIPPED, code: status });
+    if (!list.length) return { done: { status: STATUS.EMPTY, calls: 0, results: [] } };
+    if (!langName(src) || !langName(target)) {
+      return { done: { status: STATUS.UNSUPPORTED_LANG, calls: 0, results: list.map(() => skip(STATUS.UNSUPPORTED_LANG)) } };
+    }
+    const langs = src === target ? [target] : [target, src];
+    const docId = String(o.docId == null ? '' : o.docId);
+    const results = list.map((it) => (it.text ? null : skip(STATUS.EMPTY)));
+    const send = [];
+    const at = [];
+    for (let i = 0; i < list.length; i++) if (!results[i]) { send.push(list[i]); at.push(i); }
+    if (!send.length) return { done: { status: STATUS.EMPTY, calls: 0, results: results } };
+    const keys = await Promise.all(send.map((s) => keyFor(docId, s.text, target, SUMMARY_KIND, 'l=' + langs.join('+'))));
+    return { src: src, target: target, docId: docId, langs: langs, results: results, send: send, at: at, keys: keys };
+  }
+
+  /**
+   * `pipeline.summarize(paras, {src, target, docId, domain, force, retry, signal})` → `{status, calls, results[], langs}`
+   * (입력 순서, **던지지 않는다**). 결과 `{state:'ready', value:{gist, gistSrc?, points, terms}, cached?}` · `failed`(`DIGITS`·
+   * `EMPTY`·`MISSING`·`PARSE`…) · `blocked`(보내지 않음) · `skipped`(빈 글·언어 없음).
+   * 상태 기계·`gate`(오프라인·상한·키)·5xx 1회·429·cooldown·진행 중 공유·실패 기억·사용량(`byKind.summarize`)은 번역과 한 벌.
+   * `force` = [다시 요약] — 캐시 읽기를 건너뛰고 덮어쓴다. `retry` = [다시 시도].
+   * @param {({text:string}|string)[]} paras `paraTextsOf` 의 문단 글
+   */
+  async function summarize(paras, opts) {
+    const o = opts || {};
+    const prep = await summaryPrep(paras, o);
+    if (prep.done) return prep.done;
+    const out = await runJob(SUMMARY_JOB, prep.send, prep.keys, {
+      src: prep.src, target: prep.target, kind: SUMMARY_KIND, docId: prep.docId, signal: o.signal,
+      retry: !!o.retry, force: !!o.force, domain: o.domain
+    });
+    const results = prep.results.slice();
+    for (let k = 0; k < prep.at.length; k++) results[prep.at[k]] = out.results[k];
+    return { status: out.status, calls: out.calls, results: results, langs: prep.langs.slice() };
+  }
+
+  /**
+   * [이 쪽 전체 요약 (문단 n · 호출 k)] 의 k — **보내지 않고** 센다. `summarize` 가 실제로 쓰는 것과 같은 키·같은 캐시 읽기·
+   * 같은 자르기(`chunksOf` + `SUMMARY_JOB`)로. 캐시에 있는 문단, 진행 중인 문단, "보냈다가 실패"로 기억된 문단(`retry`·`force` 가 아니면)은
+   * 세지 않는다. 원격 상태가 막혀 있으면 실제 호출은 0 일 수 있다(k 는 ready 일 때의 수).
+   * @returns {Promise<{calls:number, fresh:number, cached:number}>}
+   */
+  async function planSummary(paras, opts) {
+    const o = opts || {};
+    const prep = await summaryPrep(paras, o);
+    if (prep.done) return { calls: 0, fresh: 0, cached: 0 };
+    let hits = new Map();
+    if (!o.force) { try { hits = await cache.getMany(prep.keys); } catch (e) { hits = new Map(); } }
+    const seen = new Set();
+    const fresh = [];
+    let cached = 0;
+    for (let i = 0; i < prep.send.length; i++) {
+      const k = prep.keys[i];
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const rec = hits.get(k);
+      if (rec && SUMMARY_JOB.accepts(rec.result)) { cached++; continue; }
+      if (failedKeys.has(k) && !o.retry && !o.force) continue;
+      if (inflight.has(k)) continue;
+      fresh.push(Object.assign({ key: k }, prep.send[i]));
+    }
+    const ctx = { src: prep.src, target: prep.target, domain: normalizeDomain(o.domain) };
+    return { calls: fresh.length ? chunksOf(fresh, ctx, SUMMARY_JOB).length : 0, fresh: fresh.length, cached: cached };
+  }
+
+  /**
+   * `[11-1 — 17-2-1 4-6 · 11-D19]` 범위 개요 `pipeline.outline(summaries, {target, docId, domain, label, force, retry, signal})`.
+   * 입력 = **저장한 요약**(요지 + 요점, 대상 언어 — 원문을 다시 보내지 않는다). 넘치면(`ai.maxReqChars` 또는 요청 토큰 상한)
+   * 요점을 빼고 요지만 → 그래도 넘치면 **보내지 않고** `{status:'too-big', calls:0, n, chars}`. 한 번 누름 = 최대 1호출.
+   * 키 `keyFor(docId, 입력 글, target, 'summarize', 'outline')` — 같은 범위·같은 요약이면 0회. 사용량 `byKind.summarize`.
+   * @returns {Promise<{status:string, calls:number, results:Object[], input?:'points'|'gist', n?:number, chars?:number}>} 던지지 않는다
+   */
+  async function outline(summaries, opts) {
+    const o = opts || {};
+    const target = typeof o.target === 'string' ? o.target.trim() : '';
+    const list = (Array.isArray(summaries) ? summaries : []).filter((r) => r && typeof r.gist === 'string' && r.gist.trim());
+    const skip = (status, extra) => Object.assign({ status: status, calls: 0, results: [{ state: SEG.SKIPPED, code: status }] }, extra || {});
+    if (!list.length) return skip(STATUS.EMPTY);
+    if (!langName(target)) return skip(STATUS.UNSUPPORTED_LANG);
+    const ctx = { src: target, target: target, domain: normalizeDomain(o.domain) };
+    let pick = null;
+    let last = null;
+    for (const withPoints of [true, false]) {
+      const input = outlinePayload(list, { points: withPoints });
+      const item = { text: input.text, plain: input.plain, size: input.size, summaries: list, label: o.label, points: withPoints };
+      last = item;
+      const req = OUTLINE_JOB.build([item], ctx);
+      if (req && item.size <= maxChars() && !exceedsRequestBudget(req)) { pick = item; break; }
+    }
+    if (!pick) return skip(STATUS.TOO_BIG, { n: list.length, chars: last ? last.size : 0 });
+    const docId = String(o.docId == null ? '' : o.docId);
+    const key = await keyFor(docId, pick.text, target, SUMMARY_KIND, OUTLINE.KEY_EXTRA);
+    const out = await runJob(OUTLINE_JOB, [pick], [key], {
+      src: target, target: target, kind: SUMMARY_KIND, docId: docId, signal: o.signal,
+      retry: !!o.retry, force: !!o.force, domain: o.domain
+    });
+    return Object.assign(out, { input: pick.points ? 'points' : 'gist', n: list.length });
+  }
+
   /* ── 사용자·환경이 상태를 바꾸는 길 ───────────────── */
 
   /**
@@ -826,8 +1078,14 @@ export function createPipeline(deps) {
     translate: translate,
     /** `[8f-1]` 단어 요청(17-7-2) — 번역과 같은 상태 기계. */
     translateTerms: translateTerms,
-    /** `[8f-1]` job 하나를 돌린다(11 이 요약·개요·설명 job 을 얹는다). `(job, items, keys, opts)`. */
+    /** `[8f-1]` job 하나를 돌린다(11 이 요약·개요·설명 job 을 얹는다). `(job, items, keys, opts)` — `opts` 는 빼도 된다(11-1). */
     runJob: runJob,
+    /** `[11-1]` 문단 요약(17-2-1 4-2) — 번역과 같은 상태 기계. */
+    summarize: summarize,
+    /** `[11-1]` [이 쪽 전체 요약]의 호출 수 k — 보내지 않고 센다. */
+    planSummary: planSummary,
+    /** `[11-1]` 범위 개요(11c — 4-6) — 저장한 요약에서만, 최대 1호출. */
+    outline: outline,
     retry: retry,
     configChanged: configChanged,
     setOnline: setOnline,

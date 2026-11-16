@@ -2,7 +2,7 @@
    MedReader — AI 프롬프트 (spec 10-1 공통 골격 · 10-2 번역 · 10-7)
 
    ── 순수 계층이다(3-1) ──────────────────────────────────
-   `config.js`·`ai/tokens.js`(순수)만 import 한다. 입력 → 출력.
+   `config.js`·`ai/tokens.js`·`text/summary.js`(모두 순수)만 import 한다. 입력 → 출력.
    화면 문구를 만들지 않는다 — 여기 있는 것은 **모델에게 주는 지시문**뿐이다.
 
    ── ★ 언어는 값이다 (7-1 원칙 5 · 10-1) ──────────────────
@@ -19,8 +19,10 @@
    만든다. 테스트(`tests/prompts-8a.test.mjs`)가 옛 문자열과 글자 단위로 대조한다.
    ============================================================ */
 
-import { PIPELINE, VOCAB } from '../config.js';
+import { PIPELINE, VOCAB, SUMMARY, OUTLINE } from '../config.js';
 import { estimateTokens } from './tokens.js';
+// `[11-1]` 요약·개요 응답 다듬기(트리 상한·숫자 거름)는 순수 `text/summary.js` 한 벌 — 같은 순수 계층(3-2 첫 행).
+import { clean, cutText, trimTree, pruneForeignNumbers, hasForeignNumber, outlineInput } from '../text/summary.js';
 
 /**
  * 10-1 — 프롬프트 판본. 캐시 값(`aiCache.promptVersion`)에 기록한다(키에는 넣지 않는다 — 7-5).
@@ -553,5 +555,351 @@ export function checkTerms(input, value, target) {
   return { chunkFailed: false, items: items };
 }
 
-/* 10-3 요약 프롬프트는 후순위다(7-3 `[후순위 2026-09-28]`, 로드맵 11b). 자리만 남긴다 —
-   `buildSummaryRequest(paragraphs, langs)` 가 여기에 온다. 파이프라인의 `kind` 가 그 자리를 받는다. */
+/* ────────────────────────────────────────────────────────
+   `[11-1 — spec 17-2-1 4-1 · 4-6]` 문단 요약(`kind:'summarize'`) · 범위 개요(11c)
+   10-3 의 보존 설계를 17-2-1 이 대체했다 — 요지 + 원문 언어 요지 + 요점 2단 + 용어를 **한 호출**로(11-D5).
+   번역·단어 요청과 **따로 선다** — 번역 지시문·스키마·`PROMPT_VERSION`·`TERM_PROMPT_VERSION` 은 한 글자도 바꾸지 않는다.
+   system 은 10-1 골격 `commonSystem(true, domain)` **그대로**(규칙 1–6 — 16-D2 와 같은 대조 시험).
+   ──────────────────────────────────────────────────────── */
+
+/** 요약·개요 판본 — 캐시 **값**·저장 레코드의 `promptVersion` 에만(키에는 넣지 않는다 — 7-5). 값은 `config.js`. */
+export const SUMMARY_PROMPT_VERSION = SUMMARY.PROMPT_VERSION;
+export const OUTLINE_PROMPT_VERSION = OUTLINE.PROMPT_VERSION;
+
+const STR = Object.freeze({ type: 'STRING' });
+const TERM_PAIR = Object.freeze({
+  type: 'OBJECT',
+  properties: Object.freeze({ src: STR, tr: STR }),
+  required: Object.freeze(['src', 'tr']),
+  propertyOrdering: Object.freeze(['src', 'tr'])
+});
+/** 요점 `{t, sub:[문자열]}` — 깊이 고정(gemini 스키마는 재귀가 없다). */
+const POINT_2 = Object.freeze({
+  type: 'OBJECT',
+  properties: Object.freeze({ t: STR, sub: Object.freeze({ type: 'ARRAY', items: STR }) }),
+  required: Object.freeze(['t']),
+  propertyOrdering: Object.freeze(['t', 'sub'])
+});
+
+function summarySchema(withSrc) {
+  const names = withSrc ? ['i', 'gist', 'gistSrc', 'points', 'terms'] : ['i', 'gist', 'points', 'terms'];
+  const all = {
+    i: Object.freeze({ type: 'INTEGER' }),
+    gist: STR,
+    gistSrc: STR,
+    points: Object.freeze({ type: 'ARRAY', items: POINT_2 }),
+    terms: Object.freeze({ type: 'ARRAY', items: TERM_PAIR })
+  };
+  const props = {};
+  for (const n of names) props[n] = all[n];
+  return Object.freeze({
+    type: 'OBJECT',
+    properties: Object.freeze({
+      items: Object.freeze({
+        type: 'ARRAY',
+        items: Object.freeze({
+          type: 'OBJECT',
+          properties: Object.freeze(props),
+          required: Object.freeze(['i', 'gist']),
+          propertyOrdering: Object.freeze(names)
+        })
+      }),
+      notes: STR
+    }),
+    required: Object.freeze(['items']),
+    propertyOrdering: Object.freeze(['items', 'notes'])
+  });
+}
+
+/**
+ * 4-1 스키마 `{items:[{i, gist, gistSrc?, points:[{t, sub:[…]}], terms:[{src, tr}]}], notes}` — 필수 `items`·`i`·`gist`.
+ * `SUMMARY_SCHEMA` 는 원문 언어 요지가 있는 꼴(파이프라인의 미니 검증도 이것 — 상위 집합), `SUMMARY_SCHEMA_SAME` 은
+ * 원문 = 대상 언어일 때 요청에 싣는 꼴(`gistSrc` 필드 없음).
+ */
+export const SUMMARY_SCHEMA = summarySchema(true);
+export const SUMMARY_SCHEMA_SAME = summarySchema(false);
+
+/** 요약 요청의 "Schema:" 한 줄. */
+function summarySchemaLine(withSrc) {
+  return 'Schema: {"items": [{"i": number, "gist": string, ' + (withSrc ? '"gistSrc": string, ' : '') +
+    '"points": [{"t": string, "sub": [string]}], "terms": [{"src": string, "tr": string}]}], "notes": string}';
+}
+
+function codeOf(v) {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+/**
+ * `[11-1b — 11-1R #6]` 요약·개요 TASK 끝의 대상 언어 문체 문장. 문체 표(`TARGET_STYLE`·`TARGET_STYLE_GENERAL` — 10-2 번역과 같은 표,
+ * **표는 바꾸지 않는다**: 번역 지시문 바이트가 그대로여야 한다)의 값이 언어 이름 한 문장으로 시작하면(ko 의학 `"Korean. Use …"`)
+ * `Write the Korean text in Korean.` 처럼 겹치므로 그 이름 문장을 빼고 뒤 문장만 쓴다. 그 밖은 `Write the {Target} text in {style}` 그대로.
+ */
+function styleSentence(tgt, style) {
+  if (!style) return '';
+  const head = tgt + '.';
+  if (style === head) return '';
+  if (style.startsWith(head + ' ')) return ' ' + style.slice(head.length + 1);
+  return ' Write the ' + tgt + ' text in ' + style;
+}
+
+/**
+ * 4-1 TASK. 언어는 이름으로만(7-1 원칙 5). 원문 = 대상 언어면 `gistSrc` 줄이 없다.
+ * `[8p]` `domain` — `general` 이면 용어 문장이 "usual {Target} words" 결(`GENERAL_STYLE_LINE` 과 같은 결),
+ * 대상 언어 문체는 `TARGET_STYLE_GENERAL`. 의학이면 `TERM_EXAMPLES`·`TARGET_STYLE`(표에 없으면 빈 문자열 — 16-D2).
+ * @returns {string|null} 언어 이름을 모르면 null
+ */
+export function summaryInstruction(srcLang, targetLang, domain) {
+  const src = langName(srcLang);
+  const tgt = langName(targetLang);
+  if (!src || !tgt) return null;
+  const withSrc = codeOf(srcLang) !== codeOf(targetLang);
+  const general = normalizeDomain(domain) === 'general';
+  const tc = codeOf(targetLang);
+  const lines = [
+    'TASK: For each paragraph i write, using ONLY what that paragraph says:',
+    '- "gist": 1 to 3 short sentences in ' + tgt + ' that summarize the paragraph.'
+  ];
+  if (withSrc) lines.push('- "gistSrc": the same gist in simple ' + src + ' (for a reader with B1-level ' + src + ').');
+  lines.push('- "points": up to ' + SUMMARY.MAX_POINTS + ' key points in ' + tgt + ", in the paragraph's own order; " +
+    'each point may have up to ' + SUMMARY.MAX_SUB + ' short "sub" points.');
+  lines.push('- "terms": up to ' + SUMMARY.MAX_TERMS + ' key terms as {"src": the term exactly as written in the paragraph, "tr": ' +
+    (general ? 'the usual ' + tgt + ' word or expression' : 'the standard ' + tgt + ' medical term') + '}.');
+  if (general) {
+    const gstyle = styleSentence(tgt, TARGET_STYLE_GENERAL[tc]);
+    lines.push('Use usual ' + tgt + ' words; keep proper nouns as written; do not add explanations.' + gstyle);
+  } else {
+    const style = styleSentence(tgt, TARGET_STYLE[tc]);
+    const ex = TERM_EXAMPLES[tc] ? ' (e.g. ' + TERM_EXAMPLES[tc] + ')' : '';
+    lines.push(withSrc
+      ? 'Write medical terms as the standard ' + tgt + ' term with the original ' + src + ' term in parentheses on first use' + ex + '.' + style
+      : 'Keep medical terms as written.' + style);
+  }
+  lines.push('Keep numbers, units and drug names exactly as written. Do not add causes, treatments, doses or advice that the paragraph does not state.');
+  lines.push('Output exactly one item per input i.');
+  return lines.join('\n');
+}
+
+/**
+ * 4-1 문단 요약 요청(`CompletionRequest`, 8-1). 항목 `{i, text: escapeDoc(문단 글)}`.
+ * ★ **보내는 것은 문단 글뿐**(4-2 "보내는 것") — 항목에서 `text` 만 읽는다. 저장 요약의 메모·책 제목·쪽 번호는
+ *   항목에 있어도 읽지 않는다.
+ * @param {{text:string}[]} paras `paraTextsOf` 의 문단 글
+ * @param {{src:string, target:string, domain?:string}} langs `src` = 문서 원문 언어(8n·8m — es 포함), `target` = 대상 언어
+ * @returns {{system:string, user:string, json:true, schema:Object, maxOutputTokens:number, temperature:number}|null}
+ */
+export function buildSummaryRequest(paras, langs) {
+  const list = Array.isArray(paras) ? paras : [];
+  const l = langs || {};
+  const task = summaryInstruction(l.src, l.target, l.domain);
+  if (!task || !list.length) return null;
+  const withSrc = codeOf(l.src) !== codeOf(l.target);
+  const items = [];
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i] || {};
+    items.push({ i: i, text: escapeDoc(p.text) });
+  }
+  return {
+    system: commonSystem(true, l.domain),
+    user: task + '\n' + summarySchemaLine(withSrc) + '\n<<<DOC\n' + JSON.stringify(items) + '\n>>>',
+    json: true,
+    schema: withSrc ? SUMMARY_SCHEMA : SUMMARY_SCHEMA_SAME,
+    maxOutputTokens: list.length * SUMMARY.OUT_TOKENS_PER_PARA + SUMMARY.OUT_TOKENS_PAD,
+    temperature: PIPELINE.TEMPERATURE
+  };
+}
+
+/* `[11-1b — 11-1R #2]` 길이 자르기가 숫자를 쪼개지 않게 — `1500` 이 경계에 걸려 `15` 로 보이면 입력 밖(또는 입력에 우연히 있는) 숫자가 된다. */
+const DIGIT = /\p{Nd}/u;
+const NUM_SEP = /^[.,،٫٬]$/u;    // 숫자 사이의 . , ، ٫ ٬
+
+/** 코드포인트 j 가 숫자의 일부인가(숫자 · 숫자 사이의 구분점). */
+function inNumber(a, j) {
+  if (j < 0 || j >= a.length) return false;
+  if (DIGIT.test(a[j])) return true;
+  return NUM_SEP.test(a[j]) && j > 0 && j + 1 < a.length && DIGIT.test(a[j - 1]) && DIGIT.test(a[j + 1]);
+}
+
+/**
+ * 앞 n 글자로 자르되(`cutText` 와 같은 코드포인트 셈) 경계가 숫자 **가운데**면 그 숫자 앞까지 물린다 — 반쪽 숫자를 보이지 않는다.
+ * 자르지 않아도 되면 그대로.
+ */
+function cutWhole(s, n) {
+  const a = Array.from(String(s == null ? '' : s));
+  if (a.length <= n) return String(s == null ? '' : s);
+  let k = n;
+  if (inNumber(a, k) && inNumber(a, k - 1)) { while (k > 0 && inNumber(a, k - 1)) k--; }
+  return a.slice(0, k).join('').trim();
+}
+
+/** 줄 나무의 글마다 `cutWhole`(구조·순서는 그대로 — 빈 줄·개수는 `trimTree` 가 다룬다). */
+function cutTreeWhole(arr, max) {
+  return (Array.isArray(arr) ? arr : []).map((n) => {
+    if (typeof n === 'string') return cutWhole(clean(n), max);
+    if (n && typeof n === 'object') return Object.assign({}, n, { t: cutWhole(clean(n.t), max), sub: cutTreeWhole(n.sub, max) });
+    return n;
+  });
+}
+
+/**
+ * 줄 나무를 개수 상한 없이 정규화(숫자 거름 **전**에 — 거른 뒤 개수 상한으로 자른다: 지운 줄이 상한 자리를 먹지 않게).
+ * `[11-1b]` 한 줄 글자 상한(`max`)은 여기서 **숫자를 쪼개지 않고** 먼저 자른다 — 그 뒤 거름이 자른 글을 본다.
+ */
+function normTree(points, depth, max) {
+  const lim = [];
+  for (let d = 0; d < depth; d++) lim.push(Infinity);
+  return trimTree(cutTreeWhole(points, max), lim, max);
+}
+
+/**
+ * 4-1 검증 `checkSummary(input, value, {withSrc})` — 항목마다(묶음 전체를 버리지 않는다 — `chunkFailed` 늘 false).
+ *   - `i` 로 짝(같은 `i` 두 번 → 첫 것, 범위 밖 → 버림). 없으면 그 문단만 `missing`. `gist` 가 비면 `empty`.
+ *   - ★ **숫자 거름(11-D7)**: 출력 숫자 토큰(`numberTokens` — 10-2 와 같은 함수, 동방 숫자 = 서방 숫자)이 그 문단 입력에 없으면
+ *     `gist` → 그 문단 `digits` 실패(캐시하지 않음) · 원문 언어 요지 → 그 필드만 버림 · 요점·하위 요점·용어 → **그 줄만** 뺀다.
+ *   - 상한으로 **자른다**(실패 아님): 요지 ≤ 600자, 요점 ≤ 4·하위 ≤ 3·한 줄 ≤ 200자, 용어 ≤ 5(각 ≤ 80자).
+ *     `[11-1b]` 경계가 숫자 가운데면 그 숫자 앞에서 자르고(`cutWhole`), 숫자 거름은 자른 **뒤** 글도 본다(반쪽 숫자 `1500`→`15` 막기).
+ *   - `gistSrc` 는 `withSrc` 일 때만 받는다(원문 = 대상이면 버림).
+ * @param {{text:string}[]} input 보낸 문단 글
+ * @param {*} value `jsonrepair` 가 돌려준 값
+ * @param {{withSrc?:boolean}} [opts]
+ * @returns {{chunkFailed:false, items:{i:number, state:'ok'|'failed'|'missing', value?:Object, reason?:string}[]}}
+ */
+export function checkSummary(input, value, opts) {
+  const withSrc = !(opts && opts.withSrc === false);
+  const list = Array.isArray(input) ? input : [];
+  const got = new Map();
+  const arr = value && Array.isArray(value.items) ? value.items : [];
+  for (let k = 0; k < arr.length; k++) {
+    const s = arr[k];
+    if (!s || !Number.isInteger(s.i) || s.i < 0 || s.i >= list.length || got.has(s.i)) continue;
+    got.set(s.i, s);
+  }
+  const items = [];
+  for (let i = 0; i < list.length; i++) {
+    if (!got.has(i)) { items.push({ i: i, state: 'missing', reason: 'missing' }); continue; }
+    const s = got.get(i);
+    const allowed = numberTokens(list[i] && list[i].text);
+    const foreign = (x) => hasForeignNumber(x, allowed, numberTokens);
+    const full = clean(s.gist);
+    if (!full) { items.push({ i: i, state: 'failed', reason: 'empty' }); continue; }
+    // `[11-1b — 11-1R #2]` 자르기는 숫자를 쪼개지 않고(`cutWhole`), 거름은 자르기 전 글과 **자른 뒤 글** 둘 다 본다.
+    const gist = cutWhole(full, SUMMARY.GIST_MAX);
+    if (!gist || foreign(full) || foreign(gist)) { items.push({ i: i, state: 'failed', reason: 'digits' }); continue; }
+    const srcFull = withSrc ? clean(s.gistSrc) : '';
+    const gistSrc = srcFull && !foreign(srcFull) ? cutWhole(srcFull, SUMMARY.GIST_MAX) : '';
+    const points = trimTree(pruneForeignNumbers(normTree(s.points, 2, SUMMARY.POINT_MAX), allowed, numberTokens).points,
+      [SUMMARY.MAX_POINTS, SUMMARY.MAX_SUB], SUMMARY.POINT_MAX);
+    const terms = [];
+    for (const t of Array.isArray(s.terms) ? s.terms : []) {
+      if (terms.length >= SUMMARY.MAX_TERMS) break;
+      const a = clean(t && t.src);
+      const b = clean(t && t.tr);
+      if (!a || !b) continue;
+      if (foreign(a + ' ' + b)) continue;
+      const ca = cutWhole(a, SUMMARY.TERM_MAX);
+      const cb = cutWhole(b, SUMMARY.TERM_MAX);
+      if (!ca || !cb || foreign(ca + ' ' + cb)) continue;
+      terms.push({ src: ca, tr: cb });
+    }
+    const v = { gist: gist, points: points, terms: terms };
+    if (gistSrc && !foreign(gistSrc)) v.gistSrc = gistSrc;
+    items.push({ i: i, state: 'ok', value: v });
+  }
+  return { chunkFailed: false, items: items };
+}
+
+/** 개요 요점 — 깊이 3 고정 `{t, sub:[{t, sub:[문자열]}]}`. */
+const POINT_3 = Object.freeze({
+  type: 'OBJECT',
+  properties: Object.freeze({ t: STR, sub: Object.freeze({ type: 'ARRAY', items: POINT_2 }) }),
+  required: Object.freeze(['t']),
+  propertyOrdering: Object.freeze(['t', 'sub'])
+});
+
+/** 4-6 스키마 `{title, points:[{t, sub:[{t, sub:[STRING]}]}], notes}` — 필수 `title`·`points`. */
+export const OUTLINE_SCHEMA = Object.freeze({
+  type: 'OBJECT',
+  properties: Object.freeze({
+    title: STR,
+    points: Object.freeze({ type: 'ARRAY', items: POINT_3 }),
+    notes: STR
+  }),
+  required: Object.freeze(['title', 'points']),
+  propertyOrdering: Object.freeze(['title', 'points', 'notes'])
+});
+
+/** 범위 이름(장 제목·쪽 범위 — 화면이 준다)을 지시문에 넣을 꼴로: 한 줄 · 80자 · 구분자 탈출 · 큰따옴표 없음. */
+function labelText(label) {
+  return cutText(escapeDoc(clean(label)).replace(/"/g, "'"), 80);
+}
+
+/**
+ * 4-6 TASK. 대상 언어 하나(입력 = 저장한 요약 — 이미 대상 언어). 의학이면 대상 언어 문체(`TARGET_STYLE`), 일반이면 `TARGET_STYLE_GENERAL`.
+ * @returns {string|null}
+ */
+export function outlineInstruction(targetLang, domain, label) {
+  const tgt = langName(targetLang);
+  if (!tgt) return null;
+  const tc = codeOf(targetLang);
+  const lab = labelText(label);
+  const L = OUTLINE.MAX_POINTS;
+  const styleTable = normalizeDomain(domain) === 'general' ? TARGET_STYLE_GENERAL : TARGET_STYLE;
+  const style = styleSentence(tgt, styleTable[tc]);
+  return 'TASK: The DOC contains paragraph summaries from ' + (lab ? '"' + lab + '"' : 'one part') + ' of one book, in reading order. ' +
+    'Merge them into ONE outline in ' + tgt + ': a short title, up to ' + L[0] + ' top points, each with up to ' + L[1] +
+    ' sub points, each sub with up to ' + L[2] + ' sub points. Use ONLY what the summaries say. Keep numbers and terms as written. ' +
+    'Do not add causes, treatments, doses or advice.' + style;
+}
+
+/**
+ * 4-6 범위 개요의 입력 묶음 — `buildOutlineRequest` 가 DOC 에 싣는 것과 **같은 함수**(`outlineInput`)로 만든다.
+ * 파이프라인은 `text/*` 를 직접 import 하지 않는다(3-2 — `ai/*` 행은 `text/store` 만) — 그래서 여기서 건넨다.
+ * @returns {{items:Array, text:string, plain:string, ids:string[], size:number}} `size` = DOC 에 실리는 JSON 글자 수
+ */
+export function outlinePayload(summaries, opts) {
+  const input = outlineInput(summaries, opts);
+  let n = 0;
+  for (const ch of JSON.stringify(input.items)) { if (ch) n++; }
+  return Object.assign(input, { size: n });
+}
+
+/**
+ * 4-6 범위 개요 요청. 입력 = **저장한 요약**(요지 + 요점 — `outlineInput`). 원문 문단 글은 보내지 않는다.
+ * @param {Object[]} summaries 저장한 `summary` 레코드
+ * @param {{target:string, domain?:string, label?:string, points?:boolean}} opts `points:false` = 요지만(입력 초과 때)
+ * @returns {{system:string, user:string, json:true, schema:Object, maxOutputTokens:number, temperature:number}|null}
+ */
+export function buildOutlineRequest(summaries, opts) {
+  const o = opts || {};
+  const task = outlineInstruction(o.target, o.domain, o.label);
+  const input = outlineInput(summaries, { points: o.points !== false });
+  if (!task || !input.items.length) return null;
+  return {
+    system: commonSystem(true, o.domain),
+    user: task + '\n' + 'Schema: {"title": string, "points": [{"t": string, "sub": [{"t": string, "sub": [string]}]}], "notes": string}' +
+      '\n<<<DOC\n' + escapeDoc(JSON.stringify(input.items)) + '\n>>>',
+    json: true,
+    schema: OUTLINE_SCHEMA,
+    maxOutputTokens: OUTLINE.OUT_TOKENS,
+    temperature: PIPELINE.TEMPERATURE
+  };
+}
+
+/**
+ * 4-6 검증 `checkOutline(plain, value)` — `plain` = 입력 요약들의 글(숫자 거름의 기준).
+ * 제목이 비면 `empty`, 제목에 입력 밖 숫자 → `digits`. 요점은 입력 밖 숫자가 든 줄만 빼고 상한(8·4·3, 200자)으로 자른다 —
+ * 남은 요점이 없으면 `empty`.
+ * @returns {{chunkFailed:false, items:[{i:0, state:'ok'|'failed', value?:{title:string, points:Array}, reason?:string}]}}
+ */
+export function checkOutline(plain, value) {
+  const allowed = numberTokens(plain);
+  const title = clean(value && value.title);
+  const fail = (reason) => ({ chunkFailed: false, items: [{ i: 0, state: 'failed', reason: reason }] });
+  if (!title) return fail('empty');
+  // `[11-1b — 11-1R #2]` 요약과 같이 — 숫자를 쪼개지 않고 자르고, 자르기 전·뒤 둘 다 거른다.
+  const cut = cutWhole(title, OUTLINE.TITLE_MAX);
+  if (!cut || hasForeignNumber(title, allowed, numberTokens) || hasForeignNumber(cut, allowed, numberTokens)) return fail('digits');
+  const points = trimTree(pruneForeignNumbers(normTree(value && value.points, 3, OUTLINE.POINT_MAX), allowed, numberTokens).points,
+    OUTLINE.MAX_POINTS, OUTLINE.POINT_MAX);
+  if (!points.length) return fail('empty');
+  return { chunkFailed: false, items: [{ i: 0, state: 'ok', value: { title: cut, points: points } }] };
+}
