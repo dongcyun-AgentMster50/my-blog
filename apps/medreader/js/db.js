@@ -453,6 +453,16 @@ const CASCADE_STORES = Object.freeze([
   'cards', 'aiCache', 'annotations', 'sections', 'searchText'
 ]);
 
+/**
+ * `[8f-1 — 9-2 `[신설 2026-10-12]` · 17-7-6 4-4]` 문서를 지워도 남기는 `cards` 레코드인가.
+ * 단어장 항목(`kind:'term'`)만 — 사용자가 고르고 고친 기록이라 PDF 를 지워 공간을 비울 때 함께 사라지면 안 된다.
+ * @param {*} rec `cards` 레코드
+ * @returns {boolean}
+ */
+export function keepsOnDocDelete(rec) {
+  return !!rec && rec.kind === 'term';
+}
+
 /* ────────────────────────────────────────────────────────
    `[배포 안전장치 — 텍스트 다시 추출]` (spec 9-4 "설정 > 고급 [텍스트 다시 추출]")
    한 문서의 **쪽 텍스트에서 파생된 것**만 지운다. 무엇이 파생인가는 코드에서 찾은 목록이다:
@@ -553,6 +563,9 @@ export function deleteDocument(docId) {
       req.onsuccess = () => {
         const cur = req.result;
         if (!cur) { pending--; done(); return; }
+        // `[8f-1 — 9-2 · 17-7-6 4-4]` 단어장(`cards` `kind:'term'`)은 문서를 지워도 남긴다(`docTitle` 사본이 출처를 대신한다).
+        // 문장 카드(`kind` 없음·'sentence')는 지금처럼 지운다 — 12-1 이 `sentence` 를 이 예외에 더한다(12-D8).
+        if (name === 'cards' && keepsOnDocDelete(cur.value)) { cur.continue(); return; }
         cur.delete();
         counts[name]++;
         cur.continue();

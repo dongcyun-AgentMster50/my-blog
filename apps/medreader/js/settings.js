@@ -90,6 +90,10 @@ export const DEFAULTS = Object.freeze({
      8g-1 은 키만 둔다(쓰는 화면은 8g-4). `search.aiQuery` 는 만들지 않는다(17-8-9 가 — 기본 끔). */
   'search.recent': [],
 
+  /* 단어장 (17-7-4 · 9-3 `[신설 2026-10-12]`) — `[8f-1]` "마지막 내보내기 뒤 바뀐 항목 n개" 표시용.
+     null = 아직 내보낸 적 없음. 8f-3 이 내보낼 때 쓴다(ISO 문자열 또는 ms — `vocab/store.js` `changedSince` 가 둘 다 받는다). DB 무관. */
+  'vocab.lastExportAt': null,
+
   /* AI (7·8단계) */
   'ai.provider': 'gemini',
   'ai.model': '',

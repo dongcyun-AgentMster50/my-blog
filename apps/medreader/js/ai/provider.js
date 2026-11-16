@@ -244,7 +244,7 @@ let usageChain = Promise.resolve();
  * `usage` 를 증분한다. **실패해도 던지지 않는다** — 사용량 기록이 안 됐다고
  * 번역이 죽으면 안 된다(대시보드는 부차적이고 AI 호출은 그렇지 않다).
  *
- * @param {Object} delta `{calls, kind, provider, tokensIn, tokensOut, errors, blocked429, cacheHits, ondeviceHits, charsTranslated}`
+ * @param {Object} delta `{calls, kind, provider, tokensIn, tokensOut, errors, blocked429, cacheHits, ondeviceHits, charsTranslated, capWarned}`
  * @param {{db?: Object, now?: *}} [deps] 테스트가 `db` 를 주입한다
  */
 export function bumpUsage(delta, deps) {
@@ -264,10 +264,13 @@ export function bumpUsage(delta, deps) {
       if (d.cacheHits) row.cacheHits += d.cacheHits;
       if (d.ondeviceHits) row.ondeviceHits += d.ondeviceHits;
       if (d.charsTranslated) row.charsTranslated = (Number(row.charsTranslated) || 0) + d.charsTranslated;
+      // `[8f-1 — 17-7-6 4-7 · 8cf-D9]` 80% 경고를 그날 냈다는 표시(8c-2 가 쓴다). 참만 받는다 — 빈 행에는 없다.
+      if (d.capWarned === true) row.capWarned = true;
 
       // 9-2 의 고정 키가 아니면 새로 만들지 않는다(오타가 스토어에 눌러앉는다).
       // `[8a]` `readalong`(15절)은 빈 행에 없고 **처음 쓰일 때** 생긴다(config 의 `READALONG_KIND` 주석).
-      if (d.kind && (AI.USAGE_KINDS.indexOf(d.kind) >= 0 || d.kind === AI.READALONG_KIND)) {
+      // `[8f-1]` `term`(단어 요청)도 같다(`AI.TERM_KIND`).
+      if (d.kind && (AI.USAGE_KINDS.indexOf(d.kind) >= 0 || d.kind === AI.READALONG_KIND || d.kind === AI.TERM_KIND)) {
         row.byKind[d.kind] = (row.byKind[d.kind] || 0) + (d.calls || 1);
       }
       if (d.provider) {

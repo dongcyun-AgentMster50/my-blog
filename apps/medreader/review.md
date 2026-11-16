@@ -10605,3 +10605,122 @@ import map 해시 시험 3개(IM2·IM6·IM7b)는 어떤 변이에도 빨강이�
 스크래치 `r8c1c/`: `prep.mjs`(Build 하네스 옮겨 쓰기)·`orig.mjs`(고치기 전 판 옮겨 쓰기 → `orig/`) · `common.mjs`·`common-b.mjs`·`run-g/k/e2/r.mjs`·`b-run-body.mjs`·`repro.mjs`·`cmplaps.mjs` · 새로 쓴 `v-input.mjs`·`v-modes.mjs`·`dbg-speak.mjs`·`dbg-origsearch.mjs`·`sum.mjs`·`sumvm.mjs` · `backup/mut/restore.mjs`·`bak/` · 결과 `vi-*`·`vm-*`·`g1`·`k1`·`e412`·`e915`·`ds-now`·`v1h`·`v2h`(.json)·`shot-search-*.png` · 테스트 `full1/full2/full3-after-restore.txt`·`v1–v4.txt` · 프로필 `p*` · `section.md`(이 절).
 
 **배포 가능** — 8c-1b 재검증의 중간 3건이 모두 닫혔고(세로 412 ko·가로 915 ar·원본 보기), 8c-1c 가 새로 만든 회귀는 없다(두 손가락·엄지·핀치·누른 채 마우스는 여전히 0, 한 손가락 탭 열림, 띠 보임/숨김은 기준과 같음, Esc 는 다른 입력칸 기본 동작을 막지 않음, 콘솔 오류 0). 낮음 2(원본 보기 → 검색 화면 가림 — 기존 CSS 결함·`input` 종류 거름)·정보 5는 다듬기 후보.
+
+# 8f-1 Review — 단어장 데이터 · 단어 요청 (화면 없음) (2026-11-16)
+
+> Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-8f1-vocab-data.md`. 본 것: spec 17-7-6(1·2·4-3·4-4·4-6·5 8f-1 행·6·8 "8f-1"·9·10 + `[정정 2026-11-16 — 8f-1 Build]` 세 줄), 17-7-2, 7-5, crossstep-notes "8f-1"·"9c"·"12", Build 지침·보고서, `git diff` + 새 파일 넷. 앱 코드·테스트·spec 은 고치지 않았다. 커밋 0. 스크래치 `r8f1/`.
+
+## 8f1R-1. 번역 경로 불변 (확인 1 — 가장 중요)
+
+HEAD 판(`git archive HEAD apps/medreader` → `r8f1/head/`)과 작업 트리의 `createPipeline` 을 **같은 흉내 fetch·memDb·시계·타이머**에 물려, Build 의 10개와 다른 **여러 부름이 이어지는** 시나리오 14개를 돌리고 요청 본문·URL·헤더·사용량 행·캐시 레코드(`createdAt` 뺌)·결과·`onState` 이벤트 순서·남은 타이머·상태(`_base`)를 통째로 대조했다(`r8f1/diff.mjs`).
+
+| 시나리오 | 본문 수 | 결과(요약) | 이벤트 | HEAD 와 다른 칸 |
+|---|---|---|---|---|
+| 혼합 언어 문단(fr·es·문서 언어와 같은 `src`·모르는 `src`·`tail` 조각, readalong) | 1 | ready ×6 | inflight>ready | 0 |
+| 긴 문단 쪼개기(maxReqChars 900 → 청크 3) + 둘째 청크 5xx → 즉시 1회 → 5xx | 3 | ready×3 · failed SERVER×3 · blocked cooldown×3 | …>inflight>cooldown | 0 |
+| domain 바뀜(medical → general 같은 문장 = 캐시 · 새 문장 general · 모르는 값) | 3 | 캐시 키 불변 확인 | — | 0 |
+| 키 없음 → 키 넣고 `configChanged('key')` | 1 | blocked no-key → ready | no-key>ready>inflight>ready | 0 |
+| capped(상한 2 — translate·readalong 1씩 뒤 셋째 막힘, 캐시 적중은 통과) | 2 | …blocked capped · ready(c) | …>capped | 0 |
+| offline 중간 끊김(첫 청크 뒤 끊김 → `setOnline(true)` → 다시) | 2 | 4 ready · 2 blocked offline → 캐시 4 + 새 2 | …>offline>ready>… | 0 |
+| fetch 거부(네트워크) → cooldown → 타이머 발화 뒤 다시 | 1 | blocked NETWORK → blocked cooldown | inflight>cooldown | 0 |
+| 동시 요청 셋(같은 문장 공유 · translate/readalong 섞임, 느린 fetch) | 2 | 진행 중 공유 그대로 | inflight>ready | 0 |
+| 캐시 히트 섞임(A·B 받은 뒤 A·C·B·A) | 2 | 새 것 C 만 보냄 | — | 0 |
+| 재시도 뒤 성공(i=1 누락 → 다시 부름 0호출·failed MISSING → `retry:true` 1호출) | 2 | 실패 기억 그대로 | — | 0 |
+| 429(Retry-After 30) → 그 뒤 0호출 → `retry()` → 성공 | 2 | exhausted → ready | inflight>exhausted>ready>… | 0 |
+| 밀림 20% 초과 → SHIFT / 10개 중 2개 → 항목별 RATIO·DIGITS | 2 | `failCodeOf` 새 갈래(empty·long·lang)가 번역 사유를 바꾸지 않음 | — | 0 |
+| 기기 내 번역 섞임(빈 결과 1 · `src` 항목 원격) | 1 | 그대로 | — | 0 |
+
+**14/14 모든 칸 같음**(`allSame: true`). `runJob` 일반화는 오류 처리·5xx 재시도 횟수·진행 중 공유·실패 기억·상태 이벤트 순서·cooldown 타이머를 바꾸지 않았다(파이프라인에 `onWarn` 류 콜백은 아직 없다 — 8c-2 몫, 상태 알림은 `onState` 하나). 코드로도: `translate()` 의 항목 `src` 거름·`kind`·`ctx` 값이 HEAD `fresh.push` 와 같고, `TRANSLATE_JOB.check` 의 사유 대응은 `checkTranslation` 이 내는 `missing·ratio·digits` 에 대해 HEAD 와 같다.
+
+headless(8f1R-6)의 탭 번역 1 + 낭독 동반 번역 2 본문도 HEAD 판과 sha256·길이·항목 수가 같다.
+
+## 8f1R-2. 단어 요청 (확인 2)
+
+- **지시문·스키마·검증**: 설계 4-3 과 맞다(10-1 골격 `commonSystem` · TASK + domain 줄 · SCHEMA 줄 · DOC `{i, term, context[, src]}` · `maxOutputTokens = n×120+100` · temperature `PIPELINE.TEMPERATURE`). `checkTerms` — `i` 짝(중복은 첫 것·범위 밖 버림·없는 번호는 그 항목만 missing), 빈 번역 EMPTY·200자 초과 LONG·대상 글자 없음 LANG, 뜻 300·기본형 100 자름, 품사 밖 → other, 응답 `term` 무시(입력 값). 실측 `checkTerms([a,b], {i:1 두 번, i:7})` → `[missing, ok(첫 것)]`.
+- **사용자 글 0건**: `translation`·`note`·`gloss`·`contextTr`·`userTranslation` 에 표식을 넣은 항목으로 요청 → 본문 표식 **0건**(`translateTerms` 가 항목을 `term·surface·context·src` 넷으로 새로 만든다 — 구조적으로 못 샌다).
+- **한 누름 최대 1호출·`MORE`**: 45개 → 누름마다 호출 1(20 · 20 · 5), `MORE` 25 → 5 → 0. 문맥이 `maxReqChars` 를 넘는 항목 둘 → 첫 하나만 1호출, 둘째 MORE. 같은 낱말 동시 두 누름 → 호출 1(진행 중 공유). `MORE` 는 실패 기억에 안 들어간다.
+- **다른 언어 검사의 한계(실측)**: ① 라틴 대상(`fr`)에 영어 원어 그대로 답함 → **통과**(가를 수 없음 — 설계가 적은 한계) ② `ja` 대상에 중국어 간체 → 통과(한자 공유) ③ **비라틴 대상에 라틴 약어가 정답인 경우**(`ko` 대상 `MRI`·`CT`·`HbA1c` 처럼 한국 의학 용어로 라틴 그대로 쓰는 것) → 매번 `LANG` 실패, `retry:true` 로 다시 보내도 같은 답이면 또 실패(호출만 씀). 아래 발견 4.
+- **`TERM_PROMPT_VERSION` 과 키**: 키는 `term|ar|docId|s256:…|w=x` — 판본이 없다(번역과 같은 7-5 원칙: 판본은 값에만). 그래서 단어 지시문을 바꿔도 **같은 키의 옛 값이 계속 나온다**(캐시가 갈리지 않음). 번역 캐시와는 `kind` 접두(`translate|` / `term|`)로 갈려 충돌 0. 아래 발견 6.
+- 호출자가 `normalizeTerm` 을 거치지 않으면(`'Fever'`) 키가 갈린다 — 8f-2 가 늘 `normalizeTerm` 결과를 넘기면 된다(4-3 그대로).
+
+## 8f1R-3. 데이터 (확인 3)
+
+- **`save` 한 트랜잭션**: fake-idb(S1 동시 2번) + **실제 Edge IndexedDB**(headless — 동시 2번 → 생성 1·항목 1, 대소문자 섞은 동시 5번 → 생성 1·항목 1). 트랜잭션 안 여러 `await`(커서 → `get` → `put`)가 실제 IDB 에서 자동 커밋에 걸리지 않음(오류 0).
+- **id** `'vt:'+hashHex(target+U+0001+term)`: 실측 `vt:s256:…`. 정규화 — 대소문자·NFC/NFD·전각(`ＣＲＰ`)은 같은 항목, 악센트(`résumé`/`resume`)는 다른 항목(맞음). **터키어 `İ`**: `normalizeTerm('İlaç')` = `i̇laç`(결합 점 U+0307 남음) ≠ `ilaç` — 문장 첫 대문자 낱말이 다른 항목·다른 키가 된다(`tr` 은 지원 원문 언어). 독일어 `STRASSE`/`straße` 도 갈림. 발견 7.
+- **시각 숫자 ms**: `createdAt·updatedAt·dueAt` 숫자(실측 `timesAreNumbers`), `reviewedAt·introducedAt` null.
+- **`applyImport` 가 복습 필드를 덮지 않음**: 실제 IDB 에서 `sm2 reps 3·dueAt 123·reviewedAt 456·introducedAt 789` 를 심고 CSV 왕복(메모 한 칸 고침) → 바뀜 1·새 2 적용, 복습 필드 **그대로**, 메모 바뀜, `=SUM(1)` 메모 왕복, 같은 계획 다시 → 새 항목 skipped 2(중복 0).
+- **`keepsOnDocDelete`**: 아래 headless — 문서 삭제 → term 카드 남음, 문장 카드·`kind` 없는 카드 지워짐(HEAD 와 같음), 그 문서의 `aiCache`(term 캐시 포함) 0. `name === 'cards'` 조건이 꼭 필요하다 — `aiCache` 레코드도 `kind:'term'` 이라 조건이 빠지면 term 캐시가 문서 삭제 뒤에도 남는다(변이 RM5 생존 → 발견 8).
+- **9c 병합 꼴**: `updatedAt` 숫자·`reviewedAt` 숫자|null 이라 `max(updatedAt, reviewedAt)` 을 바로 셀 수 있다. 다만 9c 에 넘길 것 둘(발견 11·12).
+
+## 8f1R-4. CSV (확인 4)
+
+- **수식 주입**: `= + - @`·탭·CR 로 시작 → `'` 접두(실측 `'=1+1`·`'-1`·`'@x`·`'\tx`·`"'\rx"`·`=HYPERLINK(…)` → `"'=HYPERLINK(""…"")"`), `'tis` 그대로. 앞 공백(` =1+1`)·전각 `＝`·`|cmd` 는 접두 없음 — OWASP 목록(6자)과 같고 엑셀이 이것들을 수식으로 읽는지는 `[M]`.
+- **왕복**: BOM·CRLF·따옴표·칸 안 줄바꿈·CR 만 쓰는 줄 끝·칸 안 CR·머리 대문자 → 실측 왕복 같음. 2MB(UTF-8 바이트)·5,000줄 상한은 I3 그대로.
+- **내보낸 파일**: 키 문자열 0(K1). 문맥 열은 문장 전체(`Unit.src` — 상한 없음, 실측 1,599자 입력이 그대로) — 설계 범위(8cf-Q2 "공유 주의 한 줄", 단위는 약 300자 분할).
+- **spec 4-6 정정(같은 `updated` + 내용 다름 → 바뀜)**: 8f-3 수용 "한 칸 고친 CSV → 바뀜 1" 과 맞다(실측 바뀜 1). **기기 쪽이 더 새로움**(내보낸 뒤 기기에서 고침)이면 그대로·`newerHere`(실측) — 엉뚱한 덮어쓰기 없음. 단 두 경우 주의: ① 파일 `updated` 칸이 **비었거나 못 읽는 꼴**(`16/11/2026 09:00` 처럼 스프레드시트가 날짜를 바꾼 경우·열을 지운 경우)이면 NaN → 내용이 다르면 **늘 바뀜** — 기기가 더 새로워도 파일 값이 덮는다(실측: 기기에서 고친 번역이 옛 파일 번역으로 돌아감). 발견 2. ② `update()` 는 공백을 정규화하지 않는데 가져오기는 정규화해 비교한다 → 고친 값에 겹공백·끝 줄바꿈이 있으면 **방금 내보낸 파일을 그대로 가져와도 "바뀜"**(+ `edited:true`·`updatedAt` 올라감). 발견 3.
+
+## 8f1R-5. 테스트 · 검사 (확인 5)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs`: **1회차 1584/1584 · 2회차(변이 복원 뒤) 1584/1584**(`r8f1/full1.txt`·`full2.txt`).
+- `dev/stamp-importmap.mjs --check` → "그대로다 (모듈 70개 · CSS 4개)"(처음·복원 뒤) · `git diff --check` 0 · 새 파일 넷 줄 끝 공백 0 · `index.html` 차이는 import map 해시 6줄 + 새 모듈 2줄뿐 · `git diff --stat` 복원 뒤 처음과 같음.
+
+## 8f1R-6. headless (확인 7 — 한 번)
+
+`r8f1/run-h.mjs` — Edge 412×915 · 새 프로필 `r8f1/p1` · pipe · 가짜 키 · 흉내 Gemini(OPTIONS 204 + CORS) · 흉내 음성 · HTTP 캐시 끔 · UI 아랍어. 한 브라우저에 컨텍스트 둘(HEAD 판 144 파일 가로채 내줌 / 작업 트리), 같은 동작: 서재 → PDF 가져오기 → **60쪽**(Build 는 40쪽) → 멈춘 상태 줄 탭 → [×] → [▶] 8초 → 멈춤 → (작업 트리) 실제 IDB 단어장 → 두 판 모두 `cards` 에 term·sentence·kind 없는 카드와 `aiCache` term 레코드를 직접 넣고 서재 [삭제](confirm 수락). 37.5초.
+
+| | HEAD | 작업 트리 |
+|---|---|---|
+| 콘솔 오류 · pageerror · 4xx | 0 · 0 · 0 | 0 · 0 · 0 |
+| 탭 번역 | 요청 1 · 띠 tap=on · ready · 번역 보임 | 같음 |
+| 낭독 동반 번역 | 요청 2 | 같음 |
+| 본문 sha256(길이) · 항목 | `88bd0514…`(2874) · `3e0ce75f…`(2686) · `cafd1837…`(9479) · 5·5·56 | **같음**(`sameBodies`·`sameItems`·`sameUsage` true) |
+| usage | calls 3 · translate 1 · readalong 2 · chars 6476 | 같음 |
+| 단어장(실제 IDB) | — | 동시 2→1 · 동시 5→1 · 계획 새 2·바뀜 1·그대로 1 · 적용 2/1/0 · 복습 필드 그대로 · 다시 적용 skipped 2 |
+| 문서 삭제 뒤 `cards` | **0**(term 도 지워짐 — HEAD 동작) | **term 5개만 남음**(직접 넣은 것 + 저장소 4) · 문장·kind 없는 카드 0 |
+| 그 문서 `aiCache` | 0 | 0(term 캐시 포함) |
+
+외부 요청은 pdf.js CDN 둘뿐(기존). 참고(범위 밖·기존): 추출이 도는 중에 지우면 그 문서의 `pages` 레코드가 남는다(HEAD 1 · 작업 트리 2 — 추출이 연쇄 삭제 뒤에 쓴다). 8f-1 무관, 발견 13.
+
+## 8f1R-7. 변이 (확인 6 — Build V1–V7 과 다른 곳. 백업 `r8f1/bak/`(`mut.mjs backup` — 읽어서 씀) → `mut.mjs apply`(바꿀 글이 정확히 1곳일 때만) → 전체 테스트 → `mut.mjs restore`(백업을 읽어 씀) → `cmp` 같음)
+
+import map 해시 시험 3개(IM2·IM6·IM7b)는 어떤 변이에도 빨강이라 셈에서 뺐다.
+
+| # | 변이 | 결과 | 복원 cmp |
+|---|---|---|---|
+| RM1 | `save` 찾기·쓰기 트랜잭션 분리(밖에서 `findTerm` 뒤 따로 쓰기) | **S1 빨강**(동시 2번 → 생성 2) | 같음 |
+| RM2 | id 정규화 빼기(`termIdOf(surface)`) | **S1·S3 빨강** | 같음 |
+| RM3 | `runJob` — `force` 여도 캐시 읽기 | **R4 빨강** | 같음 |
+| RM4 | `chunksOf` — `job.maxItems`(20) 무시 | **R3 빨강** | 같음 |
+| RM5 | 연쇄 삭제 예외의 `name === 'cards'` 빼기(`aiCache` 의 `kind:'term'` 캐시도 남김) | **생존** — 테스트 구멍(발견 8) | 같음 |
+| RM6 | CSV 수식 접두에서 CR 빼기 | **생존** — 테스트 구멍(발견 9) | 같음 |
+
+4/6 빨강, 2 생존(둘 다 코드는 맞고 시험만 비었다).
+
+## 8f1R-8. 발견 사항
+
+| # | 심각도 | 내용 | 근거 |
+|---|---|---|---|
+| 1 | 정보 | **번역 경로 불변** — 새 시나리오 14개(혼합 언어·쪼개기+5xx·domain·키 없음·capped·offline 중간·네트워크·동시 셋·캐시 섞임·재시도·429·밀림·기기 내)에서 본문·URL·헤더·사용량·캐시·결과·이벤트·타이머·상태 HEAD 와 0곳 다름 · headless 본문 3개 sha256 같음 | 8f1R-1 · `diff.mjs` · `run-h.mjs` |
+| 2 | 낮음(8f-3 지침에 필수) | `importPlan`: 파일 `updated` 가 비었거나 못 읽는 값이면 NaN → 내용이 다르면 **기기가 더 새로워도 바뀜**(실측: 내보낸 뒤 기기에서 고친 번역이 옛 파일 값으로 돌아감). 스프레드시트가 날짜 칸을 바꿔 저장하는 경우(`dd/mm/yyyy`)·열을 지운 경우. 지금은 화면이 없어 닿지 않고 8f-3 미리보기 "바뀜 m" 확인이 있다. 권장: 시각을 못 읽으면 `same`+`unknownTime` 표시(또는 미리보기에서 따로 세기). 스프레드시트 실제 동작은 `[M]` | 8f1R-4 · `data.mjs` `unparsableUpdated` |
+| 3 | 낮음 | `store.update` 는 값을 정규화하지 않는데(`newTermEntry`·`rowFields` 는 `str`/`multi`) — 겹공백·끝 줄바꿈이 든 고친 값은 **방금 내보낸 CSV 를 그대로 가져와도 "바뀜"**, `edited:true`·`updatedAt` 이 올라간다 → 8f-3 수용 "가져오기 → 바뀜 0 · 그대로 n" 이 깨질 수 있다. 권장: `update` 가 내용 필드를 `newTermEntry` 와 같은 규칙으로 정규화(한 줄) | `data.mjs` `roundTrip` |
+| 4 | 낮음 | "다른 언어" 검사: 비라틴 대상에서 **라틴 약어가 정답**인 용어(`ko` 의 `MRI`·`CT`, 아랍어 대상의 약어)는 매번 `LANG` 실패 — 다시 보내도 같은 답이면 호출만 씀. 라틴 대상끼리·`ja`↔`zh` 는 못 가름(설계 한계). 권장(다듬기·8f-2 실키): 번역이 원어와 같거나(대소문자 무시) `pos:'abbr'` 면 통과 | 8f1R-2 · `term.mjs` `koAbbr` |
+| 5 | 낮음(8f-2·8f-3 지침) | 실패 기억: 한 번 실패한 단어는 `retry:true` 없이 다시 누르면 **0호출·그대로 실패**. 설계 4-3 의 서명은 `{…, force}` 만 적었다 — 사용자가 [AI 로 번역]·[번역 안 된 것 모두 번역]을 **다시 누를 때 `retry:true`** 를 넘기라고 지침에 한 줄 | `term.mjs` `koAbbr` 둘째 · R4 |
+| 6 | 낮음(정보) | `TERM_PROMPT_VERSION` 이 키에 없다 — 단어 지시문을 바꿔도 옛 캐시 값이 계속 나온다(번역 7-5 와 같은 원칙, 의도). 지시문을 크게 바꾸는 단계는 `extra` 에 판본을 더할지 그때 정한다(11 의 job 도 같음) | 8f1R-2 |
+| 7 | 낮음 | `normalizeTerm` 이 터키어 `İ`(→ `i̇`, 결합 점 남음)·독일어 `ß`/`SS` 를 접지 않는다 — 문장 첫 대문자 `İ…` 낱말이 다른 항목·다른 캐시 키. 권장: 소문자 뒤 `i\u0307` → `i` | `data.mjs` `norm` |
+| 8 | 낮음(테스트 구멍) | RM5 생존 — `deleteDocument` 의 `name === 'cards' &&` 를 지워도 시험이 모른다(`aiCache` 레코드도 `kind:'term'`). D1 에 "그 문서의 term 캐시는 지워진다" 한 줄 | 8f1R-7 |
+| 9 | 낮음(테스트 구멍) | RM6 생존 — CSV 접두의 CR 을 C2 가 안 본다(`= + - @ 탭` 만). `csvCell('\rx')` 한 줄 | 8f1R-7 |
+| 10 | 낮음 | `runJob(job, items, keys)` 를 넷째 인자 없이 부르면 `o.force` 에서 TypeError(머리말 "던지지 않는다"와 다름). 11 이 직접 부를 함수라 `o = o \|\| {}` 한 줄 또는 11 지침에 | `pipeline.js` `runJob` |
+| 11 | 정보(9c 지침) | id 는 만들 때의 `term` 해시라, 원어 오타를 고친 항목(id 그대로)과 다른 기기에서 새로 저장한 같은 낱말(새 id)이 9c 의 id 병합에서 **두 항목**이 된다. `crypto.subtle` 이 없는 문맥(LAN http)은 `vt:fnv:` id. 9c 는 `importPlan` 처럼 id 다음 `term+targetLang` 으로도 맞춰야 한다 | `store.js` `termIdOf` · 4-4 정정 ① |
+| 12 | 정보(12·9c 지침) | `update` 는 내용 필드만 `updatedAt` 을 올린다 — `suspended`·`docId`·`pageNo` 등만 바꾸면 시각이 그대로라 9c `max(updatedAt, reviewedAt)` 병합에서 질 수 있다. 12 가 `suspended` 를 바꿀 때 어느 시각을 올릴지 정할 것 | `store.js` `update` |
+| 13 | 정보(범위 밖·기존) | 큰 PDF 추출이 도는 중에 문서를 지우면 그 문서의 `pages` 레코드가 남는다(HEAD 1 · 작업 트리 2) — 추출이 연쇄 삭제 뒤에 쓴다. 8f-1 무관, 확인 거리 | 8f1R-6 |
+| 14 | 정보 | Build 보고서 숫자 다시 잼: 1584 시험 · stamp 70 모듈 · 연쇄 삭제·복습 필드·동시 저장 주장 모두 맞음. 실제 Edge IDB 에서도 `save`·`applyImport` 한 트랜잭션 안 여러 `await` 가 정상 | 8f1R-3·5·6 |
+
+잘 된 것: 번역 요청·캐시·사용량·오류 처리가 HEAD 와 0곳 다름(새 시나리오 14 + headless) · term 키 경계·kind 접두로 번역 캐시와 충돌 0 · 사용자 글 요청 0건(구조적) · 한 누름 1호출·MORE 정확 · 동시 저장 중복 0(실제 IDB) · 복습 필드 보존 · 문서 삭제 뒤 term 만 남음 · 수식 주입 6자 방어·`'tis` 그대로 · 키 0 · 테스트 1584 ×2 · 변이 4/6 빨강(생존 2는 시험 구멍만) · 콘솔 오류 0.
+
+## 8f1R-9. 실행 · 정리
+
+명령은 한 호출에 한 가지(테스트·도장·검사·백업·변이 각각·복원 각각·`cmp` 6번·headless 1번). `cd … &&`·파이프 0. 막힌 명령 0(첫 `tar -xf C:/…` 가 경로의 `:` 를 원격으로 읽어 실패 → `--force-local` 로 다시, 같은 일). 프로세스 조회·디버깅 포트 0(pipe, `try … finally browser.close()`) · 8000 은 쓰기만 · 8123–8125 무관 · 프로필 복사 0(새 `r8f1/p1`) · 진짜 키 0 · npm·다운로드 0 · puppeteer-core 읽기만 · 결과에 원서 문장 없음 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · `.nojekyll` 그대로.
+
+스크래치 `r8f1/`: `head/`(HEAD 판) · `diff.mjs`(번역 경로 대조 14) · `term.mjs`(단어 요청 탐침) · `data.mjs`(정규화·CSV·importPlan 탐침) · `mut.mjs`·`bak/` · `run-h.mjs`·`p1/` · `full1.txt`·`full2.txt`·`m1–m6.txt` · `section.md`(이 절).
+
+**배포 가능** — 중간 이상 없음. 번역 요청·캐시·사용량 행·오류 처리는 HEAD 와 같고(새 시나리오 14·headless), 데이터 손실·중복·CSV 수식 주입·키 노출·term 캐시 키 충돌 없음. 낮음 9(가져오기 시각 못 읽음·`update` 정규화·약어 LANG·`retry` 넘기기·터키어 `İ`·시험 구멍 2·`runJob` 기본 인자·판본 키)와 정보 5는 8f-2·8f-3·9c·12 지침과 다듬기 후보로 — 그중 **2·3·5 는 8f-3(가져오기·편집 화면)이 시작하기 전에** 지침에 넣을 것.

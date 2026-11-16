@@ -19,7 +19,7 @@
    만든다. 테스트(`tests/prompts-8a.test.mjs`)가 옛 문자열과 글자 단위로 대조한다.
    ============================================================ */
 
-import { PIPELINE } from '../config.js';
+import { PIPELINE, VOCAB } from '../config.js';
 import { estimateTokens } from './tokens.js';
 
 /**
@@ -381,6 +381,176 @@ export function checkTranslation(input, value) {
   const chunkFailed = list.length > 0 &&
     shifted * PIPELINE.CHUNK_FAIL_DEN > list.length * PIPELINE.CHUNK_FAIL_NUM;
   return { chunkFailed: chunkFailed, items: items };
+}
+
+/* ────────────────────────────────────────────────────────
+   `[8f-1 — spec 17-7-2 · 17-7-6 4-3]` 단어 요청(`kind:'term'`) — 단어장 [AI 로 번역]·[번역 안 된 것 모두 번역]
+   번역 요청(위)과 **따로 선다** — 번역 지시문·스키마·`PROMPT_VERSION` 은 한 글자도 바꾸지 않는다.
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 단어 요청 지시문·스키마 판본. 캐시 **값**(`promptVersion`)에만 적는다(키에는 넣지 않는다 — 7-5).
+ * 번역 판본(`PROMPT_VERSION`)과 따로 센다 — 단어 지시문을 바꿔도 번역 캐시와 무관하다.
+ */
+export const TERM_PROMPT_VERSION = 1;
+
+/**
+ * 17-7-2 스키마 `{ "items": [ { "i", "term", "lemma", "pos", "translation", "gloss" } ], "notes" }`.
+ * 항목의 필수는 `i`·`translation` 둘뿐이다 — 미니 검증기(`jsonrepair`)는 필수가 빠진 항목을 통째로 버리므로,
+ * 뜻·품사가 빠졌다고 받은 번역까지 버리지 않게(묶음의 다른 항목은 그대로 — 17-7-2 "그 항목만").
+ * `pos` 는 `enum` 으로 묶지 않는다 — 목록 밖 값은 `checkTerms` 가 `'other'` 로 바꾼다(묶으면 항목째 버려진다).
+ */
+export const TERM_SCHEMA = Object.freeze({
+  type: 'OBJECT',
+  properties: Object.freeze({
+    items: Object.freeze({
+      type: 'ARRAY',
+      items: Object.freeze({
+        type: 'OBJECT',
+        properties: Object.freeze({
+          i: Object.freeze({ type: 'INTEGER' }),
+          term: Object.freeze({ type: 'STRING' }),
+          lemma: Object.freeze({ type: 'STRING' }),
+          pos: Object.freeze({ type: 'STRING' }),
+          translation: Object.freeze({ type: 'STRING' }),
+          gloss: Object.freeze({ type: 'STRING' })
+        }),
+        required: Object.freeze(['i', 'translation']),
+        propertyOrdering: Object.freeze(['i', 'term', 'lemma', 'pos', 'translation', 'gloss'])
+      })
+    }),
+    notes: Object.freeze({ type: 'STRING' })
+  }),
+  required: Object.freeze(['items']),
+  propertyOrdering: Object.freeze(['items', 'notes'])
+});
+
+/** 17-7-2 품사 목록(지시문·검증이 같은 목록을 쓴다). */
+export const TERM_POS = VOCAB.POS;
+
+/** `[8f-1]` 항목에 `src` 가 있을 때만 더하는 한 줄(번역의 `SRC_LINE` 과 같은 뜻 — 낱말·문맥이 그 언어다). */
+export const TERM_SRC_LINE = 'An item with a `src` language code is written in that language: translate its TERM from that language instead.';
+
+/**
+ * 17-7-2 TASK + 8p `domain`(17-7-6 2-4). 언어는 이름으로만 들어간다.
+ *   medical(없음·모르는 값) → "Give the standard {target} medical term if one exists."
+ *   general                 → "Give the usual {target} word or expression."
+ * @returns {string|null} 언어 이름을 모르면 null
+ */
+export function termInstruction(srcLang, targetLang, domain) {
+  const src = langName(srcLang);
+  const tgt = langName(targetLang);
+  if (!src || !tgt) return null;
+  const give = normalizeDomain(domain) === 'general'
+    ? 'Give the usual ' + tgt + ' word or expression.'
+    : 'Give the standard ' + tgt + ' medical term if one exists.';
+  return 'TASK: Translate the TERM as it is used in the CONTEXT sentence from ' + src + ' into ' + tgt + '. ' + give + '\n' +
+    'Output exactly one item per input `i`; copy `i` and `term` from the input. ' +
+    '`translation` = the ' + tgt + ' translation of the TERM only (not the whole sentence). ' +
+    '`lemma` = the dictionary form of the TERM in ' + src + '. ' +
+    '`pos` = one of ' + TERM_POS.map((p) => '"' + p + '"').join('|') + '. ' +
+    '`gloss` = one short explanation in ' + tgt + ' of what the term means in this context (at most 20 words). ' +
+    'No dosing, no treatment advice.';
+}
+
+/**
+ * 17-7-2 단어 요청(`CompletionRequest`, 8-1). 10-1 골격(치료 지시 금지·DOC 블록 데이터 취급·구분자 탈출) 그대로.
+ *
+ * ★ **보내는 것은 고른 낱말과 그 문장(교과서 원문)뿐**(13절) — 항목에서 `term`(또는 `surface`)·`context`·`src` 만
+ *   읽는다. 사용자가 친 번역·메모·뜻(`translation`·`note`·`gloss`)은 항목에 있어도 **읽지 않는다.**
+ *
+ * @param {{term:string, surface?:string, context:string, src?:string|null}[]} items
+ *   `surface` 가 있으면 그것을 보낸다(본문에 보인 꼴 — 대소문자를 살린다). 없으면 `term`.
+ * @param {{src:string, target:string, domain?:string}} langs
+ * @returns {{system:string, user:string, json:true, schema:Object, maxOutputTokens:number, temperature:number}|null}
+ */
+export function buildTermRequest(items, langs) {
+  const list = Array.isArray(items) ? items : [];
+  const l = langs || {};
+  const task = termInstruction(l.src, l.target, l.domain);
+  if (!task || !list.length) return null;
+  const doc = [];
+  let anySrc = false;
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i] || {};
+    const word = typeof s.surface === 'string' && s.surface.trim() ? s.surface : s.term;
+    const item = { i: i, term: escapeDoc(String(word == null ? '' : word).trim()), context: escapeDoc(s.context) };
+    if (typeof s.src === 'string' && s.src && s.src !== l.src && langName(s.src)) { item.src = s.src; anySrc = true; }
+    doc.push(item);
+  }
+  return {
+    system: commonSystem(true, l.domain),
+    user: task + '\n' + (anySrc ? TERM_SRC_LINE + '\n' : '') +
+      'Schema: {"items": [{"i": number, "term": string, "lemma": string, "pos": string, "translation": string, "gloss": string}], "notes": string}\n' +
+      '<<<DOC\n' + JSON.stringify(doc) + '\n>>>',
+    json: true,
+    schema: TERM_SCHEMA,
+    maxOutputTokens: list.length * VOCAB.OUT_TOKENS_PER_ITEM + VOCAB.OUT_TOKENS_PAD,
+    temperature: PIPELINE.TEMPERATURE
+  };
+}
+
+/**
+ * `[8f-1 — 17-7-6 수용 "다른 언어"]` 대상 언어의 **글자 체계** — 번역에 이 글자가 하나도 없으면 다른 언어로 답한
+ * 것으로 본다(그 항목만 실패). 라틴 글자 언어(en·fr·de·es·tr)는 서로 가를 수 없어 표에 없다(검사하지 않음).
+ */
+export const TARGET_SCRIPT = Object.freeze({
+  ar: /\p{Script=Arabic}/u,
+  fa: /\p{Script=Arabic}/u,
+  ur: /\p{Script=Arabic}/u,
+  he: /\p{Script=Hebrew}/u,
+  ko: /\p{Script=Hangul}/u,
+  ja: /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u,
+  zh: /\p{Script=Han}/u
+});
+
+/** 코드포인트 단위로 앞 n 글자. */
+function cutChars(s, n) {
+  const a = Array.from(String(s));
+  return a.length > n ? a.slice(0, n).join('').trim() : String(s);
+}
+
+/**
+ * 17-7-2 · 17-7-6 4-3 검증 `checkTerms(input, value, target)`.
+ *
+ * - `items` 의 `i` 로 짝짓는다(같은 `i` 두 번 → 첫 것, 범위 밖 → 버림). 없는 번호는 **그 항목만** `missing` —
+ *   묶음 전체를 버리지 않는다(번역의 밀림 검사 `chunkFailed` 는 여기 없다).
+ * - `translation` 비었으면 `empty`, 200자 넘으면 `long`, 대상 언어 글자가 하나도 없으면 `lang`(`TARGET_SCRIPT`).
+ * - `gloss` 300자 넘으면 자른다. `lemma` 100자 넘으면 자른다. `pos` 목록 밖이면 `'other'`.
+ * - `term` 은 응답 값을 믿지 않는다 — **입력 값을 쓴다**(결과는 입력 순서라 값에 `term` 을 다시 담지 않는다).
+ *   값 = `{translation, gloss, pos, lemma}`(17-7-6 4-3 캐시 값 그대로).
+ *
+ * @param {{term:string}[]} input
+ * @param {*} value `jsonrepair` 가 돌려준 값
+ * @param {string} [target] 대상 언어 코드(글자 체계 검사 — 표에 없으면 건너뜀)
+ * @returns {{chunkFailed:false, items:{i:number, state:'ok'|'failed'|'missing', value?:Object, reason?:string}[]}}
+ */
+export function checkTerms(input, value, target) {
+  const list = Array.isArray(input) ? input : [];
+  const got = new Map();
+  const arr = value && Array.isArray(value.items) ? value.items : [];
+  for (let k = 0; k < arr.length; k++) {
+    const s = arr[k];
+    if (!s || !Number.isInteger(s.i) || s.i < 0 || s.i >= list.length || got.has(s.i)) continue;
+    got.set(s.i, s);
+  }
+  const script = typeof target === 'string' && Object.prototype.hasOwnProperty.call(TARGET_SCRIPT, target)
+    ? TARGET_SCRIPT[target] : null;
+  const items = [];
+  for (let i = 0; i < list.length; i++) {
+    if (!got.has(i)) { items.push({ i: i, state: 'missing', reason: 'missing' }); continue; }
+    const s = got.get(i);
+    const tr = typeof s.translation === 'string' ? s.translation.replace(/\s+/g, ' ').trim() : '';
+    if (!tr) { items.push({ i: i, state: 'failed', reason: 'empty' }); continue; }
+    if (charLen(tr) > VOCAB.TRANSLATION_MAX) { items.push({ i: i, state: 'failed', reason: 'long' }); continue; }
+    if (script && !script.test(tr)) { items.push({ i: i, state: 'failed', reason: 'lang' }); continue; }
+    const gloss = typeof s.gloss === 'string' ? cutChars(s.gloss.replace(/\s+/g, ' ').trim(), VOCAB.GLOSS_MAX) : '';
+    const lemma = typeof s.lemma === 'string' ? cutChars(s.lemma.replace(/\s+/g, ' ').trim(), VOCAB.LEMMA_MAX) : '';
+    const posRaw = typeof s.pos === 'string' ? s.pos.trim().toLowerCase() : '';
+    const pos = TERM_POS.indexOf(posRaw) >= 0 ? posRaw : 'other';
+    items.push({ i: i, state: 'ok', value: { translation: tr, gloss: gloss, pos: pos, lemma: lemma } });
+  }
+  return { chunkFailed: false, items: items };
 }
 
 /* 10-3 요약 프롬프트는 후순위다(7-3 `[후순위 2026-09-28]`, 로드맵 11b). 자리만 남긴다 —

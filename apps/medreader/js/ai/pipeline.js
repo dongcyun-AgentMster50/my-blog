@@ -41,12 +41,13 @@
    진행 중인 캐시 키의 요청이 또 오면 **진행 중인 Promise 를 공유한다**(호출 1건).
    ============================================================ */
 
-import { PIPELINE, AI } from '../config.js';
+import { PIPELINE, AI, VOCAB } from '../config.js';
 import * as realProvider from './provider.js';
 import { CODES, localDay, bumpUsage } from './provider.js';
 import { parseAIJson } from './jsonrepair.js';
 import {
-  buildTranslateRequest, checkTranslation, TRANSLATE_SCHEMA, PROMPT_VERSION, langName, normalizeDomain
+  buildTranslateRequest, checkTranslation, TRANSLATE_SCHEMA, PROMPT_VERSION, langName, normalizeDomain,
+  buildTermRequest, checkTerms, TERM_SCHEMA, TERM_PROMPT_VERSION
 } from './prompts.js';
 import { keyFor, defaultCache } from './cache.js';
 import { exceedsRequestBudget } from './tokens.js';
@@ -81,11 +82,21 @@ export const FAIL = Object.freeze({
   NETWORK: 'NETWORK',     // 네트워크·CORS(구별 불가 — 8-3). `[수정 2026-10-10]` 3단계 전에는 blocked 의 코드, 다 쓴 뒤에는 failed 의 코드
   SAFETY: 'SAFETY',
   BAD_REQUEST: 'BAD_REQUEST',
-  UNKNOWN: 'UNKNOWN'
+  UNKNOWN: 'UNKNOWN',
+  // `[8f-1]` 단어 요청 검증(`checkTerms` — 그 항목만 실패)
+  EMPTY: 'EMPTY',         // 번역이 비었다
+  LONG: 'LONG',           // 번역이 200자를 넘는다
+  LANG: 'LANG'            // 번역에 대상 언어 글자가 하나도 없다(다른 언어로 답함)
 });
 
 /** 결과 전체의 상태(원격 상태 말고). */
 export const STATUS = Object.freeze({ SAME_LANG: 'same-lang', UNSUPPORTED_LANG: 'unsupported-lang', EMPTY: 'empty' });
+
+/**
+ * `[8f-1]` `skipped` 결과의 코드 — **한 번 부름 = 최대 1호출**인 job(단어 요청)에서 첫 묶음에 들지 못해
+ * 이번에는 보내지 않은 항목. 호출자가 다시 부르면(사용자가 다시 누르면) 그때 보낸다(17-7-2 · 6절).
+ */
+export const MORE = 'MORE';
 
 /** 다음 날 로컬 00:00(ms). 7-6 — 429 에 `Retry-After` 가 없을 때. */
 export function nextLocalMidnight(nowMs) {
@@ -103,6 +114,81 @@ function charCount(s) {
   for (const ch of String(s)) { if (ch) n++; }
   return n;
 }
+
+/* ────────────────────────────────────────────────────────
+   `[8f-1 — 17-7-6 4-3 · 8cf-D7]` **job** — 요청 만들기·응답 받기만 다르고 상태 기계·`gate`·5xx 1회·429·cooldown·
+   no-key·region·상한·사용량·캐시·진행 중 공유·"보냈다가 실패" 기억은 **한 벌**(`runJob`)이다.
+   job 의 모양:
+     build(chunk, ctx)        → `CompletionRequest`|null      (chunk 항목 = 호출자가 준 항목 + `key`·`resolve`)
+     schema                   → `parseAIJson` 미니 검증 스키마
+     check(chunk, value, ctx) → {chunkFailed, items:[{state:'ok', value} | {state:'failed', code}]}
+     accepts(result)          → 캐시 레코드의 `result` 를 그대로 쓸 수 있는가
+     toResult(result)         → 결과 객체에 덧붙일 필드(번역 `{text}` · 그 밖 `{value}` — 문자열이 아닌 결과)
+     promptVersion · size(item)(글자 상한 셈) · usageChars(chunk, ctx)(15절 글자 지표)
+     ondevice(기기 내 번역을 거치는가) · maxItems(묶음 하나의 항목 상한, 0 = 없음) · maxChunks(한 번 부름의 호출 상한, 0 = 없음)
+   11 의 요약·개요·설명은 job 하나씩을 더해 `runJob` 을 부른다.
+   ──────────────────────────────────────────────────────── */
+
+function failCodeOf(reason) {
+  return reason === 'ratio' ? FAIL.RATIO : reason === 'digits' ? FAIL.DIGITS
+    : reason === 'empty' ? FAIL.EMPTY : reason === 'long' ? FAIL.LONG : reason === 'lang' ? FAIL.LANG : FAIL.MISSING;
+}
+
+/**
+ * 번역 job — `translate()` 가 이것으로 `runJob` 을 부른다. ★ 요청은 일반화 **전과 바이트 단위 같다**
+ * (`buildTranslateRequest(chunk, {src, target, domain})` 그대로 — `tests/term-8f.test.mjs` B1 이 HEAD `2570a94` 판이 낸 본문의 sha256 과 대조한다).
+ */
+export const TRANSLATE_JOB = Object.freeze({
+  name: 'translate',
+  build: (chunk, ctx) => buildTranslateRequest(chunk, { src: ctx.src, target: ctx.target, domain: ctx.domain }),
+  schema: TRANSLATE_SCHEMA,
+  check: (chunk, value) => {
+    const chk = checkTranslation(chunk, value);
+    return {
+      chunkFailed: chk.chunkFailed,
+      items: chk.items.map((it) => (it.state === 'ok'
+        ? { state: 'ok', value: it.t }
+        : { state: 'failed', code: failCodeOf(it.reason) }))
+    };
+  },
+  accepts: (v) => typeof v === 'string',
+  toResult: (v) => ({ text: v }),
+  promptVersion: PROMPT_VERSION,
+  size: (it) => charCount(it.text),
+  // 15절 — 글자 지표는 낭독 동반 번역 호출만 센다.
+  usageChars: (chunk, ctx) => (ctx.kind === AI.READALONG_KIND ? chunk.reduce((n, it) => n + charCount(it.text), 0) : 0),
+  ondevice: true,
+  maxItems: 0,
+  maxChunks: 0
+});
+
+/**
+ * `[8f-1]` 단어 job(`kind:'term'`, 17-7-2). 기기 내 번역은 쓰지 않는다(뜻·품사가 없다). 묶음 하나 ≤ `VOCAB.BATCH_MAX`(20)
+ * 항목·누적 `ai.maxReqChars` 이하, **한 번 부름 = 최대 1호출**(나머지는 `skipped`·`MORE`).
+ * 결과는 문자열이 아니다 — `{value:{translation, gloss, pos, lemma}}`.
+ */
+export const TERM_JOB = Object.freeze({
+  name: AI.TERM_KIND,
+  build: (chunk, ctx) => buildTermRequest(chunk, { src: ctx.src, target: ctx.target, domain: ctx.domain }),
+  schema: TERM_SCHEMA,
+  check: (chunk, value, ctx) => {
+    const chk = checkTerms(chunk, value, ctx.target);
+    return {
+      chunkFailed: false,
+      items: chk.items.map((it) => (it.state === 'ok'
+        ? { state: 'ok', value: it.value }
+        : { state: 'failed', code: failCodeOf(it.reason) }))
+    };
+  },
+  accepts: (v) => !!v && typeof v === 'object' && typeof v.translation === 'string' && v.translation.trim() !== '',
+  toResult: (v) => ({ value: Object.assign({}, v) }),
+  promptVersion: TERM_PROMPT_VERSION,
+  size: (it) => charCount(it.term) + charCount(it.context),
+  usageChars: () => 0,
+  ondevice: false,
+  maxItems: VOCAB.BATCH_MAX,
+  maxChunks: 1
+});
 
 /**
  * 파이프라인 하나. 앱은 UI 가 키·설정을 주입해 하나 만든다. 테스트는 `fetch`·`db`·시계·타이머를 주입한다.
@@ -240,18 +326,22 @@ export function createPipeline(deps) {
     return Number.isFinite(v) && v > 0 ? v : PIPELINE.MAX_REQ_CHARS;
   }
 
-  /** 문장 경계에서 누적 글자 상한·토큰 상한 이하로 자른다. 상한보다 긴 한 문장은 혼자 간다. */
-  function chunksOf(items, langs) {
+  /**
+   * 문장 경계에서 누적 글자 상한·토큰 상한 이하로 자른다. 상한보다 긴 한 문장은 혼자 간다.
+   * `[8f-1]` job 의 `size`·`build` 로 센다(번역은 `charCount(text)`·`buildTranslateRequest` — 그대로).
+   * `job.maxItems` 가 있으면 묶음 하나의 항목 수도 그 이하(단어 20).
+   */
+  function chunksOf(items, ctx, job) {
     const max = maxChars();
     const out = [];
     let cur = [];
     let sum = 0;
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      const len = charCount(it.text);
+      const len = job.size(it);
       const next = cur.concat([it]);
-      const tooMany = cur.length > 0 && (sum + len > max ||
-        exceedsRequestBudget(buildTranslateRequest(next, langs) || {}));
+      const tooMany = cur.length > 0 && ((job.maxItems > 0 && cur.length >= job.maxItems) || sum + len > max ||
+        exceedsRequestBudget(job.build(next, ctx) || {}));
       if (tooMany) { out.push(cur); cur = [it]; sum = len; continue; }
       cur = next;
       sum += len;
@@ -266,9 +356,9 @@ export function createPipeline(deps) {
    * 청크 하나를 보낸다. 5xx 만 즉시 1회 다시 보낸다(7-6 의 유일한 예외).
    * @returns {Promise<{state:string, text?:string, code?:string}[]>} 청크 순서대로
    */
-  async function sendChunk(chunk, ctx) {
-    const req = buildTranslateRequest(chunk, { src: ctx.src, target: ctx.target, domain: ctx.domain });
-    const chars = chunk.reduce((n, it) => n + charCount(it.text), 0);
+  async function sendChunk(chunk, ctx, job) {
+    const req = job.build(chunk, ctx);
+    const chars = job.usageChars(chunk, ctx);
     const all = (state, code) => chunk.map(() => ({ state: state, code: code }));
 
     for (let attempt = 0; ; attempt++) {
@@ -293,8 +383,8 @@ export function createPipeline(deps) {
           db: db,
           now: now(),
           kind: ctx.kind,
-          // 15절 — 글자 지표는 낭독 동반 번역 호출만 센다.
-          chars: ctx.kind === AI.READALONG_KIND ? chars : 0
+          // 15절 — 글자 지표는 낭독 동반 번역 호출만 센다(job 의 `usageChars` — 번역 job 이 그 판정을 한다).
+          chars: chars
         });
       } catch (e) {
         err = e;
@@ -307,7 +397,7 @@ export function createPipeline(deps) {
       if (!err) {
         cooldownLevel = 0;
         notify();
-        return accept(chunk, r, ctx);
+        return accept(chunk, r, ctx, job);
       }
 
       // `[수정 2026-10-10 — 오케스트레이터 결정]` 타임아웃도 응답을 못 받은 것 — 네트워크 오류와 같은 규칙·같은 상한.
@@ -375,14 +465,14 @@ export function createPipeline(deps) {
     }
   }
 
-  /** 2xx 응답 → 10-6 파싱 → 10-2 검증 → 캐시. */
-  async function accept(chunk, r, ctx) {
-    const parsed = parseAIJson(r && r.text, TRANSLATE_SCHEMA);
+  /** 2xx 응답 → 10-6 파싱 → job 의 검증(번역 10-2 · 단어 17-7-2) → 캐시. */
+  async function accept(chunk, r, ctx, job) {
+    const parsed = parseAIJson(r && r.text, job.schema);
     if (!parsed.ok) {
       await bumpUsage({ errors: 1 }, { db: db, now: now() });
       return chunk.map(() => ({ state: SEG.FAILED, code: FAIL.PARSE }));
     }
-    const chk = checkTranslation(chunk, parsed.value);
+    const chk = job.check(chunk, parsed.value, ctx);
     if (chk.chunkFailed) {
       await bumpUsage({ errors: 1 }, { db: db, now: now() });
       return chunk.map(() => ({ state: SEG.FAILED, code: FAIL.SHIFT }));
@@ -392,15 +482,14 @@ export function createPipeline(deps) {
     for (let i = 0; i < chunk.length; i++) {
       const it = chk.items[i];
       if (it.state === 'ok') {
-        out.push({ state: SEG.READY, text: it.t });
+        out.push(Object.assign({ state: SEG.READY }, job.toResult(it.value)));
         entries.push({
-          key: chunk[i].key, docId: ctx.docId, kind: ctx.kind, targetLang: ctx.target, result: it.t,
-          provider: r.provider, model: r.model, promptVersion: PROMPT_VERSION, repaired: !!parsed.repaired,
+          key: chunk[i].key, docId: ctx.docId, kind: ctx.kind, targetLang: ctx.target, result: it.value,
+          provider: r.provider, model: r.model, promptVersion: job.promptVersion, repaired: !!parsed.repaired,
           domain: ctx.domain              // `[다듬기 2 — 8pR-9 ①]` 진단용 — 캐시 **값**에만(키 불변 · 7-5)
         });
       } else {
-        const code = it.reason === 'ratio' ? FAIL.RATIO : it.reason === 'digits' ? FAIL.DIGITS : FAIL.MISSING;
-        out.push({ state: SEG.FAILED, code: code });
+        out.push({ state: SEG.FAILED, code: it.code });
       }
     }
     if (entries.length) {
@@ -412,11 +501,12 @@ export function createPipeline(deps) {
   /* ── 보내기 묶음 ───────────────────────────────────── */
 
   /** 새로 보낼 항목들(키가 겹치지 않음)을 기기 내 → 원격 순으로 처리한다. 키 → 결과. */
-  async function sendAll(items, ctx) {
+  async function sendAll(items, ctx, job) {
     const result = new Map();
 
     // `[8m]` 문서 언어와 다른 언어의 항목(`src`)은 기기 내 번역(언어 쌍 하나)에 넣지 않는다 — 원격으로만.
-    const odItems = items.filter((it) => !it.src);
+    // `[8f-1]` 기기 내 번역은 번역 job 만(`job.ondevice`) — 단어 요청은 뜻·품사가 필요하다.
+    const odItems = job.ondevice ? items.filter((it) => !it.src) : [];
     if (ondevice && ctx.useOnDevice && odItems.length) {
       let out = null;
       try { out = await ondevice(odItems.map((it) => it.text), ctx.src, ctx.target); } catch (e) { out = null; }
@@ -426,7 +516,7 @@ export function createPipeline(deps) {
           result.set(odItems[i].key, { state: SEG.READY, text: out[i].trim(), ondevice: true });
           entries.push({
             key: odItems[i].key, docId: ctx.docId, kind: ctx.kind, targetLang: ctx.target, result: out[i].trim(),
-            provider: 'ondevice', model: null, promptVersion: PROMPT_VERSION,
+            provider: 'ondevice', model: null, promptVersion: job.promptVersion,
             domain: ctx.domain            // `[다듬기 2]` 진단용 — 값에만(기기 내 번역은 문체를 쓰지 않지만 그때 문서 문체를 남긴다)
           });
         }
@@ -437,16 +527,21 @@ export function createPipeline(deps) {
       }
     }
 
-    const chunks = chunksOf(items, { src: ctx.src, target: ctx.target, domain: ctx.domain });
+    const chunks = chunksOf(items, ctx, job);
     for (let c = 0; c < chunks.length; c++) {
       const chunk = chunks[c];
-      const g = await gate();
       let outs;
-      if (g !== STATES.READY) {
-        outs = chunk.map(() => ({ state: SEG.BLOCKED, code: g }));   // 보내지 않은 것
+      if (job.maxChunks > 0 && c >= job.maxChunks) {
+        // `[8f-1]` 한 번 부름 = 최대 `maxChunks` 호출(단어 1) — 나머지는 이번에 보내지 않는다(다시 부르면 보낸다).
+        outs = chunk.map(() => ({ state: SEG.SKIPPED, code: MORE }));
       } else {
-        outs = await sendChunk(chunk, ctx);
-        if (!outs.notSent) ctx.calls++;          // KEY_IN_URL — 보내기 전에 막혔다(호출 0)
+        const g = await gate();
+        if (g !== STATES.READY) {
+          outs = chunk.map(() => ({ state: SEG.BLOCKED, code: g }));   // 보내지 않은 것
+        } else {
+          outs = await sendChunk(chunk, ctx, job);
+          if (!outs.notSent) ctx.calls++;          // KEY_IN_URL — 보내기 전에 막혔다(호출 0)
+        }
       }
       for (let i = 0; i < chunk.length; i++) {
         result.set(chunk[i].key, outs[i]);
@@ -487,22 +582,48 @@ export function createPipeline(deps) {
 
     const docId = String(o.docId == null ? '' : o.docId);
     const keys = await Promise.all(list.map((s) => keyFor(docId, s.text, target, kind)));
+    // `[8m]` 항목 `src` 는 문서 언어와 다를 때만 요청에 실린다(일반화 전 `fresh.push` 의 판정 그대로).
+    const items = list.map((s) => ({ text: s.text, frag: s.frag, src: s.src && s.src !== src ? s.src : null }));
+    return runJob(TRANSLATE_JOB, items, keys, {
+      src: src, target: target, kind: kind, docId: docId, signal: o.signal, retry: o.retry, domain: o.domain
+    });
+  }
+
+  /**
+   * `[8f-1 — 17-7-6 4-3 · 8cf-D7]` **job 하나를 상태 기계 한 벌로 돌린다.** 번역(`translate`)·단어(`translateTerms`)가
+   * 이 함수 하나를 탄다 — 11 의 요약·개요·설명도 job 을 더해 이것을 부른다. **던지지 않는다.**
+   *
+   * 순서: 캐시(`force` 면 건너뜀) → "보냈다가 실패" 기억(`retry`·`force` 면 지움) → 진행 중 공유 → 기기 내(job 이 허락할 때) →
+   * 원격(`gate` → `sendChunk` → `accept`). 결과는 입력 순서, 준비된 것은 `{state:'ready', …job.toResult(값)}`
+   * (번역 `text` · 그 밖 `value` — **문자열이 아닌 결과**도 그대로).
+   *
+   * @param {Object} job       위 job 모양(`TRANSLATE_JOB`·`TERM_JOB` 또는 호출자의 것)
+   * @param {Object[]} list    job 의 항목(`build`·`size` 가 읽는다)
+   * @param {string[]} keys    항목마다 캐시 키(7-5 — 호출자가 만든다)
+   * @param {{src:string, target:string, kind:string, docId:string, domain?:string,
+   *          signal?:AbortSignal, retry?:boolean, force?:boolean}} o
+   *   `kind` — 사용량(`usage.byKind`)과 캐시 값의 종류. `force` — 캐시 읽기를 건너뛰고 새로 받아 덮어쓴다(7-5 "다시 생성").
+   * @returns {Promise<{status:string, calls:number, results:Object[]}>}
+   */
+  async function runJob(job, list, keys, o) {
     const results = new Array(list.length).fill(null);   // ★ 구멍 배열이면 every() 가 빈칸을 건너뛴다
 
     // 1. 캐시
-    let hits = new Map();
-    try { hits = await cache.getMany(keys); } catch (e) { hits = new Map(); }
-    for (let i = 0; i < list.length; i++) {
-      const rec = hits.get(keys[i]);
-      if (rec && typeof rec.result === 'string') results[i] = { state: SEG.READY, text: rec.result, cached: true };
-    }
-    if (results.every((r) => r)) {
-      await bumpUsage({ cacheHits: 1 }, { db: db, now: now() });   // 호출 하나를 아꼈다
-      return { status: current(), calls: 0, results: results };
+    if (!o.force) {
+      let hits = new Map();
+      try { hits = await cache.getMany(keys); } catch (e) { hits = new Map(); }
+      for (let i = 0; i < list.length; i++) {
+        const rec = hits.get(keys[i]);
+        if (rec && job.accepts(rec.result)) results[i] = Object.assign({ state: SEG.READY }, job.toResult(rec.result), { cached: true });
+      }
+      if (results.every((r) => r)) {
+        await bumpUsage({ cacheHits: 1 }, { db: db, now: now() });   // 호출 하나를 아꼈다
+        return { status: current(), calls: 0, results: results };
+      }
     }
 
-    // 2. 보냈다가 실패한 것은 사용자 [다시 시도] 전에는 다시 보내지 않는다.
-    if (o.retry) for (let i = 0; i < list.length; i++) failedKeys.delete(keys[i]);
+    // 2. 보냈다가 실패한 것은 사용자 [다시 시도] 전에는 다시 보내지 않는다. (`force` 도 사용자가 부른 것이다.)
+    if (o.retry || o.force) for (let i = 0; i < list.length; i++) failedKeys.delete(keys[i]);
 
     // 3. 진행 중 공유 · 새로 보낼 것 — ★ 확인과 등록 사이에 await 가 없다(그래야 공유가 성립한다).
     const waits = new Map();       // 키 → Promise<결과>
@@ -517,18 +638,18 @@ export function createPipeline(deps) {
       const p = new Promise((res) => { resolve = res; });
       inflight.set(k, p);
       waits.set(k, p);
-      fresh.push({ key: k, text: list[i].text, frag: list[i].frag, src: list[i].src && list[i].src !== src ? list[i].src : null, resolve: resolve });
+      fresh.push(Object.assign({ key: k }, list[i], { resolve: resolve }));
     }
 
     const ctx = {
-      src: src, target: target, kind: kind, docId: docId, signal: o.signal || null, calls: 0,
+      src: o.src, target: o.target, kind: o.kind, docId: o.docId, signal: o.signal || null, calls: 0,
       domain: normalizeDomain(o.domain),
-      useOnDevice: getSetting('ai.useOnDevice') !== false
+      useOnDevice: !!job.ondevice && getSetting('ai.useOnDevice') !== false
     };
     if (fresh.length) {
       let sent = new Map();
       try {
-        sent = await sendAll(fresh, ctx);
+        sent = await sendAll(fresh, ctx, job);
       } catch (e) {
         sent = new Map();
       } finally {
@@ -547,6 +668,62 @@ export function createPipeline(deps) {
       results[i] = Object.assign({}, r);
     }
     return { status: current(), calls: ctx.calls, results: results };
+  }
+
+  /**
+   * `[8f-1 — 17-7-2 3 · 17-7-6 4-3]` 단어 요청 `translateTerms(items, {src, target, docId, domain, force, retry, signal})`.
+   * 사용자가 [AI 로 번역]·[이 문맥으로 다시 번역]·[번역 안 된 것 모두 번역]을 누를 때만 부른다(17절 머리 — 호출 0 먼저).
+   *
+   * - 상태 기계·`gate`·5xx 1회·429·cooldown·no-key·capped·사용량(`byKind.term`)은 번역과 **같은 한 벌**(`runJob`).
+   * - **키** `keyFor(docId, context, target, 'term', 'w=' + term)` — 문맥은 해시, 낱말은 `extra` 로 그대로.
+   *   17-7-2 의 `term + '\n' + context` 는 `normalizeForHash` 가 `'\n'` 을 공백으로 접어 경계가 사라진다(8f-1 정정).
+   * - 한 번 부름 = **최대 1호출**(≤ 20개·누적 `ai.maxReqChars`) — 넘친 항목은 `skipped`·`MORE`.
+   * - 낱말의 원문 언어가 대상 언어와 같으면 그 항목만 `skipped`·`same-lang`, 낱말이 비면 `skipped`·`empty`.
+   * - ★ 보내는 것은 항목의 `term`(·`surface`)·`context`·`src` 뿐 — 항목에 사용자 번역·메모가 있어도 옮겨 담지 않는다(13절).
+   *
+   * @param {{term:string, surface?:string, context:string, src?:string}[]} items `term` = `normalizeTerm` 결과(호출자)
+   * @returns {Promise<{status:string, calls:number,
+   *           results:{state:string, value?:{translation:string, gloss:string, pos:string, lemma:string}, code?:string, cached?:boolean}[]}>}
+   */
+  async function translateTerms(items, opts) {
+    const o = opts || {};
+    const src = typeof o.src === 'string' ? o.src.trim() : '';
+    const target = typeof o.target === 'string' ? o.target.trim() : '';
+    const list = (Array.isArray(items) ? items : []).map((it) => {
+      const x = it || {};
+      return {
+        term: String(x.term == null ? '' : x.term).trim(),
+        surface: typeof x.surface === 'string' && x.surface.trim() ? x.surface.trim() : null,
+        context: String(x.context == null ? '' : x.context),
+        src: typeof x.src === 'string' && x.src && langName(x.src) ? x.src : null
+      };
+    });
+    const results = list.map(() => null);
+    const skip = (status) => ({ state: SEG.SKIPPED, code: status });
+    if (!list.length) return { status: STATUS.EMPTY, calls: 0, results: [] };
+    if (!langName(src) || !langName(target)) return { status: STATUS.UNSUPPORTED_LANG, calls: 0, results: list.map(() => skip(STATUS.UNSUPPORTED_LANG)) };
+
+    const docId = String(o.docId == null ? '' : o.docId);
+    const send = [];
+    const at = [];
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i];
+      if (!it.term) { results[i] = skip(STATUS.EMPTY); continue; }
+      if ((it.src || src) === target) { results[i] = skip(STATUS.SAME_LANG); continue; }   // 7-1 원칙 5
+      send.push({ term: it.term, surface: it.surface, context: it.context, src: it.src && it.src !== src ? it.src : null });
+      at.push(i);
+    }
+    if (!send.length) {
+      const same = results.every((r) => r.code === STATUS.SAME_LANG);
+      return { status: same ? STATUS.SAME_LANG : STATUS.EMPTY, calls: 0, results: results };
+    }
+    const keys = await Promise.all(send.map((s) => keyFor(docId, s.context, target, AI.TERM_KIND, 'w=' + s.term)));
+    const out = await runJob(TERM_JOB, send, keys, {
+      src: src, target: target, kind: AI.TERM_KIND, docId: docId, signal: o.signal,
+      retry: !!o.retry, force: !!o.force, domain: o.domain
+    });
+    for (let k = 0; k < at.length; k++) results[at[k]] = out.results[k];
+    return { status: out.status, calls: out.calls, results: results };
   }
 
   /* ── 사용자·환경이 상태를 바꾸는 길 ───────────────── */
@@ -600,6 +777,10 @@ export function createPipeline(deps) {
 
   return {
     translate: translate,
+    /** `[8f-1]` 단어 요청(17-7-2) — 번역과 같은 상태 기계. */
+    translateTerms: translateTerms,
+    /** `[8f-1]` job 하나를 돌린다(11 이 요약·개요·설명 job 을 얹는다). `(job, items, keys, opts)`. */
+    runJob: runJob,
     retry: retry,
     configChanged: configChanged,
     setOnline: setOnline,

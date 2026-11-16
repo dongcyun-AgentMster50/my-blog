@@ -16,6 +16,13 @@
 - 시각은 **숫자 ms**(`dueAt`·`createdAt`·`updatedAt`), `applyImport` 가 `sm2`·`dueAt`·`reviewedAt`·`introducedAt` 을 덮지 않게(12).
 - term 캐시 키는 `keyFor(docId, context, target, 'term', 'w='+term)`(spec 17-7-2 의 '\n' 잇기는 해시 정규화로 경계가 사라지는 결함).
 
+## 8f-1 Review 에서 넘긴 것 (8f1R — 2026-11-16)
+- **8f-2**: 실패한 단어를 사용자가 다시 누르면 `translateTerms(…, {retry:true})` 를 넘긴다(안 넘기면 호출 0 으로 실패가 그대로).
+- **8f-3 (시작 전 반드시)**: ① `importPlan` 에서 파일 `updated` 칸이 비었거나 못 읽는 꼴(`dd/mm/yyyy` 등)이면 기기 쪽이 더 새로워도 파일이 덮는다 — 못 읽는 `updated` 는 "충돌(미리보기에서 고르기)"로. ② `store.update` 가 값 공백을 정규화하지 않아 방금 내보낸 CSV 를 그대로 가져와도 "바뀜"·`edited`·`updatedAt` 이 오른다 — 비교 전에 같은 정규화. ③ 실패 단어 다시 누름 `retry:true`(위 8f-2 와 같음).
+- **9c**: 단어 id 는 처음 저장 때의 term 해시 — 원어를 고친 항목과 다른 기기에서 새로 저장한 같은 낱말은 id 가 달라진다(`crypto.subtle` 없는 LAN http 문맥은 `vt:fnv:` 꼴). 병합은 id 다음에 `term+targetLang` 으로도 맞출 것. `update` 가 `suspended` 처럼 내용 밖 필드만 바뀌면 `updatedAt` 을 안 올려 `max(updatedAt, reviewedAt)` 병합에서 질 수 있다(12 도 같음).
+- **11**: `pipeline.runJob(job, items, keys, opts)` 를 넷째 인자 없이 부르면 TypeError — 11 Build 가 기본값 `{}` 를 넣거나 늘 넘긴다.
+- **다듬기 후보**: 비라틴 대상에서 라틴 약어가 정답인 단어(ko `MRI`)가 늘 `LANG` 실패 · `normalizeTerm` 이 터키어 `İ`·독일어 `ß` 를 접지 않음 · 테스트 구멍 RM5(연쇄 삭제 예외의 `name==='cards'` 조건 — 빠지면 term 캐시가 문서 삭제 뒤 남음)·RM6(CSV 접두 CR) · 큰 PDF 추출 중 문서 삭제 시 `pages` 레코드 남음(HEAD 부터).
+
 ## 8f-2·11-2
 - 서재 삭제 확인의 "남습니다" 줄(단어장·요약·기억 카드)을 한 함수로.
 

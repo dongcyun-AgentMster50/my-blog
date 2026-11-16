@@ -639,7 +639,48 @@ export const AI = Object.freeze({
   /* `[8a]` 9-2 · 15절 — 낭독 동반 번역 원격 호출의 `usage.byKind` 키.
      `USAGE_KINDS` 에 넣지 않고 따로 둔다: 7a 테스트가 **빈 행**의 키 여섯 개를 고정한다.
      `bumpUsage` 는 이 키도 받아 **처음 쓰일 때** 행에 만든다(대시보드는 `|| 0` 으로 읽는다). */
-  READALONG_KIND: 'readalong'
+  READALONG_KIND: 'readalong',
+
+  /* `[8f-1]` 17-7-6 4-3 — 단어 요청(단어장 [AI 로 번역]·[번역 안 된 것 모두 번역])의 `usage.byKind` 키이자
+     캐시 `kind`. `READALONG_KIND` 와 같은 까닭으로 `USAGE_KINDS` 에 넣지 않는다(7a 빈 행 테스트 무변) —
+     처음 쓰일 때 행에 생긴다. 상한(`ai.dailyCap`)에는 들어간다(검증만 빠진다 — 15절). */
+  TERM_KIND: 'term'
+});
+
+/* ────────────────────────────────────────────────────────
+   `[8f-1]` 17-7 단어장 · 17-7-6 4-3·4-4·4-6 — 상수. **추가만** 했다.
+   ★ 무료 티어 한도 숫자는 여기에도 없다(15절). 호출 한 번에 담는 낱말 수는 비용 모양이다(17-7-2 "묶음 번역").
+   ──────────────────────────────────────────────────────── */
+export const VOCAB = Object.freeze({
+  /* 17-7-2 — 한 요청(=한 번 누름)에 담는 낱말 수 상한. 글자 상한은 `ai.maxReqChars`(PIPELINE.MAX_REQ_CHARS)와 같다. */
+  BATCH_MAX: 20,
+  /* 17-7-2 — `maxOutputTokens = 항목 수 × PER_ITEM + PAD` */
+  OUT_TOKENS_PER_ITEM: 120,
+  OUT_TOKENS_PAD: 100,
+  /* 17-7-2 검증 — 번역 ≤ 200자(넘으면 그 항목 실패), 짧은 뜻 ≤ 300자(넘으면 자름), 기본형 ≤ 100자(넘으면 자름) */
+  TRANSLATION_MAX: 200,
+  GLOSS_MAX: 300,
+  LEMMA_MAX: 100,
+  /* 17-7-2 품사 목록 — 밖이면 'other' */
+  POS: Object.freeze(['noun', 'verb', 'adj', 'adv', 'abbr', 'phrase', 'other']),
+  /* 17-7-2 `findInSentenceTr` — 괄호 앞에서 뒤로 거슬러 올라갈 최대 낱말 수 */
+  CANDIDATE_WORDS: 4,
+  /* 17-7-4 가져오기 상한 — 넘으면 통째로 거절 */
+  IMPORT_MAX_BYTES: 2 * 1024 * 1024,
+  IMPORT_MAX_ROWS: 5000,
+  /* 17-7-4 CSV 열 이름(영어 고정 — 가져오기가 이름으로 맞춘다). 순서도 이대로 내보낸다. */
+  CSV_COLUMNS: Object.freeze(['term', 'translation', 'pos', 'gloss', 'context', 'context_translation', 'note',
+    'document', 'page', 'source_lang', 'target_lang', 'added', 'updated', 'id']),
+  /* 단어장 항목 필드(9-2) → 위 열 이름. `text/vocab.js` 는 열 이름을 이 표로만 읽는다(순수 계층 grep — 16-A). */
+  CSV_COL: Object.freeze({
+    surface: 'term', translation: 'translation', pos: 'pos', gloss: 'gloss', context: 'context',
+    contextTr: 'context_translation', note: 'note', docTitle: 'document', pageNo: 'page',
+    srcLang: 'source_lang', targetLang: 'target_lang', createdAt: 'added', updatedAt: 'updated', id: 'id'
+  }),
+  /* 17-7-4 Anki 머리 줄(Anki 2.1.55+ `[가정]`) */
+  ANKI_HEADER: Object.freeze(['#separator:tab', '#html:false', '#columns:Front\tBack\tContext\tNote\tSource']),
+  /* 9-2 cards `origin` 값 */
+  ORIGINS: Object.freeze(['sentence', 'ai', 'user', 'import'])
 });
 
 /* ────────────────────────────────────────────────────────
