@@ -95,12 +95,29 @@ export function endsSentence(text) {
 /* `[7c — spec 9-2]` "다음 글자가 문장 시작처럼 보이는가" — 원문 언어별.
  * **en(또는 언어 없음)은 원래 정규식 그대로다** — 영어 분할 결과는 한 글자도 바뀌지 않는다
  * (`tests/srclang-7c.test.mjs` 의 E1 이 7c 이전 사본과 대조한다). fr 은 악센트 대문자(É·À·Ç…)를, ko 는 한글을
- * 더할 뿐이다 `[가정 — 실물 측정 전]`. 약어 목록(`ABBREVIATIONS`)은 영어 것 그대로다. */
+ * 더할 뿐이다 `[가정 — 실물 측정 전]`. 약어 목록(`ABBREVIATIONS`)은 영어 것 그대로다.
+ * `[8n]` es 는 fr 꼴에 여는 `¿`·`¡` 를 더한다. `Sr.`·`Sra.` 같은 스페인어 약어 뒤에서 잘못 끊을 수 있다 —
+ * 견본 없이 목록을 늘리지 않는다(spec 19-1-3 §5, 한계로 기록). */
 const SENTENCE_START = Object.freeze({
   en: /[A-Z0-9(\[«"“']/,
   fr: /[\p{Lu}0-9(\[«"“']/u,
-  ko: /[\p{Lu}\p{Script=Hangul}0-9(\[«"“']/u
+  ko: /[\p{Lu}\p{Script=Hangul}0-9(\[«"“']/u,
+  /* `[8n — spec 19-1-3 §5]` 스페인어 — fr 꼴 + 여는 `¿`·`¡`(그 앞에서 끊는다). 종결 부호는 그대로(`?`·`!`). */
+  es: /[\p{Lu}0-9(\[«"“'¿¡]/u
 });
+
+/* `[8n-b — spec 19-1-3 §5]` es — 여는 `¿`·`¡` 가 문장 시작 꼴이어도 끊지 않는 경우: 여는 부호 바로 뒤가
+ * 소문자 — 문장 중간의 꼬리 질문(`Es grave… ¿o no?`).
+ * `[8n-c]` 8n-b 의 둘째 규칙(앞이 소문자 겹약어 꼴 `p. ej.` 이면 안 끊음)은 뺐다 — 글자만으로는 문장 중간
+ * `p. ej. ¿…` 와 문장 끝 `i. v.`·`a. m.` 뒤 새 문장 `¿…` 를 가를 수 없고, 지은 표본에서 끝 꼴 틀림(88)이
+ * 중간 꼴 틀림(36)보다 많았다(spec 19-1-3 §5 정정 8n-c). 겹약어 뒤 `¿대문자` 는 보통 대문자 낱말 뒤와 같이 끊는다.
+ * en·fr·ko 의 `SENTENCE_START` 에는 `¿`·`¡` 가 없어 여기까지 오지 않는다 — 그쪽 분할은 그대로다. */
+const ES_LOWER_AFTER_OPENER = /\p{Ll}/u;
+
+function esOpenerContinues(t, j) {
+  const after = t[j + 2];
+  return !!after && ES_LOWER_AFTER_OPENER.test(after);
+}
 
 /* `[8h-1 — spec 6-6-3 B]` 문장 경계 두 개를 더한다. 분할 함수는 여전히 이것 하나다(R6).
  *   B1 글머리 — `CITE.BULLETS` 글리프가 **앞에 공백, 뒤에 공백**을 두고 문장 중간에 나오면 글리프 **앞**에서 끊는다.
@@ -176,6 +193,8 @@ export function splitSentences(text, opts) {
     if (!next) break;
     // 소문자로 이어지면 문장이 끝난 것이 아니다
     if (!startRe.test(next)) continue;
+    // `[8n-b]` es 의 여는 ¿·¡ — 꼬리 질문(뒤가 소문자)이면 끊지 않는다(위 주석).
+    if ((next === '¿' || next === '¡') && esOpenerContinues(t, j)) continue;
     out.push(head.trim());
     start = j + 1;
   }

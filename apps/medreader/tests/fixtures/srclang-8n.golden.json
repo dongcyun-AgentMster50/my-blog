@@ -1,0 +1,440 @@
+{
+ "from": "HEAD b767dd7 (8n 이전)",
+ "guess": {
+  "en": {
+   "lang": "en",
+   "score": 1,
+   "script": "latin"
+  },
+  "fr": {
+   "lang": "fr",
+   "score": 1,
+   "script": "latin"
+  },
+  "ko": {
+   "lang": "ko",
+   "score": 1,
+   "script": "hangul"
+  },
+  "zh": {
+   "lang": "zh",
+   "score": 1,
+   "script": "han"
+  },
+  "ja": {
+   "lang": "ja",
+   "score": 1,
+   "script": "han"
+  },
+  "ar": {
+   "lang": "ar",
+   "score": 1,
+   "script": "arabic"
+  },
+  "short-empty": {
+   "lang": "en",
+   "score": 0,
+   "script": "none"
+  },
+  "short-fr": {
+   "lang": "en",
+   "score": 0,
+   "script": "latin"
+  },
+  "short-fr150": {
+   "lang": "en",
+   "score": 0,
+   "script": "latin"
+  },
+  "short-ko": {
+   "lang": "en",
+   "score": 0,
+   "script": "hangul"
+  },
+  "short-zh": {
+   "lang": "en",
+   "score": 0,
+   "script": "han"
+  },
+  "short-es": {
+   "lang": "en",
+   "score": 0,
+   "script": "latin"
+  },
+  "tie-en-fr": {
+   "lang": "en",
+   "score": 0,
+   "script": "latin"
+  },
+  "no-function-words": {
+   "lang": "en",
+   "score": 0,
+   "script": "latin"
+  },
+  "en-etal": {
+   "lang": "en",
+   "score": 0.857,
+   "script": "latin"
+  },
+  "en-kana": {
+   "lang": "en",
+   "score": 1,
+   "script": "latin"
+  },
+  "ko-abbrev": {
+   "lang": "ko",
+   "score": 0.908,
+   "script": "hangul"
+  },
+  "ko-30-50": {
+   "lang": "ko",
+   "score": 0.441,
+   "script": "latin"
+  },
+  "fr-1.5x": {
+   "lang": "en",
+   "score": 0.333,
+   "script": "latin"
+  },
+  "b-fr-es": {
+   "lang": "fr",
+   "score": 0.667,
+   "script": "latin"
+  },
+  "b-en-es": {
+   "lang": "en",
+   "score": 1,
+   "script": "latin"
+  },
+  "b-es-max-under2x": {
+   "lang": "en",
+   "score": 1,
+   "script": "latin"
+  },
+  "b-en-with-es-quote": {
+   "lang": "en",
+   "score": 0.917,
+   "script": "latin"
+  },
+  "b-fr-with-es-quote": {
+   "lang": "fr",
+   "score": 1,
+   "script": "latin"
+  },
+  "b-ko-with-es": {
+   "lang": "ko",
+   "score": 0.851,
+   "script": "hangul"
+  },
+  "b-und-latin-es-words-zero": {
+   "lang": "en",
+   "score": 0,
+   "script": "latin"
+  }
+ },
+ "split": {
+  "en": [
+   [
+    "Fever was noted in 3 of 10 cases.",
+    "It resolved."
+   ],
+   [
+    "Use e.g. the second form.",
+    "Then stop."
+   ],
+   [
+    "Dr. Kim saw the patient at 9 a.m. today.",
+    "The rash was gone."
+   ],
+   [
+    "The dose was 2.5 mg. (See Table 4.)",
+    "Repeat in 6 h."
+   ],
+   [
+    "He said \"stop.\"",
+    "Then he left!",
+    "Why?",
+    "Nobody knows…",
+    "Later it rained."
+   ],
+   [
+    "J. R. Smith et al. described it.",
+    "The cohort was small."
+   ],
+   [
+    "Values were high. éarly morning samples differed. Évitez is French, not English."
+   ],
+   [
+    "The test was positive. 환자는 좋아졌다.",
+    "Another line."
+   ],
+   [
+    "Ends with abbreviation vs. Continues here.",
+    "Fig. 3 shows it."
+   ],
+   [
+    "Lower case after period. and it continues.",
+    "«Quoted» start.",
+    "[Bracket] start."
+   ],
+   [
+    "I-42.",
+    "An 18-year-old man.",
+    "A. Primary option.",
+    "The answer is C."
+   ],
+   [
+    "lots of spaces.",
+    "Next sentence here."
+   ],
+   [],
+   [
+    "No terminal punctuation at all"
+   ],
+   [
+    "La fièvre a cédé. Évitez les anti-inflammatoires. Ça suffit."
+   ],
+   [
+    "Voir p. ex. la suite. puis rien."
+   ],
+   [
+    "환자는 열이 있었다. 항생제를 시작하였다.",
+    "CRP 는 정상이었다."
+   ],
+   [
+    "The sign said hola. ¿Qué tal? ¡Muy bien!",
+    "Then we left."
+   ],
+   [
+    "Il a dit bonjour. ¿Qué tal? ¡Muy bien!",
+    "Puis il est parti."
+   ],
+   [
+    "그는 인사했다. ¿Qué tal? ¡Muy bien! 그리고 떠났다."
+   ],
+   [
+    "El paciente llegó al hospital con fiebre alta y tos persistente desde hace una semana.",
+    "Los médicos revisaron las radiografías del tórax y encontraron una lesión en el pulmón derecho.",
+    "Por la noche se inició el tratamiento con antibióticos para controlar la infección.",
+    "Lo más importante es descansar y beber mucha agua. ¿Cuánto tiempo durará la recuperación? ¡Lo sabremos pronto!"
+   ],
+   [
+    "Sr. García llegó.",
+    "Sra.",
+    "López también.",
+    "El Dr. Ruiz no."
+   ],
+   [
+    "See [PMID 12345]. ¿Next?",
+    "Item one.",
+    "• Bullet two",
+    "• Bullet three."
+   ]
+  ],
+  "fr": [
+   [
+    "Fever was noted in 3 of 10 cases.",
+    "It resolved."
+   ],
+   [
+    "Use e.g. the second form.",
+    "Then stop."
+   ],
+   [
+    "Dr. Kim saw the patient at 9 a.m. today.",
+    "The rash was gone."
+   ],
+   [
+    "The dose was 2.5 mg. (See Table 4.)",
+    "Repeat in 6 h."
+   ],
+   [
+    "He said \"stop.\"",
+    "Then he left!",
+    "Why?",
+    "Nobody knows…",
+    "Later it rained."
+   ],
+   [
+    "J. R. Smith et al. described it.",
+    "The cohort was small."
+   ],
+   [
+    "Values were high. éarly morning samples differed.",
+    "Évitez is French, not English."
+   ],
+   [
+    "The test was positive. 환자는 좋아졌다.",
+    "Another line."
+   ],
+   [
+    "Ends with abbreviation vs. Continues here.",
+    "Fig. 3 shows it."
+   ],
+   [
+    "Lower case after period. and it continues.",
+    "«Quoted» start.",
+    "[Bracket] start."
+   ],
+   [
+    "I-42.",
+    "An 18-year-old man.",
+    "A. Primary option.",
+    "The answer is C."
+   ],
+   [
+    "lots of spaces.",
+    "Next sentence here."
+   ],
+   [],
+   [
+    "No terminal punctuation at all"
+   ],
+   [
+    "La fièvre a cédé.",
+    "Évitez les anti-inflammatoires.",
+    "Ça suffit."
+   ],
+   [
+    "Voir p. ex. la suite. puis rien."
+   ],
+   [
+    "환자는 열이 있었다. 항생제를 시작하였다.",
+    "CRP 는 정상이었다."
+   ],
+   [
+    "The sign said hola. ¿Qué tal? ¡Muy bien!",
+    "Then we left."
+   ],
+   [
+    "Il a dit bonjour. ¿Qué tal? ¡Muy bien!",
+    "Puis il est parti."
+   ],
+   [
+    "그는 인사했다. ¿Qué tal? ¡Muy bien! 그리고 떠났다."
+   ],
+   [
+    "El paciente llegó al hospital con fiebre alta y tos persistente desde hace una semana.",
+    "Los médicos revisaron las radiografías del tórax y encontraron una lesión en el pulmón derecho.",
+    "Por la noche se inició el tratamiento con antibióticos para controlar la infección.",
+    "Lo más importante es descansar y beber mucha agua. ¿Cuánto tiempo durará la recuperación? ¡Lo sabremos pronto!"
+   ],
+   [
+    "Sr. García llegó.",
+    "Sra.",
+    "López también.",
+    "El Dr. Ruiz no."
+   ],
+   [
+    "See [PMID 12345]. ¿Next?",
+    "Item one.",
+    "• Bullet two",
+    "• Bullet three."
+   ]
+  ],
+  "ko": [
+   [
+    "Fever was noted in 3 of 10 cases.",
+    "It resolved."
+   ],
+   [
+    "Use e.g. the second form.",
+    "Then stop."
+   ],
+   [
+    "Dr. Kim saw the patient at 9 a.m. today.",
+    "The rash was gone."
+   ],
+   [
+    "The dose was 2.5 mg. (See Table 4.)",
+    "Repeat in 6 h."
+   ],
+   [
+    "He said \"stop.\"",
+    "Then he left!",
+    "Why?",
+    "Nobody knows…",
+    "Later it rained."
+   ],
+   [
+    "J. R. Smith et al. described it.",
+    "The cohort was small."
+   ],
+   [
+    "Values were high. éarly morning samples differed.",
+    "Évitez is French, not English."
+   ],
+   [
+    "The test was positive.",
+    "환자는 좋아졌다.",
+    "Another line."
+   ],
+   [
+    "Ends with abbreviation vs. Continues here.",
+    "Fig. 3 shows it."
+   ],
+   [
+    "Lower case after period. and it continues.",
+    "«Quoted» start.",
+    "[Bracket] start."
+   ],
+   [
+    "I-42.",
+    "An 18-year-old man.",
+    "A. Primary option.",
+    "The answer is C."
+   ],
+   [
+    "lots of spaces.",
+    "Next sentence here."
+   ],
+   [],
+   [
+    "No terminal punctuation at all"
+   ],
+   [
+    "La fièvre a cédé.",
+    "Évitez les anti-inflammatoires.",
+    "Ça suffit."
+   ],
+   [
+    "Voir p. ex. la suite. puis rien."
+   ],
+   [
+    "환자는 열이 있었다.",
+    "항생제를 시작하였다.",
+    "CRP 는 정상이었다."
+   ],
+   [
+    "The sign said hola. ¿Qué tal? ¡Muy bien!",
+    "Then we left."
+   ],
+   [
+    "Il a dit bonjour. ¿Qué tal? ¡Muy bien!",
+    "Puis il est parti."
+   ],
+   [
+    "그는 인사했다. ¿Qué tal? ¡Muy bien!",
+    "그리고 떠났다."
+   ],
+   [
+    "El paciente llegó al hospital con fiebre alta y tos persistente desde hace una semana.",
+    "Los médicos revisaron las radiografías del tórax y encontraron una lesión en el pulmón derecho.",
+    "Por la noche se inició el tratamiento con antibióticos para controlar la infección.",
+    "Lo más importante es descansar y beber mucha agua. ¿Cuánto tiempo durará la recuperación? ¡Lo sabremos pronto!"
+   ],
+   [
+    "Sr. García llegó.",
+    "Sra.",
+    "López también.",
+    "El Dr. Ruiz no."
+   ],
+   [
+    "See [PMID 12345]. ¿Next?",
+    "Item one.",
+    "• Bullet two",
+    "• Bullet three."
+   ]
+  ]
+ }
+}

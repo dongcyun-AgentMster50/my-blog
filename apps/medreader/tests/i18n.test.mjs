@@ -178,7 +178,7 @@ test('I14 ar 은 실제로 번역돼 있다 (en 값의 복사가 아니다)', ()
   // 언어 이름·URL·{size} 처럼 번역할 것이 없는 키는 제외한다.
   const skip = new Set([
     'app.name', 'onboarding.lang.ar', 'onboarding.lang.en',
-    'onboarding.lang.fr', 'onboarding.lang.ko',
+    'onboarding.lang.fr', 'onboarding.lang.ko', 'onboarding.lang.es',
     'about.openSource.url'
   ]);
   let same = 0;

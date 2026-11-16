@@ -255,7 +255,7 @@ function srcLangText(doc) {
   return t(langSourceOf(doc) === 'auto' ? 'library.card.srcLang.auto' : 'library.card.srcLang', { lang: name });
 }
 
-/** [⋯] 패널 — "원문 언어" 선택 하나. 선택지는 `SUPPORTED_SRC` 에서 만든다(미지원이어도 셋). */
+/** [⋯] 패널 — "원문 언어" 선택 하나. 선택지는 `SUPPORTED_SRC` 에서 만든다(미지원이어도 넷). */
 function langPanel(doc, panelId) {
   const panel = el('div', 'doc-lang-panel');
   panel.id = panelId;

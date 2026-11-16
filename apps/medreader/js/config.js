@@ -437,12 +437,13 @@ export const SPEECH_MARKS = Object.freeze(['∗', '*', '†', '‡', '§']);   /
  * 낭독 사본에서만(`tts/text.js` 의 `speechBlanks`) — `src`·화면·번역 입력·검색은 그대로(캐시 키 불변).
  * 언어 = 그 단위의 말할 언어(8m `Unit.lang`) ‖ 문서 언어. 언어가 없으면 en(기호 표와 같은 규칙),
  * **표에 없는 언어는 쉼표 하나**(소리 없이 짧은 쉼 — 영어 낱말을 끼워 넣지 않는다).
- * fr·ar 문안 `[검토 — Nour·운영자]`(ar 은 spec 에 문안이 없어 Build 가 고른 것). es 는 8n 이 더한다. */
+ * fr·ar 문안 `[검토 — Nour·운영자]`(ar 은 spec 에 문안이 없어 Build 가 고른 것). es 는 8n 이 더했다(spec 19-1-3 §5). */
 export const SPEECH_BLANK = Object.freeze({
   en: 'blank',
   ko: '빈칸',
   fr: 'blanc',
-  ar: 'فراغ'
+  ar: 'فراغ',
+  es: 'espacio'
 });
 
 /* `[8h-1 — spec 6-6-2 A · 6-6-3 B]` 인용 단위·참고문헌 묶음·글머리 경계 (`text/cite.js` · `text/segment.js`).
@@ -458,11 +459,13 @@ export const CITE = Object.freeze({
 /* `[7c — spec 6-1]` 고를 음성이 없을 때 `utterance.lang` 에 넣는 언어별 기본 지역.
  * `[8k · 다듬기 1]` 사용자가 목소리를 고르면 그 음성 자신의 태그, 억양만 고르면 그 억양이 우선이고, 아무것도 안 골랐으면
  * 이 태그만 보낸다(voice 없이 — 휴대폰 설정 따름). 고르는 곳은 `tts/voices.js` 의 `resolveSpeech`(`defaultSpeechTag`).
- * 코드의 다른 곳에 지역 태그를 박지 않는다 — 여기 한 곳이다. */
+ * 코드의 다른 곳에 지역 태그를 박지 않는다 — 여기 한 곳이다.
+ * `[8n — spec 19-1-3 §5]` es 는 지역 기본값 es-ES. `TTS_SYMBOLS` 에 es 표는 두지 않는다(빈 표 — 엔진에 맡김). */
 export const TTS_LANG_REGION = Object.freeze({
   en: 'en-US',
   fr: 'fr-FR',
-  ko: 'ko-KR'
+  ko: 'ko-KR',
+  es: 'es-ES'
 });
 
 /* ────────────────────────────────────────────────────────

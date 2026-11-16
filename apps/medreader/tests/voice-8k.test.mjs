@@ -477,7 +477,7 @@ test('K20 저장값 — 목소리 = uri + 그 음성의 억양 · 억양만 = ur
   assert.deepEqual(voicePrefFor('phone', '', NOUR, 'en'), { uri: '', accent: '' });
   assert.deepEqual(voicePrefFor('voice', 'urn:ko_KR', NOUR, 'ko'), { uri: 'urn:ko_KR', accent: 'ko-KR' });
   assert.deepEqual(voicePrefFor('accent', 'fr-CA', NOUR, 'en'), { uri: '', accent: '' }, '다른 언어 억양은 저장하지 않는다');
-  for (const l of ['en', 'fr', 'ko', 'ar']) assert.ok(VOICE_SAMPLES[l], '[들어 보기] 문장 ' + l);
+  for (const l of ['en', 'fr', 'ko', 'ar', 'es']) assert.ok(VOICE_SAMPLES[l], '[들어 보기] 문장 ' + l);   // `[8n]` es 더함
 });
 
 test('K21 i18n — 새 키가 네 언어에 있고, 억양 문구에 {region}, 안내 한 줄은 휴대폰 설정을 가리킨다', () => {

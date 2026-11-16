@@ -223,8 +223,8 @@ test('F8 사용자 선택 뒤의 추정은 순서와 상관없이 지지 않는�
   assert.equal(rec.langSource, 'user');
 });
 
-test('F9 SUPPORTED_SRC = en, fr, ko (en 필수, 순서가 [⋯] 의 순서)', () => {
-  assert.deepEqual([...SUPPORTED_SRC], ['en', 'fr', 'ko']);
+test('F9 SUPPORTED_SRC = en, fr, ko, es (en 필수, 순서가 [⋯] 의 순서 — `[8n]` es 는 뒤에 붙임)', () => {
+  assert.deepEqual([...SUPPORTED_SRC], ['en', 'fr', 'ko', 'es']);
 });
 
 /* ── 표본 (9-2 "앞 30쪽 · 본문 5쪽 · 최대 8,000자") ─────────── */

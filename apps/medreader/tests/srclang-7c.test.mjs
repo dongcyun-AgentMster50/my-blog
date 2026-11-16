@@ -153,7 +153,9 @@ test('V2 ★ availability — out[doc.lang] 을 담는다 (en 고정이 아니�
   assert.equal(a.ar, false);
   const b = availability([], 'und');
   assert.equal(b.und, false);
-  assert.deepEqual(Object.keys(availability(VOICES)).sort(), ['ar', 'en', 'fr', 'ko']);
+  // `[8n]` 지원 원문에 es 가 들어가 키에도 es(목록에 없으면 false).
+  assert.deepEqual(Object.keys(availability(VOICES)).sort(), ['ar', 'en', 'es', 'fr', 'ko']);
+  assert.equal(availability(VOICES).es, false);
 });
 
 /* ── 6-1 낭독기 — 언어 **전달**만 ───────────────────────────── */

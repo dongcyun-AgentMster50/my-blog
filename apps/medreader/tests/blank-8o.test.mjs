@@ -49,8 +49,9 @@ test('T-B1 ★ 네 꼴(-{4,} · _{3,} · –{3,} · —{2,}) × 언어 3(en·ko�
   assert.equal(normalizeSpeech('the (______) one', null, { blank: 'blank' }), 'the ( blank) one');
 });
 
-test('T-B1 config 표 — en·ko·fr 는 spec 낱말 그대로, ar 하나 더(문안 검토 대상) · es 는 아직 없다(8n)', () => {
-  assert.deepEqual(Object.keys(SPEECH_BLANK).sort(), ['ar', 'en', 'fr', 'ko']);
+test('T-B1 config 표 — en·ko·fr 는 spec 낱말 그대로, ar 하나 더(문안 검토 대상) · es 는 8n 이 더함(espacio)', () => {
+  assert.deepEqual(Object.keys(SPEECH_BLANK).sort(), ['ar', 'en', 'es', 'fr', 'ko']);
+  assert.equal(SPEECH_BLANK.es, 'espacio');
   assert.equal(SPEECH_BLANK.en, 'blank');
   assert.equal(SPEECH_BLANK.ko, '빈칸');
   assert.equal(SPEECH_BLANK.fr, 'blanc');
@@ -142,7 +143,8 @@ test('T-B3 ★ 표에 없는 언어는 쉼표 하나(짧은 쉼) · 언어 없�
   assert.equal(blankWordFor(undefined), 'blank');
   assert.equal(blankWordFor(''), 'blank');
   assert.equal(blankWordFor('und'), ',');
-  assert.equal(blankWordFor('es'), ',');
+  assert.equal(blankWordFor('de'), ',');                 // `[8n]` 예전엔 es 였다 — es 는 표에 들어갔다
+  assert.equal(blankWordFor('es'), 'espacio');
   assert.equal(blankWordFor('fr'), 'blanc');
   const und = buildUnits([para('p', [ln('1', 'Él ------- la casa.')])], 'sentence', { lang: 'und' });
   assert.equal(und[0].text, 'Él, la casa.');

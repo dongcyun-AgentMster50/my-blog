@@ -1232,15 +1232,16 @@ function runVoiceTest() {
    innerHTML 0건 — 음성 이름은 기기가 주는 글자라 `textContent` 로만.
    ──────────────────────────────────────────────────────── */
 
-/** 설정 화면이 보이는 언어 순서. */
-const VOICE_LANGS = Object.freeze(['en', 'fr', 'ko', 'ar']);
+/** 설정 화면이 보이는 언어 순서. `[8n — spec 19-1-3 §5 정정 ③]` es 는 끝에 붙인다(앞 넷 순서 불변). */
+export const VOICE_LANGS = Object.freeze(['en', 'fr', 'ko', 'ar', 'es']);
 
 /** [들어 보기] 가 읽는 지어낸 짧은 문장(원서 문장이 아니다). */
 export const VOICE_SAMPLES = Object.freeze({
   en: 'This is how the reading voice sounds.',
   fr: 'Voici la voix de lecture.',
   ko: '낭독 목소리는 이렇게 들립니다.',
-  ar: 'هكذا يبدو صوت القراءة.'
+  ar: 'هكذا يبدو صوت القراءة.',
+  es: 'Así suena la voz de lectura.'
 });
 
 /** 펼쳐 둔 언어 — 목록이 다시 그려져도 접히지 않게. */

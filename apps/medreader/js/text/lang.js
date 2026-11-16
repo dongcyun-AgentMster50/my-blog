@@ -6,7 +6,7 @@
 
    ── 왜 휴리스틱 하나인가 ────────────────────────────────
    온디바이스 언어 감지 API 는 쓰지 않는다(Android Chrome 미지원 `[가정]`).
-   지원 원문은 en·fr·ko 셋뿐이고 이 셋은 **글자 계통 + 기능어 빈도**로 충분히
+   지원 원문은 en·fr·ko·es(8n) 넷뿐이고 이들은 **글자 계통 + 기능어 빈도**로 충분히
    갈린다. 경로가 둘이면 기기마다 결과가 달라진다 — 하나로 둔다.
 
    ── 판정 순서 (spec 9-2) ────────────────────────────────
@@ -15,6 +15,17 @@
                     한자 ≥ 30% → zh (미지원) · 아랍 문자 ≥ 30% → ar (미지원)
      2. 라틴이면 기능어 빈도(낱말 1,000개당) — en 묶음 vs fr 묶음.
         큰 쪽이 작은 쪽의 2배 이상이면 그 언어, 아니면 en + 낮은 score.
+        `[8n — spec 19-1-3 §5]` 그 **앞에** es 묶음 한 갈래: es 가 en·fr 중 큰 쪽의
+        2배(`WORD_FACTOR`) 이상일 때만 es. 아니면 위 두 갈래 규칙 그대로 —
+        es 가 이기지 않는 모든 입력의 결과가 8n 이전과 같다.
+        `[8n-b]` 이 비교에서만 fr 쪽은 스페인어와 겹치는 `la`(`FR_ES_OVERLAP`)를 빼고 센다 —
+        스페인어 글에 `la` 가 흔해 보통 꼴 스페인어가 fr 로 가던 것. 그리고 es 기능어가
+        `ES_MIN_WORDS` 낱말 이상이어야 한다(en·fr 0 + es 낱말 하나로 es·1 이 되지 않게).
+        en·fr 두 갈래 비교는 한 글자도 바뀌지 않았다.
+        `[8n-d]` es 묶음에서 `es` 를 뺐다 — 프랑스어 동사 `es`(`tu es`·`es-tu`·`n'es`·`qui es`…)와 겹쳐
+        짧은 반말 프랑스어가 es 로 새던 뿌리. 8n-c 의 `tu es` 꼴 규칙은 필요 없어져 지웠다.
+        `[8n-e]` 대문자로 시작하는 es 기능어는 바로 다음 낱말이 소문자로 시작할 때만 센다 —
+        `Los pacientes` 는 셈, 스페인어 고유명사·저자명(`Los Angeles`·`Del Rio C`·`Con A`)은 안 셈.
      · 200자 미만이면 판단하지 않는다 — en + score 0.
 
    `[가정]` "가나 존재 → ja" 를 "가나가 있고 한자+가나 ≥ 30%" 로 좁혔다.
@@ -25,11 +36,13 @@
    0~1 의 **근거의 세기**다(보정된 확률이 아니다).
      · 글자 계통 판정: 그 계통의 비율
      · 기능어 판정: `1 − 작은 쪽 / 큰 쪽` — 2배 규칙을 넘으면 늘 ≥ 0.5
+       (es 갈래는 `1 − max(en, fr−la) / es` — 같은 뜻으로 0.5~1)
      · 짧음·동률·기능어 없음: < 0.5 (`LOW_SCORE` 미만)
    ============================================================ */
 
-/** spec 9-2 — 고를 수 있는 원문 언어. `en` 은 필수. 순서가 서재 [⋯] 의 순서다. */
-export const SUPPORTED_SRC = Object.freeze(['en', 'fr', 'ko']);
+/** spec 9-2 — 고를 수 있는 원문 언어. `en` 은 필수. 순서가 서재 [⋯] 의 순서다.
+ *  `[8n — spec 19-1-3 §5]` es 는 **뒤에 붙인다** — 앞 셋의 순서 불변. */
+export const SUPPORTED_SRC = Object.freeze(['en', 'fr', 'ko', 'es']);
 
 /** 미지원 문자 계통을 본 문서의 `lang`. BCP 47 의 "정해지지 않음". */
 export const UNSUPPORTED_LANG = 'und';
@@ -56,14 +69,29 @@ export const GUESS = Object.freeze({
   SCRIPT_NUM: 3,
   SCRIPT_DEN: 10,
   /* 기능어 — 큰 쪽이 작은 쪽의 이 배수 이상이어야 그 언어다. */
-  WORD_FACTOR: 2
+  WORD_FACTOR: 2,
+  /* `[8n-b]` es 갈래의 최소량 — es 기능어가 이 낱말 수 이상이어야 es 다. 3 이 아니라 2 인 것은
+   * 지은 보통 꼴 스페인어 문단(270자)에 es 기능어가 둘뿐인 것이 있어서다(spec 19-1-3 §5 정정 8n-b).
+   * `[8n-d]` `es` 를 묶음에서 뺀 뒤 다시 쟀다 — 1 이면 영어 목록·표·포르투갈어 꼴이 es 로(그 밖 44 중 9 → 14),
+   * 3 이면 지은 스페인어를 더 잃는다(45 중 39 → 32). 2 그대로. */
+  ES_MIN_WORDS: 2
 });
 
-/* spec 9-2 의 기능어 묶음. 소문자로만 비교한다. */
+/* spec 9-2 의 기능어 묶음. 소문자로만 비교한다.
+ * `[8n]` es 는 en·fr 묶음과 **겹치지 않는 낱말만** — `la`·`que`·`se`·`y` 는 프랑스어에도 흔해 뺐다.
+ * `[8n-d]` `es` 도 뺐다 — 프랑스어 2인칭 `es`(`tu es`·`t'es`·`es-tu`·`n'es`·`tu n'y es`·`toi qui es`…)와 같은 낱말이다.
+ * 꼴마다 규칙을 더하던 8n-c 의 `tu es` 규칙은 다음 꼴에서 또 샜다(spec 19-1-3 §5 정정 8n-d). */
 const FUNCTION_WORDS = Object.freeze({
   en: new Set(['the', 'and', 'of', 'to', 'is', 'in', 'with', 'for']),
-  fr: new Set(['le', 'la', 'les', 'des', 'est', 'et', 'une', 'du', 'pour', 'dans'])
+  fr: new Set(['le', 'la', 'les', 'des', 'est', 'et', 'une', 'du', 'pour', 'dans']),
+  es: new Set(['el', 'los', 'las', 'del', 'por', 'para', 'con', 'una', 'lo'])
 });
+
+/* `[8n-b]` es 갈래를 비교할 때만 fr 쪽 세기에서 빼는 낱말 — 스페인어에서도 흔한 fr 기능어.
+ * `le`·`les` 는 넣지 않았다: 스페인어 대명사로도 쓰이지만 실측(지은 스페인어 12문단)에서 드물었고
+ * (le 4·les 2 vs la 94), 빼면 "es 낱말이 섞인 프랑스어"(`b-fr-es` 경계)가 es 로 넘어간다.
+ * en·fr 두 갈래 비교에는 쓰지 않는다. */
+const FR_ES_OVERLAP = Object.freeze(new Set(['la']));
 
 const RE_LETTER = /\p{L}/u;
 const RE_HANGUL = /\p{Script=Hangul}/u;
@@ -100,20 +128,64 @@ export function scriptCounts(text) {
   return c;
 }
 
+const RE_LOWER_START = /^\p{Ll}/u;
+const RE_UPPER_START = /^\p{Lu}/u;
+
+/**
+ * `[8n-e]` es 기능어 낱말 수 — **원문 글자꼴 그대로** 본다(en·fr 셈은 `functionWordRates` 에서 소문자로 바꾼 글로, 그대로).
+ * 대문자로 시작하는 es 기능어(`Los`·`El`·`Del`·`Con`…)는 **바로 다음 낱말이 소문자로 시작할 때만** 센다 —
+ * `Los pacientes`·문장 첫머리 `El paciente` 는 세고, 스페인어 고유명사·저자명(`Los Angeles`·`El Niño`·
+ * `Del Rio C`·`Con A`)과 글 끝의 것은 세지 않는다. 짧은 프랑스어·영어 일정표·참고문헌이 es 로 가던 뿌리
+ * (spec 19-1-3 §5 정정 8n-e). 모두 대문자(`LOS`·`DEL`)와 소문자는 지금처럼 센다 — 표·약어 꼴은 최소량
+ * (`ES_MIN_WORDS`)이 이미 막는다. "다음 낱말" 은 `RE_WORD` 의 다음 글자 덩이(숫자·기호는 건너뜀).
+ * 세는 수가 줄기만 하므로 es 갈래가 서지 않는 글의 결과는 그대로다.
+ */
+function countEsWords(text) {
+  const ws = text.match(RE_WORD) || [];
+  let es = 0;
+  for (let i = 0; i < ws.length; i++) {
+    const w = ws[i];
+    const lw = w.toLowerCase();
+    if (!FUNCTION_WORDS.es.has(lw)) continue;
+    if (RE_UPPER_START.test(w) && w !== w.toUpperCase()) {
+      // 대문자로 시작하고 모두 대문자는 아님 — 다음 낱말이 소문자로 시작해야 센다
+      const next = ws[i + 1];
+      if (!next || !RE_LOWER_START.test(next)) continue;
+    }
+    es++;
+  }
+  return es;
+}
+
 /**
  * 기능어 빈도 — 낱말 1,000개당.
- * @returns {{words:number, en:number, fr:number}}
+ * `[8n-b]` `frForEs` 는 es 갈래 비교용 fr 빈도(`FR_ES_OVERLAP` 를 뺀 것), `esWords` 는 es 기능어 **낱말 수**.
+ * `[8n-e]` `es`·`esWords` 는 `countEsWords`(대문자 es 기능어는 다음 낱말이 소문자일 때만) — es 갈래에만 쓰인다.
+ * @returns {{words:number, en:number, fr:number, es:number, frForEs:number, esWords:number}}
  */
 export function functionWordRates(text) {
-  const words = str(text).toLowerCase().match(RE_WORD) || [];
+  const lower = str(text).toLowerCase();
+  const words = lower.match(RE_WORD) || [];
   let en = 0;
   let fr = 0;
+  let frForEs = 0;
   for (let i = 0; i < words.length; i++) {
     if (FUNCTION_WORDS.en.has(words[i])) en++;
-    if (FUNCTION_WORDS.fr.has(words[i])) fr++;
+    if (FUNCTION_WORDS.fr.has(words[i])) {
+      fr++;
+      if (!FR_ES_OVERLAP.has(words[i])) frForEs++;
+    }
   }
+  const es = countEsWords(str(text));
   const n = words.length;
-  return { words: n, en: n ? (en * 1000) / n : 0, fr: n ? (fr * 1000) / n : 0 };
+  return {
+    words: n,
+    en: n ? (en * 1000) / n : 0,
+    fr: n ? (fr * 1000) / n : 0,
+    es: n ? (es * 1000) / n : 0,
+    frForEs: n ? (frForEs * 1000) / n : 0,
+    esWords: es
+  };
 }
 
 /** 가장 많은 계통의 이름 — `langGuess.script` 에 남는다(사람이 읽는 기록). */
@@ -130,7 +202,7 @@ function dominantScript(c) {
 /**
  * ★ spec 9-2 `guessLang(text) → {lang, score, script}`.
  *
- * `lang` 은 `en|fr|ko` 또는 미지원 `zh|ja|ar`. 미지원을 `'und'` 로 바꾸는 일은
+ * `lang` 은 `en|fr|ko|es` 또는 미지원 `zh|ja|ar`. 미지원을 `'und'` 로 바꾸는 일은
  * `langFromGuess` 가 한다 — 추정 기록(`langGuess`)에는 본 그대로 남긴다.
  */
 export function guessLang(text) {
@@ -163,6 +235,12 @@ export function guessLang(text) {
   const r = functionWordRates(t);
   const big = Math.max(r.en, r.fr);
   const small = Math.min(r.en, r.fr);
+  // `[8n]` es 갈래가 먼저 — en·fr 중 큰 쪽의 2배 이상일 때만. 아니면 아래가 8n 이전 규칙 그대로다.
+  // `[8n-b]` 이 비교의 fr 은 `la` 를 뺀 것(`frForEs`), es 기능어는 `ES_MIN_WORDS` 낱말 이상.
+  const bigEs = Math.max(r.en, r.frForEs);
+  if (r.es > 0 && r.esWords >= G.ES_MIN_WORDS && r.es >= bigEs * G.WORD_FACTOR) {
+    return { lang: 'es', score: round3(1 - bigEs / r.es), script: script };
+  }
   if (big === 0) return { lang: 'en', score: 0, script: script };
   const score = round3(1 - small / big);
   if (big >= small * G.WORD_FACTOR) {
@@ -236,7 +314,7 @@ export function applyUserLang(rec, lang) {
    `[8m — spec 19-1-2 2-1 · 2-2]` 문장(낭독 단위)별 말할 언어 — 글자 체계 예외
 
    문서의 원문 언어(`documents.lang`)는 그대로 두고, **글자 체계(Unicode Script)** 로만 예외를 둔다.
-   한글 → ko, 아랍 문자 → ar, 라틴 → 문서 언어가 라틴 계열(en·fr)이면 문서 언어, 아니면 en `[가정]`.
+   한글 → ko, 아랍 문자 → ar, 라틴 → 문서 언어가 라틴 계열(en·fr·es)이면 문서 언어, 아니면 en `[가정]`.
    그리스 문자·한자·가나 등 표에 없는 체계는 **중립** — 세지 않는다(끊기만 한다). 책 이름·낱말 목록·
    언어별 문턱은 두지 않는다(메모리 원칙). 같은 체계 안의 언어(영·불)는 가르지 않는다.
 
@@ -256,8 +334,9 @@ export const SCRIPT_SWITCH = Object.freeze({
 
 /** 셀 글자 체계 → 말할 언어. 라틴은 `null`(문서 언어에 따라 — `unitLang` 이 정한다). */
 const SCRIPT_TO_LANG = Object.freeze({ hangul: 'ko', arabic: 'ar', latin: null });
-/** 라틴 문자로 쓰는 지원 원문 언어(라틴 덩어리는 이 문서들에서 문서 언어로 읽는다). */
-const LATIN_DOC_LANGS = Object.freeze(['en', 'fr']);
+/** 라틴 문자로 쓰는 지원 원문 언어(라틴 덩어리는 이 문서들에서 문서 언어로 읽는다).
+ *  `[8n — spec 19-1-3 §5 정정]` es 문서도 라틴 계열 — 빼면 스페인어 문장이 전부 en 예외(영어 목소리)가 된다. */
+const LATIN_DOC_LANGS = Object.freeze(['en', 'fr', 'es']);
 /** 라틴 계열이 아닌 문서 안의 라틴 덩어리 `[가정]`. */
 const LATIN_FALLBACK = 'en';
 

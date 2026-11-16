@@ -9607,3 +9607,505 @@ Build 6절 V-1~V-11(★·◆)은 설계 9절 V-1~V-10 + 9b-1 Review 넘김(V-8 �
 **배포 판정: 통과 — 8e 배포.** 낮음 1–4 는 다음 다듬기(배포를 막지 않음). 커밋 때 `dev/measure-table-8i4.mjs`(다른 작업)는 빼라.
 
 스크래치 `r8e/`: `common.mjs`·`setup.mjs`·`geo.mjs`·`cmpgeo.mjs`·`geo-cur.txt`·`cmp/{orig,orig-run1,cur,orig-dpr2.625,orig2-dpr2.625,cur-dpr2.625,cur2-dpr2.625}/`·`land.mjs`·`sumland.mjs`·`land-all.txt`·`toggle.mjs`·`curfn.js`·`regress.mjs`·`regress.txt`·`d8.mjs`·`fs.mjs`·`mutate.mjs`·`bak/`·`orig/`(HEAD 판)·`shots/`(915×412 문장 아래 낭독 · 780×330 아랍어 고지 카드 · 915×412 검색).
+
+---
+
+# 8n Review — 스페인어 원문 언어 (+ 설정 목소리 es 묶음) (2026-11-16)
+
+> Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-8n-es.md`. 앱 코드·테스트·spec 무수정, 커밋 0. 보고서는 믿지 않고 다시 쟀다. 스크래치 `r8n/`(HEAD 판 `r8n/head/`). `dev/measure-table-8i4.mjs` 는 보지 않았다.
+
+## 8nR-1. 회귀 — es 가 이기지 않는 입력은 8n 이전과 같은가 (확인 1)
+
+- HEAD(`b767dd7`) 판 `text/lang.js`·`segment.js`·`config.js` 를 `git show` 로 `r8n/head/js/` 에 꺼내 두 판을 대조했다.
+- **golden 픽스처의 출처**: `srclang-8n.golden.json` 을 HEAD 모듈로 다시 만들어 글자 단위 대조 — guess 26건·split 23건 × en·fr·ko **다른 것 0**, 말뭉치 밖 여분 키 0. HEAD 로 만든 golden 이 맞다(`r8n/golden-check.mjs`). 말뭉치가 전부 "es 가 이기지 않는 입력"이라 HEAD·8n 둘 다 같은 값을 내는 것은 설계대로다.
+- **무작위·경계 40,000개**(`r8n/fuzz.mjs` — en/fr 비율 2배 근처, 200자 경계, 기능어 0, 한글·아랍·한자 섞임, `¿¡` 섞임): HEAD 와 다른 결과 6,666개 **전부 8n=es 이고 전부 `es ≥ 2×max(en,fr)` 충족** — es 가 아닌 쪽으로 바뀐 것 0. 다만 그 6,666개는 **모두 "en·fr 기능어 0 + es 낱말 몇 개" 꼴**(HEAD en·score 0 → 8n es·score 1) — 아래 낮음-1.
+- 정확히 2배 경계(낱말 수로 맞춤): es = 2×big 이면 es(score 0.5), 한 낱말 모자라면 HEAD 와 같음 — 여섯 쌍 모두 설계대로.
+- `splitSentences` en·fr·ko·인자 없음: 무작위 80,000 + `¿¡` 를 마침표 뒤에 일부러 넣은 120,000 — **다른 것 0**.
+- **의학책 실측**(pdf.js 추출, 원문 미인용, `r8n/books.mjs`): CMDT 2026 179쪽·12만 낱말 / CMDT 2021 180쪽·4만 / Harrison 180쪽·10만. 쪽별 `guessLang`(200자 이상 499쪽) **HEAD 와 다른 쪽 0, es 판정 0**. 쪽별 es/max(en,fr) 최대 0.143(CMDT 2026) — 2배 문턱의 1/14. 앞 30쪽 8,000자 표본은 세 권 모두 en·1(HEAD 와 같음).
+- 영어 의학책 속 es 기능어(천 낱말당): CMDT 2026 `con` 0.28·`el` 0.03·`para` 0.02·`es`·`lo`·`los` 0.008, `del`·`por`·`una`·`las` 0 · CMDT 2021 `del` 0.025 외 0 · Harrison `con` 0.23 외 0. 프랑스어 실물 견본은 없다(직접 지은 프랑스어 3문단에서 es 0).
+
+## 8nR-2. es 판정 경계 (확인 2)
+
+- **score 식** `1 - big/r.es`: es 갈래에 들어오면 `r.es ≥ 2·big` 이라 0.5 ≤ score ≤ 1(big=0 이면 1). 기존 두 갈래의 "2배 이상 → ≥ 0.5, 미만 → < 0.5" 의미와 같다. `LOW_SCORE` 는 `lang.js` 안에서만 쓰이고 UI 에서 읽는 곳이 없다(grep) — score 는 `langGuess` 기록용.
+- **`big === 0`**: es 낱말 **하나**면 es·score 1. 직접 지은 글에서 포르투갈어·악센트 없는 베트남어·약어 표(`LOS`·`DEL` 이 소문자로 es 낱말)가 HEAD en·0 → 8n es·1, 이탈리아어는 HEAD fr·0.5 → es·0.6. 독일어(`in`)·카탈루냐어(fr 우세)는 그대로.
+- 영어 문서 속 스페인어 인용·프랑스어 문서 속 `del`·`por`·`con el`: golden 의 경계 6건 + 무작위에서 HEAD 와 같다.
+- **★ 보통 스페인어 글이 여전히 fr 로 간다(높음-1).** es 묶음에서 `la` 를 뺐지만 **fr 묶음의 `la`(그리고 `le`·`les`)는 스페인어 글에서도 세어진다**. 내가 지은 스페인어 의학 문단 6개(`r8n/es-margin.mjs`·`es-variants.mjs`): es/fr 비 0.22·0.33·0.67·1.33·1.67 → **fr·score 1** 다섯, es 하나. 여섯을 이으면 es 36 : fr 39 → fr. 테스트 말뭉치의 `ES`(es/fr 5배)는 `el/los/del/por/para/con/lo` 를 일부러 많이 넣은 꼴이라 이 구멍을 못 본다. headless 실제 앱 경로에서도 같다(8nR-6 ⑦).
+
+## 8nR-3. 문장 나눔 (확인 3)
+
+`¿·¡` 앞에서 끊는다(N2 + headless). 끊지 않는 곳: 쉼표 뒤(`Dijo, ¿vienes? y se fue.`), 괄호 안(`(¿desde cuándo?)`), 콜론 뒤, 공백 없는 `Hola.¿Qué`, `Dr.`·`Etc.` 뒤. en·fr·ko 분할 불변(8nR-1). es 와 fr 규칙은 `¿¡` 없는 글에서 같다(무작위 20,000 — 다른 것은 모두 `¿¡` 가 든 글). 남은 꼴(낮음-3): 말줄임표 뒤 소문자 꼬리 질문 `Es grave… ¿o no?` 를 세 조각으로, `p. ej. ¿…` 를 약어 뒤에서 끊는다(약어 목록 한계와 같은 꼴), `Sra.` 뒤 끊김(Build 가 적은 한계 그대로).
+
+## 8nR-4. 8m 연결 (확인 4)
+
+`unitLang`(`r8n/m8.mjs`, HEAD 와 대조): es 문서의 라틴 문장 → 예외 없음(문서 언어 es — HEAD 판은 en 이었다, `LATIN_DOC_LANGS` 정정 ①이 맞다) · ko·ar·und 문서 속 스페인어 문장 → en(가정 그대로, HEAD 와 같음) · es 문서 속 한글 → ko · 아랍 → ar. headless 2쪽: 한글 문장만 `ko-KR`, 나머지 `es-ES`. 한계(낮음-4): es 분할은 fr 꼴이라 `?`·`.` 뒤 **아랍 문자** 문장도 붙어 `¿Desde cuándo? المريض…` 한 단위가 ar 목소리로 간다 — fr 문서와 같은 8m 기존 한계(정정 ①은 한글만 적었다).
+
+## 8nR-5. 설정 목소리 es · 번역 지시문 · 옛 서재 (확인 5·6·7)
+
+- 설정 > 낭독 목소리: 묶음 `en,fr,ko,ar,es`(es 끝), 머리 `Español`(`lang=es`·`dir=ltr`), 기본값 "휴대폰 설정 따름(기본)" 체크, 억양 줄 es-ES·es-MX·es-US(흉내 음성 `es_MX` 밑줄 꼴도 `es-MX` 로 묶임) + 목소리 줄, [들어 보기] 7개. **화면에서** 멕시코 억양을 눌러 `tts.accent.es='es-MX'`·`tts.voice.es=''`(다른 언어 키 그대로), [들어 보기] → `es-MX` 로 "Así suena la voz de lectura.", 설정을 다시 열어도 es-MX 체크·머리 "멕시코 억양", 리더 3쪽 낭독 태그 전부 `es-MX`(voice 없음). ar UI: `dir=rtl`, es 머리는 `ltr`, es-MX 체크 유지, 가로 넘침 0.
+- 9c: `js/backup/`·`text/backup.js` 없음(아직 Build 전). spec 17-4-1(4424행)의 "담지 않는다"가 `tts.voice.*`·`tts.accent.*` 무늬, 수용 기준(4494행)이 "`DEFAULTS` 의 모든 키가 목록 중 하나" — 보고서에 적힌 대로다.
+- 번역 요청 본문(흉내 Gemini, 가짜 키, OPTIONS 204+CORS): es 문서 → **"from Spanish into Arabic"** 5건, 띠 `lang=ar dir=rtl`. `git diff` 에 `ai/`·`db.js`·`layout` 변경 0 — `PROMPT_VERSION` 3·캐시 키(`docId·text·target·kind`)·DB·`algoVersion` 불변.
+- 옛 서재: es 로 판정된 문서를 `{lang:'en', langSource:'auto', langGuess:{en,1}}` 로 고쳐 넣고 다시 부팅·리더 2·3쪽을 열어도 **en 그대로**, 낭독 `en-US`, 요청 "from English" — `shouldGuess` 가 다시 추정하지 않는다.
+
+## 8nR-6. headless Edge (확인 9 — 412×915 · pipe · 가짜 키 · 흉내 음성 · `r8n/runA.mjs`·`runB.mjs`)
+
+합성 PDF 두 개는 이 Review 가 새로 지은 글(`r8n/make_pdfs.py` → `r8n-es-rico.pdf`·`r8n-es-natural.pdf`, 맑은 고딕 — 한글 한 문장 포함). 프로필 `r8n/p1b`(A)·`r8n/p2`(B), 둘 다 새것(p1 은 첫 시도가 스크린숏 폴더 없음으로 멈춰 버리고 새 이름으로).
+
+| # | 확인 | 결과 |
+|---|---|---|
+| ① | rico 가져오기 → 판정 | `es`·auto·`langGuess {es, 0.907, latin}` |
+| ② | 서재 카드·[⋯] (ko·ar) | "원문: Español (자동)" · 선택지 English·Français·한국어·**Español**(끝, `lang=es`, 눌림 표시) · 가로 넘침 0 |
+| ③ | 1쪽 낭독 큐 14발화 | 전부 `es-ES`, voice 없음 · `¿Por qué duele más con el frío?`·`¡Lo mejor es moverse…!` 가 따로 선다 |
+| ④ | 번역 띠 | 요청 "from Spanish into Arabic" ×2(31항목), 띠 `ar`·`rtl` |
+| ⑤ | 2쪽 8m | 한글 문장만 `ko-KR` |
+| ⑥ | 설정 목소리 ko·ar | 8nR-5 그대로 |
+| ⑦ | **natural(보통 스페인어) 가져오기** | **`fr`·score 1 → 낭독 `fr-FR`, 요청 "from French into Arabic"** — 높음-1 이 실제 앱에서 재현. [⋯] 에서 Español → `es`·user, 카드 "원문: Español", 다음 쪽 낭독 `es-MX`(억양 설정), 요청 "from Spanish" |
+| ⑧ | 옛 서재 | en 그대로(8nR-5) |
+| ⑨ | 회귀 CMDT 2026(1,967쪽) | 판정 en·1 · 40쪽 9발화 `en-US` · "from English into Arabic" ×2 · 띠 `ar`·`rtl` · 가로 넘침 ko 0·ar 0 |
+|  | 공통 | 콘솔 오류 0 · 페이지 오류 0 · 4xx/5xx 0 · 흉내 오류 0 · 외부 요청은 pdf.js CDN 뿐 |
+
+스크린숏 `r8n/shots/A-*.png`·`B-*.png`.
+
+## 8nR-7. 변이 (확인 10 — 내가 고른 곳 · `r8n/mutate.mjs` · 백업 `r8n/bak/`)
+
+변이마다 `bak/` 원본을 읽어 한 곳만 바꿔 쓰고 전체 `node --test`(1,495개). IM2·IM6·IM7b(import map 해시)는 매번 함께 빨강 — 아래 숫자에서 뺐다.
+
+| # | 변이 | 빨강 | 판정 |
+|---|---|---|---|
+| a | es 갈래 `>=` → `>`(정확히 2배 경계) | N5 | 잡힘 |
+| b | es 묶음에 `la` 더함(겹침 규칙 깨기) | N1 | 잡힘 |
+| c | es score 식 `1 - big/(2·r.es)` | 0 | **테스트 구멍** — es score 값이 big>0 에서 고정되지 않음(N1 은 ≥0.5·big=0 → 1 만) |
+| d | es 갈래에 최소량(천 낱말당 3) 더함 | 0 | **경계 미고정** — "es 낱말 하나 + en·fr 0" 꼴을 보는 테스트 없음(낮음-1 과 짝) |
+| e | `SENTENCE_START.es` 에서 `¡` 만 뺌 | N2 ×2 | 잡힘 |
+| f | `VOICE_SAMPLES.es` 를 영어 문장으로 | 0 | **테스트 구멍** — N10·K20 은 견본이 "있는지"만 본다 |
+
+복원: `bak/` 원본을 읽어 쓰기 → `cmp` 세 파일(`lang.js`·`segment.js`·`ui/settings.js`) 같음, `git diff --stat` 이 시작 때와 같음(40·8·7줄), stamp `--check` 0.
+
+## 8nR-8. 발견 사항
+
+| # | 심각도 | 내용 | 근거 |
+|---|---|---|---|
+| 1 | **높음** | **보통 스페인어 글이 8n 뒤에도 `fr`·score 1 로 판정된다** — 8n 의 "왜 지금"(조용한 fr 오판)을 대부분 못 막는다. 원인: fr 묶음의 `la`·`le`·`les` 가 스페인어에서도 흔해 es 가 fr 의 2배를 넘기 어렵다(의학 글은 여성 명사가 많아 더하다). 회귀는 아니다(HEAD 도 fr). 오판 뒤 [⋯] 로 고쳐도 캐시 키에 원문 언어가 없어 "from French" 로 받은 번역은 남는다(7c 부터의 동작). **권고**: es 갈래의 비교에서만 fr 쪽 `la` 를 빼고 센다(`r.es ≥ 2·max(en, fr−la)`) — 내 표본 스페인어 6/6 es, 프랑스어 3/3 그대로, "es 가 이기지 않으면 8n 이전과 같다" 성질도 그대로. + 보통 꼴 스페인어 문단(여성 명사 많음)을 N1 에 | `js/text/lang.js:70`(fr 묶음)·`:180`(es 갈래) · 지은 문단 6개 중 5개 fr(es/fr 0.22–1.67, 합 36:39) · headless ⑦ `r8n-es-natural.pdf` fr·1·`fr-FR`·"from French" |
+| 2 | 낮음 | en·fr 기능어가 0 이면 es 낱말 **하나**로 es·score 1 — 포르투갈어·악센트 없는 베트남어·약어 표(`LOS`·`DEL`)가 en·0 → es·1, 이탈리아어 fr·0.5 → es·0.6. 의학책 표본 영향 0(쪽별 es/big 최대 0.143). score 1 이 확신처럼 기록되지만 UI 가 읽지 않는다. 권고(선택): es 갈래에 최소량(예: 천 낱말당 몇 개) + 그 경계 테스트 | `lang.js:180` · 무작위 6,666건 전부 이 꼴 · 변이 d 생존 |
+| 3 | 낮음 | es 분할: 말줄임표 뒤 소문자 꼬리 질문(`Es grave… ¿o no?`)을 끊는다 · `p. ej.` 뒤 `¿` 에서 끊는다 · `Sra.`(알려진 한계) | `js/text/segment.js:106` · `r8n/split.mjs` |
+| 4 | 낮음 | es 문서에서 `?`·`.` 뒤 아랍 문자 문장이 안 끊겨 스페인어+아랍 한 단위가 ar 목소리 — fr 문서와 같은 8m 기존 한계. spec 정정 ①은 한글만 적었다 | `r8n/m8.mjs` 단위 2 |
+| 5 | 낮음 | 테스트 구멍 2: es score 값(변이 c)·es 견본 문장의 언어(변이 f)를 아무 테스트도 고정하지 않는다 | 8nR-7 |
+| 6 | 정보 | `ui/library.js:258` 주석 "(미지원이어도 셋)" — 이제 넷(Build 정정 ⑥ 그대로) | — |
+
+잘 된 것: golden 이 HEAD 모듈 출처(재생성 일치) · es 가 아닌 결과 변화 0(무작위 4만·의학책 499쪽) · en·fr·ko 분할 불변(20만) · 설정 es 묶음·저장·다시 열기·`es-MX` 태그·ar RTL · "from Spanish" · 옛 서재 불변 · CMDT 회귀 0 · 콘솔 오류 0.
+
+## 8nR-9. 실행 · 정리
+
+| 실행 | tests | pass | fail |
+|---|---|---|---|
+| 전체 1회(변이 전) | 1495 | 1495 | 0 |
+| 전체 2회(변이 전) | 1495 | 1495 | 0 |
+| (변이 e 첫 시도가 패턴 불일치로 안 들어가 복원 상태로 한 번 더 돈 것) | 1495 | 1495 | 0 |
+
+`stamp-importmap --check` "그대로다(모듈 66 · CSS 4)" 종료 0(변이 전·복원 뒤) · `git diff --check` 0 · `git status` 는 시작 때와 같다(+ 이 절). headless 전부 `try/finally browser.close()`·10분 상한·pipe(디버깅 포트 없음 — "새 포트" 해당 없음), 8000 python 사용만, puppeteer-core 읽기만, 가짜 키만, 프로필 복사 0, 프로세스 조회 0. 의학책은 읽기만(숫자만 기록). 막힌 명령 없음 — 다만 ① heredoc 으로 `r8n/hl.mjs` 를 쓰는 셸 명령이 따옴표 해석 오류로 실패해 Write 도구로 썼다 ② `python -I make_pdfs.py` 가 `fpdf` 를 못 찾아(사용자 site-packages) `-I` 없이 돌렸다(내가 쓴 스크립트, 내려받은 파일 없음) ③ 실행 A 첫 시도는 `shots/` 폴더가 없어 멈춰 새 프로필 `p1b` 로 다시 돌렸다.
+
+스크래치 `r8n/`: `head/`(HEAD 판) · `golden-check.mjs` · `fuzz.mjs` · `books.mjs` · `es-margin.mjs` · `es-variants.mjs` · `split.mjs` · `m8.mjs` · `pdfguess.mjs` · `make_pdfs.py` · `r8n-es-rico.pdf` · `r8n-es-natural.pdf` · `hl.mjs` · `runA.mjs` · `runB.mjs` · `mutate.mjs` · `bak/` · `shots/` · `p1`·`p1b`·`p2`(프로필).
+
+**고친 뒤 배포** — 높음-1(보통 스페인어가 fr 로 가는 것)을 고치고(한 줄 + 테스트), 낮음 2·5 는 같이 넣으면 좋다. 지금 판은 회귀가 0 이라 그대로 내보내도 해는 없지만, 8n 의 목적(스페인어 문서를 fr 로 조용히 오판하지 않기)을 내 표본 6개 중 5개에서 이루지 못한다.
+
+---
+
+# 8n-b 재검증 — 8n Review 지적 고친 곳 (2026-11-16)
+
+> Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-8n-b.md`. 앱 코드·테스트·spec 무수정, 커밋 0. 보고서 `.claude/tasks/medreader-build-8n-b-fix-report.md` 는 믿지 않고 다시 쟀다. 스크래치 `r8nb/` — 8n 판 모듈 `r8nb/v8n/`(= `b8nb/bak/` 사본), HEAD 판은 `r8n/head/`(읽기만). 문단은 모두 이 Review 가 새로 지은 글(`r8nb/paras.mjs`·`fr-tues-texts.mjs`) — 앞 Review·Build 문단과 다르다. 원서 글 인용 0.
+
+## 8nbR-1. 높음-1 고침 — 보통 스페인어 · 프랑스어 (확인 1, `r8nb/eval-paras.mjs`)
+
+| 묶음(새로 지음) | HEAD | 8n 판 | 지금 |
+|---|---|---|---|
+| 스페인어 8 — 의학 `anemia`·`renal`·`migraña` · 뉴스 `noticia`·`noticia2` · 설명 `explica`·`receta` · 대화 `dialogo` | fr·1 ×8 | fr·1 ×8 | **es ×8**(score 1 ×7 · 대화 0.75) |
+| 스페인어 8 이은 것(2,351자, la 63) | fr·1 | fr·1 | **es·0.97** |
+| 프랑스어 8 — `thyroïde`·`insuff`·`migraine`(의학) · `actu`(뉴스) · `explique` · `recette` · `dialogue` · **`la-lourd`(la 16번)** | fr·1 ×8 | fr·1 ×8 | **fr·1 ×8 — lang·score·script 가 HEAD 와 글자 그대로 같음** |
+| 프랑스어 8 이은 것(2,297자, la 77) | fr·1 | fr·1 | fr·1 |
+
+- `la` 가 많은 프랑스어(여성 명사 글)는 새지 않는다 — `la` 를 빼도 fr 쪽에 `le·les·des·est·et·une·du·pour·dans` 가 남고, 보통 프랑스어에는 es 묶음 낱말이 0 이다(8문단 모두 es 0).
+- **★ 그러나 2인칭 `tu es` 가 잦은 짧은 프랑스어는 es 로 샌다**(`r8nb/fr-tues.mjs`, 새로 지은 5문단 220–250자): 편지 `lettre` es·0.5 · 아이에게 `enfant` es·0.75 · 짧은 반말 `tutoie-court` es·0.75 — HEAD·8n 판은 셋 다 fr·1. `coach`·`patient` 는 fr·1 그대로, 다섯을 이으면(1,172자) fr·1. 원인: es 묶음의 `es` 가 프랑스어 `tu es` 의 `es` 와 겹친다. 8n 판에서는 fr 쪽 `la` 가 막아 주었는데 `la` 를 빼자 드러났다 — fr 쪽 나머지 기능어가 1–2개뿐인 짧은 글에서 `tu es` 넷이면 es 가 2배를 넘는다. (덧: 프랑스어에 `con` 을 일부러 섞은 인위 꼴도 es·0.5 — 참고만.)
+- 고침 후보 모의(`r8nb/tues-options.mjs` — 앱 코드 무수정, es 갈래만 다시 계산. 모의 결과가 지금 앱과 7묶음 모두 같음): **A. `tu` 바로 뒤의 `es` 는 es 로 세지 않고 fr 쪽에 센다** → `tu es` 5/5 fr, 스페인어(이 Review 8 · 말뭉치 `ES_NATURAL` 10 · `ES`) 전부 es 그대로, 프랑스어(이 Review 8 · `FR_NATURAL` 7 · `FR`) 그대로. B. es 묶음에서 `es` 빼기 → 스페인어 2개가 떨어진다(권하지 않음). 스페인어에서 `tu es` 는 문법상 나오지 않는다(`tú eres`).
+
+## 8nbR-2. 회귀 (확인 2)
+
+- **golden**: `srclang-8n.golden.json` 은 추적 안 된 파일이라 `git diff` 에 나오지 않는다 — 대신 앞 Review 의 `r8n/golden-check.mjs` 를 다시 돌려 HEAD 모듈로 재생성 대조: guess 26·split 23×en·fr·ko **다른 것 0**, 여분 키 0, 지금 모듈과도 0. 수정 시각 01:37 그대로, 시작·끝 sha1 같음. 말뭉치의 `GUESS_CASES`·`SPLIT_CASES`·`SPLIT_LANGS`·`ES`·`FR` 는 8n 판(`b8nb/bak/`)과 같고 더해진 것은 `ES_NATURAL`·`FR_NATURAL` 뿐(`r8nb/corpus-same.mjs`).
+- **무작위 50,000**(`r8nb/fuzz.mjs`, 이 Review 의 생성기·씨앗 — `la` 무겁게 · `tu es` · `Los`/`Las`/`Del` 이름 · `¿¡` · `p. ej.`·`a. m.` · 한글·아랍 섞임 · 200자 경계): HEAD 와 다른 8,927건 **전부 지금=es·새 규칙 충족(위반 0), es 아닌 쪽 변화 0**. HEAD 쪽은 en 7,143(기능어 0 꼴)·fr 1,784. 8n 판 대비: fr→es 1,783 · es 끼리 score 다름 1 · **8n es → 지금 es 아님 0**. es score 0.585–1.
+- **의학책 3권**(`r8nb/books.mjs`, pdf.js 추출, 숫자만): CMDT 2026 174쪽 · CMDT 2021 149쪽 · Harrison 176쪽 = 499쪽 — 쪽별 `guessLang` **HEAD·8n 판과 다른 쪽 0, es 0**, 앞 30쪽 표본 세 권 다 en·1(HEAD 와 같음). 더해 **짧은 창**(쪽 글을 200·400·800자로 자른 것) 15,315개(7,246 · 2,331 · 5,738) — es 0, es 아닌 쪽 HEAD 와 다른 것 0.
+
+## 8nbR-3. `ES_MIN_WORDS = 2` (확인 3, `r8nb/minwords.mjs`)
+
+- **이유는 맞다**: 이 Review 의 스페인어 8문단 중 3개(`anemia`·`renal`·`noticia`, 276–307자)가 es 기능어 정확히 2개 — 3 이면 셋 다 HEAD 처럼 fr 로 돌아간다. Build 가 든 `shortfem` 과 같은 꼴이다.
+- **2 로 생기는 오판**(기능어 없는 짧은 영어 — 모두 HEAD 에서도 en·0 이던 꼴): 참고문헌 꼴(`Del Rio C` · `Lo B` → es 2) **es·1**, 약물 표 꼴(`Con A` · `Para-aminosalicylic` → es 2) **es·1** — 3 이면 en·0. 도시 목록(`Los Angeles`·`Las Vegas`·`El Paso` → es 3)은 3 이어도 es. es 1낱말 목록·장 제목 꼴은 en·0 으로 돌아왔다(8n 판 es·1 — 고침 확인). 보통 영어 산문은 `con`·`por` 셋이나 `Los Angeles`·`Las Vegas` 가 있어도 en 기능어가 많아 en·1 그대로.
+- 실물: 의학책 짧은 창 15,315개에서 es 0. **판정: 2 가 맞다** — 득실이 비슷한 가장자리이고 실물 영향 0. 기록용 낮음.
+
+## 8nbR-4. 문장 나눔 (확인 4, `r8nb/fuzz.mjs`·`split-es.mjs`·`dash.mjs`)
+
+- **en·fr·ko·인자 없음** 무작위 30,000 × 4 = 120,000: HEAD 와 다른 것 **0**, 8n 판과 다른 것 **0**.
+- **es** 30,000(모두 `¿¡` 포함): 8n 판과 다른 것은 `¿¡` 든 글뿐 · **새로 끊는 자리 0** · 글자 불변.
+- **놓친 끊김**(정상 문장 시작 `¿`·`¡` 앞인데 지금 안 끊김 — 문장 끝꼴 21 × 시작꼴 10, 20,000개):
+  - 대문자 시작(`¿Por qué?`·`¡Qué alivio!`·`¿Él…?`·`¿«…»?`·`¿3 o 4…?`): 앞 문장이 **약어로 끝날 때** — `a. m.`·`p. m.`·`i. v.`·`v. o.`·`s. c.`·`p. ej.`·붙인 `a.m.`·`a. b.` — 8n 판은 모두 끊고 **지금은 모두 안 끊는다**(겹약어 규칙 (b)). 스페인어는 약어 마침표가 문장 마침표를 겸해 `Se administró 1 g i. v. ¿Y si hay alergia?` 가 한 단위가 된다. 보고서·spec 은 `a. m.` 만 적었다 — 의학 글의 `i. v.`·`v. o.`·`s. c.` 도 같은 꼴(낮음-2). 보통 끝(마침표·`?`·`!`·`…`·숫자·한 글자 `a.`·`Sra.`·`EE. UU.`) 뒤 대문자 `¿` 는 그대로 끊긴다.
+  - 소문자 시작(`¿y ahora qué?`·`¡ay, qué dolor!`): 어떤 끝 뒤든 안 끊긴다(규칙 (a)). 정서법상 문장 첫 글자는 대문자라 실물에선 드물다. `¿Vienes? ¿o te quedas?` 처럼 이어진 질문이 붙는 것은 맞다.
+  - 8n-b 와 무관한 기존 꼴: 대화 줄표 뒤 `—¿Le duele…?` 앞은 끊지 않는다(`—` 가 `SENTENCE_START` 에 없음 — 8n 판·fr `— Vous` 도 같음). headless 3쪽 대화 문단이 한 발화(정보-5).
+- 영향: 두 문장이 한 낭독 단위(같은 es 목소리·같은 번역 항목) — 낮음.
+
+## 8nbR-5. 보고서가 밝힌 한계 (확인 5, `r8nb/unsupported.mjs`)
+
+이 Review 가 지은 미지원 라틴 글: 카탈루냐어 fr·1(HEAD 와 같음 — 보고서의 fr→es 는 글에 따라) · 이탈리아어 fr·0.875(같음) · 포르투갈어 en·0 → es·1(8n 판과 같음) · 악센트 없는 베트남어 fr·1 → **es·1** · 독일어(`es` 한 번) en·0(8n 판 es·1 → 최소량으로 복귀). 모두 미지원 언어라 HEAD 도 맞는 답이 아니었다 — 보고서의 한계 목록은 지원 원문 밖에만 해당한다. 지원 언어: en·ko 영향 0(무작위·의학책·글자 계통 판정이 먼저), es 좋아짐. **그러나 fr 에는 보고서에 없는 한계가 하나 있다 — 짧은 `tu es` 글(중간-1)** — 그래서 "지원 언어 판정에 영향 없음"은 fr 에서 성립하지 않는다.
+
+## 8nbR-6. 테스트 · 검사 (확인 6)
+
+| 실행 | tests | pass | fail |
+|---|---|---|---|
+| 전체 1회 | 1503 | 1503 | 0 |
+| 전체 2회 | 1503 | 1503 | 0 |
+
+`stamp-importmap --check` "그대로다(모듈 66개 · CSS 4개)" 종료 0 · `git diff --check` 종료 0 · 추적 안 된 새 테스트·말뭉치 끝 공백 0·CR 0. 보고서 숫자(1503·stamp·의학책 다른 쪽 0·headless)는 재현됐다.
+
+## 8nbR-7. 변이 (확인 7, `r8nb/mutate.mjs` — 원본은 `r8nb/bak/` 에서 읽어 한 곳 바꿔 쓰기 → 전체 `node --test` → `finally` 에서 원본 쓰기)
+
+IM2·IM6·IM7b(import map 해시)는 매번 함께 빨강 — 아래에서 뺐다. Build 의 m1–m7 과 다른 곳을 골랐다.
+
+| # | 변이(고친 코드 안) | 빨강 | 판정 |
+|---|---|---|---|
+| M1 | `la` 빼기가 en·fr 두 갈래로 샘(`big = max(en, frForEs)`) | N3 golden · N4 · N5 | 잡힘 |
+| M2 | es score 를 `la` 든 fr 로(`1 − max(en, fr)/es`) | N4 · N11 ×2 · N13 | 잡힘 |
+| M3 | 최소량 경계 `>=` → `>` | N11 ×2 · N12 | 잡힘 |
+| M4 | 겹약어 꼴 왼쪽 경계 `(?:^\|[\s(])` 빼기 | 0 | **생존 — 구멍(정보-4)**: 빼면 `…la mano. sí. ¿Y?` 처럼 긴 낱말 끝 글자 + 짧은 소문자 낱말 꼴 뒤도 안 끊긴다. 테스트가 이 경계를 고정하지 않는다 |
+| M5 | `¡` 에는 계속 규칙 안 씀 | N2(8n-b) | 잡힘 |
+| M6 | 여는 부호 뒤 글자 대신 부호 자신을 봄(소문자 규칙 꺼짐) | N2(8n-b) | 잡힘 |
+
+복원: `cmp` `lang.js`·`segment.js` 백업과 같음 · 시작 때 sha1 5파일(lang·segment·golden·말뭉치·8n 테스트) OK.
+
+## 8nbR-8. headless Edge (확인 8 — 한 번, `r8nb/runD.mjs` · 새 프로필 `r8nb/p1` · pipe · 412×915 · 가짜 키 · 흉내 Gemini OPTIONS 204+CORS · 흉내 음성, `b8nb/hl.mjs` 를 복사해 경로·가짜 키 이름만 바꾼 `r8nb/hl.mjs`)
+
+PDF 는 이 Review 가 지은 `r8nb/r8nb-es-normal.pdf`(3쪽, 위 스페인어 7문단 — `r8nb/make_pdf.py`, 맑은 고딕).
+
+| 확인 | 결과 |
+|---|---|
+| 가져오기 → 판정 | **`es`·auto·`langGuess {es, 0.96, latin}`** · 카드 "원문: Español (자동)" |
+| 1쪽 낭독 10발화 | 전부 **`es-ES`**, voice 없음 |
+| 3쪽 낭독 6발화 | 전부 `es-ES` (대화 문단은 한 발화 — 줄표 기존 꼴) |
+| 번역 요청 | **"from Spanish into Arabic"** ×2, 띠 `ar`·`rtl`, 가로 넘침 0 |
+| 회귀 CMDT 2026(1,967쪽) | 판정 **en**·1 · 40쪽 8발화 `en-US` · "from English into Arabic" ×2 · 띠 `ar`·`rtl` · 가로 넘침 ko 0·ar 0 · ar `dir=rtl` |
+| 공통 | **콘솔 오류 0** · 페이지 오류 0 · 4xx/5xx 0 · 흉내 오류 0 · 외부 요청은 pdf.js CDN 뿐 · 59.5초 |
+
+스크린숏 `r8nb/shots/D-normal-p1-ko.png`·`D-cmdt-p40-ar.png`.
+
+## 8nbR-9. 발견 사항
+
+| # | 심각도 | 내용 | 근거 |
+|---|---|---|---|
+| 1 | **중간** | **2인칭 `tu es` 가 잦은 짧은 프랑스어가 es 로 판정된다**(HEAD·8n 판 fr·1 → 지금 es·0.5–0.75) — 8n-b 가 새로 만든 지원 언어 오판. 편지·아이에게 쓰는 글·반말 메모 꼴 5문단 중 3. 길게 이으면 fr(문서 표본이 길면 묻힘), 의학책 영향 0. 결과는 낭독 `es-ES`·"from Spanish" — 8n 이 막으려던 "조용한 오판"의 반대 방향. **권고**: es 갈래에서 `tu` 바로 뒤의 `es` 는 es 로 세지 않는다(fr 쪽에 센다) — 모의로 5/5 fr, 스페인어·프랑스어 묶음 전부 불변 + `tu es` 문단 묶음 테스트 | `lang.js` `FUNCTION_WORDS.es` 의 `es` · `FR_ES_OVERLAP` · `r8nb/fr-tues.mjs`·`tues-options.mjs` |
+| 2 | 낮음 | es 겹약어 규칙 (b)가 **문장 끝 약어**(`i. v.`·`v. o.`·`s. c.`·`a. m.`·`p. m.`·붙인 `a.m.`) 뒤 정상 `¿대문자` 를 놓친다 — 8n 판은 끊었다. 보고서·spec 한계는 `a. m.` 만 적음. spec 한계에 의학 약어 꼴을 더하거나 (b)를 좁힐지 운영자 결정 | `r8nb/split-es.mjs` |
+| 3 | 낮음 | `ES_MIN_WORDS = 2` — 기능어 없는 영어 참고문헌·표 꼴(`Del`·`Lo`, `Con A`·`Para-`)이 es·1(3 이면 en·0). 2 의 이유(270–300자 보통 스페인어에 es 기능어 둘)는 실측으로 맞고 실물 영향 0 — 기록만 | `r8nb/minwords.mjs` · 짧은 창 15,315 es 0 |
+| 4 | 정보 | 변이 M4 생존 — 겹약어 꼴 왼쪽 경계를 고정하는 테스트 없음 | 8nbR-7 |
+| 5 | 정보 | 대화 줄표 `—¿…?` 앞에서 끊지 않는다 — 8n 판·fr 과 같은 기존 꼴(8n-b 무관), spec 한계에 없음 | `r8nb/dash.mjs` · headless 3쪽 |
+
+잘 된 것: 높음-1 고침이 실제로 일한다(새 스페인어 8/8 es — HEAD·8n 0/8, headless es·`es-ES`·"from Spanish") · `la` 많은 프랑스어 fr 그대로·score HEAD 와 같음 · golden 불변 · es 아닌 결과 변화 0(무작위 5만·의학책 499쪽·짧은 창 15,315) · en·fr·ko 분할 불변(12만) · es 분할 새로 끊는 곳 0 · 8n Review 낮음-2(es 최소량)·5(테스트 구멍 c·f) 고침 확인 · CMDT 회귀 0 · 콘솔 오류 0.
+
+## 8nbR-10. 실행 · 정리
+
+막힌 명령 없음. 덧: ① `node -e` 한 줄이 셸 이스케이프 오류로 바로 끝남(아무것도 안 씀) ② `tues-options.mjs` 첫 실행은 말뭉치 `ES`·`FR` 가 문자열이라 TypeError → 스크래치 스크립트만 고쳐 다시 ③ `make_pdf.py` 는 내가 쓴 스크립트라 `-I` 없이(fpdf 가 사용자 site-packages) ④ 이 절을 heredoc 으로 덧붙이는 셸 명령이 따옴표 해석 오류로 실패해(파일 무변경 확인) Write 로 스크래치에 쓴 뒤 덧붙였다. headless 1회 · `try/finally browser.close()` · pipe(디버깅 포트 없음) · 8000 python 사용만 · puppeteer-core 읽기만 · 가짜 키만 · 프로세스 조회 0 · npm·다운로드 0 · 의학책 읽기만(숫자만). `git status` 는 시작 때와 같다(+ 이 절).
+
+스크래치 `r8nb/`: `bak/`(lang·segment) · `start-sha1.txt` · `v8n/`(8n 판) · `paras.mjs` · `eval-paras.mjs` · `fr-tues.mjs`·`fr-tues-texts.mjs`·`tues-options.mjs` · `corpus-same.mjs` · `books.mjs`(+`books-out.json`) · `minwords.mjs` · `fuzz.mjs`(+`fuzz-out.json`) · `split-es.mjs` · `dash.mjs` · `unsupported.mjs` · `mutate.mjs`(+`mutate-out.json`) · `full1.txt`·`full2.txt` · `make_pdf.py`·`r8nb-es-normal.pdf` · `hl.mjs`·`runD.mjs`(+`runD-out.json`) · `section.md`(이 절) · `shots/` · `p1/`(프로필).
+
+**고친 뒤 배포** — 중간-1(`tu es` 프랑스어 → es)을 한 조건 + 테스트로 고치고, 낮음-2 는 spec 한계 문구로 충분하다. 지금 판도 전체로는 HEAD·8n 보다 낫다(보통 스페인어 고침이 훨씬 넓다).
+
+# 8n-c 재검증 — 8n-b 재검증 지적 고친 곳 (2026-11-16)
+
+> Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-8n-c.md`. 앱 코드·테스트·spec 무수정, 커밋 0, headless 0(판정·분할 함수만 바뀜). 보고서 `.claude/tasks/medreader-build-8n-c-fix-report.md` 는 믿지 않고 다시 쟀다. 스크래치 `r8nc/` — HEAD 판은 `git show HEAD:` 로 새로 꺼낸 `r8nc/head/`(앞 Review 의 `r8n/head/` 와 `cmp` 같음), 8n-b 판은 `r8nc/v8nb/`(= `r8nb/bak/` = `b8nc/bak/`, `cmp` 같음). 문단은 모두 이 Review 가 새로 지은 글(`r8nc/paras.mjs`·`es-other.mjs`) — 앞 Review·Build·말뭉치 문단과 다르다. 원서 글 인용 0.
+
+코드 확인: `lang.js` 는 `RE_FR_TU_ES = /(?<!\p{L})(?:tu\s+|t['’])es(?!\p{L})/gu` 를 소문자 글에 맞춰 그 수만큼 `es`·`esWords` 에서 빼고 `frForEs` 에 더한다 — `en`·`fr` 값과 두 갈래 비교는 그대로다. 이 변경은 es 를 줄이고 fr 쪽을 늘리기만 하므로 **결과가 바뀔 수 있는 방향은 es → (HEAD 와 같은 두 갈래 값) 하나뿐**이다. 낱말 정규식이 `\p{L}+` 라 `t'es` 의 `es` 는 따로 센 낱말이고, 정규식이 건 `es` 는 언제나 센 `es` 낱말 하나와 짝이다(무작위 조각 20,000 에서 `es`·`esWords` 음수 0). `segment.js` 는 8n-b 판에서 겹약어 규칙 (b)(`ES_COMPOUND_ABBREV_END`)와 `start` 인자만 빠졌다(diff 로 확인 — 그 밖 글자 같음).
+
+## 8ncR-1. `RE_FR_TU_ES` (확인 1, `r8nc/eval-tues.mjs`)
+
+| 묶음(새로 지음) | HEAD | 8n-b 판 | 지금 |
+|---|---|---|---|
+| `tu es`·`t'es`·`t’es` 프랑스어 8 — 생일 카드 `f-anniv` · 대문자 문자 `f-majuscules`(`TU ES`·`T’ES`) · 줄바꿈 시 `f-poeme-lignes`(`Tu es\nla…`) · 끊김 없는 공백 `f-espaces-insec`(NBSP·좁은 NBSP) · 탭·여러 칸 `f-chat-tab` · 꾸중 `f-reproche` · 소아과 `f-pediatre` · CRLF `f-crlf` | fr·1 ×8 | **es 7**(0.667–1) · fr 1 | **fr·1 ×8 — lang·score·script HEAD 와 같음** |
+| 위 8 이은 것(1,902자) | fr·1 | es·0.756 | fr·1 |
+| 스페인어 8 — 소유 `tu casa es…`(`tu` 와 `es` 떨어짐) · 학습자 오류 `«tú es»`(악센트) · 프랑스어 노래 제목 인용 `«Tu es mon autre»`(우연히 붙은 `tu es` 1) · 악센트 없는 메시지(`tu eres`) · 줄바꿈 `tu\nespalda` · 대문자 제목 `TU SALUD ES` · 학습자 오류 설명 `«tu es»` 1 · `Tu esposa`·`tu estudio` | fr·1 ×8 | es·1 ×8 | **es ×8**(1 ×6 · 0.909 · 0.9 — 우연한 `tu es` 하나가 score 만 조금 낮춤) |
+| 위 8 이은 것(1,999자) | fr·1 | es·1 | es·0.978 |
+| 말뭉치 `FR_TUES` 11 · `ES_TU` 2 · `ES_NATURAL` 10 · `ES` · `FR_NATURAL` 7 (회귀) | — | — | FR_TUES 11 fr·HEAD 같음 · ES 13 es · FR_NATURAL 7 HEAD 같음 — 보고서 표 재현 |
+
+- 대소문자·사이 글자(`functionWordRates` 의 `esWords`, `r8nc/eval-tues.mjs` probes 32개 전부 기대대로): `Tu es`·`TU ES`·`tU eS`·`T'ES`·`T’Es` 걸림 · `tu\nes`·`tu\r\nes`·`tu\tes`·`tu   es`·`tu es`·`tu es`·`tu\n\n  es` 걸림 · `tú es`·`TÚ ES`·`tu, es`·`tu. es`·`t es`·`t' es`·`t‘es`(왼 따옴표) 안 걸림 · `tues`·`tu esta`·`statu es`·`tutu es`·`tu-es` 안 걸림 · `2tu es`·`_tu es` 걸림(숫자·밑줄은 글자 아님 — 해 없음).
+- 덧(정보): 스페인어로 쓴 **프랑스어 문법 설명**(`s-leccion-fr` — `tu es` 4번·`il est`)은 8n-b es·0.875 → 지금 fr·1(= HEAD). 두 언어가 진짜로 섞인 글이라 맞는 답이 모호하다.
+- **★ 그러나 같은 뿌리의 다른 프랑스어 2인칭 꼴은 여전히 es 로 샌다**(`r8nc/es-other.mjs`, 새로 지은 5문단 224–231자): 도치 `Où es-tu ?`·`Es-tu prêt ?` · 부정 `Tu n'es pas…` · `Où en es-tu`·`tu y es` — `x-inversion` es·0.75 · `x-negation` es·0.667 · `x-en-y` es·0.75 · `x-coach-inv` es·0.6 (HEAD 넷 다 fr·1, 8n-b 와 같은 값 — 8n-c 가 안 건드린 꼴). `x-mix`(`t'es` 가 섞임)만 fr·1. **다섯을 이어도(1,147자) es·0.55.** 규칙이 `tu` 바로 뒤·`t'` 바로 뒤의 `es` 만 보기 때문이다 — `n'es`·`es-tu` 는 프랑스어 반말에서 `tu es` 만큼 흔하다.
+- 고침 후보 모의(`r8nc/es-options.mjs` — 앱 무수정, es 갈래만 다시 계산): **C. 지금 규칙 + `es-tu` 의 `es` · 아포스트로피 생략 뒤 `es`(`n'es`) · `tu en es`·`tu y es` 의 `es` 도 fr 쪽에** → 프랑스어 30(이 Review 12 · `FR_TUES` 11 · `FR_NATURAL` 7 — 지금 fr 26) **30/30 fr**, 스페인어 21(이 Review 8 · `ES_TU` 2 · `ES_NATURAL` 10 · `ES`) **21/21 es 그대로**, 다섯 이은 것 fr·1. 스페인어는 아포스트로피 생략·`-tu` 도치를 쓰지 않는다. 같은 방향(es 를 줄이기만)이라 es 아닌 결과는 그대로다.
+
+## 8ncR-2. 겹약어 규칙 뺌 — 안 (나) (확인 2, `r8nc/abbrev.mjs`)
+
+이 Review 가 새로 지은 틀(Build 틀과 다름)로 (가) 8n-b 판 / (나) 지금을 쟀다.
+
+| 표본 | 맞는 답 | (가) 틀림 | (나) 틀림 |
+|---|---|---|---|
+| 문장 중간 `p. ej.`·`p.ej.`·`v. gr.` × 10틀 × `¿Quién…?`·`¡Incluso…!` = 60 | 안 끊음 | 0 | 60 |
+| 문장 끝 의학 `i. v.`·`v. o.`·`s. c.`·`i. m.` × 5틀 × `¿Y si…?`·`¡Qué…!` = 40 | 끊음 | 40 | 0 |
+| 문장 끝 시각 `a. m.`·`p. m.`·`a.m.`·`p.m.` × 5틀 × 2 = 40 | 끊음 | 40 | 0 |
+| 합 140 · 꼴별 같은 수(꼴마다 20 또는 10) | | 80 | 60 |
+
+- Build 측정(88 대 36, 같은 수면 10 대 10)과 **같은 결론**: 꼴마다 결과가 전부 맞거나 전부 틀리므로(틀 수와 무관) 합계는 표본에 넣은 꼴 수의 비율일 뿐이고, 꼴별로는 동률 → 지침의 동률 규칙대로 (나). 끝 꼴이 8종(의학 4 + 시각 4)으로 중간 꼴 3종보다 많다는 점에서도 (나)가 맞다.
+- 대조: 겹약어 뒤 소문자 꼬리 질문(`p. ej. ¿quién…?`·`a. m. ¿qué tal?`)은 두 안 모두 안 끊음 · 보통 대문자 낱말(`i. v. Luego`·`p. ej. Naranjas`)은 두 안 모두 끊음 — (나)는 `¿¡대문자` 를 보통 대문자와 같게 맞춘 것. 글자 잃음 0.
+- 남은 한계(문장 중간 `p. ej. ¿대문자` 앞 짧은 쉼·번역 항목 둘)는 spec §5 정정 8n-c 에 적혀 있다.
+
+## 8ncR-3. 회귀 (확인 3)
+
+- **golden**(`r8nc/golden-check.mjs`): `srclang-8n.golden.json` 을 HEAD 모듈로 **통째로 다시 만들어** 대조 — guess 26 + split 23 × en·fr·ko = 95 항목 **HEAD↔golden 0 · 지금↔golden 0**, 다시 만든 것과 golden 의 guess·split 이 글자 그대로 같음, 여분 키 0. sha1 `1ab93adb…0129` 시작·끝 같음, 수정 시각 01:37 그대로.
+- **무작위 50,000**(`r8nc/fuzz.mjs` — 이 Review 의 생성기, splitmix32 난수, **서로 다른 글 50,000/50,000** 을 `Set` 으로 셈. `tu es`·`t’es`·`es-tu`·`n'es`·`TU ES`·`tu\nes`·NBSP · `la` 무겁게 · `Los Angeles`·`Con A` · `¿¡` · `p. ej.`·`a. m.`·`i.v.` · 한글·아랍 섞임 · 150–900자):
+  - 판정: HEAD 와 다른 8,517건 **전부 지금 es — es 아닌데 HEAD 와 다른 것 0**. 8n-b 대비 다른 9,383건: es→fr 5,711 · es→en 1,310(모두 HEAD 값) · es 끼리 score 다름 2,362. **8n-b 의 es 아닌 결과가 바뀐 것 0**. es score 0.5–1.
+  - 분할 en·fr·ko·인자 없음 50,000 × 4 = **200,000 — HEAD 와 다른 것 0 · 8n-b 와 다른 것 0**. es 50,000: 8n-b 와 다른 2,280건 — 글자 잃음 0 · 8n-b 자름 잃은 것 0 · 새 자름은 **모두 겹약어 꼴 뒤**(그 밖 0).
+- **의학책 3권**(`r8nc/books.mjs` = Build 것에 HEAD 경로·분할 대조만 더함, 11.3초, 숫자만): CMDT 2026 174쪽 · CMDT 2021 149쪽 · Harrison 176쪽 = 499쪽 — 쪽별 `guessLang` **HEAD·8n-b 와 다른 쪽 0, es 0** · 쪽별 `splitSentences`(판정 언어로) **HEAD 와 다른 쪽 0/499** · 앞 30쪽 표본 세 권 en·1(HEAD 같음) · 짧은 창 15,315개(200·400·800자) es 0, es 아닌 쪽 HEAD 와 다른 것 0.
+
+## 8ncR-4. 테스트 · 검사 (확인 4)
+
+| 실행 | tests | pass | fail |
+|---|---|---|---|
+| 전체 1회 | 1507 | 1507 | 0 |
+| 전체 2회 | 1507 | 1507 | 0 |
+
+`stamp-importmap --check` "그대로다(모듈 66개 · CSS 4개)" 종료 0 · `git diff --check` 종료 0 · 추적 안 된 8n 테스트·말뭉치 끝 공백 0·CR 0. 보고서 숫자(1507·stamp·golden·의학책)는 재현됐다. spec 19-1-3 §5 `[정정 2026-11-16 — 8n-c]` 한 줄 있음(① tu es ② (나)·124 표본 ③ 한계 — `p. ej. ¿`·`ES_MIN_WORDS` 영어 참고문헌 꼴·대화 줄표 `—¿`).
+
+## 8ncR-5. 변이 (확인 5, `r8nc/mutate.mjs` — 원본은 `r8nc/bak/` 에서 읽어 한 곳 바꿔 쓰기 → 전체 `node --test` → `finally` 원본 쓰기)
+
+IM2·IM6·IM7b(import map 해시)는 매번 함께 빨강 — 아래에서 뺐다. Build 의 X1–X7 과 다른 곳을 골랐다.
+
+| # | 변이 | 빨강(IM 밖) | 판정 |
+|---|---|---|---|
+| M1 | `RE_FR_TU_ES` 왼쪽 경계 `(?<!\p{L})` 빼기 | 0 | **생존** — 스페인어 `espíritu es`(낱말 끝 `tu`)도 fr 쪽으로 셈. 모의(`r8nc/survivors.mjs`): `espíritu es` 3번 든 스페인어 es·1 → es·0.813 |
+| M2 | 오른쪽 경계 `(?!\p{L})` 빼기 | 0 | **생존** — 소유 `tu` + `es…` 낱말(`tu espalda`·`tu estrés`·`tu esposa`)을 `tu es` 로 셈, 세지도 않은 `es` 를 뺌. 모의: 그런 낱말 7개 든 스페인어 es·1 → **es 아님** |
+| M3 | 사이 `\s+` → 공백 하나 | N15 ★ 값 | 잡힘 |
+| M4 | 소문자로 바꾸기 전 글에 맞춤 | N15 ★★ · N15 ★ | 잡힘 |
+| M5 | 꼬리 질문 규칙 소문자 → 모든 글자 | N2 ×3 · N2 낭독 단위 · N7 | 잡힘 |
+| M6 | 아포스트로피에서 `’` 빼기 | N15 ★★ · N15 ★ | 잡힘 |
+
+복원: `restored: true` · `cmp` `lang.js`·`segment.js` ↔ `r8nc/bak/` 같음 · 시작 sha1 7파일(lang·segment·8n 테스트·말뭉치·golden·index.html·spec) `sha1sum -c` 모두 OK.
+
+## 8ncR-6. 발견 사항
+
+| # | 심각도 | 내용 | 근거 |
+|---|---|---|---|
+| 1 | **중간** | **`tu es` 고침이 절반이다 — 도치 `es-tu`·부정 `tu n'es`·`tu en es`·`tu y es` 가 잦은 짧은 프랑스어는 여전히 es**(HEAD fr·1 → 지금 es·0.55–0.75, 새로 지은 5문단 중 4, 이어도 es). 8nbR 중간-1 과 같은 뿌리(es 묶음 `es` ↔ 프랑스어 `es`)이고 8n-b 가 만든 오판 그대로 — 결과는 낭독 `es-ES`·"from Spanish". **권고**: 같은 es 갈래 규칙에 `es-tu` 의 `es`, 아포스트로피 생략 뒤 `es`(`n'es`), `tu en|y es` 의 `es` 를 더한다(모의 C: 프랑스어 30/30 fr, 스페인어 21/21 es 그대로) + 이 꼴 문단 묶음 테스트 | `r8nc/es-other.mjs`·`es-options.mjs` |
+| 2 | 정보 | 변이 M1·M2 생존 — `RE_FR_TU_ES` 양쪽 경계를 고정하는 테스트 없음. 특히 오른쪽 경계가 빠지면 `tu espalda`·`tu estrés` 꼴 스페인어가 es 를 잃는다. 1번을 고칠 때 `espíritu es`·`tu esposa` 꼴 기대 줄을 함께 두면 막힌다 | 8ncR-5 · `r8nc/survivors.mjs` |
+| 3 | 정보 | 스페인어로 쓴 프랑스어 문법 설명(`tu es` 4번)은 지금 fr(= HEAD, 8n-b 는 es) — 섞인 글, 맞는 답 모호 | 8ncR-1 |
+| 4 | 낮음 | 안 (나)의 남은 한계(문장 중간 `p. ej. ¿대문자` 앞 끊김)는 spec 에 적힘 — 측정은 재현(꼴별 동률·끝 꼴 종류가 더 많음) | 8ncR-2 |
+
+잘 된 것: 붙은 `tu es`·`t'es`·`t’es` 는 대소문자·줄바꿈·CRLF·탭·NBSP 모두 걸리고 새 프랑스어 8/8 fr·HEAD 값 · 스페인어 8/8 es(`tú es`·`tu casa es`·`tu\nespalda`·우연한 `«Tu es…»` 인용 모두) · 겹약어 규칙 뺌의 근거 재현 · golden 불변(HEAD 로 통째 재생성) · es 아닌 결과 변화 0(서로 다른 글 5만·의학책 499쪽·짧은 창 15,315) · en·fr·ko·인자 없음 분할 20만 HEAD·8n-b 와 0 · 의학책 분할 HEAD 와 0 · 테스트 1507 ×2 · 변이 6 중 4 잡힘.
+
+## 8ncR-7. 실행 · 정리
+
+막힌 명령 없음. 덧: 첫 `eval-tues.mjs` probe 기대 하나(`tu es-ES`)를 내가 잘못 적어(0 → 맞는 값 1 — `es-ES` 의 두 번째 `es` 가 남음) 스크래치 스크립트만 고쳐 다시 돌림. headless 0 · 서버 사용 0 · 프로세스 조회 0 · 가짜 키도 안 씀 · npm·다운로드 0 · 의학책 읽기만(파일 경로를 직접 열기만, 폴더 목록 안 봄, 숫자만) · 커밋 0 · `git checkout/restore/stash` 0. `git status` 는 시작 때와 같다(+ 이 절).
+
+스크래치 `r8nc/`: `bak/`(lang·segment) · `start-sha1.txt` · `head/`(git show HEAD) · `v8nb/`(8n-b 판) · `paras.mjs` · `eval-tues.mjs`(+`-out.txt`) · `es-other.mjs`(+`-out.txt`) · `es-options.mjs`(+`-out.txt`) · `abbrev.mjs`(+`-out.txt`) · `golden-check.mjs`(+`golden-out.json`) · `fuzz.mjs`(+`fuzz-out.json`) · `books.mjs`(+`books-out.json`) · `mutate.mjs`(+`mutate-out.json`) · `survivors.mjs`(+`-out.txt`) · `full1.txt`·`full2.txt` · `section.md`(이 절).
+
+**고친 뒤 배포** — 중간-1(`es-tu`·`n'es` 프랑스어 → es)을 같은 규칙의 꼴 몇 개 더하기 + 경계 테스트로 고치면 된다. 8n-c 가 고친 부분 자체(`tu es`·`t'es`, 겹약어 규칙 뺌)는 맞게 일하고 회귀 0 이다.
+
+# 8n-d 재검증 — 프랑스어 `es` 겹침을 뿌리에서 (2026-11-16, 마지막)
+
+> Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-8n-d.md`. 앱 코드·테스트·spec 무수정, 커밋 0, headless 0. 보고서 `.claude/tasks/medreader-build-8n-d-fix-report.md` 는 믿지 않고 다시 쟀다. 스크래치 `r8nd/` — HEAD 판은 `git show HEAD:` 로 새로 꺼낸 `r8nd/head/`(`r8nc/head/` 와 `cmp` 같음), 8n-c 판은 `r8nd/v8nc/`(= `b8nd/bak/lang.js`, `RE_FR_TU_ES` 있음). 문단은 모두 이 Review 가 새로 지은 글(`r8nd/paras.mjs`·`eval2-sets.mjs`) — 말뭉치·앞 문단과 글자 다름. 원서 인용 0.
+
+코드 확인(`git diff`): es 묶음은 `el·los·las·del·por·para·con·una·lo` 9개, `RE_FR_TU_ES`·`tuEs` 셈 없음, `ES_MIN_WORDS` 2, `FR_ES_OVERLAP` `la`. es 갈래는 en·fr 두 갈래 **앞**에서 es 를 돌려줄지만 정하므로 es 아닌 결과는 구조상 HEAD 와 같다. 말뭉치는 덧붙이기만(앞 18,109바이트 `cmp -n` 같음), `segment.js`·golden 은 `b8nd/bak/` 과 `cmp` 같음. spec 19-1-3 §5 `[정정 2026-11-16 — 8n-d]` 한 줄 있음.
+
+## 8ndR-1. 프랑스어 → es (확인 1, `r8nd/eval.mjs`·`eval2.mjs`)
+
+| 묶음(새로 지음, 모두 200자 이상) | HEAD | 8n-c | 지금 |
+|---|---|---|---|
+| `être` 2인칭 꼴 8 — `tu es`·`es-tu`·`n'es`·`t'en es`·`toi qui es`·`« Qui es-tu ? »`·`D'où es-tu`·`t'es` (SMS·소아과·소설 대화·감사 문자) | fr·1 ×8 | fr·1 ×8 | **fr·1 ×8 = HEAD** |
+| 스페인어 고유명사가 든 프랑스어 8 — `Los Angeles`(+`tu es`) · `El Niño` 기사 · `Las Vegas`·`Del Rio` 여행기 · `« por favor »` 인용 · `Hospital del Mar` · 일정표(`Los Angeles ; Las Vegas ; El Paso et Del Rio` + `tu es`) · `Lakers de Los Angeles` · 참고문헌(`Del Rio C`·`Los Arcos I, Con A`·`Las Heras M`) | fr·1 ×8 | fr ×7 · **es 1**(참고문헌 0.8) | fr ×6 · **es 2** — 일정표 `f-itineraire` **es·0.5(8n-c fr·1, 8n-d 가 새로 만든 것)** · 참고문헌 `f-biblio` es·0.8 |
+| `tu es`·`t'es` + 스페인어 낱말 프랑스어 8 — `café con leche` · 스페인어 숙제(`« el perro, los gatos, por favor »`) · 로드트립 · 타파스 · Erasmus · El Clásico · 살사 · 멕시코 | fr·1 ×8 | fr ×8 | fr ×7 · **es 1** — `b-cours-espagnol` es·0.5(8n-c fr) |
+| 스페인어 고유명사·저자명 영어 8 — `El Niño` 뉴스 · 참고문헌 둘(`Del Rio C`·`Con A`) · `"por favor"` 여행 · Rio Grande·`Del Rio` · 사무소 목록 · 증례(`Las Cruces`) · 방법(`Con A`) | en·1 ×8 | en ×6 · **es 2** | en ×6 · **es 2**(0.6 · 0.857) — 8n-c 와 같음 |
+| 참고문헌 길이·섞임 9(`ref-*`) | en ×9(195자 하나는 en·0) | 지금과 같음 | 모두 스페인어 성 저자만인 짧은 목록 둘(272·559자) **es**(0.8·0.667) · 195자 목록 en·0(200자 미만) · 다른 저자가 같은 수 이상 섞인 목록·본문 문단 + 목록(412–1,642자) **en ×6** |
+| 위 묶음을 이은 것(프랑스어 3,820·1,907자, 영어 1,971자) | fr·1 · en·1 | 같음 | 같음 |
+
+- **`être` 꼴은 뿌리에서 닫혔다**: `es` 가 es 묶음에 없으므로 어느 2인칭 꼴도 es 쪽에 낱말을 보태지 못한다(8개 모두 esWords 0). 8ncR 중간-1 해소.
+- **그러나 같은 갈래의 다른 구멍 — 대문자 스페인어 고유명사**(`Los Angeles`·`Las Vegas`·`El Paso`·`Del Rio`·`El Niño`, 저자명 `Del Rio C`·`Los Arcos I`, `Con A`)가 es 기능어로 세어진다(소문자로 바꾼 뒤 세므로). fr 기능어가 적은 짧은 프랑스어·영어 참고문헌에서 es 가 된다. 보고서 한계 2 의 "실제 지은 문단에서는 0" 은 재현되지 않았다 — 이 Review 문단 24 중 2 가 8n-c fr → 지금 es(모두 score 0.5, 2배 경계 딱 맞음).
+- **문장 틀 무작위**(`r8nd/fuzz-fr.mjs` — 낱말 섞음이 아니라 짧은 프랑스어 문장 22틀·영어 13틀에 고유명사 8개를 끼움, 서로 다른 글 4,000 × 비율 5 × 2언어, 200–900자): 고유명사 든 문장 비율 p 별 es —
+
+| p | 프랑스어 지금 | 프랑스어 8n-c | 영어 지금(= 8n-c) |
+|---|---|---|---|
+| 0.1 | 3.7% | 2.05% | 0.1% |
+| 0.2 | 12.1% | 6.6% | 0.33% |
+| 0.35 | 27.6% | 16.1% | 0.48% |
+| 0.5 | 40.8% | 27.3% | 0.38% |
+| 1 | 71.3% | 60.5% | 0.2% |
+
+  HEAD 는 프랑스어 틀 97–87% fr(나머지 en·0), 영어 틀 100% en. **8n-b 부터 있던 구멍이고 8n-d 가 프랑스어에서 약 1.5–2배로 키웠다**(`tu es` 가 fr 쪽에 보태던 몫이 없어짐). 의학책 3권 짧은 창 15,315 에서는 0(아래 8ndR-3) — 영어 본문은 기능어가 넉넉하다.
+- **고침 후보 모의**(`r8nd/sim.mjs` — 앱 무수정, es 갈래의 es 셈만 바꿈, 모의 `now` = 앱 0 다름. 200자 미만 글만 말뭉치 테스트처럼 되풀이 — 영어 17 의 195자 `ref-hisp2` 가 되풀이로 es 가 되어 "지금 5" 에 들어 있다):
+
+| 안 | 스페인어 적중(앞 모음 39 · `ES_SHORT` 12 · 이 Review 13) | 프랑스어 → es(앞 모음 46 · `FR_ES_FORMS` 17 · 이 Review 24) | 영어 → es(이 Review 17) | 그 밖 es(/44) | 문장 틀 프랑스어·영어 es(p 전부) |
+|---|---|---|---|---|---|
+| 지금 | 35 · 8 · 6 | 0 · 0 · 3 | 5 | 9 | 위 표 |
+| P1 대문자로 시작하는 es 기능어는 안 셈 | 33 · 7 · 6(잃음 `es-noticia`·`d-opinion`) | 0 · 0 · 1 | 0 | 3 | 0 |
+| P2 P1 + 문장 첫머리 대문자는 셈 | 35 · 8 · 6 | 0 · 0 · 2 | 3(`1. Del Rio C` 가 문장 첫머리) | 7 | — |
+| **P3 대문자 es 기능어는 바로 다음 낱말이 소문자로 시작할 때만 셈**(`Los pacientes` 셈 · `Los Angeles`·`Del Rio C`·`Con A`·`El Niño` 안 셈) | **35 · 8 · 6(잃음 0)** | **0 · 0 · 1** | **0** | 6 | **0** |
+
+  P3 에서 남는 프랑스어 하나는 `b-cours-espagnol`(프랑스어 문장 속 소문자 스페인어 낱말 목록 — 두 언어가 진짜로 섞인 글, 8ncR 정보-3 과 같은 모호함). 세 안 모두 es 를 줄이기만 하므로 es 아닌 결과는 그대로 HEAD 다.
+
+## 8ndR-2. 스페인어 적중 (확인 2)
+
+| 묶음(새로 지음 13, 217–249자) | HEAD | 8n-c | 지금 |
+|---|---|---|---|
+| `la` 많은 글 6 — 고혈압 · 영화 · 할머니 집 · 편지 · 소아 발열 · 요리 | fr ×6 | es 2 | **es 2**(영화·요리) · 놓친 4 fr = HEAD |
+| 대명사 `le`·`les` 많은 글 5 — 형제 · 환자 · 의사 · 이메일 · 이웃 | fr ×5 | es 2 | **es 2**(이메일·이웃) · 놓친 3 fr = HEAD (`le` 가 fr 셈에 들어감) |
+| 보통 꼴 2 — 법률 기사 · 증례 | fr ×2 | es 2 | **es 2** |
+| 합 | | 6/13 | **6/13 — 놓친 7 모두 HEAD 값(fr·1)**, 새 오판 0 · 13 이으면(3,059자) es·0.577 |
+
+- 놓친 것: esWords 0–1(`la`·`de`·`en`·`que` 만 쓰는 글) 넷, `le` 가 es 기능어보다 많은 글 셋. 8n 이전과 같은 쪽 틀림 → 낮음(한계).
+- **★ Build 결정 묶음 점검**(`r8nd/es-short-pad.mjs`): 말뭉치 테스트·Build 측정은 `atLeast200`(220자가 될 때까지 **되풀이**)을 200자 넘는 글에도 씌운다. 200–219자 글은 두 번 이어져 esWords 1 → 2 가 되어 `ES_MIN_WORDS` 를 넘는다. `ES_SHORT` 의 `z-casa`(205자)·`z-migrana`(216자)는 **글 그대로면 fr·1(= HEAD), 되풀이하면 es·1** — N16 ★ "12 중 10 es" 와 보고서 표 2·spec 줄의 "A 스페인어 39/45"·"어려운 꼴 A 4/6" 은 이 둘만큼 부풀었다(그대로 재면 37/45 · 2/6). `ES_NATURAL`·앞 모음 39 는 되풀이 영향 0. **결정(A)은 바뀌지 않는다** — 기준 "프랑스어 오판 0 먼저"에서 B 는 프랑스어 새 오판 3(`toi qui es`·`t'en es`·`n'en es` — B 의 꼴 목록 밖이라 B 가 질 수밖에 없는 묶음이지만, 꼴을 나열하는 규칙이 다음 꼴에서 샌다는 8ncR-1 의 결론과 같은 것을 보인다). 프랑스어 어려운 꼴 6 은 210–227자라 되풀이가 오히려 es 쪽으로 밀어 A 에 불리했다.
+
+## 8ndR-3. 회귀 (확인 3)
+
+- **golden**(`r8nd/golden-check.mjs`): HEAD 모듈로 통째 다시 만든 것과 `regenDeepEqual` true · 95 항목 HEAD↔golden 0 · 지금↔golden 0 · 여분 키 0 · sha1 `1ab93adb…0129` 시작·끝 같음, 수정 시각 01:37 그대로.
+- **무작위 50,000**(`r8nd/fuzz.mjs` — 이 Review 의 생성기 mulberry32, 앞 둘과 다름. 낱말 섞음 + 프랑스어·영어·스페인어 **문장 틀** + 고유명사·`« »` 인용 + 한글. **서로 다른 글 50,000/50,000**, 중복이면 다시 뽑음): HEAD 와 다른 19,136건 **전부 es — es 아닌데 HEAD 와 다른 것 0** · es score 0.5–1 · 8n-c 대비 다른 12,248: es→es(score) 9,965 · **fr→es 1,082** · es→fr 560 · es→en 550 · en→es 91. 프랑스어 문장 틀만 쓴 글 14,383 중 지금 es 9,053(그중 8n-c 는 es 아님 983) — 생성기가 문장마다 고유명사를 넣는 쪽이라 비율은 위 p 표가 맞는 그림이다.
+- **분할** en·fr·ko·인자 없음 50,000 × 4 = **200,000 — HEAD 와 다른 것 0**.
+- **의학책 3권**(`r8nd/books.mjs` = r8nc 것에 8n-c 판 대조, 11.4초, 숫자만): CMDT 2026 174쪽 · CMDT 2021 149쪽 · Harrison 176쪽 = 499쪽 — `guessLang` **HEAD·8n-c 와 다른 쪽 0, es 0** · 분할 HEAD 와 다른 쪽 0/499 · 앞 30쪽 표본 세 권 en·1(HEAD 같음) · 짧은 창 15,315(200·400·800자) **es 0**, es 아닌 쪽 HEAD 와 다른 것 0.
+
+## 8ndR-4. 테스트 · 검사 (확인 4)
+
+| 실행 | tests | pass | fail |
+|---|---|---|---|
+| 전체 1회 | 1509 | 1509 | 0 |
+| 전체 2회 | 1509 | 1509 | 0 |
+
+`stamp-importmap --check` "그대로다 (모듈 66개 · CSS 4개)" 종료 0 · `git diff --check` 종료 0 · 추적 안 된 8n 테스트·말뭉치 CR 0·끝 공백 0.
+
+## 8ndR-5. 변이 (확인 5, `r8nd/mutate.mjs` — `r8nd/bak/lang.js` 를 읽어 한 곳 바꿔 쓰기 → 전체 `node --test` → `finally` 원본 쓰기)
+
+IM2·IM6·IM7b(import map 해시)는 매번 함께 빨강 — 아래에서 뺐다. Build X1–X6 과 다른 곳.
+
+| # | 변이 | 빨강(IM 밖) | 판정 |
+|---|---|---|---|
+| M1 | es 갈래 비교 `>=` → `>`(2배 딱 맞음은 es 아님) | 2 — N5 · N13 | 잡힘 |
+| M2 | `FR_ES_OVERLAP` 에 `le` 더함 | 4 — N3 ★★ · N5 ★ · N11 ★ · N13 | 잡힘 |
+| M3 | es 묶음에서 `una` 빼기 | 4 — N1 · N11 ★★ · N15 ★★ · N16 ★ | 잡힘 |
+| M4 | es 비교에서 en 무시(`bigEs = frForEs`) | 5 — N3 ★★ · N4 ★ · N5 ×2 · N13 | 잡힘 |
+| M5 | `esWords ≥ ES_MIN_WORDS` 조건 빼기 | 5 — N11 ★★ · N12 ×2 · N15 ★★ · N16 ★ | 잡힘 |
+
+복원: `restored: true` · `cmp` `lang.js`·`segment.js` ↔ `r8nd/bak/` 같음 · 시작 sha1 8파일(lang·segment·8n 테스트·말뭉치·golden·index.html·spec·review) `sha1sum -c` 모두 OK.
+
+## 8ndR-6. 발견 사항
+
+| # | 심각도 | 내용 | 근거 |
+|---|---|---|---|
+| 1 | **중간** | **스페인어 고유명사·저자명이 든 짧은 프랑스어·영어가 es**(HEAD fr·1 / en·1). 대문자 `Los`·`Las`·`El`·`Del`·`Con` 이 es 기능어로 세어지는 것이 뿌리. 이 Review 문단: 프랑스어 일정표 es·0.5(**8n-d 가 새로 만듦**, 8n-c fr) · 프랑스어 참고문헌 es·0.8 · 영어 참고문헌(`Del Rio C`·`Con A`) es 4(0.6–0.857, 8n-c 부터 — spec 8n-c 한계에 "영어 참고문헌 꼴"로 적힘). 문장 틀 프랑스어는 고유명사 든 문장 10% 에서 3.7%·20% 에서 12.1% es(8n-c 의 약 1.5–2배) — 보고서 한계 2 는 무작위 낱말 섞음만이 아니라 문장 꼴에서도 나온다. 완화: 서재 추정은 앞 30쪽 최대 8,000자 표본이라 짧은 문서에서만 문제, 의학책 짧은 창 15,315 에서 0, 다른 저자가 섞인 목록·본문이 붙은 목록은 en. **권고(P3)**: es 갈래에서 대문자로 시작하는 es 기능어는 바로 다음 낱말이 소문자로 시작할 때만 센다 — 모의: 스페인어 64 중 잃음 0, 프랑스어 → es 3 → 1(섞인 글 하나), 영어 5 → 0, 그 밖 9 → 6, 문장 틀 전부 0. es 를 줄이기만 하므로 es 아닌 결과는 HEAD 그대로. 테스트는 이 절의 `f-itineraire`·`f-biblio`·`e-refs-*` 꼴과 `Los pacientes`·`El paciente`(문장 첫머리 스페인어 — 세야 함) 경계 줄 | 8ndR-1 · `r8nd/eval*.mjs`·`fuzz-fr.mjs`·`sim.mjs` |
+| 2 | 낮음 | 테스트·측정의 `atLeast200` 되풀이가 200–219자 스페인어의 esWords 를 두 배로 만들어 적중을 부풀림 — `z-casa`·`z-migrana` 는 글 그대로면 fr(= HEAD). N16 ★ 기대 "10 es"·보고서 "A 39/45"·spec 8n-d 줄의 숫자가 2만큼 큼(그대로 37/45). 결정 A 는 그대로 맞다. 권고: 200자 이상 글은 되풀이하지 않거나 두 문단을 대가 묶음(`ES_LIGHT`)으로 옮기고 spec 숫자 고침 | 8ndR-2 · `r8nd/es-short-pad.mjs` |
+| 3 | 낮음 | 짧은 스페인어 13 중 7 을 놓침(`la` 만 많은 글 4 · 대명사 `le` 많은 글 3) — **모두 HEAD 값(fr·1)으로 떨어짐, 새 오판 0**. 이으면 es. 보고서 한계 1 과 같은 꼴, 기준상 한계 | 8ndR-2 |
+| 4 | 정보 | `être` 2인칭 꼴 8 모두 fr·1 = HEAD — `es` 를 묶음에서 뺀 것으로 8ncR 중간-1 이 꼴 나열 없이 닫혔다. 프랑스어 문장 속 소문자 스페인어 낱말 목록(`b-cours-espagnol`)은 es·0.5 — 섞인 글, 맞는 답 모호 | 8ndR-1 |
+
+잘 된 것: `tu es`·`es-tu`·`n'es`·`t'en es`·`qui es` 꼴이 규칙 없이 모두 fr · golden 불변(HEAD 로 통째 재생성) · es 아닌 결과 HEAD 와 다른 것 0(서로 다른 글 5만·의학책 499쪽·짧은 창 15,315) · 분할 20만 HEAD 와 0 · 의학책 es 0 · 테스트 1509 ×2 · 변이 5/5 잡힘 · 말뭉치 덧붙이기만·segment 무수정.
+
+## 8ndR-7. 실행 · 정리
+
+막힌 명령 없음. 덧: 스크래치에 빈 파일 하나를 heredoc 으로 만들었다가(`es-short-pad.mjs`, 앱·review 와 무관) 곧바로 Write 로 덮어씀 · `sim.mjs`·`fuzz-fr.mjs` 를 Node 문자열 바꾸기로 고치다 정규식 이스케이프가 깨진 것을 Edit 로 바로잡고 다시 돌림. headless 0 · 서버 0 · 프로세스 조회 0 · 키 0 · npm·다운로드 0 · 의학책은 r8nc 스크립트의 파일 경로만 열고 숫자만(Downloads 목록 안 봄) · 커밋 0 · `git checkout/restore/stash` 0. `git status` 는 시작 때와 같다(+ 이 절).
+
+스크래치 `r8nd/`: `bak/`(lang·segment) · `start-sha1.txt` · `head/`(git show HEAD) · `v8nc/`(8n-c 판) · `paras.mjs` · `eval.mjs`(+`-out.txt`) · `eval2-sets.mjs`·`eval2.mjs`(+`-out.txt`) · `sim.mjs`(+`-out.txt`) · `es-short-pad.mjs`(+`-out.txt`) · `fuzz.mjs`(+`-out.json`) · `fuzz-fr.mjs`(+`-out.txt`) · `golden-check.mjs`(+`golden-out.json`) · `books.mjs`(+`books-out.json`) · `mutate.mjs`(+`mutate-out.json`) · `full1.txt`·`full2.txt` · `section.md`(이 절).
+
+**고친 뒤 배포** — 중간-1(스페인어 고유명사·저자명이 든 짧은 프랑스어·영어 → es; 일정표 꼴은 8n-d 가 새로 만듦)을 P3(대문자 es 기능어는 다음 낱말이 소문자일 때만 셈) 한 곳 + 경계 테스트로 고치면 된다. 8n-d 가 고친 것 자체(`es` 뺌, `tu es` 규칙 지움)는 맞게 일하고 회귀 0 이다.
+
+# 8n-e 재검증 — 대문자 고유명사 거르기 P3 (2026-11-16)
+
+> Review 서브에이전트(Build 와 분리). 지침 `.claude/tasks/medreader-review-8n-e.md`. 앱 코드·테스트·spec 무수정, 커밋 0, headless 0. 보고서 `.claude/tasks/medreader-build-8n-e-fix-report.md` 는 믿지 않고 다시 쟀다. 스크래치 `r8ne/` — HEAD 판은 `git show HEAD:` 로 새로 꺼낸 `r8ne/head/`(`r8nd/head/` 와 `cmp` 같음), 8n-d 판은 `r8ne/v8nd/lang.js`(= `r8nd/bak/lang.js` = `b8ne/bak/lang.js`, `cmp` 같음). 새 글은 모두 이 Review 가 지음(`r8ne/paras.mjs` — 말뭉치·r8nd·b8ne 글과 글자 다름). 원서 인용 0.
+
+코드 확인(`git diff`): `countEsWords` 는 원문 글자꼴에서 `\p{L}+` 덩이를 뽑아, es 기능어가 대문자로 시작하고 모두 대문자가 아니면 바로 다음 덩이가 `\p{Ll}` 로 시작할 때만 센다(다음 덩이 없으면 안 셈). en·fr·`frForEs`·`words` 는 예전처럼 소문자로 바꾼 글에서 센다. es 갈래 조건·`ES_MIN_WORDS` 2·`FR_ES_OVERLAP` 그대로. 말뭉치는 덧붙이기만(앞 26,309바이트 `cmp -n` 같음). spec 19-1-3 §5 `[정정 2026-11-16 — 8n-e]` 한 줄 있음(① P3 · ② 8n-d 숫자 정정 39/45 → 37/45 등).
+
+## 8neR-1. 단조성 — 지금 es 셈이 8n-d 보다 큰 입력이 있는가 (확인 1, `r8ne/mono.mjs`, 37초)
+
+| 시험 | 크기 | 지금 > 8n-d | 그 밖 |
+|---|---|---|---|
+| A. 코드 포인트 전수 — 모든 코드 포인트(대리 쌍 제외 1,112,064)를 es 기능어 앞·뒤·사이에 끼운 7꼴(`Los{c}pacientes`·`x{c}Los pacientes`·`Con{c}`·`{c}con{c}A`·`Del{c}rio y {c}el{c}`…) | 7,784,448 호출 | **0** | words·en·fr·frForEs 8n-d 와 다른 것 0 |
+| B. 경계 무작위(sfc32 — 앞 Review·Build 의 mulberry32 와 다름) — es 기능어 소문자·첫 대문자·모두 대문자·섞음(`lOs`) + 경계 59가지(숫자 `20`·`1,5`, `« » ¿ ¡ ( ) " — – … / _ @ # * + = % ° ·`, 줄바꿈 `\n`·`\r\n`·U+2028, 탭, NBSP·ZWSP·ZWJ·soft hyphen, 홀로 결합 악센트 U+0301, 이모지) + 다음 낱말 소문자(`ángeles`·`ñandú`·`ébola`·`α`·`ж`·`ß`·`ı`·`ʼx`·`ǆ`) · 대문자(`Él`·`Á`·`Ébola`·`Ñu`·`İstanbul`·`ẞ`·`Ǆ`·`ǅ`·`Ⓐ`·`Ⅳ`·Kelvin `K`·`Å`) · 그 밖(한글·한자·아랍·히브리·전각 `Ｌｏｓ`·숫자) + 하이픈 낱말(`-`·`‐`·`‑`) + 아포스트로피 뒤(`l'`·`d'`·`O’`·`dell'`) + 글 끝(`… Los`·`… El.`) + 소문자 바꿈이 길이를 바꾸는 문자(`İ`·`ẞ`·`ﬁ`·`ŉ`) | **서로 다른 글 50,000/50,000** · 20–900자 | **0** | 같음 3,448 · 줄어듦 46,552 · en·fr 셈 다른 것 0 · guessLang: 지금 es 인데 8n-d 는 es 아님 **0** · 둘 다 es 인데 score 가 오른 것 0 · 지금 es 아닌데 HEAD 와 다른 것 **0** · 8n-d → 지금 es→es(score) 29,149 · es→en 1,592 · es→fr 376 |
+
+- **구조로도 성립**: 소문자로 바꾸면 "글자 아님 → 글자" 가 되는 코드 포인트 **0개**(낱말이 붙어 8n-d 셈이 줄 길이 없음), "글자 → 글자 아닌 것 섞임" 은 U+0130 `İ`(→ `i̇`) 하나 — 8n-d 쪽 낱말을 쪼갤 뿐이라 지금 ≤ 8n-d 쪽. 낱말 덩이가 1:1 로 맞고 셈 조건만 더해졌으므로 지금 ≤ 8n-d 는 모든 입력에서 성립한다. **단조성 위반 0.**
+
+## 8neR-2. P3 가 놓치는 스페인어 꼴 (확인 2, `r8ne/eval.mjs`)
+
+| 새로 지은 스페인어(200–234자) | HEAD | 8n-d | 지금 | esWords 8n-d → 지금 |
+|---|---|---|---|---|
+| 목차·제목 대문자 꼴(`Guía Para El Manejo De La…`) | fr·1 | es·1 | **fr·1 = HEAD** | 9 → 0 |
+| 대화 `¡Por Dios`·`Por Favor`·`Lo Siento`(첫 대문자로 적음) | fr·1 | es·1 | **fr·1 = HEAD** | 5 → 0 |
+| 지리 `El Salvador limita con…`·`Los Andes`·`Las Palmas`·`El Hierro` | fr·1 | es·1 | **fr·1 = HEAD** | 7 → 1 |
+| 기관 `El Hospital General`·`Los Servicios de Salud`·`Por Orden Ministerial` | fr·1 | es·1 | **fr·1 = HEAD** | 8 → 1 |
+| 제목식 기사(`Crisis En El Sistema De Salud…`) | fr·1 | es·1 | **fr·1 = HEAD** | 10 → 0 |
+| 보통 꼴(대조) `El paciente llegó… Los análisis…` | en·0 | es·1 | es·1 | 10 → 10 |
+| 여섯 이음(1,326자) | fr·1 | es·1 | **es·1** | 49 → 12 |
+
+- 판정을 바꾼다 — 고유명사·제목식 대문자가 대부분이고 소문자 es 기능어가 0–1개인 짧은 스페인어 5개가 8n-d es → 지금 fr. **모두 HEAD 값으로 떨어진다**(es 아닌 결과는 구조상 HEAD — 8neR-1). 이 가운데 지리·기관 둘은 자연스러운 스페인어 꼴이다. 이으면 es. 보고서의 "Review 스페인어 64 잃음 0" 은 앞 묶음에서 맞다(아래) — 대문자 꼴만 많은 글은 그 묶음에 없었을 뿐. → **낮음**(한계).
+- 보고서 1절 표 다시 잼(`r8ne/remeasure.mjs` — b8nd·r8nd 묶음을 읽기만 import, 200자 미만만 `padTo200`): 스페인어 앞 모음 39 · `ES_SHORT` 12 · `ES_NATURAL`+`ES_TU` 12 · r8nd 13 → es 35·8·11·6, **잃음 0** · 프랑스어 앞 모음 46·`FR_ES_FORMS` 17 → 0·0 · 프랑스어 r8nd 24 → 3 → **1**(`b-cours-espagnol` 0.5) · 영어 r8nd 17 → 5 → **0** · 그 밖 44 → 8 → 5(pt·vi ×2·it·ca). 모든 묶음 새 es 0, es 아닌데 HEAD 와 다른 것 0. **보고서 숫자와 같다.**
+
+## 8neR-3. 새 고유명사 프랑스어·영어 (확인 3, `r8ne/eval.mjs`·`fuzz-names.mjs`)
+
+| 새로 지음(200–240자) — 지명·인명·기관명·참고문헌 | HEAD | 8n-d | 지금 |
+|---|---|---|---|
+| 프랑스어 카나리아 일정(`Las Palmas`·`El Hierro`·`Los Cristianos`·`Las Américas`·`El Médano`) | fr·1 | fr·1 | fr·1 |
+| 프랑스어 시네클럽(`Los Olvidados`·`El Ángel exterminador`·`Guillermo Del Toro`) | en·0 | **es·1** | **en·0 = HEAD** |
+| 프랑스어 연수(`Clínica Las Condes`·`Hospital El Cruce`·`Residencia Los Pinos`) | fr·1 | **es·1** | **fr·1** |
+| 프랑스어 콜레라(`biotype El Tor`) | fr·1 | fr·1 | fr·1 |
+| 프랑스어 참고문헌(`El-Serag HB`·`Lo CM`·`Del Castillo R`·`Las Casas M`·`El Hachem M`) | en·0 | **es·1** | **en·0** |
+| 프랑스어 음악축제(`Los Del Río`·`Los Lobos`·`Las Ketchup`·`El Camarón`·`Lo Ferro`) | fr·1 | **es·0.667** | **fr·1** |
+| 영어 폭풍 뉴스(`El Salvador`·`Los Cabos`·`Las Lomas`·`Del Norte`·`El Cajon`) | en·1 | en·1 | en·1 |
+| 영어 참고문헌(`El-Serag HB`·`Lo CM`·`Del Pozo JL`) | en·0 | **es·1** | **en·0** |
+| 영어 패널(`Benicio Del Toro`·`Del Potro`·`El Bulli`·`Lo Wei`·`Las Fallas`·`Los Galayos`) | en·1 | **es·0.5** | **en·1** |
+| 영어 지명 목록(`Las Lajas · El Calafate · … · Por Fin Café · Para Ti · Con Con · Una Vida …`) | en·0 | **es·1** | **en·0** |
+| 영어 미생물(`El Tor`·`Los Alamos`·`Del Mar`) | en·1 | en·1 | en·1 |
+| 영어 병원 순환(`Hospital Las Mercedes`·`Clínica Del Sur`·`El Pilar`·`Por Ciento`·`Con Salud`) | en·1 | en·1 | en·1 |
+| 프랑스어 여섯 이음 · 영어 여섯 이음 | fr·1 · en·1 | es·0.542 · es·0.579 | **fr·1 · en·1** |
+
+- **12 중 es 0**(8n-d 7), esWords 모두 0, 모두 HEAD 와 같음. 이은 글도 HEAD.
+- **P3 밖 — 소문자 이음말 이름**(덧, 3개): `Guillermo del Toro`·`de los Santos`(영어, 기능어 넉넉) en·0.75 = HEAD · 프랑스어 마드리드 여행(`musée del Prado`·`Puerta del Sol`·`Paseo del Arte`) **es·0.6**(HEAD fr·1) · 소문자로 적은 참고문헌(`de la Cruz M`·`del Valle J`·`del Río C`) **es·0.8**(HEAD en·0). 둘 다 **8n-d 와 같다**(소문자는 P3 와 무관, 8n 부터 셈) — 새 es 아님.
+- 문장 틀 무작위(`fuzz-names.mjs` — 이 Review 의 프랑스어·영어 문장 틀, 이름 묶음별, 서로 다른 글 4,000 × 비율 3 × 묶음 3 × 2언어, 200–900자):
+
+| 이름 묶음 · p | 프랑스어 8n-d → 지금 | 영어 8n-d → 지금 |
+|---|---|---|
+| 대문자 이름 · 0.1 / 0.2 / 0.5 | 0.13% → **0** / 0.63% → **0** / 10.28% → **0.05%** | 0.03% → 0 / 0.03% → 0 / 0.1% → 0 |
+| 소문자 이음말 · 0.1 / 0.2 / 0.5 | 0.10% / 0.42% / 3.63% (같음) | 0 / 0.03% / 0.03% (같음) |
+| 모두 대문자(`LOS ANGELES`·`DEL MAR`) · 0.1 / 0.2 / 0.5 | 0.05% / 0.47% / 8.32% (같음) | 0 (같음) |
+
+  모든 칸 새 es 0 · es 아닌데 HEAD 와 다른 것 0. 대문자 이름 p 0.5 의 0.05%(2/4,000)는 둘째 낱말이 es 기능어인 지명 `Con Con` 뒤에 소문자 낱말이 올 때(둘째 `Con` 을 셈) — 8n-d 보다 줄어든 잔여.
+
+## 8neR-4. 회귀 (확인 4)
+
+- **golden**(`r8ne/golden-check.mjs` = r8nd 것, 이 Review 의 HEAD 모듈): HEAD 로 통째 다시 만든 것과 `regenDeepEqual` true · 95 항목 HEAD↔golden 0 · 지금↔golden 0 · 여분 키 0 · sha1 `1ab93adbcc22c9a4ab18542c8cd4581977840129` — 시작·끝 같음.
+- **무작위 50,000**(`r8ne/fuzz.mjs` — sfc32, 이 Review 가 새로 지은 프랑스어·영어·스페인어·한국어 문장 틀 + 이름 21개(대문자·소문자 이음말·모두 대문자) + 낱말 섞음 + 이름 목록, 8모드, 150–1,200자): **서로 다른 글 50,000/50,000** · HEAD 와 다른 19,475 **전부 es — es 아닌데 HEAD 와 다른 것 0** · es score 0.5–1 · 8n-d 대비 다른 11,574: es→es(score) 8,737 · es→en 1,635 · es→fr 1,202 · **새 es 0**. 모드별 es 8n-d → 지금: 프랑스어 틀 749 → 109(이름 묶음에 소문자 이음말·모두 대문자 이름·`Con Con` 이 섞여 있음 — 묶음별로 나눈 것은 8neR-3) · 영어 틀 46 → 0 · 스페인어 틀 5,607 → 5,607 · 한국어 0.
+- **분할** en·fr·ko·인자 없음 50,000 × 4 = **200,000 — HEAD 와 다른 것 0**.
+- **의학책 3권**(`r8ne/books.mjs` = r8nd 것에 대조 대상만 8n-d, 12.6초, 숫자만): CMDT 2026 174쪽 · CMDT 2021 149쪽 · Harrison 176쪽 = 499쪽 — `guessLang` **HEAD·8n-d 와 다른 쪽 0, es 0** · 분할 HEAD 와 다른 쪽 0/499 · 앞 30쪽 표본 세 권 en·1(HEAD·8n-d 같음) · 짧은 창 15,315(200·400·800자) es 0(8n-d 도 0), es 아닌 쪽 HEAD 와 다른 것 0 · 쪽 esWords 합 8n-d → 지금 42 → 37 · 1 → 1 · 24 → 24.
+
+## 8neR-5. 테스트 · 검사 (확인 5)
+
+| 실행 | tests | pass | fail |
+|---|---|---|---|
+| 전체 1회 | 1513 | 1513 | 0 |
+| 전체 2회 | 1513 | 1513 | 0 |
+
+`stamp-importmap --check` "그대로다 (모듈 66개 · CSS 4개)" 종료 0 · `git diff --check` 종료 0 · 추적 안 된 8n 테스트·말뭉치 CR 0·끝 공백 0. `padTo200` 은 정규화 글 200자 이상이면 원문 그대로, 아니면 숫자 `0` 으로 200자 — 숫자는 낱말 덩이가 아니라 기능어 셈·"다음 낱말" 이 원문과 같다(글 끝 `… Del 000` 도 다음 낱말 없음).
+
+## 8neR-6. 변이 (확인 6, `r8ne/mutate.mjs` — `r8ne/bak/lang.js` 를 읽어 `countEsWords` 쪽 한 곳 바꿔 쓰기(찾을 문자열 정확히 1곳) → 전체 `node --test` → `finally` 원본 쓰기)
+
+IM2·IM6·IM7b(import map 해시)는 매번 함께 빨강 — 아래에서 뺐다. Build M1–M5 와 다른 곳.
+
+| # | 변이 | 빨강(IM 밖) | 판정 |
+|---|---|---|---|
+| X1 | 다음 낱말 "소문자로 시작" → "글자로 시작"(`\p{Ll}` → `\p{L}`) | 3 — N17 ★★ 고유명사 · N17 경계 ×2 | 잡힘 |
+| X2 | "다음 낱말" 대신 "앞 낱말"(`ws[i + 1]` → `ws[i - 1]`) | 4 — N16 ★ · N17 ★★ 고유명사 · N17 경계 ×2 | 잡힘 |
+| X3 | 소문자 판정을 ASCII 로(`\p{Ll}` → `[a-z]` — `Los ángeles` 안 셈) | 1 — N17 경계 | 잡힘 |
+| X4 | 대문자 판정을 ASCII 로(`\p{Lu}` → `[A-Z]`) | 0 | **동등 변이** — es 기능어 9개는 모두 ASCII 이고, 비ASCII 문자 중 소문자가 ASCII 가 되는 것은 Kelvin `K`→`k` 하나(es 기능어 글자 아님, 코드 포인트 전수로 확인). 테스트 빈틈 아님 |
+| X5 | 낱말 덩이에 숫자 넣기(`Con 20 mg` 의 다음 낱말이 `20`) | 1 — N17 경계 | 잡힘 |
+
+복원: `restored: true` · `cmp lang.js r8ne/bak/lang.js` 같음 · 시작 sha1 8파일(lang·segment·8n 테스트·말뭉치·golden·index.html·spec·review) 끝(이 절 덧붙이기 전)과 모두 같음(`r8ne/start-sha1.txt`·`end-sha1.txt`).
+
+## 8neR-7. 발견 사항
+
+| # | 심각도 | 내용 | 근거 |
+|---|---|---|---|
+| 1 | 낮음 | **P3 가 놓치는 스페인어** — 대문자 es 기능어 + 대문자 낱말(고유명사·제목식 대문자)이 대부분이고 소문자 es 기능어가 0–1개인 짧은 스페인어(목차·대화 `¡Por Dios`·지리 `El Salvador… Los Andes`·기관 `El Hospital General… Los Servicios`·제목식 기사)는 8n-d es → 지금 fr·1. **모두 HEAD 값**, 이으면 es. 앞 묶음 스페인어 76 잃음 0 | 8neR-2 |
+| 2 | 낮음 | **소문자 이음말 이름**(`museo del Prado`·`Puerta del Sol`·`del Río C`·`de la Cruz M`)이 든 짧은 프랑스어·소문자 참고문헌은 es(HEAD fr·1 / en·0) — **8n-d 와 같음(새 아님)**, P3 범위 밖. 문장 틀 프랑스어 이름 든 문장 20% 에서 0.42%·50% 에서 3.63%, 영어 ≤ 0.03% | 8neR-3 |
+| 3 | 낮음 | **모두 대문자 이름**(`LOS ANGELES`·`DEL MAR`)은 지침대로 그대로 셈 — 프랑스어 문장 틀 20% 0.47%·50% 8.32%, 영어 0, **8n-d 와 같음** | 8neR-3 |
+| 4 | 정보 | "다음 낱말" 은 숫자·기호·줄바꿈·문장 끝을 건너뛴다 — 두 낱말 지명의 둘째가 es 기능어(`Con Con`)이고 뒤가 소문자면 그 하나를 셈(대문자 이름 문장 50% 에서 0.05%). 보고서 한계 3(`Con 20 mg`)과 같은 결 | 8neR-3 |
+| 5 | 정보 | 단조성은 무작위·전수 모두 위반 0 이고 구조로도 성립(소문자 바꿈이 낱말을 붙이는 문자 0개, 쪼개는 문자는 `İ` 하나). X4 는 동등 변이 | 8neR-1 · 8neR-6 |
+
+잘 된 것: 단조성 위반 0(780만 호출 · 서로 다른 글 5만) · 지원 언어 글이 8n-d 대비 새로 es 0(모든 시험) · 새 고유명사 프랑스어·영어 12 중 es 0(8n-d 7) · 보고서 1절 숫자 재현 · golden 불변 · es 아닌 결과 HEAD 와 다른 것 0(서로 다른 글 5만·의학책 499쪽·짧은 창 15,315) · 분할 20만 HEAD 와 0 · 테스트 1513 ×2 · 변이 4/4 잡힘 + 동등 1 · 말뭉치 덧붙이기만·segment 무수정.
+
+## 8neR-8. 실행 · 정리
+
+막힌 명령 없음. 덧: 처음 지은 글 셋(프랑스어 음악축제 199자 · 스페인어 대화 190자 · 제목식 기사 199자)이 200자 미만이라 스크래치 글만 Edit 로 늘려 다시 돌림 · HEAD 판 `segment.js` 가 `../config.js` 를 읽어 `r8ne/head/` 를 `js/text/` 구조로 옮기고 HEAD `config.js` 를 꺼냄. headless 0 · 서버 0 · 프로세스 조회 0 · 키 0 · npm·다운로드 0 · 의학책은 r8nd 스크립트의 파일 경로만 열고 숫자만(Downloads 목록 안 봄) · 커밋 0 · `git checkout/restore/stash` 0. `git status` 는 시작 때와 같다(+ 이 절).
+
+스크래치 `r8ne/`: `bak/`(시작 판 8파일) · `start-sha1.txt`·`end-sha1.txt` · `head/`(git show HEAD — lang·segment·config) · `v8nd/`(8n-d 판) · `paras.mjs` · `mono.mjs`(+`-out.json`) · `eval.mjs`(+`-out.txt`) · `remeasure.mjs`(+`-out.txt`) · `fuzz.mjs`(+`-out.json`) · `fuzz-names.mjs`(+`-out.txt`) · `golden-check.mjs`(+`golden-out.json`) · `books.mjs`(+`books-out.json`) · `mutate.mjs`(+`mutate-out.json`) · `full1.txt`·`full2.txt` · `section.md`(이 절).
+
+**배포 가능** — 중간 이상 0. P3 는 es 셈을 줄이기만 하고(위반 0), 8n-d 재검증 중간-1(고유명사·저자명 든 짧은 프랑스어·영어 → es)이 닫혔다(새 글 12 중 es 0). 남은 것(대문자 꼴만 많은 스페인어를 놓쳐 HEAD 값 · 소문자 이음말·모두 대문자 이름 — 8n-d 와 같음)은 낮음, 한계로 기록.

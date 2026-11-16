@@ -41,6 +41,8 @@ export default {
   'onboarding.lang.en': 'English',
   'onboarding.lang.fr': 'Français',
   'onboarding.lang.ko': '한국어',
+  /* `[8n — spec 19-1-3 §5]` 원문 언어 이름(자국어 표기). UI 언어 목록에는 없다 — 온보딩 버튼은 index.html 의 고정 4개. */
+  'onboarding.lang.es': 'Español',
 
   'onboarding.consent.title': 'Before you start',
   'onboarding.consent.education.title': 'Education only',
