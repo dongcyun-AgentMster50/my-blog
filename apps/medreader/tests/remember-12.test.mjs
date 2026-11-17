@@ -441,7 +441,9 @@ test('R11 ★ 명령 표 — remember 꼴 · "save" 혼자일 때만 · 부정 �
   assert.deepEqual(c.ar, ['احفظ', 'احفظها', 'احفظ الجملة', 'تذكر', 'ذكرني']);
   assert.deepEqual(c.en, ['remember', 'remember this', 'save this', 'keep this', 'save']);
   assert.deepEqual(c.exact, ['save']);
-  assert.equal(VOICE_COMMANDS[VOICE_COMMANDS.length - 1].id, 'remember', '표 끝(다른 명령 순서 그대로)');
+  // `[20-2]` 표 끝에 `mark` 가 더해졌다 — remember 는 그 바로 앞(다른 명령 순서 그대로)
+  assert.equal(VOICE_COMMANDS[VOICE_COMMANDS.length - 2].id, 'remember', '표 끝 앞(다른 명령 순서 그대로)');
+  assert.equal(VOICE_COMMANDS[VOICE_COMMANDS.length - 1].id, 'mark');
   for (const [s, l, want] of [
     ['احفظ', 'ar', 'remember'], ['من فضلك احفظ', 'ar', 'remember'], ['احفظ الجملة', 'ar', 'remember'], ['ذكرني', 'ar', 'remember'],
     ['remember', 'en', 'remember'], ['Please remember this!', 'en', 'remember'], ['save', 'en', 'remember'], ['save', 'ar', 'remember'],

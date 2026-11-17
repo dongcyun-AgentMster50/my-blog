@@ -91,6 +91,9 @@ export function clearReflow() {
 let wired = false;
 let seq = 0;
 let store = null;
+/** `[20-2]` 마지막으로 칠한 쪽의 찾은 결과 — 선택 줄 겹침 판정·쪽 필기 시트·쪽 칩이 읽는다(DB 를 다시 읽지 않게). */
+let last = null;
+const paintedListeners = new Set();
 
 /** `ui/reader.js` 의 `initReader` 가 부른다(검색 뒤). 구독만 한다. */
 export function initAnnotate(deps) {
@@ -99,23 +102,38 @@ export function initAnnotate(deps) {
   store = (deps && deps.store) || annotationStore();
   onPageRender(() => { paintNow(); });
   onPageRepaint(() => { paintNow(); });
-  onReaderLeave(() => { seq++; clearReflow(); });
+  onReaderLeave(() => { seq++; last = null; clearReflow(); });
 }
 
-/** 지금 쪽의 필기를 다시 찾아 칠한다. 늦게 끝난 옛 쪽 결과는 버린다. */
+/**
+ * 지금 쪽의 필기를 다시 찾아 칠한다. 늦게 끝난 옛 쪽 결과는 버린다.
+ * `[20-2 — 20-1R #5]` 걷기는 **새 결과를 받은 뒤** 같은 틱에(`paintReflow` 가 걷고 바로 칠한다) — 같은 쪽 다시 알림 때 한 프레임
+ * 꺼졌다 켜지지 않게. 칠할 쪽이 없으면(자리표시자·떠남) 곧장 걷는다.
+ */
 export async function paintNow() {
   const token = ++seq;
   const scr = currentScreen();
-  clearReflow();
-  if (!scr || !scr.ready || !scr.desc) return 0;
+  if (!scr || !scr.ready || !scr.desc) { last = null; clearReflow(); return 0; }
   let placed = [];
   try {
-    placed = await (store || annotationStore()).placeOnPage(scr.docId, scr.page, scr.desc);
-  } catch (e) { return 0; }      // 저장소를 못 읽어도 읽기는 계속된다
+    placed = await (store || annotationStore()).placeOnPage(scr.docId, scr.page, scr.desc, { layout: scr.layout });
+  } catch (e) { if (token === seq) { last = null; clearReflow(); } return 0; }      // 저장소를 못 읽어도 읽기는 계속된다
   if (token !== seq) return 0;
   const now = currentScreen();
   if (!now || now.docId !== scr.docId || now.page !== scr.page || now.desc !== scr.desc) return 0;
   const groups = paintGroups(placed);
-  if (now.view === 'original') { original.setAnnotations(groups); return groups.length; }
+  last = { docId: now.docId, page: now.page, desc: now.desc, placed: placed };
+  for (const fn of paintedListeners) { try { fn(last); } catch (e) { /* 구독자 예외 */ } }
+  if (now.view === 'original') { clearReflow(); original.setAnnotations(groups); return groups.length; }
   return paintReflow(groups, lineElement);
 }
+
+/** `[20-2]` 지금 쪽의 찾은 필기(`placeOnPage` 결과) — 그 쪽을 칠한 뒤에만(아니면 null). */
+export function placedNow() {
+  const scr = currentScreen();
+  if (!last || !scr || scr.docId !== last.docId || scr.page !== last.page || scr.desc !== last.desc) return null;
+  return last.placed;
+}
+
+/** `[20-2]` 칠할 때마다 `fn({docId, page, placed})` — 쪽 칩이 수를 다시 센다. 해제 함수를 돌려준다. */
+export function onPainted(fn) { paintedListeners.add(fn); return () => paintedListeners.delete(fn); }

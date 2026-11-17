@@ -100,7 +100,8 @@ function allSynonyms(c) { return c.ar.concat(c.arLoan, c.en); }
 test('C3 ★ V2 표 무결성 — id · 켜짐 · 겹침 = SHARED_FORMS · exact 는 표 안 · 군말·숫자 없음', () => {
   // `[11-2 — spec 17-2-1 4-5 · 11-D11]` `summarize` 를 explain 앞에 더했다(표 무결성 규칙은 그대로 — 아래 겹침·exact·군말·숫자).
   // `[12-2 — spec 17-11 5]` `remember`(기억 카드)를 끝에 더했다(표 무결성 규칙은 그대로).
-  assert.deepEqual(COMMAND_IDS, ['play', 'pause', 'next', 'prev', 'again', 'trOn', 'trOff', 'slower', 'faster', 'summarize', 'explain', 'remember']);
+  // `[20-2 — spec 17-16 5]` `mark`(지금 문장 노랑)를 끝에 더했다(표 무결성 규칙은 그대로).
+  assert.deepEqual(COMMAND_IDS, ['play', 'pause', 'next', 'prev', 'again', 'trOn', 'trOff', 'slower', 'faster', 'summarize', 'explain', 'remember', 'mark']);
   assert.equal(new Set(COMMAND_IDS).size, COMMAND_IDS.length, 'id 중복');
   // `[11-4 — spec 17-2-1 4-5 · 9b-D14]` explain 을 켰다 — 꺼진 명령 0(id 목록·낱말·겹침 규칙은 그대로).
   assert.deepEqual(VOICE_COMMANDS.filter((c) => !c.enabled).map((c) => c.id), []);

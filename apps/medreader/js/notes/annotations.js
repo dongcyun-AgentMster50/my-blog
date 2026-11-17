@@ -47,6 +47,20 @@ export function textHashOf(text) {
 }
 
 /**
+ * `[20-2 — 20-1R #1]` 쪽 레이아웃(`fromStored` — 줄마다 bbox, PDF 좌표) → `boxOf(lineId)`. 레이아웃이 없으면 null
+ * (앵커는 좌표 없이 만들어지고, 동점은 옛 규칙 — 저장한 첫 줄 번호). 순수.
+ * @param {{lines?:Array<{id, bbox?:{x0,y0}}>}} layout
+ * @returns {?function(string):?{x0:number, y0:number}}
+ */
+export function boxOfLayout(layout) {
+  const lines = layout && Array.isArray(layout.lines) ? layout.lines : null;
+  if (!lines || !lines.length) return null;
+  const m = new Map();
+  for (const l of lines) if (l && l.id != null && l.bbox) m.set(String(l.id), l.bbox);
+  return (id) => m.get(String(id)) || null;
+}
+
+/**
  * 지금 쪽의 화면 글자 · 문단 id · 문단 해시(`idx.parts` 순서).
  * @param {Object} desc `describePage(…)`
  * @returns {Promise<{idx:Object, paraIds:Array, paraHashes:string[]}>}
@@ -90,7 +104,8 @@ export function createAnnotationStore(deps) {
   /**
    * 만들기 — 선택 하나 → 레코드 하나 이상(문단마다 · 긴 인용은 나눔, 같은 `group`). 한 트랜잭션.
    * @param {{docId:string, pageNo:number, desc:Object, from:number, to:number, kind?:string, color?:string, note?:string,
-   *          fileHash?:string, docTitle?:string, algo?:number}} input  `from`·`to` = 화면 글자(`screenIndex`) 오프셋
+   *          fileHash?:string, docTitle?:string, algo?:number, layout?:Object}} input  `from`·`to` = 화면 글자(`screenIndex`) 오프셋
+   *   · `[20-2]` `layout` = 지금 쪽 레이아웃(있으면 앵커에 첫 줄 PDF 좌표 `pos` — 동점 가르기)
    * @returns {Promise<Object[]>} 만든 레코드들(없으면 [])
    */
   async function create(input) {
@@ -99,7 +114,8 @@ export function createAnnotationStore(deps) {
     if (!i.docId || !Number.isFinite(pageNo) || !i.desc) return [];
     const kind = i.kind === KIND.NOTE ? KIND.NOTE : KIND.HIGHLIGHT;
     const pi = await pageIndex(i.desc);
-    const ctx = { pageNo: pageNo, algo: i.algo == null ? ALGO_VERSION : Number(i.algo), paraIds: pi.paraIds, paraHashes: pi.paraHashes };
+    const ctx = { pageNo: pageNo, algo: i.algo == null ? ALGO_VERSION : Number(i.algo), paraIds: pi.paraIds, paraHashes: pi.paraHashes,
+      boxOf: boxOfLayout(i.layout) };
     const anchors = [];
     for (const c of splitSelection(pi.idx, i.from, i.to)) {
       const an = anchorOf(pi.idx, c.from, c.to, ctx);
@@ -243,7 +259,7 @@ export function createAnnotationStore(deps) {
    * @param {string} docId
    * @param {number} pageNo
    * @param {Object} desc 지금 쪽 `describePage(…)`
-   * @param {{algo?:number}} [opts]
+   * @param {{algo?:number, layout?:Object}} [opts]  `[20-2]` `layout` = 지금 쪽 레이아웃(동점 가르기 — 줄 PDF 좌표)
    * @returns {Promise<Array<{rec:Object, res:(Object|null)}>>} 고아는 `res: null`
    */
   async function placeOnPage(docId, pageNo, desc, opts) {
@@ -252,12 +268,14 @@ export function createAnnotationStore(deps) {
     const recs = await forPage(docId, pageNo);
     if (!recs.length || !desc) return recs.map((r) => ({ rec: r, res: null }));
     const pi = await pageIndex(desc);
+    const boxOf = boxOfLayout(o.layout);
     const out = [];
     const fixes = [];
     for (const rec of recs) {
-      const res = resolve(rec.anchor, pi.idx, { algo: algo, paraHashes: pi.paraHashes });
+      const res = resolve(rec.anchor, pi.idx, { algo: algo, paraHashes: pi.paraHashes, boxOf: boxOf });
       out.push({ rec: rec, res: res });
-      if (res && res.how !== 'exact' && Number(rec.anchor && rec.anchor.algo) !== algo) fixes.push({ rec: rec, res: res });
+      // `[20-2 — 20-1R #1]` 동점 규칙으로 정한 자리(`tie`)는 고쳐 쓰지 않는다 — 틀린 자리가 `exact` 로 굳지 않게(매번 다시 찾는다).
+      if (res && !res.tie && res.how !== 'exact' && Number(rec.anchor && rec.anchor.algo) !== algo) fixes.push({ rec: rec, res: res });
     }
     for (const f of fixes) {
       const rs = f.res.ranges;
@@ -277,7 +295,20 @@ export function createAnnotationStore(deps) {
     return out;
   }
 
-  return { create, update, remove, forPage, list, count, reattach, placeOnPage };
+  /**
+   * `[20-2 — 20-D10]` 되살리기 — `remove` 가 돌려준 레코드를 그대로 다시 넣는다(3초 [되돌리기]). id·만든 때·`updatedAt` 그대로.
+   * 필기 레코드가 아니면 넣지 않는다. 한 트랜잭션. @returns {Promise<number>} 넣은 수
+   */
+  function restore(recs) {
+    const list = (Array.isArray(recs) ? recs : []).filter(isMine);
+    if (!list.length) return Promise.resolve(0);
+    return db.withTx([STORE], 'readwrite', async (tx, s) => {
+      for (const r of list) await rq(s[STORE].put(r));
+      return list.length;
+    });
+  }
+
+  return { create, update, remove, forPage, list, count, reattach, placeOnPage, restore };
 }
 
 let shared = null;

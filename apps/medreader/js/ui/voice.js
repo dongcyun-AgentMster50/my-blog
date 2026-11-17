@@ -146,6 +146,8 @@ function makeRecord(kind, lang, d, m, now) {
  * @param {Object}   [deps.sayer]            `[11-2]` `tts/say.js` — `{busy(), stop()}`. 말하는 중이면 "바쁨"(9a·화면 단추가 먼저 `cancel()`)
  * @param {Function} [deps.onRemember]       `[12-2]` 음성 "기억" — `({via:'voice', was, heard})` → `Promise<{ok, key?, created?}>`
  *                                           (controls → `ui/remember.js` — 호출 0. 이 파일은 카드 저장소를 모른다 — 주입만)
+ * @param {Function} [deps.onMark]           `[20-2]` 음성 "표시" — `({via:'voice', was, heard})` → `Promise<{ok, key?, already?, was?}>`
+ *                                           (controls → `ui/notesheet.js` 흐름 — 호출 0. `was` = 단추 설명 띠가 멈춰 둔 읽기면 그 상태)
  */
 export function createVoice(deps) {
   const d = deps || {};
@@ -180,6 +182,7 @@ export function createVoice(deps) {
   let flow = null;           // 지금 누름 {was, lang}
   let sayJob = null;         // 실패 안내 한 마디 {was, u, timer}
   let askJob = null;         // `[11-2]` 음성 "요약"·`[11-4]` "설명" — 결과를 기다리거나 말하는 중 {was}
+  let askWas = null;         // `[20-2]` 마이크를 누를 때 끊은 그 흐름의 was(음성 "표시"의 되돌림 — 11-4bR 를 되풀이하지 않게)
   let statusTimer = null;
   const saidInfra = new Set();   // 같은 인프라 실패는 두 번째부터 음성 없이(세션 동안 — 5절)
   const stats = { presses: 0, cancels: 0, says: 0, restores: 0, commands: {} };
@@ -316,6 +319,9 @@ export function createVoice(deps) {
       case 'remember':
         remember(was, heard);                      // `[12-2]` AI 호출 없는 갈래 — 저장 뒤 확인 줄 + 한 마디 → 되돌림
         return;
+      case 'mark':
+        mark(was, heard);                          // `[20-2]` 12-2 remember 와 같은 꼴 — 칠한 뒤 확인 줄 + 한 마디 → 되돌림
+        return;
       default:
         return;
     }
@@ -408,6 +414,54 @@ export function createVoice(deps) {
     });
   }
 
+  /**
+   * `[20-2 — spec 17-16 5 · 20-D7]` 음성 "표시" — 지금 문장(줄 모드면 그 줄을 담은 문장)을 노랑 하이라이트로. 주입 함수
+   * (`deps.onMark` = controls → `ui/notesheet.js` 흐름)는 AI 를 부르지 않는다. 12-2 `remember` 와 **같은 꼴**: 칠하면 확인 줄 +
+   * 한 마디 `voice.mark.done`(이미 표시면 `voice.mark.already`) → `say` 가 끝나면 되돌림 · 문장이 없으면 `voice.mark.none` → 되돌림 ·
+   * 기다리는 사이 손이 닿으면 되돌림 없음.
+   * ★ 되돌릴 상태(11-4bR 다듬기 후보를 이 갈래에서 되풀이하지 않는다): 누른 순간이 멈춤이어도 그 멈춤이 **다른 갈래가 읽기를 멈춰 둔
+   *   것**이면 그 갈래의 `was` — ① 음성 요약·설명을 기다리거나 말하던 중 누름(`askWas` — 그 흐름의 was) ② 주입이 돌려준 `r.was`
+   *   (controls — 단추 설명 띠가 열린 채 멈춰 둔 읽기, 11-4b `inherit` 와 같은 결). 둘 다 "읽던 중"일 때만 쓴다.
+   */
+  function mark(was, heard) {
+    const fn = d.onMark;
+    const prior = askWas;
+    askWas = null;
+    if (typeof fn !== 'function') {
+      status({ text: tr('voice.notYet'), kind: 'info' }, VOICE.NOTICE_MS);
+      say('voice.notYet', was);
+      return;
+    }
+    const job = { was: was };
+    askJob = job;
+    const alive = function () { return askJob === job; };
+    const backOf = function (r) {
+      if (isReading(was)) return was;
+      if (isReading(prior)) return prior;
+      return r && isReading(r.was) ? r.was : was;
+    };
+    let p = null;
+    try { p = Promise.resolve(fn({ via: 'voice', was: was, heard: heard })); } catch (e) { p = Promise.reject(e); }
+    p.then(function (r) {
+      if (!alive()) return;                        // 손이 끊었다 — 되돌림 없음
+      askJob = null;
+      const back = backOf(r);
+      if (!r || !r.ok) {
+        const key = (r && r.key) || 'voice.mark.none';
+        status({ text: tr(key), kind: 'info' }, VOICE.NOTICE_MS);
+        say(key, back);                            // 한 마디가 끝나면 restore(back)
+        return;
+      }
+      confirm('mark', heard);
+      say(r.already ? 'voice.mark.already' : 'voice.mark.done', back);
+    }, function () {
+      if (!alive()) return;
+      askJob = null;
+      status({ text: tr('anno.failed'), kind: 'error' }, VOICE.NOTICE_MS);
+      say('anno.failed', backOf(null));
+    });
+  }
+
   /* ── 인식기 이벤트 → 흐름 ─────────────────────────── */
 
   function onResult(ev) {
@@ -493,6 +547,7 @@ export function createVoice(deps) {
     if (listener.isListening()) { cancel(); return; }  // 듣는 중 다시 탭 = 취소(되돌림 없음)
     let carry = null;
     if (sayJob) { carry = sayJob.was; stopSay(); }       // 안내 중 다시 탭 — 그 누름의 되돌림을 이어받는다
+    askWas = askJob ? askJob.was : null;                 // `[20-2]` 끊는 흐름의 was — 음성 "표시"만 읽는다(다른 명령은 그대로)
     if (askJob || sayerBusy()) stopAsk();                // `[11-2]` 요약을 기다리거나 말하는 중 — 손이 이긴다(되돌림 없음)
     if (!get('voice.noticeAt')) {
       // 첫 사용 고지 카드(8절) — [시작] 탭이 그 제스처 안에서 흐름을 시작한다.

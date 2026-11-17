@@ -123,6 +123,14 @@
   --anno-blue: #bcd8f5;
   --anno-pink: #f9c6dc;
   --anno-note: #8a5a00;
+  /* `[20-2 — 20-1R #3]` 원본 보기 필기 상자 — PDF 종이는 **테마와 무관하게 늘 흰색**(원본 canvas 는 뒤집지 않는다). 그래서 이 다섯은
+     테마마다 다시 정의하지 않는다(:root 한 곳). 흰 종이 위 상자(opacity 0.38): 네 색끼리 가장 가까운 ΔE76 33.5(노랑–초록) ·
+     덮인 검은 글자 대비 ≥ 6.8:1 · 메모 점선(0.9) 흰 종이 대비 6.7:1 — Build 보고서(20-2) `b20-2/paper.mjs`. */
+  --anno-paper-yellow: #ffd000;
+  --anno-paper-green: #2fbf4f;
+  --anno-paper-blue: #2b86f0;
+  --anno-paper-pink: #ee3f8c;
+  --anno-paper-note: #6b4200;
 }
 
 /* `[8b-2]` 띠가 켜지면(유효 모드 show·speak — `ui/trband.js` 가 `<html data-tr-band="on">` 을 건다)

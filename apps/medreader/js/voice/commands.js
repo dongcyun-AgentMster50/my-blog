@@ -63,6 +63,7 @@ export const CMD_LANGS = Object.freeze(['auto', 'ar', 'en']);
 //   `[11-4 — spec 17-2-1 4-5 · 9b-D14]` explain 을 켰다(지금 꺼진 명령 0). 낱말 칸은 9b 그대로 — 맞춤 결과(id)는 바뀌지 않는다.
 // `[11-2]` `summarize`(문단 요약)를 explain 앞에 더했다 — 실행은 `ui/voice.js` 가 주입 함수(`deps.onSummarize`·`[11-4]` `deps.onExplain`)로만.
 // `[12-2]` `remember`(기억 카드)를 끝에 더했다 — 실행은 주입 함수(`deps.onRemember`)로만(AI 해석·호출 없음).
+// `[20-2]` `mark`(지금 문장 노랑 하이라이트)를 끝에 더했다 — 실행은 주입 함수(`deps.onMark`)로만(AI 해석·호출 없음).
 const RAW = [
   {
     id: 'play', enabled: true,
@@ -162,6 +163,16 @@ const RAW = [
     arLoan: [],
     en: ['remember', 'remember this', 'save this', 'keep this', 'save'],
     exact: ['save']
+  },
+  {
+    // `[20-2 — spec 17-16 5 · 20-D7]` 지금 문장을 노랑 하이라이트로(로컬 — AI 호출 0). 낱말은 설계 표 그대로 `[검토 — Nour·운영자]`.
+    //   «علّم»·«علم» 는 정규화가 같은 꼴로 접는다(표에 둘 다 두는 것은 읽는 사람을 위해서 — 9b 표 관례). 한 낱말 «علم» 은 "과학·깃발"
+    //   뜻도 있어 3낱말 이하 말 안에서는 명령이 된다(9b 결정 ① — «علم الأمراض» 같은 두 낱말 의학 용어가 남는 오탐, 보고서·실기기 묶음).
+    id: 'mark', enabled: true,
+    ar: ['علّم', 'علم', 'ظلل', 'ظلّل', 'تظليل', 'علّم الجملة'],
+    arLoan: [],
+    en: ['highlight', 'mark', 'mark this'],
+    exact: []
   }
 ];
 

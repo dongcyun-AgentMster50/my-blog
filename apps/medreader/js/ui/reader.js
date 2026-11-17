@@ -66,6 +66,8 @@ import { ensure as ensureOutline, isOutlineCurrent } from '../search/outline.js'
 import { initSearch } from './search.js';
 // `[20-1 — spec 17-16 4]` 필기 칠하기(구독만) · 겹칠 때 쌓는 순서(낭독 2 — 맨 위)
 import { initAnnotate, prioritize } from './annotate.js';
+// `[20-2 — spec 17-16 5]` 쪽 필기 칩 "필기 n" — 쪽마다 인덱스 `count`(누름은 `ui/notesheet.js`)
+import { annotationStore } from '../notes/annotations.js';
 // `[8e — spec 12-8-1 (3)]` 낮은 화면의 상단바 숨김 [≡] — 표식·상태는 그 파일 하나가 갖는다.
 import { initChrome } from './chrome.js';
 // `[8c-1 — spec 17-7-6 3절]` 탭 판정(누름 시간·움직임·선택 풀기 탭)·가림 굴리기 — 순수 함수, 원본 보기와 같은 규칙.
@@ -549,6 +551,7 @@ export function initReader() {
     backToLine: root.querySelector('#backToLine'),
     viewToggle: root.querySelector('#viewToggle'),
     quizChip: root.querySelector('#quizChipSlot'),
+    annoChip: root.querySelector('#annoChip'),       // `[20-2]` 쪽 필기 칩
     quizBtn: root.querySelector('#readerQuizBtn'),
     // `[8l]` 스캔본·깨짐 안내 띠(문서당 한 번)
     scanNotice: root.querySelector('#scanNotice'),
@@ -913,6 +916,7 @@ function leaveReaderNow() {
   leaveControls();
   if (els && els.mount) clear(els.mount);
   if (els && els.quizChip) els.quizChip.hidden = true;
+  if (els && els.annoChip) { annoChipSeq++; els.annoChip.hidden = true; }   // `[20-2]`
   if (els && els.scanNotice) els.scanNotice.hidden = true;   // `[8l]`
   original.leaveOriginal();
   state.desc = null;
@@ -1348,7 +1352,33 @@ function notifyPage(extra) {
     try { fn(Object.assign({ docId: state.docId, page: state.page }, extra || null)); } catch (e) { /* 구독자 예외 */ }
   }
   paintQuizChip();
+  paintAnnoChip();
 }
+
+/**
+ * `[20-2 — spec 17-16 5]` 쪽 필기 칩 "필기 n" — 그 쪽에 1개 이상일 때만. 쪽을 넘길 때마다 인덱스로 센다(`count` — 글을 읽지 않는다).
+ * 늦게 온 옛 쪽 셈은 버린다. 8e compact(가로)에서는 CSS 가 숨긴다. 누름은 `ui/notesheet.js`(쪽 필기 시트).
+ */
+let annoChipSeq = 0;
+function paintAnnoChip() {
+  if (!els || !els.annoChip) return;
+  const token = ++annoChipSeq;
+  const docId = state.docId;
+  const page = state.page;
+  if (docId == null) { els.annoChip.hidden = true; return; }
+  Promise.resolve(annotationStore().count(docId, page)).then((n) => {
+    if (token !== annoChipSeq || docId !== state.docId || page !== state.page || !els.annoChip) return;
+    els.annoChip.setAttribute('data-i18n-n', String(n));     // 언어를 바꾸면 applyTranslations 가 같은 수로 다시 쓴다
+    els.annoChip.textContent = t('anno.chip', { n: n });
+    els.annoChip.hidden = !(n > 0);
+  }, () => { if (token === annoChipSeq) els.annoChip.hidden = true; });
+}
+
+/** `[20-2]` 만들고 지운 뒤 칩을 다시 센다. */
+export function refreshAnnoChip() { paintAnnoChip(); }
+
+/** `[20-2]` 지금 문서의 `fileHash`(필기 레코드 사본 — 20-3 다시 붙이기). */
+export function docFileHash() { return (state.doc && state.doc.fileHash) || ''; }
 
 /**
  * 5-4 — [이 섹션 퀴즈 풀기] 칩. 판단·파싱은 전부 `ui/quiz.js` 가 한다.

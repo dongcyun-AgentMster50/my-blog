@@ -12,6 +12,10 @@
          `ui/links.js` 로 곧바로(새 탭은 누름 안에서 — 팝업 차단), 그다음 `onAction('lookup')`(controls 는 듣기 취소만).
          링크가 둘 이상이면 18 목록이 `[⋯]` 메뉴 자리(선택 줄 위)에 뜬다 — 18 의 Esc 층·`armAnchor` 그대로.
      · 단추 목록은 **데이터**(`SEL_ACTIONS`)에서 그린다(crossstep-notes 8c-1).
+     · `[20-2 — spec 17-16 5]` `[⋯]` 메뉴 **맨 위 필기 줄**(`.sel-anno` — 칸 목록과 따로, `annoRowModel` 데이터): 색 네 칸 + [메모],
+       선택이 이미 필기와 겹치면 [메모 보기/고치기]·[색 바꾸기]·[지우기]. 겹침은 메뉴를 열 때 controls 가 잰다(`annoState` — 동기),
+       동작은 `onAnno(op, snapshot, {color, id})`. 낭독을 건드리지 않는다(손이 이긴다 — 듣기 취소만, controls). 스냅숏에 선택 **끝 줄**
+       (`endLineId`·`endOff`)을 더했다 — 여러 줄 선택을 필기가 그대로 덮게.
    동작 자체는 모른다 — controls 가 넘긴 `onAction(id, snapshot)` 을 부른다(speaker·readalong·띠를 import 하지 않는다).
    `[⋯]` 메뉴의 Esc 는 18 목록과 같은 층(창 붙잡기 — 띠·시트보다 먼저, 메뉴만 닫고 `[⋯]` 로 포커스).
 
@@ -28,6 +32,8 @@ import { lineOffsetOf, clampSelection } from '../text/select.js';
 // `[18 — spec 17-9 · 결정 18-D1]` [찾아보기] — 검색어는 순수 `queryText`(8c-1 과 같은 6낱말·60자 상수), 여는 일·목록은 `ui/links.js`.
 import { queryText } from '../text/links.js';
 import { lookup, queryLinkCount, closeLookupMenu, lookupMenuOpen } from './links.js';
+// `[20-2 — spec 17-16 5]` 필기 줄의 색 네 칸(순서·이름 한 곳)
+import { ANNO } from '../config.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — `tests/taptr-8c.test.mjs`
@@ -101,6 +107,29 @@ export function withSummary(model, ok) {
     ? Object.assign({}, m, { disabled: true, note: 'sum.notEligible' }) : m));
 }
 
+/**
+ * `[20-2 — spec 17-16 5 · 20-D4·D10]` `[⋯]` 메뉴 맨 위 필기 줄의 단추들. 순수 함수.
+ *   · 만들기(`create`) — 색 네 칸(노랑·초록·파랑·분홍 — 누르면 그 색 하이라이트) + [메모](메모 시트)
+ *   · 선택이 이미 필기와 겹침(`edit`) — [메모 보기/고치기] · [색 바꾸기](하이라이트만) · [지우기]
+ *   · [색 바꾸기]를 누른 뒤(`sub === 'recolor'`) — 색 네 칸(지금 색 눌림)
+ * @param {?{mode:string, kind?:string, color?:string}} state  `deps.annoState(snap)` — null 이면 줄 없음
+ * @param {?string} sub
+ * @param {ReadonlyArray<string>} colors
+ * @returns {{act:string, key:string, color?:string, pressed?:boolean}[]}
+ */
+export function annoRowModel(state, sub, colors) {
+  if (!state) return [];
+  const sw = (pressedColor) => colors.map((c) => ({ act: 'color', key: 'anno.color.' + c, color: c, pressed: c === pressedColor }));
+  if (state.mode === 'edit') {
+    if (sub === 'recolor' && state.kind === 'highlight') return sw(state.color);
+    const out = [{ act: 'edit', key: 'anno.note.view' }];
+    if (state.kind === 'highlight') out.push({ act: 'recolor', key: 'anno.recolor' });
+    out.push({ act: 'remove', key: 'anno.delete' });
+    return out;
+  }
+  return sw(null).concat([{ act: 'note', key: 'anno.note.add' }]);
+}
+
 /** `[11-2]` `[⋯]` 를 보일까 — 메뉴 안에 보이는 칸이 하나라도 있을 때. 순수 함수. */
 export function moreVisible(model) {
   return (Array.isArray(model) ? model : []).some((m) => m.more && !m.hidden);
@@ -135,12 +164,17 @@ let actions = SEL_ACTIONS;
 let more = null;
 /** `[11-2]` [요약] 칸 — 이 스냅숏의 문단이 요약 대상인가(메뉴를 열 때 잰다 · 모르면 undefined). */
 let summaryOk;
+/** `[20-2]` 필기 줄 — 메뉴를 열 때 잰 꼴(`deps.annoState(snap)`)과 [색 바꾸기] 를 누른 뒤(`'recolor'`). */
+let annoState = null;
+let annoSub = null;
 
 /**
  * @param {{root:Element, onAction:(id:string, snap:Object)=>void, lift?:(bottom:number, edge:number)=>void,
  *          canSummarize?:(snap:Object)=>boolean}} d
  *   `lift` — 선택 아래변이 이 줄 윗변 − 4px 보다 아래면 그만큼 굴린다(controls → reader `liftAbove`).
  *   `canSummarize` — `[11-2]` [요약] 흐림 판정(controls → `ask.canSummarize` — 호출 0, 읽기만). `[⋯]` 를 열 때 한 번.
+ *   `annoState` — `[20-2]` 필기 줄의 꼴(controls → `notesheet` 흐름 `stateFor` — 지금 쪽의 찾은 필기와 겹치나, 동기 · null = 줄 없음).
+ *   `onAnno(op, snap, {color, id})` — `[20-2]` 필기 줄 단추(op = highlight · note · edit · recolor · remove). 둘 다 있을 때만 줄을 만든다.
  * @returns {{hide:Function, clear:Function, refresh:Function}}
  */
 export function initSelBar(d) {
@@ -149,8 +183,17 @@ export function initSelBar(d) {
   const bar = document.getElementById('selBar');
   if (!bar || !x.root || typeof x.onAction !== 'function') return api();
   els = { root: x.root, bar: bar, list: bar.querySelector('#selActions'), note: bar.querySelector('#selNote'),
-    moreBtn: bar.querySelector('#selMoreBtn'), menu: bar.querySelector('#selMore') };
+    moreBtn: bar.querySelector('#selMoreBtn'), menu: bar.querySelector('#selMore'), anno: null };
   deps = x;
+  // `[20-2]` `[⋯]` 메뉴 맨 위 필기 줄 — 칸(`data-sel-action`)이 아니라 따로 그린다(칸 목록 `SEL_ACTIONS` 는 그대로)
+  if (els.menu && typeof x.annoState === 'function' && typeof x.onAnno === 'function') {
+    els.anno = document.createElement('div');
+    els.anno.className = 'sel-anno';
+    els.anno.setAttribute('role', 'group');
+    els.anno.setAttribute('data-i18n-aria', 'anno.row');
+    els.anno.hidden = true;
+    els.menu.insertBefore(els.anno, els.menu.firstChild);
+  }
   render(null);
 
   document.addEventListener('selectionchange', onSelectionChange);
@@ -248,8 +291,15 @@ function snapshotOf(sel) {
   const sec = line.closest('section.page');
   const pg = sec ? Number(sec.getAttribute('data-page')) : NaN;
   // `[8f-2]` `multi` — 선택이 다음 줄까지 걸쳤다(단어 시트가 줄 글자 대신 선택 글자로 원어를 만든다 — `wordsheet.pickSurface`).
-  return { lineId: id, start: start, end: Math.max(start, end), text: text.slice(0, 400), page: Number.isFinite(pg) ? pg : null,
+  const s = { lineId: id, start: start, end: Math.max(start, end), text: text.slice(0, 400), page: Number.isFinite(pg) ? pg : null,
     multi: endLine !== line };
+  // `[20-2 — spec 17-16 5]` 필기는 선택 **끝 줄**까지 — 끝이 다른 흐름 줄이면 그 줄 id·오프셋(같은 I1 좌표). 흐름 밖이면 두지 않는다
+  // (필기는 시작 줄 끝까지). 다른 단추는 이 두 필드를 보지 않는다.
+  if (endLine && endLine !== line && endLine.closest('article.reflow') && els.root.contains(endLine)) {
+    const eid = endLine.getAttribute('data-line-id');
+    if (eid) { s.endLineId = eid; s.endOff = offsetIn(endLine, r.endContainer, r.endOffset); }
+  }
+  return s;
 }
 
 /**
@@ -268,9 +318,13 @@ function render(s) {
   }
 }
 
+/** 칸 단추들 — `[20-2]` 메뉴 맨 위 필기 줄(`.sel-anno`)은 칸이 아니다(그대로 둔다). */
+function actionButtons(host) { return Array.from(host.children).filter((b) => b.hasAttribute('data-sel-action')); }
+
 function paintButtons(host, model, item) {
-  if (host.children.length !== model.length || Array.from(host.children).some((b, i) => b.getAttribute('data-sel-action') !== model[i].id)) {
-    while (host.firstChild) host.removeChild(host.firstChild);
+  const had = actionButtons(host);
+  if (had.length !== model.length || had.some((b, i) => b.getAttribute('data-sel-action') !== model[i].id)) {
+    for (const b of had) host.removeChild(b);
     for (const m of model) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -282,8 +336,9 @@ function paintButtons(host, model, item) {
     }
     applyTranslations(els.bar);
   }
+  const now = actionButtons(host);
   for (let i = 0; i < model.length; i++) {
-    const b = host.children[i];
+    const b = now[i];
     b.hidden = model[i].hidden;
     if (model[i].disabled) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
     b.setAttribute('data-sel-note', model[i].note);
@@ -301,6 +356,11 @@ function openMore(byKey) {
   if (snap && deps && typeof deps.canSummarize === 'function') {
     try { summaryOk = !!deps.canSummarize(Object.assign({}, snap)); } catch (e) { summaryOk = undefined; }
   }
+  // `[20-2]` 필기 줄 — 이 선택이 이미 필기와 겹치나(지금 쪽의 찾은 결과로 — DB 를 기다리지 않는다)
+  annoSub = null;
+  annoState = null;
+  if (snap && els.anno) { try { annoState = deps.annoState(Object.assign({}, snap)) || null; } catch (e) { annoState = null; } }
+  paintAnno();
   render(snap);
   els.menu.classList.remove('sel-more-cols');
   try {
@@ -337,7 +397,62 @@ function closeMore(back) {
 }
 
 function menuItems() {
-  return els && els.menu ? Array.from(els.menu.querySelectorAll('button[data-sel-action]')).filter((b) => !b.hidden) : [];
+  // `[20-2]` 필기 줄 단추(`data-anno`)가 먼저 — 화살표가 맨 위 줄부터 닿는다(DOM 순서)
+  return els && els.menu ? Array.from(els.menu.querySelectorAll('button[data-anno], button[data-sel-action]'))
+    .filter((b) => !b.hidden && !(b.parentElement && b.parentElement.hidden)) : [];
+}
+
+/** `[20-2]` 필기 줄을 (다시) 그린다 — `annoRowModel` 데이터에서. 글자는 i18n(`data-i18n`·`data-i18n-aria`), `innerHTML` 0. */
+function paintAnno() {
+  if (!els || !els.anno) return;
+  const model = annoRowModel(annoState, annoSub, ANNO.COLORS);
+  const host = els.anno;
+  while (host.firstChild) host.removeChild(host.firstChild);
+  host.hidden = model.length === 0;
+  host.setAttribute('data-mode', annoState ? (annoSub || annoState.mode) : 'none');
+  for (const m of model) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.tabIndex = -1;
+    b.setAttribute('data-anno', m.act);
+    if (m.act === 'color') {
+      b.className = 'sel-btn sel-swatch';
+      b.setAttribute('data-color', m.color);
+      b.setAttribute('data-i18n-aria', m.key);
+      if (m.pressed) b.setAttribute('aria-current', 'true');
+      const dot = document.createElement('span');
+      dot.className = 'sel-swatch-dot anno-dot-' + m.color;
+      dot.setAttribute('aria-hidden', 'true');
+      b.appendChild(dot);
+    } else {
+      b.className = 'sel-btn sel-anno-btn';
+      b.setAttribute('data-i18n', m.key);
+    }
+    host.appendChild(b);
+  }
+  applyTranslations(host);
+}
+
+/** `[20-2]` 필기 줄 단추 — [색 바꾸기]는 줄을 색 네 칸으로 바꾸고(메뉴는 그대로), 나머지는 메뉴를 닫고 controls 에 넘긴다. */
+function onAnnoClick(b, ev) {
+  const act = b.getAttribute('data-anno');
+  if (act === 'recolor') {
+    annoSub = 'recolor';
+    paintAnno();
+    const items = menuItems();
+    items.forEach((x, k) => { x.tabIndex = k === 0 ? 0 : -1; });
+    if (ev.detail === 0 && items[0]) items[0].focus();
+    return;
+  }
+  const s = snap;
+  const st = annoState;
+  if (!s) return;
+  const color = b.getAttribute('data-color');
+  let op = act;
+  if (act === 'color') op = annoSub === 'recolor' && st && st.mode === 'edit' ? 'recolor' : 'highlight';
+  closeMore(false);
+  try { deps.onAnno(op, Object.assign({}, s), { color: color, id: st && st.id ? st.id : null }); } catch (e) { /* 동작 오류가 줄을 막지 않는다 */ }
 }
 
 function onMoreKey(ev) {
@@ -380,6 +495,8 @@ export function hide() {
   closeMore(false);                      // `[11-2]` `[⋯]` 메뉴도
   snap = null;
   summaryOk = undefined;
+  annoState = null;                      // `[20-2]`
+  annoSub = null;
   els.bar.hidden = true;
   if (els.note) { els.note.hidden = true; els.note.textContent = ''; }
   document.documentElement.removeAttribute('data-sel-bar');
@@ -398,7 +515,7 @@ export function refresh(list) {
   closeLookupMenu(true);
   closeMore(false);
   while (els.list.firstChild) els.list.removeChild(els.list.firstChild);
-  if (els.menu) while (els.menu.firstChild) els.menu.removeChild(els.menu.firstChild);
+  if (els.menu) for (const b of actionButtons(els.menu)) els.menu.removeChild(b);   // `[20-2]` 필기 줄은 남긴다
   render(snap);
 }
 
@@ -421,6 +538,9 @@ function onClick(ev) {
     if (more) closeMore(false); else if (snap) openMore(ev.detail === 0);
     return;
   }
+  // `[20-2]` 필기 줄
+  const ab = ev.target && ev.target.closest ? ev.target.closest('button[data-anno]') : null;
+  if (ab && els.anno && els.anno.contains(ab)) { onAnnoClick(ab, ev); return; }
   const b = ev.target && ev.target.closest ? ev.target.closest('button[data-sel-action]') : null;
   if (!b || !els.bar.contains(b) || b.hidden) return;
   const id = b.getAttribute('data-sel-action');
@@ -458,8 +578,12 @@ function attachDebugHook() {
         buttons: Array.from(els.list.children).map((b) => ({ id: b.getAttribute('data-sel-action'), hidden: b.hidden })),
         // `[11-2]` `[⋯]` 메뉴 — 보이는가·열렸나·칸(이름·숨김·흐림)·[요약] 판정
         more: els.moreBtn ? { shown: !els.moreBtn.hidden, open: !!more, expanded: els.moreBtn.getAttribute('aria-expanded'),
-          items: els.menu ? Array.from(els.menu.children).map((b) => ({ id: b.getAttribute('data-sel-action'), hidden: b.hidden,
+          items: els.menu ? actionButtons(els.menu).map((b) => ({ id: b.getAttribute('data-sel-action'), hidden: b.hidden,
             disabled: b.getAttribute('aria-disabled') === 'true' })) : [] } : null,
+        // `[20-2]` 필기 줄 — 꼴·단추(동작·색) · 겹친 필기 id 는 담지 않는다(꼴만)
+        anno: els.anno ? { hidden: els.anno.hidden, mode: els.anno.getAttribute('data-mode'),
+          buttons: Array.from(els.anno.children).map((b) => ({ act: b.getAttribute('data-anno'), color: b.getAttribute('data-color'),
+            current: b.getAttribute('aria-current') === 'true' })) } : null,
         summaryOk: summaryOk === undefined ? null : summaryOk };
     },
     /** `[11-2]` 측정용 — `[⋯]` 메뉴를 연다/닫는다(누름 없이). */

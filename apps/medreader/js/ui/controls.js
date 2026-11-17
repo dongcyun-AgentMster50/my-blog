@@ -71,6 +71,11 @@ import { createAsk, explainPlan, sentenceIndexOf } from './ask.js';
 import { createRemember } from './remember.js';
 // `[13-1 — spec 17-12 4]` 낭독 기록·읽은 쪽 — speaker 를 주입(서비스는 tts 를 모른다). 리더에 들어오면 붙이고 떠나면 뗀다.
 import { readLogStore, bucketFor } from '../plan/readlog.js';
+// `[20-2 — spec 17-16 5]` 필기 만들기 — 선택 줄 `[⋯]` 필기 줄 · 메모 시트 · 쪽 필기 시트 · 음성 "표시"(호출 0 · 낭독을 멈추지 않는다).
+// 칠하기는 20-1 의 길(`annotate.paintNow`)만 — 지금 쪽의 찾은 결과(`placedNow`)로 겹침을 잰다.
+import { createAnnoFlow, initNoteSheet, inheritWas, docMeta } from './notesheet.js';
+import { placedNow, paintNow } from './annotate.js';
+import { currentScreen, refreshAnnoChip } from './reader.js';
 
 let els = null;
 let speaker = null;
@@ -102,6 +107,10 @@ let remember = null;
  */
 let explainSnap = null;
 const noteUnits = new Map();
+/** `[20-2]` 필기 — 흐름(`createAnnoFlow` — DOM 없음) · 시트(메모·쪽 필기·[되돌리기]) · 마지막 설명의 `was`(음성 "표시" 되돌림). */
+let annoFlow = null;
+let notesUi = null;
+let explainHeld = null;
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -289,7 +298,24 @@ export function initControls() {
     onAction: onSelAction,
     lift: function (bottom, edge) { liftAbove(bottom, edge); },
     // `[11-2]` [⋯] 를 열 때 [요약] 흐림 판정(그 문단이 요약 대상인가 — 호출 0)
-    canSummarize: function (s) { return ask ? ask.canSummarize(s) : undefined; }
+    canSummarize: function (s) { return ask ? ask.canSummarize(s) : undefined; },
+    // `[20-2]` [⋯] 맨 위 필기 줄 — 겹침(동기 · 지금 쪽의 찾은 결과) · 단추
+    annoState: function (s) { return annoFlow ? annoFlow.stateFor(s) : null; },
+    onAnno: onAnnoAction
+  });
+  // `[20-2 — spec 17-16 5]` 필기 — 흐름(speaker 는 읽기만 — 음성 "표시"의 지금 문장) · 시트(열 때 다른 시트·선택 줄을 거둔다)
+  annoFlow = createAnnoFlow({
+    screen: currentScreen,
+    placed: placedNow,
+    repaint: paintNow,
+    meta: docMeta,
+    units: function () { return speaker.sentenceUnits(); },
+    current: function () { return { cur: speaker.getCurrent(), idx: speaker.getIndex(), unit: speaker.getUnit() }; }
+  });
+  notesUi = initNoteSheet({
+    flow: annoFlow,
+    focusBack: function (lineId) { focusLine(lineId, false); },
+    beforeOpen: function () { if (wordsheet) wordsheet.close(false); if (sumsheet) sumsheet.close(false); if (selbar) selbar.hide(); }
   });
   // `[8f-2 — spec 17-7-6 4-5]` 단어 시트 — 문장 단위는 탭 번역과 같은 `speaker.sentenceUnits()`(문지기 문맥을 먼저 맞춘다),
   // 문서·대상 언어·문체는 리더 값. 시트가 준비되면 선택 줄 [단어 번역]을 켠다(목록을 바꿔 끼움 — 8c-1 `refresh`).
@@ -455,6 +481,15 @@ export function initControls() {
     // `[12-2 — spec 17-11 5]` 음성 "기억" — 지금 문장을 카드로(호출 0). 저장 뒤 띠 [☆] 를 다시 본다(같은 문장이면 [★]).
     onRemember: function () {
       return remember ? remember.fromVoice().then(function (r) { if (trband) trband.refreshStar(); return r; }) : Promise.resolve(null);
+    },
+    // `[20-2 — spec 17-16 5 · 20-D7]` 음성 "표시" — 지금 문장 노랑(호출 0). 되돌릴 상태는 단추 설명 띠가 멈춰 둔 읽기를 이어받는다
+    // (`inheritWas` — 11-4bR 다듬기 후보를 이 갈래에서 되풀이하지 않는다).
+    onMark: function (o) {
+      if (!annoFlow) return Promise.resolve(null);
+      return annoFlow.markCurrent().then(function (r) {
+        if (r && r.ok && !r.already) refreshAnnoChip();
+        return Object.assign({}, r, { was: inheritWas(o && o.was, explainHeld, !!trband && trband.isNoteOpen()) });
+      });
     }
   });
   if (mounted) mounted.button.addEventListener('click', () => voice.press());
@@ -619,6 +654,7 @@ export function leaveControls() {
   if (sumsheet) sumsheet.close(false);   // `[11-2]` 요약 시트도
   if (sayer) sayer.stop();
   if (remember) remember.leave();        // `[12-2]` 뒷면 기다림(pendingBacks)은 리더 세션 동안만
+  explainHeld = null;                    // `[20-2]` (메모·쪽 필기 시트·[되돌리기] 줄은 notesheet 가 리더 떠남에서 거둔다)
   noteUnits.clear();
   lastShown = null;
   toggleRatePanel(false);
@@ -665,6 +701,8 @@ function openTapFor(lineId, segsWanted) {
 function onSelAction(id, snap) {
   cancelVoice();
   if (!snap || snap.lineId == null) return;
+  // `[20-2]` [설명] 누르기 전 상태·설명 띠(ask 가 같은 틱에 읽기를 멈추고 띠를 연다 — 그 전에 잰다)
+  const pre = id === 'explain' && speaker ? { st: speaker.getState(), band: !!trband && trband.isNoteOpen() } : null;
   // `[12-2]` [설명]이면 이 스냅숏이 설명 띠 [☆] 의 대상(ask 가 같은 틱에 띠를 연다 — `noteUnitFor`). 이 함수 끝에서 비운다.
   explainSnap = id === 'explain' ? snap : null;
   if (id === 'word' && sumsheet) sumsheet.close(false);    // `[11-2]` 시트는 한 번에 하나
@@ -691,6 +729,8 @@ function onSelAction(id, snap) {
   } else if (id === 'explain') {
     // `[11-4 — spec 17-2-1 4-7 · 11-D15]` 설명 — 선택 시작 줄의 문장(호출 1, 캐시 적중이면 0). 읽는 중이면 멈추고 말한 뒤 이어 읽는다.
     if (ask) ask.explain({ via: 'button', snap: snap }).catch(() => { /* 결과는 띠가 그린다 */ });
+    // `[20-2]` 이 누름의 was(ask 의 `inherit` 와 같은 결 — 누르기 **전**에 잰 값) — 띠가 열린 채 음성 "표시"를 하면 끝난 뒤 이 was 로.
+    if (pre) explainHeld = { was: inheritWas(pre.st, explainHeld, pre.band) };
     // `[11-4b — 11-4R #3]` [문장 번역]처럼 고른 줄을 띠 위로 — 띠는 ask 가 같은 틱에 열었다(선택 줄은 거둬져 띠 윗변이 가장자리).
     if (trband) liftLineAbove(snap.lineId, liftEdge(selbar ? selbar.top() : null, trband.bandTop()));
   } else if (id === 'remember') {
@@ -703,6 +743,39 @@ function onSelAction(id, snap) {
     }
   }
   explainSnap = null;
+}
+
+/**
+ * `[20-2 — spec 17-16 5]` 선택 줄 `[⋯]` 필기 줄 — 하이라이트(색) · 메모 시트(새 메모 · 보기/고치기) · 색 바꾸기 · 지우기.
+ * 첫 줄에서 듣기를 취소한다(손이 이긴다). **낭독은 건드리지 않는다**(만들기·지우기는 발화를 끊지 않는다). 칠하기는 흐름이 20-1 의 길로.
+ * @param {string} op  highlight · note · edit · recolor · remove
+ * @param {Object} snap  선택 스냅숏
+ * @param {{color:?string, id:?string}} arg
+ */
+function onAnnoAction(op, snap, arg) {
+  cancelVoice();
+  if (!annoFlow || !snap) return;
+  const a = arg || {};
+  const fail = (r) => { if (selbar) selbar.note((r && r.key) || 'anno.failed'); };
+  if (op === 'highlight') {
+    annoFlow.highlight(snap, a.color).then((r) => {
+      if (!r || !r.ok) { fail(r); return; }
+      if (selbar) selbar.clear();              // 선택 색이 칠한 색을 가리지 않게
+      refreshAnnoChip();
+    }, () => fail(null));
+  } else if (op === 'note') {
+    if (notesUi) notesUi.openDraft(snap);
+  } else if (op === 'edit' && a.id) {
+    if (notesUi) notesUi.openEdit(a.id, snap.lineId);
+  } else if (op === 'recolor' && a.id) {
+    annoFlow.recolor(a.id, a.color).then((r) => {
+      if (!r || !r.ok) { fail(r); return; }
+      if (selbar) selbar.clear();
+    }, () => fail(null));
+  } else if (op === 'remove' && a.id) {
+    if (selbar) selbar.clear();
+    if (notesUi) notesUi.askRemove(a.id);
+  }
 }
 
 /**
