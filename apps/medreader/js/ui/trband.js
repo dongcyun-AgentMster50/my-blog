@@ -32,6 +32,13 @@
    (준비 중 · 글(+ 고지 한 줄) · 실패 + [다시 시도] · 막힘 짧은 줄 · 대상 아님). 요청·소리는 하지 않는다 — `ui/ask.js` 가 파이프라인을
    부르고 `updateNote` 로 알린다. 말하는 동안 `noteRoll` 이 기존 경과 비율 스크롤(`startRoll` 장치 하나)을 설명 글 길이로 돌린다.
    [×]·Esc 로 닫으면 `onClose`(ask — 말하기 멈춤, 되돌림 없음).
+
+   ── `[12-2]` [☆] 기억 카드 (spec 17-11 5 · 12-D5) ─────────
+   머리 단추 칸의 [☆] 자리(`#trSlot`)에 단추 하나(`#trStar`, 48×48) — **세 모드 같은 단추**: 낭독(지금 문장 — 표 안내·인용이면 숨김,
+   칸에 홀로) · 탭(탭한 문장들 — [문단 전체] 보기면 숨김) · 설명(설명이 ready 일 때 — 설명 사본도). 무엇을 가리키는지는 순수
+   `starTarget`, 상태·저장은 controls 가 넘긴 `setRemember({stateFor, toggle})`(`ui/remember.js` — 호출 0). 카드가 있으면 `[★]`
+   (`aria-pressed="true"`). 누르면 낭독은 멈추지 않고, 띠를 만진 것으로 보지 않는다(굴림 멈춤은 띠 본문만 — `touchHolds`).
+   결과 한 줄은 상태 줄에 잠깐(`flash`).
    ============================================================ */
 
 import * as settings from '../settings.js';
@@ -207,6 +214,40 @@ export function noteFailBanner(rec, ctx) {
 }
 
 /**
+ * `[12-2 — spec 17-11 5]` 띠 [☆] 가 지금 가리키는 문장(들) — 없으면 null(단추 숨김). 순수 함수.
+ *   · 설명 모드(`note`) — 설명이 ready 이고 그 문장 단위(`unit`)를 알 때: `{origin:'explain', unit, explain}`
+ *   · 탭 모드(`tap`) — [문단 전체] 보기가 아니고 탭한 문장이 있을 때: `{origin:'tap', segs}`(둘이면 카드 둘)
+ *   · 낭독 모드 — 지금 문장이 있고 표 안내·인용이 아닐 때(`seg` 가 있음): `{origin:'band', segs:[{seg, src}]}`
+ * `key` = 대상이 바뀌었는지 가르는 값(메모리에만 — 디버그에 싣지 않는다). `enabled` 거짓(기억 카드 배선 없음)이면 늘 null.
+ * @param {{enabled:boolean, cur?:{src:?string, seg:?number}, tap?:{full:boolean, segs:Array}, note?:{id:number, state:string, unit?:Object, text?:string}}} o
+ * @returns {?{origin:string, key:string, segs?:Array, unit?:Object, explain?:string}}
+ */
+export function starTarget(o) {
+  const x = o || {};
+  if (!x.enabled) return null;
+  if (x.note) {
+    const n = x.note;
+    return n.state === 'ready' && n.unit ? { origin: 'explain', unit: n.unit, explain: String(n.text == null ? '' : n.text), key: 'explain\u0001' + n.id } : null;
+  }
+  if (x.tap) {
+    const segs = Array.isArray(x.tap.segs) ? x.tap.segs.filter((s) => s && typeof s.src === 'string' && s.src) : [];
+    if (x.tap.full || !segs.length) return null;
+    return { origin: 'tap', segs: segs.map((s) => ({ seg: s.seg, src: s.src })), key: 'tap\u0001' + segs.map((s) => s.seg + '\u0002' + s.src).join('\u0003') };
+  }
+  const c = x.cur || {};
+  if (typeof c.src !== 'string' || !c.src || !Number.isInteger(c.seg)) return null;
+  return { origin: 'band', segs: [{ seg: c.seg, src: c.src }], key: 'band\u0001' + c.seg + '\u0002' + c.src };
+}
+
+/**
+ * `[12-2]` 띠를 만진 것이 굴림 멈춤(7-7)인가 — 띠 **본문**을 만질 때만. [☆] 단추(`data-tr-action="remember"`) 안이면 아니다. 순수 함수.
+ * @param {?{closest?:Function}} target  이벤트 대상(DOM 요소)
+ */
+export function touchHolds(target) {
+  return !(target && typeof target.closest === 'function' && target.closest('[data-tr-action="remember"]'));
+}
+
+/**
  * 7-7 경과 비율 스크롤 — `(경과 − 1s) / 예상 시간` 을 0~1 로 자른다. 순수 함수.
  * @returns {number}
  */
@@ -308,6 +349,15 @@ let suspendInline = null;
  */
 let noteSeq = 0;
 
+/** `[12-2]` 기억 카드 — controls 가 넘긴 `{stateFor(target), toggle(target), noteUnit(lineId)}`(`ui/remember.js`). 없으면 [☆] 없음. */
+let rem = null;
+/** `[12-2]` [☆] 상태 — 가리키는 대상(`starTarget`)·눌림·누르는 중·번호(늦게 온 답이 다른 문장을 칠하지 않게). */
+const star = { key: null, target: null, pressed: false, busy: false, seq: 0 };
+/** `[12-2]` 상태 줄에 잠깐 보일 한 줄(i18n 키) — `flash`. */
+let flashKey = null;
+let flashTimer = null;
+const FLASH_MS = 2500;
+
 /**
  * @param {{readalong:Object, speaker:Object}} deps  controls 가 만든 그 둘(8b-1 계약 8절)
  * @returns {{sync:Function, leave:Function}}
@@ -329,7 +379,11 @@ export function initTrBand(deps) {
     close: band.querySelector('#trClose'),
     // `[11-4]` 설명 모드 — 꼬리표 "설명" · [▶ 다시 듣기]
     kind: band.querySelector('#trKind'),
-    replay: band.querySelector('#trReplay')
+    replay: band.querySelector('#trReplay'),
+    // `[12-2]` [☆] 자리(`#trSlot`)와 그 안의 단추 · 글리프
+    slot: band.querySelector('#trSlot'),
+    star: band.querySelector('#trStar'),
+    starGlyph: band.querySelector('#trStarGlyph')
   };
   ra = d.readalong;
   sp = d.speaker;
@@ -342,14 +396,15 @@ export function initTrBand(deps) {
     else if (b.getAttribute('data-tr-action') === 'close') closeTapByUser(ev.detail === 0);   // `[8c-1c]` 0 = 키보드로 누름
     else if (b.getAttribute('data-tr-action') === 'para') toggleFull();
     else if (b.getAttribute('data-tr-action') === 'replay') onReplay();   // `[11-4]` [▶ 다시 듣기]
+    else if (b.getAttribute('data-tr-action') === 'remember') onStar();   // `[12-2]` [☆]/[★] — 낭독은 그대로
   });
 
   /* ── `[8c-1b]` Esc — 탭 띠가 **가장 위**일 때만 닫는다. 붙잡기 단계에서 먼저 본다: 팝오버(Aa·속도)·시트(음성 고지 카드)·
      `<dialog>`·8e `[≡]` 가 열려 있으면 그쪽 몫이라 손대지 않는다(그것들이 자기 Esc 로 닫힌 뒤 띠까지 닫히지 않게). ── */
   document.addEventListener('keydown', onEscKey, true);
 
-  /* ── 띠를 만지면 그 문장 동안 자동 스크롤을 멈춘다(7-7) ── */
-  const hold = () => { roll.held = true; };
+  /* ── 띠를 만지면 그 문장 동안 자동 스크롤을 멈춘다(7-7) — `[12-2]` [☆] 단추 누름은 본문을 만진 것이 아니다(`touchHolds`) ── */
+  const hold = (ev) => { if (touchHolds(ev && ev.target)) roll.held = true; };
   band.addEventListener('pointerdown', hold, { passive: true });
   band.addEventListener('touchstart', hold, { passive: true });
   band.addEventListener('wheel', hold, { passive: true });
@@ -370,7 +425,7 @@ export function initTrBand(deps) {
   ra.addEventListener('notice-clear', (ev) => onNoticeClear(ev.detail || {}));
   ra.addEventListener('remote', (ev) => onRemote(ev.detail || {}));
 
-  onLangChange(() => { if (els) { applyTranslations(els.band); lastPaint = ''; paint(); } });
+  onLangChange(() => { if (els) { applyTranslations(els.band); lastPaint = ''; paint(); paintStar(); } });
   applyTranslations(band);
   attachDebugHook();
   return api();
@@ -379,6 +434,8 @@ export function initTrBand(deps) {
 function api() {
   return { sync: sync, leave: leave, openTap: openTap, closeTap: closeTap, isTapOpen: isTapOpen, bandTop: bandTop,
     setInlineSuspend: setInlineSuspend,
+    // `[12-2]` [☆] 기억 카드 — 배선 · 다른 입구(선택 줄·음성)로 저장한 뒤 다시 보기
+    setRemember: setRemember, refreshStar: refreshStar,
     // `[11-4]` 설명 모드
     openNote: openNote, updateNote: updateNote, noteRoll: noteRoll, isNoteOpen: isNoteOpen, noteView: noteView,
     noteBanner: noteBanner, dropNoteBanner: dropNoteBanner };   // `[11-4b]` · `[11-4c]`
@@ -422,6 +479,8 @@ export function leave() {
   if (offCur) { try { offCur(); } catch (e) { /* 이미 풀림 */ } offCur = null; }
   cur = { src: null, seg: null, page: null };
   lastPaint = '';
+  clearFlash();                          // `[12-2]` [☆] 한 줄·상태도 거둔다(다른 문서에서 옛 답이 칠하지 않게)
+  syncStar(null);
   els.band.hidden = true;
   document.documentElement.removeAttribute('data-tr-band');
 }
@@ -440,6 +499,7 @@ function onLine(d) {
     if (src !== null && seg !== null) offCur = ra.onChange(src, () => paint());
     // 새 문장 — 맨 위에서, 손을 뗀 상태로. show 모드는 원문 발화 시간으로 흐른다(7-7).
     roll.held = false;
+    clearFlash();                        // `[12-2]` 앞 문장의 [☆] 한 줄을 다음 문장에 남기지 않는다
     resetScroll();
     if (shownMode === 'show') startRoll('src');
     else stopRoll();
@@ -485,7 +545,16 @@ function targetLang() { return normalizeTranslationLang(settings.get('ai.transla
 function paint() {
   if (!els || !ra) return;
   if (tap) { paintTap(); return; }
-  if (els.tools) els.tools.hidden = true;
+  // `[12-2]` 낭독 모드의 머리 칸 = [☆] 홀로(문장일 때만) — [문단 전체]·꼬리표·[▶ 다시 듣기]·[×] 는 탭·설명 모드 것.
+  const st = starTarget({ enabled: !!rem, cur: cur });
+  if (els.tools) {
+    els.tools.hidden = !st;
+    if (els.para) els.para.hidden = true;
+    if (els.kind) els.kind.hidden = true;
+    if (els.replay) els.replay.hidden = true;
+    if (els.close) els.close.hidden = true;
+  }
+  syncStar(st);
   els.band.removeAttribute('data-tap');
   const rec = cur.src ? ra.get(cur.src) : null;
   const v = bandView(rec, {
@@ -494,7 +563,7 @@ function paint() {
     remote: safeRemote()
   });
   const a = translationBlockAttrs(targetLang());
-  const sig = [v.state, v.text, v.noteKey, v.retry, a.lang, a.dir].join('\u0001');
+  const sig = [v.state, v.text, v.noteKey, v.retry, a.lang, a.dir, flashKey].join('\u0001');
   els.band.setAttribute('data-state', v.state);
   if (sig === lastPaint) return;
   lastPaint = sig;
@@ -507,12 +576,12 @@ function paint() {
   if (v.text) appendBidiText(tx, v.text, a.dir);
   tx.hidden = !v.text;
 
-  // 상태 한 줄 — UI 언어·UI 방향.
+  // 상태 한 줄 — UI 언어·UI 방향. `[12-2]` [☆] 결과 한 줄이 떠 있으면 잠깐 그것(`flash`).
   els.note.dir = getDir();
-  els.note.textContent = v.noteKey ? t(v.noteKey) : '';
+  els.note.textContent = flashKey ? t(flashKey) : v.noteKey ? t(v.noteKey) : '';
   els.retry.hidden = !v.retry;
   els.retry.disabled = false;
-  els.status.hidden = !v.noteKey && !v.retry;
+  els.status.hidden = !flashKey && !v.noteKey && !v.retry;
   if (v.text && roll.kind) tick();          // 늦게 도착한 번역문도 지금 경과에 맞춘다
 }
 
@@ -733,13 +802,15 @@ function paintTap() {
   if (tap.note) { paintNote(); return; }
   if (els.kind) els.kind.hidden = true;            // `[11-4]` 번역 탭에는 설명 꼬리표·[▶ 다시 듣기]가 없다
   if (els.replay) els.replay.hidden = true;
-  if (els.close) els.close.setAttribute('aria-label', t('tap.close'));
+  if (els.close) { els.close.setAttribute('aria-label', t('tap.close')); els.close.hidden = false; }
   els.band.removeAttribute('data-note');
+  // `[12-2]` [☆] — 탭한 문장(들). [문단 전체] 보기에서는 숨김.
+  syncStar(starTarget({ enabled: !!rem, tap: tap }));
   const list = tap.full ? tap.paraSegs : tap.segs;
   const v = tapView(tap.gate.ok ? list.map((s) => ra.get(s.src)) : null, { gate: tap.gate, remote: safeRemote() });
   const a = translationBlockAttrs(targetLang());
   const showPara = tap.gate.ok && tap.paraSegs.length > tap.segs.length;
-  const sig = ['tap', tap.full, showPara, v.state, v.text, v.noteKey, v.retry, a.lang, a.dir].join('\u0001');
+  const sig = ['tap', tap.full, showPara, v.state, v.text, v.noteKey, v.retry, a.lang, a.dir, flashKey].join('\u0001');
   els.band.setAttribute('data-state', v.state);
   els.band.setAttribute('data-tap', 'on');
   if (sig === lastPaint) return;
@@ -757,10 +828,10 @@ function paintTap() {
   if (v.text) appendBidiText(tx, v.text, a.dir);
   tx.hidden = !v.text;
   els.note.dir = getDir();
-  els.note.textContent = v.noteKey ? t(v.noteKey) : '';
+  els.note.textContent = flashKey ? t(flashKey) : v.noteKey ? t(v.noteKey) : '';
   els.retry.hidden = !v.retry;
   els.retry.disabled = false;
-  els.status.hidden = !v.noteKey && !v.retry;
+  els.status.hidden = !flashKey && !v.noteKey && !v.retry;
 }
 
 /* ── `[11-4 — spec 17-2-1 4-7 · 11-D16]` 설명 모드 — 탭 모드 자리(`tap`)를 넓힌 것 ── */
@@ -785,7 +856,9 @@ export function openNote(o) {
     full: false, retry: typeof x.retry === 'function' ? x.retry : null, offs: [], resend: null, resent: false,
     focusBack: typeof x.focusBack === 'function' ? x.focusBack : null,
     note: { id: noteSeq, kind: 'explain', rec: x.rec || { state: 'pending' }, text: '',
-      replay: typeof x.replay === 'function' ? x.replay : null, onClose: typeof x.onClose === 'function' ? x.onClose : null } };
+      replay: typeof x.replay === 'function' ? x.replay : null, onClose: typeof x.onClose === 'function' ? x.onClose : null,
+      // `[12-2]` [☆] 가 카드로 만들 문장 단위 — 여는 이 순간 controls 가 고른다(`noteUnit` — 설명 흐름과 같은 대상)
+      unit: noteUnitOf(x.lineId) } };
   tap.note.text = tap.note.rec.state === 'ready' ? String(tap.note.rec.text || '') : '';
   stopRoll();
   if (!was && suspendInline) { try { suspendInline(true); } catch (e) { /* 띠는 그래도 연다 */ } }
@@ -839,7 +912,9 @@ function paintNote() {
   const n = tap.note;
   const v = noteView(n.rec, { remote: safeRemote() });
   const a = translationBlockAttrs(targetLang());
-  const sig = ['note', n.id, v.state, v.text, v.noteKey, v.retry, a.lang, a.dir].join('\u0001');
+  // `[12-2]` [☆] — 설명이 ready 일 때(그 문장 + 설명 사본 + 있으면 번역).
+  syncStar(starTarget({ enabled: !!rem, note: { id: n.id, state: v.state, unit: n.unit, text: n.text } }));
+  const sig = ['note', n.id, v.state, v.text, v.noteKey, v.retry, a.lang, a.dir, flashKey].join('\u0001');
   els.band.setAttribute('data-state', v.state);
   els.band.setAttribute('data-tap', 'on');
   els.band.setAttribute('data-note', n.kind);
@@ -849,7 +924,7 @@ function paintNote() {
   if (els.tools) els.tools.hidden = false;
   if (els.para) els.para.hidden = true;                 // 설명에는 [문단 전체]가 없다
   if (els.kind) els.kind.hidden = false;
-  if (els.close) els.close.setAttribute('aria-label', t('explain.close'));
+  if (els.close) { els.close.setAttribute('aria-label', t('explain.close')); els.close.hidden = false; }
   if (els.replay) els.replay.hidden = !(v.state === 'ready' && n.replay);
   // 설명 글 — 대상 언어(`ai.translationLang`)의 dir·lang, 라틴 괄호는 `appendBidiText`(번역문과 같은 함수 — 13절 textContent).
   const tx = els.text;
@@ -859,10 +934,118 @@ function paintNote() {
   if (v.text) appendBidiText(tx, v.text, a.dir);
   tx.hidden = !v.text;
   els.note.dir = getDir();
-  els.note.textContent = v.noteKey ? t(v.noteKey) : '';
+  els.note.textContent = flashKey ? t(flashKey) : v.noteKey ? t(v.noteKey) : '';
   els.retry.hidden = !v.retry;
   els.retry.disabled = false;
-  els.status.hidden = !v.noteKey && !v.retry;
+  els.status.hidden = !flashKey && !v.noteKey && !v.retry;
+}
+
+/* ── `[12-2 — spec 17-11 5 · 12-D5]` [☆] 기억 카드 — 세 모드 같은 단추 ───── */
+
+/**
+ * controls 가 넘긴 기억 카드 배선 — `{stateFor(target), toggle(target), noteUnit(lineId)}`(`ui/remember.js` + controls 의 설명 대상 고르기).
+ * 없으면(null) [☆] 를 보이지 않는다.
+ */
+export function setRemember(r) {
+  rem = r && typeof r.stateFor === 'function' && typeof r.toggle === 'function' ? r : null;
+  refreshStar();
+}
+
+/** 설명 띠를 여는 순간 그 문장 단위를 묻는다(없으면 null — 그 설명에는 [☆] 가 없다). */
+function noteUnitOf(lineId) {
+  if (!rem || typeof rem.noteUnit !== 'function') return null;
+  try { return rem.noteUnit(lineId == null ? null : String(lineId)) || null; } catch (e) { return null; }
+}
+
+/** 지금 띠가 가리키는 [☆] 대상(모드별 — `starTarget`). */
+function currentStar() {
+  if (!tap) return starTarget({ enabled: !!rem, cur: cur });
+  if (tap.note) {
+    const v = noteView(tap.note.rec, { remote: safeRemote() });
+    return starTarget({ enabled: !!rem, note: { id: tap.note.id, state: v.state, unit: tap.note.unit, text: tap.note.text } });
+  }
+  return starTarget({ enabled: !!rem, tap: tap });
+}
+
+/** 다른 입구(선택 줄·음성)로 저장했다 — 같은 문장이면 [★] 로 다시 본다. */
+export function refreshStar() {
+  if (!els) return;
+  star.key = null;
+  syncStar(els.band.hidden ? null : currentStar());
+}
+
+/**
+ * 대상이 바뀌었을 때만 카드 유무를 한 번 묻는다(문장이 바뀔 때 — id 는 해시 하나 + `get` 한 번). 자리(`#trSlot`)는 대상이 있을 때만.
+ * 답이 늦게 와도 그 사이 대상이 바뀌었으면(번호) 칠하지 않는다.
+ */
+function syncStar(target) {
+  if (!els || !els.slot) return;
+  els.slot.hidden = !target;
+  const key = target ? target.key : null;
+  if (key === star.key) return;
+  star.key = key;
+  star.target = target || null;
+  star.pressed = false;
+  star.busy = false;
+  star.seq++;
+  paintStar();
+  if (!target || !rem) return;
+  const my = star.seq;
+  Promise.resolve()
+    .then(() => rem.stateFor(target))
+    .then((r) => { if (my !== star.seq) return; star.pressed = !!(r && r.pressed); paintStar(); }, () => null);
+}
+
+/** `[☆]`/`[★]` — 눌림(`aria-pressed`)·이름("기억 카드에 넣기"/"기억 카드에 있음")·글리프. */
+function paintStar() {
+  if (!els || !els.star) return;
+  const k = star.pressed ? 'remember.added' : 'remember.add';
+  els.star.setAttribute('aria-pressed', star.pressed ? 'true' : 'false');
+  els.star.setAttribute('data-i18n-aria', k);
+  els.star.setAttribute('aria-label', t(k));
+  if (els.starGlyph) els.starGlyph.textContent = star.pressed ? '★' : '☆';
+  if (star.busy) els.star.setAttribute('aria-busy', 'true'); else els.star.removeAttribute('aria-busy');
+}
+
+/** [☆] 누름 — 저장(☆) 또는 복습 전 카드 지움(★). 낭독·띠 굴림은 건드리지 않는다. 누르는 중 다시 누르면 무시. */
+function onStar() {
+  if (!rem || !star.target || star.busy) return;
+  const target = star.target;
+  const my = star.seq;
+  star.busy = true;
+  paintStar();
+  Promise.resolve()
+    .then(() => rem.toggle(target))
+    .then((r) => {
+      if (my !== star.seq) return;
+      star.busy = false;
+      star.pressed = !!(r && r.pressed);
+      paintStar();
+      if (r && r.key) flash(r.key);
+    }, () => {
+      if (my !== star.seq) return;
+      star.busy = false;
+      paintStar();
+      flash('remember.failed');
+    });
+}
+
+/** 상태 줄에 한 줄을 잠깐(`FLASH_MS`) — [☆] 결과("기억 카드에 넣었습니다"·"복습 중인 카드입니다 …"). */
+function flash(key) {
+  if (!els) return;
+  clearFlash();
+  flashKey = key || null;
+  if (flashKey && typeof window !== 'undefined') {
+    flashTimer = window.setTimeout(() => { flashTimer = null; flashKey = null; lastPaint = ''; paint(); }, FLASH_MS);
+  }
+  lastPaint = '';
+  paint();
+}
+
+function clearFlash() {
+  if (flashTimer !== null && typeof window !== 'undefined') window.clearTimeout(flashTimer);
+  flashTimer = null;
+  flashKey = null;
 }
 
 /* ── 상태 바 (14절 배너) — 바뀔 때 한 번 ──────────────── */
@@ -1000,7 +1183,11 @@ function attachDebugHook() {
         tap: tap ? { segs: tap.segs.length, para: tap.paraSegs.length, full: tap.full, gate: tap.gate.reason } : null,
         // `[11-4]` 설명 모드 — 번호·상태·글자 수·사유만(글 없음)
         note: tap && tap.note ? { id: tap.note.id, state: tap.note.rec.state, code: tap.note.rec.code || null,
-          chars: tap.note.text.length, replay: !!(els.replay && !els.replay.hidden), kind: !!(els.kind && !els.kind.hidden) } : null
+          chars: tap.note.text.length, replay: !!(els.replay && !els.replay.hidden), kind: !!(els.kind && !els.kind.hidden) } : null,
+        // `[12-2]` [☆] — 보이는가·눌림·누르는 중·대상 종류·문장 수·한 줄 키만(글 없음)
+        star: els.slot ? { shown: !!(els.tools && !els.tools.hidden && !els.slot.hidden), pressed: star.pressed, busy: star.busy,
+          origin: star.target ? star.target.origin : null, n: star.target ? (star.target.segs ? star.target.segs.length : 1) : 0,
+          wired: !!rem, flash: flashKey } : null
       };
     }
   };

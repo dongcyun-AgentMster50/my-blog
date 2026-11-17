@@ -66,7 +66,9 @@ import { setReadalongMode, lastOnMode } from './settings.js';
 // `[11-2 — spec 17-2-1 4-3·4-5]` 문단 요약 — 대상 언어 한 번 말하기(sayer) · 요약 시트 · 흐름(선택 줄 [요약]·음성 "요약"이 같은 길).
 import { createSayer } from '../tts/say.js';
 import { initSumSheet } from './sumsheet.js';
-import { createAsk } from './ask.js';
+import { createAsk, explainPlan, sentenceIndexOf } from './ask.js';
+// `[12-2 — spec 17-11 5]` 기억 카드 만들기 — 띠 [☆](세 모드)·선택 줄 [기억 카드]·음성 "기억"이 같은 길(호출 0).
+import { createRemember } from './remember.js';
 
 let els = null;
 let speaker = null;
@@ -90,6 +92,14 @@ let wordsheet = null;
 let sayer = null;
 let sumsheet = null;
 let ask = null;
+/** `[12-2]` 기억 카드 — `stateFor`·`toggle`(띠) · `fromSelection` · `fromVoice` · `leave`. */
+let remember = null;
+/**
+ * `[12-2]` 설명 띠의 [☆] 대상 고르기 — 선택 줄 [설명]을 누른 그 순간의 스냅숏(ask 가 같은 틱에 띠를 연다) ·
+ * 줄 id → 마지막으로 고른 문장 단위([다시 시도]가 같은 설명을 다시 열 때 — ask 는 같은 대상으로 다시 연다).
+ */
+let explainSnap = null;
+const noteUnits = new Map();
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -328,6 +338,22 @@ export function initControls() {
       focusBack: function (lineId, reveal) { focusLine(lineId, reveal); }
     });
   }
+  // `[12-2 — spec 17-11 5 · 12-D5]` 기억 카드 — 문장 단위는 탭 번역·설명과 같은 `speaker.sentenceUnits()`, 뒷면은 readalong 메모리·캐시
+  // (pipeline 을 넘기지 않는다 — 호출 0). 띠 [☆] 는 `setRemember`, 선택 줄·음성은 아래 `onSelAction`·`onRemember`.
+  remember = createRemember({
+    readalong: readalong,
+    speaker: speaker,
+    units: function () { return speaker.sentenceUnits(); },
+    ctx: function () {
+      const p = currentPage();
+      return { docId: p.docId, page: p.page, docTitle: docTitle(), target: targetLang(), docLang: sourceLang(), domain: docDomain() };
+    }
+  });
+  trband.setRemember({
+    stateFor: function (tg) { return remember.stateFor(tg); },
+    toggle: function (tg) { return remember.toggle(tg); },
+    noteUnit: noteUnitFor
+  });
   // `[8c-1]` 쪽이 바뀌면(쪽 넘김·뷰 전환·새 판) 탭 띠를 닫는다 — 다른 쪽 문장의 번역이 남지 않게.
   onPageRender(() => { if (trband) trband.closeTap(); });
   // `[11-4c]` 설명 실패 배너·[다시 시도]도 거둔다 — 다른 쪽·문서에서 옛 문장을 다시 부르지 않게.
@@ -419,7 +445,11 @@ export function initControls() {
     onSummarize: function (o) { return ask ? ask.summarize(o) : Promise.resolve(null); },
     sayer: sayer,
     // `[11-4 — spec 17-2-1 4-7]` 음성 "설명" — 같은 흐름(ask)을 주입
-    onExplain: function (o) { return ask ? ask.explain(o) : Promise.resolve(null); }
+    onExplain: function (o) { return ask ? ask.explain(o) : Promise.resolve(null); },
+    // `[12-2 — spec 17-11 5]` 음성 "기억" — 지금 문장을 카드로(호출 0). 저장 뒤 띠 [☆] 를 다시 본다(같은 문장이면 [★]).
+    onRemember: function () {
+      return remember ? remember.fromVoice().then(function (r) { if (trband) trband.refreshStar(); return r; }) : Promise.resolve(null);
+    }
   });
   if (mounted) mounted.button.addEventListener('click', () => voice.press());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') voice.onHidden(); });
@@ -581,6 +611,8 @@ export function leaveControls() {
   if (wordsheet) wordsheet.close(false); // `[8f-2]` 단어 시트를 거둔다(포커스는 옮기지 않는다)
   if (sumsheet) sumsheet.close(false);   // `[11-2]` 요약 시트도
   if (sayer) sayer.stop();
+  if (remember) remember.leave();        // `[12-2]` 뒷면 기다림(pendingBacks)은 리더 세션 동안만
+  noteUnits.clear();
   lastShown = null;
   toggleRatePanel(false);
 }
@@ -626,6 +658,8 @@ function openTapFor(lineId, segsWanted) {
 function onSelAction(id, snap) {
   cancelVoice();
   if (!snap || snap.lineId == null) return;
+  // `[12-2]` [설명]이면 이 스냅숏이 설명 띠 [☆] 의 대상(ask 가 같은 틱에 띠를 연다 — `noteUnitFor`). 이 함수 끝에서 비운다.
+  explainSnap = id === 'explain' ? snap : null;
   if (id === 'word' && sumsheet) sumsheet.close(false);    // `[11-2]` 시트는 한 번에 하나
   if (id === 'sentence') {
     // 선택 시작·끝 글자의 문장(들) — 모든 낭독 상태에서(낭독 중에도 — 다음 문장에서 띠가 낭독 문장으로 돌아간다).
@@ -652,7 +686,41 @@ function onSelAction(id, snap) {
     if (ask) ask.explain({ via: 'button', snap: snap }).catch(() => { /* 결과는 띠가 그린다 */ });
     // `[11-4b — 11-4R #3]` [문장 번역]처럼 고른 줄을 띠 위로 — 띠는 ask 가 같은 틱에 열었다(선택 줄은 거둬져 띠 윗변이 가장자리).
     if (trband) liftLineAbove(snap.lineId, liftEdge(selbar ? selbar.top() : null, trband.bandTop()));
+  } else if (id === 'remember') {
+    // `[12-2 — spec 17-11 5]` 기억 카드 — 선택 시작 줄의 문장(호출 0 — 번역은 메모리·캐시, 없으면 앞면만). 낭독은 멈추지 않는다.
+    if (remember) {
+      remember.fromSelection(snap).then((r) => {
+        if (selbar && r && r.key) selbar.note(r.key);
+        if (trband) trband.refreshStar();
+      }, () => { if (selbar) selbar.note('remember.failed'); });
+    }
   }
+  explainSnap = null;
+}
+
+/**
+ * `[12-2]` 설명 띠를 여는 순간(trband `openNote` 가 부른다 — ask 의 설명 흐름 안, 같은 틱) 그 설명의 문장 단위.
+ * ask 와 같은 대상 규칙(`explainPlan` — 단추 = 선택 스냅숏, 음성 = 지금 문장 `sentenceIndexOf`)으로 다시 고르고, 띠가 받은 줄 id 와
+ * 같을 때만 쓴다. 둘 다 아니면(띠 [다시 시도]·배너 [다시 시도] — ask 가 같은 대상으로 다시 연다) 그 줄에서 마지막으로 고른 단위.
+ * @param {?string} lineId
+ * @returns {?Object}
+ */
+function noteUnitFor(lineId) {
+  const id = lineId == null ? null : String(lineId);
+  let plan = null;
+  try {
+    const units = speaker.sentenceUnits();
+    if (explainSnap) plan = explainPlan(units, { snap: explainSnap });
+    else if (voice && voice.isListening()) {
+      plan = explainPlan(units, { index: sentenceIndexOf(units, speaker.getCurrent(), speaker.getIndex(), speaker.getUnit()) });
+    }
+  } catch (e) { plan = null; }
+  if (plan && plan.ok && plan.unit && id !== null && plan.lineId === id) {
+    noteUnits.set(id, plan.unit);
+    if (noteUnits.size > 32) noteUnits.delete(noteUnits.keys().next().value);
+    return plan.unit;
+  }
+  return id !== null && noteUnits.has(id) ? noteUnits.get(id) : null;
 }
 
 /* ────────────────────────────────────────────────────────

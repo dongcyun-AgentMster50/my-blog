@@ -85,8 +85,11 @@ export default {
   'library.card.delete': 'Delete',
   // `[11-2]` [검토 — Nour·운영자]
   'library.card.deleteConfirm': 'Supprimer « {title} » ? Le PDF, la progression de lecture, l’historique des quiz et les traductions en cache seront supprimés.',
-  'library.card.deleteConfirmVocab': '{n} entrées du lexique seront conservées',   // `[8f-2]` [검토 — Nour·운영자]
-  'library.card.deleteConfirmSummaries': '{n} résumés enregistrés seront conservés',   // `[11-2]` [검토 — Nour·운영자]
+  // `[12-2 — spec 17-11 4]` 남는 것은 **한 줄**(`deleteKeeps` 의 {list} = 아래 조각들을 " · " 로 이음). [검토 — Nour·운영자] 조각·줄 전부.
+  'library.card.deleteConfirmVocab': '{n} entrées du lexique',   // `[8f-2]` → `[12-2]` 조각
+  'library.card.deleteConfirmCards': '{n} fiches de révision',
+  'library.card.deleteConfirmSummaries': '{n} résumés enregistrés',   // `[11-2]` → `[12-2]` 조각
+  'library.card.deleteKeeps': 'Seront conservés : {list}',
   'library.card.vocab': 'Lexique de ce livre',   // `[8f-3]` [검토 — Nour·운영자]
   'library.card.summaries': "Résumés enregistrés de ce livre",   // `[11-3]` [검토 — Nour·운영자]
 
@@ -394,6 +397,15 @@ export default {
   'explain.replay': "Réécouter l’explication",
   'explain.close': "Fermer l’explication",
   'explain.disclaimer': "Explication par IA — pour l’étude uniquement. Vérifiez le texte original.",
+  /* `[12-2 — spec 17-11 5]` [☆] fiches de révision — bandeau · menu [⋯] — [검토 — Nour·운영자] 프랑스어 문구 전부. */
+  'remember.add': "Ajouter aux fiches de révision",
+  'remember.added': "Dans les fiches de révision — appuyez à nouveau pour retirer",
+  'remember.saved': "Ajoutée aux fiches de révision.",
+  'remember.exists': "Déjà dans les fiches de révision.",
+  'remember.removed': "Retirée des fiches de révision.",
+  'remember.reviewed': "Cette fiche est en cours de révision — supprimez-la depuis la liste.",
+  'remember.failed': "Impossible d’enregistrer la fiche.",
+  'sel.remember': "Fiche de révision",
   'sum.title': "Résumé du paragraphe · {page}",
   'sum.titlePage': "Résumé de la page · {page}",
   'sum.pending': "Résumé en cours…",
@@ -743,6 +755,9 @@ export default {
   'voice.cmd.explain': "Expliquer",
   'voice.cmd.summarize': "Résumer le paragraphe",                // `[11-2]` [검토 — Nour·운영자]
   'voice.cmd.summarizePrev': "Résumer le paragraphe précédent",
+  'voice.cmd.remember': "Ajouter aux fiches de révision",   // `[12-2]` [검토 — Nour·운영자]
+  'voice.remember.done': "Enregistré.",                      // `[12-2]` [검토 — Nour·운영자]
+  'voice.remember.none': "Aucune phrase à enregistrer.",      // `[12-2]` [검토 — Nour·운영자]
   'voice.notYet': "Cette commande n’est pas encore disponible.",
   'voice.noSpeech': "Je n’ai rien entendu.",
   'voice.noMatch': "Commande non reconnue : « {text} »",

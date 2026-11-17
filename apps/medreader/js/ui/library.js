@@ -59,6 +59,8 @@ import { DOMAINS, domainOf, normalizeDomain } from '../ai/prompts.js';
 import { vocabStore } from '../vocab/store.js';
 // `[11-2]` 삭제 확인 "저장한 요약 n개는 남습니다"(셈만 — 읽기)
 import { summaryStore } from '../notes/summaries.js';
+// `[12-2 — spec 17-11 4]` 삭제 확인 "기억 카드 m 는 남습니다" — 그 문서의 문장 카드 수(읽기만).
+import { cardStore } from '../srs/cards.js';
 // `[18 — spec 17-9 · 결정 18-D2]` 저장 줄 위 "의료 사이트" 접는 카드(열기만) — 그리기는 `ui/links.js` 한 곳.
 import { renderLibraryLinks } from './links.js';
 
@@ -1336,10 +1338,12 @@ async function onListClick(ev) {
    ──────────────────────────────────────────────────────── */
 
 /**
- * 남는 것들의 셈 → 확인 대화에 덧붙일 줄(i18n 키·자리표시자). 0개인 것은 줄을 만들지 않는다. 순수 함수.
+ * 남는 것들의 셈 → 확인 대화에 덧붙일 조각(i18n 키·자리표시자). 0개인 것은 조각을 만들지 않는다. 순수 함수.
  * `[11-2 — crossstep "8f-2·11-2"]` 저장한 요약(요약 + 범위 개요 — `annotations` 는 문서를 지워도 남는다, 11-1 `keepsOnDocDelete`).
  * 필기(20)를 같은 줄로 셀지는 20 몫 — 지금은 요약·개요만 센다.
- * @param {{vocab?:number, summaries?:number}} counts
+ * `[12-2 — spec 17-11 4]` 기억 카드(문장 카드 — 12-D8 로 남는다) 조각을 단어장 다음에. 조각들은 `deleteConfirmText` 가 **한 줄로 합친다**
+ * ("단어장 n · 기억 카드 m · 저장한 요약 k 는 남습니다" — `library.card.deleteKeeps`).
+ * @param {{vocab?:number, cards?:number, summaries?:number}} counts
  * @returns {{key:string, params:Object}[]}
  */
 export function deleteKeepLines(counts) {
@@ -1347,6 +1351,8 @@ export function deleteKeepLines(counts) {
   const out = [];
   const vocab = Math.floor(Number(c.vocab));
   if (Number.isFinite(vocab) && vocab > 0) out.push({ key: 'library.card.deleteConfirmVocab', params: { n: vocab } });
+  const cards = Math.floor(Number(c.cards));
+  if (Number.isFinite(cards) && cards > 0) out.push({ key: 'library.card.deleteConfirmCards', params: { n: cards } });
   const sums = Math.floor(Number(c.summaries));
   if (Number.isFinite(sums) && sums > 0) out.push({ key: 'library.card.deleteConfirmSummaries', params: { n: sums } });
   return out;
@@ -1354,16 +1360,19 @@ export function deleteKeepLines(counts) {
 
 /**
  * 그 문서를 지워도 남는 것을 센다 — 읽기만(호출 0). 못 읽으면 0(확인 대화를 막지 않는다).
- * `summaries` 는 1개 이상일 때만 결과에 담는다(8f-2 의 `{vocab}` 꼴을 지킨다 — 0 이면 줄도 없다).
+ * `summaries`·`[12-2]` `cards`(그 문서의 기억 카드 — `cardStore.keptCount`)는 1개 이상일 때만 결과에 담는다(8f-2 의 `{vocab}` 꼴 — 0 이면 조각도 없다).
  * @param {string} docId
- * @param {{vocab?:{countByDoc:Function}, summaries?:{count:Function}}} [deps]  테스트가 가짜 저장소를 넣는다
- * @returns {Promise<{vocab:number, summaries?:number}>}
+ * @param {{vocab?:{countByDoc:Function}, summaries?:{count:Function}, cards?:{keptCount:Function}}} [deps]  테스트가 가짜 저장소를 넣는다
+ * @returns {Promise<{vocab:number, cards?:number, summaries?:number}>}
  */
 export async function deleteKeepCounts(docId, deps) {
   const vs = (deps && deps.vocab) || vocabStore;
   let vocab = 0;
   try { vocab = Number(await vs.countByDoc(docId)) || 0; } catch (e) { vocab = 0; }
   const out = { vocab: vocab };
+  let cards = 0;
+  try { cards = Number(await ((deps && deps.cards) || cardStore).keptCount(docId)) || 0; } catch (e) { cards = 0; }
+  if (cards > 0) out.cards = cards;
   let sums = 0;
   try { sums = Number(await ((deps && deps.summaries) || summaryStore()).count(docId)) || 0; } catch (e) { sums = 0; }
   if (sums > 0) out.summaries = sums;
@@ -1371,7 +1380,9 @@ export async function deleteKeepCounts(docId, deps) {
 }
 
 /**
- * 확인 대화 문장 — 머리(`library.card.deleteConfirm`) + 남는 줄들(줄바꿈). 숫자는 UI 언어 숫자로.
+ * 확인 대화 문장 — 머리(`library.card.deleteConfirm`) + `[12-2 — spec 17-11 4]` 남는 것 **한 줄**(줄바꿈 하나 뒤):
+ * 조각(`deleteKeepLines` — "단어장 n"·"기억 카드 m"·"저장한 요약 k")을 " · " 로 이어 `library.card.deleteKeeps`({list}) 에 넣는다.
+ * 남는 것이 없으면 머리만. 숫자는 UI 언어 숫자로.
  * @param {string} title
  * @param {{key:string, params:Object}[]} lines  `deleteKeepLines` 결과
  * @param {Function} [tr]  번역 함수(기본 `t`)
@@ -1379,11 +1390,13 @@ export async function deleteKeepCounts(docId, deps) {
 export function deleteConfirmText(title, lines, tr) {
   const tt = typeof tr === 'function' ? tr : t;
   const out = [tt('library.card.deleteConfirm', { title: title })];
+  const parts = [];
   for (const l of Array.isArray(lines) ? lines : []) {
     const p = Object.assign({}, l.params || {});
     if (typeof p.n === 'number') p.n = formatNumber(p.n);
-    out.push(tt(l.key, p));
+    parts.push(tt(l.key, p));
   }
+  if (parts.length) out.push(tt('library.card.deleteKeeps', { list: parts.join(' · ') }));
   return out.join('\n');
 }
 

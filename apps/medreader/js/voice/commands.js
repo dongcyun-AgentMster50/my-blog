@@ -62,6 +62,7 @@ export const CMD_LANGS = Object.freeze(['auto', 'ar', 'en']);
 // `enabled:false` = 표에 자리만 — 꺼진 동안 그 말은 nomatch 가 아니라 `enabled:false` 로 돌아온다("아직 없는 기능" 안내 — 장치는 남긴다).
 //   `[11-4 — spec 17-2-1 4-5 · 9b-D14]` explain 을 켰다(지금 꺼진 명령 0). 낱말 칸은 9b 그대로 — 맞춤 결과(id)는 바뀌지 않는다.
 // `[11-2]` `summarize`(문단 요약)를 explain 앞에 더했다 — 실행은 `ui/voice.js` 가 주입 함수(`deps.onSummarize`·`[11-4]` `deps.onExplain`)로만.
+// `[12-2]` `remember`(기억 카드)를 끝에 더했다 — 실행은 주입 함수(`deps.onRemember`)로만(AI 해석·호출 없음).
 const RAW = [
   {
     id: 'play', enabled: true,
@@ -152,6 +153,15 @@ const RAW = [
     arLoan: [],
     en: ['explain', 'explain this'],
     exact: []
+  },
+  {
+    // `[12-2 — spec 17-11 5 · 12-D5]` 지금 문장을 기억 카드로(로컬 — AI 호출 0). `[검토 — Nour·운영자]` 낱말 전부.
+    //   "save" 는 혼자 말할 때만(`exact` — "save the patient" 같은 문장이 명령이 되지 않게).
+    id: 'remember', enabled: true,
+    ar: ['احفظ', 'احفظها', 'احفظ الجملة', 'تذكر', 'ذكرني'],
+    arLoan: [],
+    en: ['remember', 'remember this', 'save this', 'keep this', 'save'],
+    exact: ['save']
   }
 ];
 

@@ -13327,3 +13327,91 @@ headless: Edge · pipe · 새 프로필 `r11-4c/pV1`·`pV2`·`pT1`·`pR1` · 흉
 명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 리다이렉트로 파일에). **막힌(거절된) 명령 0.** 서버 0 · headless 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · `r12-1c/`·`b12-1d/` 읽기·실행만 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
 
 스크래치 `r12-1d/`: `make-old.mjs`·`old12-1c-backup.mjs`(기준선) · `rv4.test.mjs`·`rv4.txt` · `rv3-orig.txt` · `legacy-probe.mjs` · `mut.mjs`·`bak/backup.js`·`m-Y1…Y3.txt` · `full1.txt`·`full2.txt` · `section.md`(이 절)·`append.mjs`.
+
+
+---
+
+# 12-2 Review — 기억 카드 만들기 (띠 [☆] 세 모드 · 선택 줄 [기억 카드] · 음성 "기억") (2026-11-17)
+
+> 지침 `.claude/tasks/medreader-review-12-2.md` · Build 지침 `medreader-build-12-2-remember.md` · Build 보고 `medreader-build-12-2-remember-report.md`(믿지 않고 다시 잼) · spec 17-11(4 삭제 확인 한 줄 · 5 입구 셋 · 7 표 12-2 행 · 8 "12-2" · 10 · `[정정 2026-11-17 — 12-2 Build]` ①–⑧) · 17-1-2 명령 표 `remember` · `git diff`(18파일 504+/66−) + 새 파일 `js/ui/remember.js`·`tests/remember-12.test.mjs`. 앱 코드·시험·spec 무변(변이는 백업을 읽어 써서 되돌리고 `cmp` 0), 커밋 0. 스크래치 `r12-2/`.
+
+## 12-2R-1. 호출 0 (확인 1 — 가장 중요)
+
+- **구조**: `remember.js` import 4개(`srs/cards`·`text/summary`·`text/select`·`./ask.js` 순수 export) · `pipeline|requestTap|fetch` 0 · controls 의 `createRemember({…})` 인자에 pipeline 없음. readalong 은 `get`·`cachedFor`(캐시 읽기만 — 읽어 보니 `pipeline` 을 부르지 않고 `docGen` 이 바뀌면 빈 표)·`onChange` 만. `ai/*`·`config.js`·`db.js`·`srs/*`·`backup/*`·`ui/ask.js`·`tests/fixtures` **git diff 0**.
+- **headless(X1 — 멈춘 채, 누름 구간마다 흉내 Gemini POST 수)**: 띠 [☆] 저장 **0** · [★] 되돌림 **0** · 두 번 누름 **0** · 탭 띠 [☆] **0** · 설명 띠 [☆] 저장 **0** · 설명 띠 [★] 되돌림 **0** · 선택 줄 `[⋯]→[기억 카드]` **0** · 음성 «احفظ» **0**(멈춘 채라 되돌림이 낭독을 켜지 않음 — paused → paused). 실행 전체 POST 종류 = translate 8(낭독·탭 — 사용자 동작 몫)·explain 1(설명 단추)뿐.
+- **`pendingBacks` 채움**(X2–X4): 채움 구간에 늘어난 POST 는 낭독 동반 번역 몫뿐(카드 쪽 요청 0 — `fillBack` 의 조회 함수는 이미 온 글을 돌려줄 뿐).
+- **요청 본문 바이트**(`r12-2/rbody.mjs` — 지금 HEAD 를 `git archive` 로 풀어 `r12-2/head/` 에 두고 같은 입력으로 실제 `fetch` 본문을 만듦, r11-4 하네스와 다른 입력·조합 + **설명 두 꼴** 더함): 6조합 × (번역·낭독·단어·요약·개요·설명 둘) **39본문 모두 HEAD 와 바이트 같음**.
+
+## 12-2R-2. 데이터 (확인 2)
+
+- **카드 꼴**(X1·X6 · node R1·R4): `kind:'sentence'` · front = 문장 원문 정리 · back = 그 문장 번역 · `origin` = band/tap/explain/select/voice · `docId` · id = `cardStore.idFor`(R4 단정, `sentenceIdOf` 직접 호출 0 — R13). headless 카드 셋의 앞면이 모두 그 쪽 문장 단위와 같음.
+- **앞면만 → 같은 카드 채움 — 다른 문장 번역으로 채우지 않음**(Build A2 는 한 문장 · 멈춘 흐름. 여기는 빠르게 바뀌는 흐름):
+  - **X2 낭독 중 빠르게 바뀜**: show 모드 · 낭독 빠르게(글자당 6ms) · 번역 3.5초 지연 → 문장 0·1·2 가 지나가는 동안 셋 다 pending 에서 [☆] → 누를 때 뒷면 0·0·0 → 6초 뒤 **세 카드 모두 자기 문장의 흉내 번역**(`own` 3 · `other` 0 · 앞면 = 누른 문장).
+  - **X3 pending 중 쪽 넘김**: [☆] → 곧장 [다음 쪽] → 6초 뒤 카드 1 · 뒷면 33자 = 그 문장 번역(다른 쪽 문장 아님).
+  - **X4 pending 중 리더 떠남**: [☆] → 곧장 서재로 → 5초 뒤 뒷면 0자(채우지 않음) → 같은 쪽 다시 들어와 낭독(그 문장 번역이 다시 옴) → **여전히 0자**(설계대로 — 리더 세션 밖 채움은 12-3 `fillBack`, 보고서 남은 7).
+  - 왜 안전한가(코드): `onChange` 는 문장 **원문 키**로 구독하고 채울 글은 그 키의 레코드에서만 받음 · 대상 언어를 바꾸는 길(설정 화면)은 리더를 정말로 떠나 `leave()` 가 구독을 거둠(`leaveReaderNow → leaveControls`), 검색 화면(숨기기만)은 같은 문서라 무해 · `fillBack` 은 카드가 없으면 만들지 않음(`db.patch` — 지운 뒤 도착해도 되살아나지 않음).
+- **[★] 되돌리기**: X1 저장 → 되돌림 → 카드 0 · node R4 복습한 카드(`reviewedAt`)는 남고 `remember.reviewed` 한 줄(`removeIfFresh`). 두 번 빨리 누름(X1 — 손가락 탭 두 번): 첫 누름이 끝난 뒤 둘째가 들어와 저장 → 지움, 끝 상태 카드 0 · [☆] · `busy` false — 저장소와 단추가 어긋나지 않음.
+- **이미 있음**: 선택 줄 두 번째 → `remember.exists`(R8 · Build A6). **두 문장 줄** → 카드 둘(R6 — 합성 PDF 에 두 문장 줄 없음, node 만). **표 안내·인용 → 저장 안 함**(R1·R8·R9 · `starTarget` 이 seg 없는 낭독 대상에 [☆] 숨김 — R3).
+- **서재 삭제 확인 한 줄**: R12(ko "단어장 2 · 기억 카드 3 는 남습니다" · 0 은 빠짐 · 4언어 `{list}`) · Build A8 headless 4언어 한 줄 · 지운 뒤 term 2 + sentence 3. `deleteKeepCounts` 는 1 이상만 `cards` 를 담음(변이 X3 빨강).
+- **9c 백업**(X6 — 실제 IndexedDB): 출처 셋(tap·select·voice) 카드 3 → `exportBackup` → `cards` 비움 → `importBackup` → **3장 · 깊은 비교 같음** · ok.
+
+## 12-2R-3. 회귀 (확인 3)
+
+- node 전체 2회 통과(아래 6). 낭독 끊김 0·띠 굴림 멈춤은 본문만: Build A1(표본 44 · 비 speaking 0 · [☆] 탭 뒤 `held` false · 본문 탭 → true) — 이번엔 같은 장치를 다시 돌리지 않고 X2 에서 [☆] 세 번 누르는 동안 낭독이 문장 0→1→2 로 이어짐(멈춤 없음)을 봄.
+- **Build 하네스 사본 다시 돌림**(`r12-2/mkcommon.mjs` — `b12-2` 를 읽기만, 경로·가짜 키 꼬리만 바꿈 · 새 프로필):
+  - `run-t`(8c-1 탭 띠·닫기 다섯·손가락 탭·inline 떼기) pT1: **Build `t1.json` 과 바이트 같음** · 콘솔 0.
+  - `run-r`(18 [찾아보기]·Esc 층 셋·손가락·9a·9b·8e dock) pR1: **r11-4 `r1.json` 과 다른 곳 = 915×412 `[⋯]` 메뉴 top 24→5 · 높이 162→181 둘뿐**(+ 내준 파일 수) · 콘솔 0.
+  - `run-v`(11-4c — 설명 실패 사유 다섯·배너·[다시 시도]·이어 읽기·쪽/문서 바뀜·`was`·429·상한) pV1 189초: **Build `v1.json` 과 같음**(배너 뜬 ms 흔들림 3곳만) · 콘솔은 의도한 흉내 429 한 줄.
+- **9b 말뭉치**(`r12-2/rvoice.mjs` — HEAD `commands.js` 를 `git show` 로 따로 받음, 말뭉치 r9b1·r9b2·r9b3 읽기만): **692판 결과 객체 차이 0 · 이웃 셋 688판 차이 0 · 말뭉치 안 remember 적중 0** · 기존 동의어 328판(혼자 말함) 차이 0 · 기존 11행 그대로. 리뷰어 탐침: 기존 동의어 + 새 낱말(앞·뒤) 5,248판 중 기존 명령 → 무효(모호) 686 · → remember 1,464(긴 구가 이김 — "save this next" 꼴) · 다른 명령으로 바뀜 0. 일상 말 16개 중 remember 오탐 1(**"I remember now"** — 아래 #4), 부정·"save the patient"·"keep going"·«ما بتذكر»·«لا تحفظ»·«حفظ» 등 0.
+- **기존 시험 기대 7곳**(L9·I7b·K10·W14 선택 줄 id 목록에 `remember` 끼움 · C3 명령 id 끝에 `remember` · W13·K13 삭제 확인 한 줄 꼴 + W13 `cards:1`): 모두 **더하기**이고 원래 단정(순서·숨김·흐림·"0 이면 없음"·"못 읽어도 확인은 뜬다"·한 함수를 거침)은 그대로 — 뜻을 지킴.
+
+## 12-2R-4. 음성 "기억" (확인 4)
+
+- R10(가짜 인식기·진짜 speaker): 저장 1 · 확인 줄 1 · 한 마디 1 → 끝나면 같은 문장 speaking(되돌림 1) · `sayErrors=false` → 한 마디 0 · 곧장 speaking · none → 상태 줄 + 한 마디 → 되돌림 · 주입 없음 → `voice.notYet`. Build A7(headless 낭독 중 «احفظ») 결과와 맞음.
+- headless X1(멈춘 채 «احفظ»): 확인 줄 · voice 카드 1 · 낭독 상태 paused 그대로(되돌림은 "읽던 중"일 때만) · POST 0.
+- **"손이 이긴다" 시험의 틈**(변이 X1 — 아래 #2): 성공 갈래의 `if (!alive()) return;` 을 빼도 R10 이 통과. 시험은 손(`cancel`) 뒤 저장을 풀고 `flush` 만 하고 `synth.finish()` 를 하지 않아, 빠진 검사로 생기는 한 마디·되돌림을 못 봄. 지금 코드는 맞음(검사 있음).
+
+## 12-2R-5. 화면 (확인 5)
+
+`r12-2/run-l.mjs` pL1 68초 — 360×740·412×915·915×412 × ko·en·fr·ar × 낭독·탭·설명 = **36판 나쁨 0**: [☆] 48×48 · 머리 줄 단추([문단 전체]·꼬리표·[▶ 다시 듣기]·[×])와 겹침 0 · 번역문·상태 문구 줄 상자와 겹침 0 · 화면 안 · 띠 안 · 가로 넘침 0 · ar 은 왼쪽(inline-end)·그 밖 오른쪽 · `aria-pressed` true/false · 이름 있음. 콘솔 0.
+
+- **915×412 `[⋯]` 메뉴**(남은 3 — `r12-2/run-m.mjs` pM1): 메뉴 상자가 `max-block-size` 181px 에 눌려 **안이 이미 굴러감**(scrollHeight 212 > clientHeight 179) — 넷째 칸 **[찾아보기]가 48px 중 아래 약 30px 가려짐**(칸 top 161·bottom 209 vs 상자 181). 412×915·360×740 은 넷 다 보임(상자 214). Build 보고의 "여전히 바 위·화면 안"·"칸이 더 늘면 굴림이 생긴다"는 **이미 생긴 것**을 놓침 → #1. 스크린샷 `r12-2/shots/r4-menu-915x412.png`.
+- **`flash` 가 상태 문구를 가림**(남은 6 — X5): 번역 pending 에서 [☆] → 상태 줄이 "번역 중" 문구 대신 결과 한 줄(2.5초) — 보고서대로. 낮음.
+- `innerHTML`·`outerHTML`·`insertAdjacentHTML`: 이번 diff 에 0(`git diff -G` 0) · `remember.js` 0. 모든 글자 `textContent`/`appendBidiText`/i18n.
+- 스크린샷 `r12-2/shots/`: `r1-explain-fr-360.png` · `r2-explain-ar-412.png`(RTL — [×][▶][☆] 꼬리표) · `r3-menu-ko-915x412.png` · `r4-menu-915x412.png`.
+
+## 12-2R-6. 시험 · 점검 · 변이 (확인 6·7)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,866/1,866 · 1,866/1,866**(12.9초 · 13.2초 — `r12-2/full1.tap`·`full2.tap`, 2회째는 변이 복원 뒤). (첫 시도는 내가 글롭 대신 폴더를 넘겨 "모듈 없음" 1건으로 실패 — 같은 명령을 글롭으로 다시 돌린 것이 1회차.)
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 89개 · CSS 4개)" · `git diff --check` 0.
+- 변이(Build M1–M9 와 다른 곳 · 원본 `r12-2/bak/` → 한 곳 고침 → 관련 시험 10파일 → **bak 을 읽어 그대로 써** 되돌림 → 바이트 같음 + `cmp` 네 파일 0):
+
+| # | 변이 | 빨강 |
+|---|---|---|
+| X1 | voice.js 음성 "기억" 성공 갈래의 손이 이김(`alive`) 검사 뺌 | **없음** — 시험 틈 → #2 |
+| X2 | remember.js 뒷면이 있어도 늘 `pendingBacks` 구독 | R4 |
+| X3 | library.js 기억 카드 0 이어도 `cards` 를 담음 | R12 · K13 · W13 |
+| X4 | remember.js `cardInput` 원문 언어 — 문서 언어가 단위 언어(8m)를 이김 | R1 |
+| X5 | controls.js `noteUnitFor` 줄 id 같음 검사 뺌(설명 띠 [☆] 가 다른 줄 문장을 잡을 수 있음) | **없음** — 시험 틈 → #3 |
+| X6 | remember.js [★] 되돌림에서 복습 카드가 남아도 "뺐습니다" 한 줄 | R4 |
+
+## 12-2R-7. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(배치 — 18 [찾아보기] 보임 회귀) | **915×412 `[⋯]` 메뉴에서 [찾아보기]가 대부분 가려짐** — 칸이 넷이 되며 상자(181px) 안이 굴러가는데 굴림 표시가 없어 넷째 칸이 있는 줄 모르기 쉬움. 세로 화면은 무사. Build 보고 2절 "화면 안"·남은 3 "더 늘면 굴림"은 사실과 다름 | 12-2R-5 · `run-m` · 스크린샷 r4. 방향: 가로 짧은 화면에서 메뉴를 두 열로 · 칸 높이 유지한 채 메뉴를 선택 줄 옆(inline 쪽)으로 · 또는 `max-block-size` 계산에 위쪽 여백을 더 씀(지금 top 5px) — 어느 쪽이든 915×412 에서 넷 다 보임을 headless 로 단정 |
+| 2 | 낮음(시험 틈) | R10 "손이 이긴다"가 성공 갈래의 `alive` 검사를 지키지 못함(X1 통과) — `cancel` 뒤 `synth.finish()` 를 안 해서 빠진 검사로 생기는 한 마디·되돌림이 안 보임. 코드는 맞음 | X1. 방향: 그 단락 끝에 `h.synth.finish()` + 한 마디 0 · `restores` 0 · paused 단정(none·실패 갈래도 같은 꼴 한 줄씩) |
+| 3 | 낮음(시험 틈) | `noteUnitFor` 의 "줄 id 가 같을 때만" 검사를 빼도 node 전부 통과(X5) — R13 은 `explainSnap` 대입만 정적으로 봄. Build headless A5 는 맞는 흐름만 | X5. 방향: `noteUnitFor` 의 고르기를 순수 함수로 꺼내(units·snap·voice 문장·lineId·기억 표 → 단위) 줄 id 어긋남 → 기억 표/없음 을 단정 |
+| 4 | 낮음(음성 — 9b 규칙 그대로) | 세 낱말 이하 말 안의 한 낱말 "remember" 가 명령이 됨 — **"I remember now" → remember**(카드 1 저장 + 한 마디). 짧은 섞인 말(«تشغيل احفظ» 등)은 전엔 기존 명령, 지금은 모호(무효). 말뭉치 692판 변화 0 · 부정·"save the patient" 등은 막힘 | 12-2R-3 탐침. 마이크를 눌러야만 듣는 흐름이라 위험은 작음. `[검토 — Nour·운영자]` — 필요하면 "remember" 도 `exact` 로(두 낱말 구 "remember this" 는 그대로) |
+| 5 | 낮음(문안) | ① `remember.reviewed` "목록에서 지우세요" — 목록(12-3)이 아직 없음 ② en `'{n} memory cards'` n=1 이면 "1 memory cards"(옛 `{n} word-list entries` 와 같은 꼴) ③ ko `'{list} 는 남습니다'` — 숫자로 끝나 "기억 카드 3 는"(설계 문구 그대로) | i18n diff. 방향: ① 12-3 까지 "복습 중인 카드라 남겨 둡니다" 꼴 ② 단수 키 또는 "memory cards: {n}" 꼴(ar·fr 처럼) ③ "{list} — 남습니다" 꼴 — 모두 운영자 판단 |
+| 6 | 낮음(남은 6 확인) | `flash` 한 줄이 2.5초 동안 "번역 중" 등 띠 상태 문구를 가림 | X5 — 보고서대로 |
+| 7 | 정보(설계대로) | 앞면만 저장한 카드는 리더를 떠나면 구독이 거둬져, 다시 들어와 같은 문장 번역이 와도 이번 세션에서는 채우지 않음(X4) — 12-3 `fillBack` 몫 | 보고서 남은 7 |
+| 8 | 정보 | Build 보고 다시 잼 — 1,866×2 · stamp 89·4 · 호출 0(구조·headless·본문 바이트) · 말뭉치 692·688 변화 0 · 회귀 하네스 셋 같은 값 · 36판 배치 · 삭제 확인 · 기대 변경 7곳 — #1 의 "화면 안" 한 줄 말고 모두 맞음. 내 쪽에서 빠른 문장 바뀜·쪽 넘김·리더 떠남 중 pending 채움(X2–X4) · 9c 왕복(X6) · 멈춘 채 다섯 입구 POST(X1) · 설명 두 꼴 본문 바이트 · 말뭉치 탐침 5,248판 · 메뉴 굴림을 더 잼 | — |
+
+**판정: 배포 가능** — 중간 이상 0. AI 호출 0(여덟 누름 구간 · 본문 39개 HEAD 와 같음), 엉뚱한 문장·번역으로 카드 저장·채움 0(빠른 문장 바뀜·쪽 넘김·리더 떠남), 복습한 카드 지움 0, 낭독 끊김·회귀 0(하네스 셋 같은 값), 음성 말뭉치 변화 0, XSS 길 0(`innerHTML` 0), 콘솔 오류 0(의도한 흉내 429 제외). 낮음 #1(가로 `[⋯]` 메뉴의 [찾아보기] 가림)은 다음 다듬기에서 먼저 고칠 것을 권함, #2·#3 시험 틈은 같은 때 한 줄씩.
+
+## 12-2R-8. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 리다이렉트로 파일에). **막힌(거절된) 명령 0.** 실수 한 번: 첫 전체 시험에 글롭 대신 폴더를 넘겨 1건 실패 → 같은 명령을 글롭으로(변형 찾기 아님 — 지침의 그 명령). `tar` 가 `C:` 를 호스트로 읽어 한 번 실패 → `--force-local`. headless 는 한 번에 하나(`run-v` 189초가 백그라운드로 넘어간 동안 다른 headless·변이 0) · Edge · pipe · 새 프로필(`pX1`·`pL1`·`pM1`·`pT1`·`pR1`·`pV1`) · 가짜 키(`…review_r12_2`) · 흉내 Gemini OPTIONS 204 + CORS · 흉내 음성 · 9b 가짜 인식기 · `setCacheEnabled(false)` · **서버 0**(가로채기) · 합성 PDF `b11-2/syn.pdf` 읽기만 · 콘솔 오류 0(run-v 의 의도한 429 한 줄 제외) · pageerror 0 · 외부 요청 0 · 빠진 파일 0. 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음 · `b12-2/`·`r9b*/`·`r11-4/` 읽기만 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음(`git diff --stat` 18파일 504+/66− — 리뷰 전과 같음).
+
+스크래치 `r12-2/`: `full1.tap`·`full2.tap` · `commands-head.txt`·`commands-head.mjs`·`rvoice.mjs` · `head.tar`·`head/`·`rbody.mjs` · `mut.mjs`·`bak/`(remember·voice·library·controls) · `mkcommon.mjs`·`common.mjs`·`run-t.mjs`·`run-r.mjs`·`run-v.mjs`(Build 사본) · `run-x.mjs`·`x1.json` · `run-l.mjs`·`l1.json` · `run-m.mjs` · `t1.json`·`r1.json`·`v1.json` · `shots/` · 프로필 `p*` · `section.md`(이 절)·`append.mjs`.

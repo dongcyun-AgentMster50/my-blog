@@ -54,7 +54,7 @@
 <link rel="stylesheet" href="css/tokens.css?v=7ff71180ec">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
 <link rel="stylesheet" href="css/screens.css?v=09186c9ef5">
-<link rel="stylesheet" href="css/reader.css?v=7a03d9c286">
+<link rel="stylesheet" href="css/reader.css?v=dcfcbd812d">
 <script type="importmap">
 {
   "imports": {
@@ -72,11 +72,11 @@
     "./js/config.js": "./js/config.js?v=defca63304",
     "./js/db.js": "./js/db.js?v=b085a26857",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=273239f953",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=2cf28b730a",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=1540579a79",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=906417d3c1",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=b136fad431",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=e8ce528f77",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=e11f7aa73b",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=fce83ffaab",
     "./js/main.js": "./js/main.js?v=4798789b69",
     "./js/notes/summaries.js": "./js/notes/summaries.js?v=c928e7ff09",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
@@ -121,30 +121,31 @@
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
     "./js/ui/chrome.js": "./js/ui/chrome.js?v=ebc3657eb9",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=6861dbac8d",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=9f2a5af46f",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
     "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=0fe335b7ac",
-    "./js/ui/library.js": "./js/ui/library.js?v=f39ed94b8e",
+    "./js/ui/library.js": "./js/ui/library.js?v=feed0cf595",
     "./js/ui/links.js": "./js/ui/links.js?v=af6adb9d8f",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=e840a78947",
     "./js/ui/quiz.js": "./js/ui/quiz.js?v=6e3917dcaa",
     "./js/ui/reader.js": "./js/ui/reader.js?v=50037047bf",
+    "./js/ui/remember.js": "./js/ui/remember.js?v=568e7a280e",
     "./js/ui/search.js": "./js/ui/search.js?v=1b6d40d560",
-    "./js/ui/selbar.js": "./js/ui/selbar.js?v=08765c200e",
+    "./js/ui/selbar.js": "./js/ui/selbar.js?v=0105a0bd55",
     "./js/ui/settings.js": "./js/ui/settings.js?v=a93e197aea",
     "./js/ui/summaries.js": "./js/ui/summaries.js?v=6b7280a0fd",
     "./js/ui/sumsheet.js": "./js/ui/sumsheet.js?v=9ac7bbb36c",
-    "./js/ui/trband.js": "./js/ui/trband.js?v=ff78f2cb44",
+    "./js/ui/trband.js": "./js/ui/trband.js?v=43e769218d",
     "./js/ui/tree.js": "./js/ui/tree.js?v=08e765cecb",
     "./js/ui/typeset.js": "./js/ui/typeset.js?v=2ccd2e6cd1",
     "./js/ui/usage.js": "./js/ui/usage.js?v=104d59f4e5",
     "./js/ui/vocab.js": "./js/ui/vocab.js?v=dff0c8e87c",
-    "./js/ui/voice.js": "./js/ui/voice.js?v=35b78fba3b",
+    "./js/ui/voice.js": "./js/ui/voice.js?v=ea33237313",
     "./js/ui/wordsheet.js": "./js/ui/wordsheet.js?v=e1bb841a16",
     "./js/vocab/store.js": "./js/vocab/store.js?v=928b6125e9",
-    "./js/voice/commands.js": "./js/voice/commands.js?v=16bec998e4",
+    "./js/voice/commands.js": "./js/voice/commands.js?v=6397224bf8",
     "./js/voice/listen.js": "./js/voice/listen.js?v=194d4c7d9c"
   }
 }
@@ -514,14 +515,16 @@
     <div class="tr-band" id="trBand" role="region" data-i18n-aria="readalong.band"
          data-state="idle" data-speaking="src" hidden>
       <!-- `[8c-1 — spec 17-7-6 4-1]` 탭 모드(멈춘 상태 줄 탭 · 선택 줄 [문장 번역])일 때만 보이는 머리 끝 단추 칸.
-           [문단 전체](aria-pressed) · 12 기억 카드의 [☆] 자리(비어 있음 — 12 가 채운다) · [×](닫기, 48×48).
+           [문단 전체](aria-pressed) · 12 기억 카드의 [☆] 자리(`[12-2]` 채움 — 낭독 모드에서는 [☆] 홀로) · [×](닫기, 48×48).
            번역문 앞에 두어 글이 그 옆으로 흐른다(띠 높이는 토큰 그대로). 동작은 띠의 위임 리스너(`data-tr-action`). -->
       <div class="tr-tools" id="trTools" hidden>
         <!-- `[11-4 — spec 17-2-1 4-7]` 설명 모드 — 꼬리표 "설명"(번역과 구별) · [▶ 다시 듣기](48×48 — 글이 준비됐을 때만). -->
         <span class="tr-kind" id="trKind" data-i18n="explain.tag" hidden></span>
         <button type="button" class="tr-para" id="trPara" data-tr-action="para" aria-pressed="false"
                 data-i18n="tap.para" hidden></button>
-        <span class="tr-slot" id="trSlot" hidden></span>
+        <!-- `[12-2 — spec 17-11 5]` [☆] 기억 카드 — 세 모드(낭독·탭·설명) 같은 단추 48×48. 카드가 있으면 [★](aria-pressed). 동작은 위임 리스너. -->
+        <span class="tr-slot" id="trSlot" hidden><button type="button" class="tr-star" id="trStar" data-tr-action="remember"
+                aria-pressed="false" data-i18n-aria="remember.add"><span id="trStarGlyph" aria-hidden="true">☆</span></button></span>
         <button type="button" class="tr-replay" id="trReplay" data-tr-action="replay"
                 data-i18n-aria="explain.replay" hidden><span aria-hidden="true">▶</span></button>
         <button type="button" class="tr-close" id="trClose" data-tr-action="close"
@@ -538,7 +541,7 @@
     <!-- `[8c-1 — spec 17-7-6 4-2]` 선택 동작 줄 — 본문 글자를 길게 눌러 고르면 컨트롤 바(띠가 켜져 있으면 띠) 바로 위에 뜬다.
          단추는 `js/ui/selbar.js` 가 목록 데이터(`SEL_ACTIONS`)에서 그린다. 동작은 줄 하나의 위임 리스너(`data-sel-action`).
          `[11-2 — spec 17-2-1 · 11-D3]` 보이는 칸 고정: [단어 번역] · [문장 번역] · `[11-4]` [설명] + `[⋯]`.
-         `[⋯]` 메뉴(`#selMore`, `role="menu"`) 안: [요약] · [여기서부터 읽기] · [찾아보기](18 — 링크가 있을 때만). 칸은 JS 가 넣는다. -->
+         `[⋯]` 메뉴(`#selMore`, `role="menu"`) 안: [요약] · [여기서부터 읽기] · `[12-2]` [기억 카드] · [찾아보기](18 — 링크가 있을 때만). 칸은 JS 가 넣는다. -->
     <div class="sel-bar" id="selBar" role="region" data-i18n-aria="sel.bar" hidden>
       <div class="sel-actions" id="selActions"></div>
       <button type="button" class="sel-btn sel-more" id="selMoreBtn" aria-haspopup="menu" aria-expanded="false"

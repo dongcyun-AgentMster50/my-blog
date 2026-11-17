@@ -81,8 +81,11 @@ export default {
   'library.card.delete': 'حذف',
   // `[11-2]` "وكل ما هو مخزَّن معه" → ما يُحذف فعلًا (القائمة والملخصات تبقى — السطور التالية). [검토 — Nour·운영자]
   'library.card.deleteConfirm': 'هل تريد حذف «{title}»؟ سيُحذف ملف PDF وموضع القراءة وسجل الاختبارات والترجمات المخزّنة مؤقتًا.',
-  'library.card.deleteConfirmVocab': 'ستبقى {n} من كلمات القائمة',   // `[8f-2]` [검토 — Nour·운영자]
-  'library.card.deleteConfirmSummaries': 'ستبقى {n} من الملخصات المحفوظة',   // `[11-2]` [검토 — Nour·운영자]
+  // `[12-2 — spec 17-11 4]` 남는 것은 **한 줄**(`deleteKeeps` 의 {list} = 아래 조각들을 " · " 로 이음). [검토 — Nour·운영자] 조각·줄 전부.
+  'library.card.deleteConfirmVocab': 'كلمات القائمة: {n}',   // `[8f-2]` → `[12-2]` 조각
+  'library.card.deleteConfirmCards': 'بطاقات المراجعة: {n}',
+  'library.card.deleteConfirmSummaries': 'الملخصات المحفوظة: {n}',   // `[11-2]` → `[12-2]` 조각
+  'library.card.deleteKeeps': 'سيبقى ما يلي: {list}',
   'library.card.vocab': 'قائمة كلمات هذا الكتاب',   // `[8f-3]` [검토 — Nour·운영자]
   'library.card.summaries': "الملخصات المحفوظة لهذا الكتاب",   // `[11-3]` [검토 — Nour·운영자]
 
@@ -390,6 +393,15 @@ export default {
   'explain.replay': "استمع إلى الشرح مرة أخرى",
   'explain.close': "إغلاق الشرح",
   'explain.disclaimer': "شرح بالذكاء الاصطناعي — للدراسة فقط. راجِع النص الأصلي.",
+  /* `[12-2 — spec 17-11 5]` [☆] بطاقات المراجعة — الشريط · قائمة [⋯] — [검토 — Nour·운영자] 아랍어 문구 전부. */
+  'remember.add': "أضِف إلى بطاقات المراجعة",
+  'remember.added': "في بطاقات المراجعة — اضغط مرة أخرى للإزالة",
+  'remember.saved': "أُضيفت إلى بطاقات المراجعة.",
+  'remember.exists': "موجودة في بطاقات المراجعة.",
+  'remember.removed': "أُزيلت من بطاقات المراجعة.",
+  'remember.reviewed': "هذه بطاقة قيد المراجعة — احذفها من القائمة.",
+  'remember.failed': "تعذّر حفظ البطاقة.",
+  'sel.remember': "بطاقة مراجعة",
   'sum.title': "ملخص الفقرة · {page}",
   'sum.titlePage': "ملخص الصفحة · {page}",
   'sum.pending': "جارٍ التلخيص…",
@@ -738,6 +750,9 @@ export default {
   'voice.cmd.explain': "اشرح",
   'voice.cmd.summarize': "تلخيص الفقرة",          // `[11-2]` [검토 — Nour·운영자]
   'voice.cmd.summarizePrev': "تلخيص الفقرة السابقة",
+  'voice.cmd.remember': "احفظ في بطاقات المراجعة",   // `[12-2]` [검토 — Nour·운영자]
+  'voice.remember.done': "تم الحفظ",                 // `[12-2]` 한 마디(«تم الحفظ» — spec 17-11 5) [검토 — Nour·운영자]
+  'voice.remember.none': "لا توجد جملة لحفظها.",      // `[12-2]` [검토 — Nour·운영자]
   'voice.notYet': "هذا الأمر غير متاح بعد.",
   'voice.noSpeech': "لم أسمع شيئًا.",
   'voice.noMatch': "لم أفهم الأمر: «{text}»",

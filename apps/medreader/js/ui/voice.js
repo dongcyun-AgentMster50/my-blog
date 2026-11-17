@@ -144,6 +144,8 @@ function makeRecord(kind, lang, d, m, now) {
  * @param {Function} [deps.onSummarize]      `[11-2]` 음성 "요약" — `({via:'voice', was, heard, alive})` → `Promise<{ok, key?, prev?, done?}>`
  *                                           (controls → `ui/ask.js`. 이 파일은 파이프라인·시트를 모른다 — 주입만)
  * @param {Object}   [deps.sayer]            `[11-2]` `tts/say.js` — `{busy(), stop()}`. 말하는 중이면 "바쁨"(9a·화면 단추가 먼저 `cancel()`)
+ * @param {Function} [deps.onRemember]       `[12-2]` 음성 "기억" — `({via:'voice', was, heard})` → `Promise<{ok, key?, created?}>`
+ *                                           (controls → `ui/remember.js` — 호출 0. 이 파일은 카드 저장소를 모른다 — 주입만)
  */
 export function createVoice(deps) {
   const d = deps || {};
@@ -311,6 +313,9 @@ export function createVoice(deps) {
       case 'explain':
         explain(was, heard);                       // `[11-4]` 같은 꼴 — 확인 줄은 결과 뒤
         return;
+      case 'remember':
+        remember(was, heard);                      // `[12-2]` AI 호출 없는 갈래 — 저장 뒤 확인 줄 + 한 마디 → 되돌림
+        return;
       default:
         return;
     }
@@ -363,6 +368,44 @@ export function createVoice(deps) {
         paint();
       }, function () { if (alive()) { askJob = null; restore(was); } });
     }, function () { fail(k.failed); });
+  }
+
+  /**
+   * `[12-2 — spec 17-11 5]` 음성 "기억" — 지금 문장을 기억 카드로. 주입 함수(`deps.onRemember` = controls → `ui/remember.js`)는
+   * AI 를 부르지 않는다(번역은 메모리·캐시만 — 없으면 앞면만) — 그래서 `askFor`(기다림 상태 줄·요지 말하기)를 타지 않고 따로 둔다.
+   * 되돌림 규칙은 같은 한 곳: 저장되면 확인 줄 + 한 마디 `voice.remember.done` → `say` 가 끝나면 `restore(was)`(읽던 중이면 이어 읽기 ·
+   * `voice.sayErrors` 꺼짐이면 곧장). 문장이 없거나 표 안내면 `voice.remember.none` 한 마디 → 되돌림. 저장을 기다리는 사이
+   * 손이 닿으면(`cancel` — `askJob` 을 비움) 되돌림 없음(손이 이긴다).
+   */
+  function remember(was, heard) {
+    const fn = d.onRemember;
+    if (typeof fn !== 'function') {
+      status({ text: tr('voice.notYet'), kind: 'info' }, VOICE.NOTICE_MS);
+      say('voice.notYet', was);
+      return;
+    }
+    const job = { was: was };
+    askJob = job;
+    const alive = function () { return askJob === job; };
+    let p = null;
+    try { p = Promise.resolve(fn({ via: 'voice', was: was, heard: heard })); } catch (e) { p = Promise.reject(e); }
+    p.then(function (r) {
+      if (!alive()) return;                        // 손이 끊었다 — 되돌림 없음
+      askJob = null;
+      if (!r || !r.ok) {
+        const key = (r && r.key) || 'voice.remember.none';
+        status({ text: tr(key), kind: 'info' }, VOICE.NOTICE_MS);
+        say(key, was);                             // 한 마디가 끝나면 restore(was)
+        return;
+      }
+      confirm('remember', heard);
+      say('voice.remember.done', was);
+    }, function () {
+      if (!alive()) return;
+      askJob = null;
+      status({ text: tr('remember.failed'), kind: 'error' }, VOICE.NOTICE_MS);
+      say('remember.failed', was);
+    });
   }
 
   /* ── 인식기 이벤트 → 흐름 ─────────────────────────── */

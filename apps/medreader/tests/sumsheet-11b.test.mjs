@@ -472,10 +472,11 @@ test('K9 ★ 글 트리 — details open 중첩 · 하위 없으면 li · 깊이
 test('K10 ★ 선택 줄 — 보이는 칸 [단어 번역][문장 번역] + [⋯] · [⋯] 안 [요약]·[여기서부터 읽기]·[찾아보기] · [요약] 흐림 · 마크업', () => {
   // `[11-4 — 11-D3]` 보이는 칸 = [단어 번역][문장 번역][설명] + [⋯](셋째 칸 [설명]은 11-4 가 끼웠다).
   assert.deepEqual(SEL_ACTIONS.filter((a) => !a.more).map((a) => a.id), ['word', 'sentence', 'explain'], '★ 보이는 칸 고정(11-D3 — 폭을 재지 않는다)');
-  assert.deepEqual(SEL_ACTIONS.filter((a) => a.more).map((a) => a.id), ['summary', 'readFrom', 'lookup']);
+  // `[12-2 — spec 17-11 5]` [⋯] 안에 [기억 카드](`remember`) — [여기서부터 읽기] 다음.
+  assert.deepEqual(SEL_ACTIONS.filter((a) => a.more).map((a) => a.id), ['summary', 'readFrom', 'remember', 'lookup']);
   const on = showAction(SEL_ACTIONS, 'word');
   const m = selBarModel(on, { text: 'arthritis' }, { links: 0 });
-  assert.deepEqual(m.map((x) => [x.id, x.more, x.hidden]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', true, false], ['readFrom', true, false], ['lookup', true, true]]);
+  assert.deepEqual(m.map((x) => [x.id, x.more, x.hidden]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', true, false], ['readFrom', true, false], ['remember', true, false], ['lookup', true, true]]);
   assert.equal(moreVisible(m), true);
   assert.equal(moreVisible(m.filter((x) => !x.more)), false);
   // [요약] 흐림 — 모름이면 그대로, false 면 흐림 + sum.notEligible
@@ -733,7 +734,8 @@ test('K13 서재 삭제 확인 — "저장한 요약 n개는 남습니다" · �
   assert.deepEqual(await deleteKeepCounts('d', { vocab: { countByDoc: async () => 1 }, summaries: { count: async () => 0 } }), { vocab: 1 }, '0 이면 줄도 키도 없다(8f-2 꼴)');
   assert.deepEqual(await deleteKeepCounts('d', { vocab: { countByDoc: async () => 0 }, summaries: { count: async () => { throw new Error('x'); } } }), { vocab: 0 }, '못 읽어도 확인은 뜬다');
   const tr = (k, p) => k + JSON.stringify(p || {});
-  assert.equal(deleteConfirmText('T', deleteKeepLines({ summaries: 2 }), tr), 'library.card.deleteConfirm{"title":"T"}\nlibrary.card.deleteConfirmSummaries{"n":"2"}');
+  // `[12-2 — spec 17-11 4]` 남는 것은 한 줄(`library.card.deleteKeeps` 의 {list} 안에 조각).
+  assert.equal(deleteConfirmText('T', deleteKeepLines({ summaries: 2 }), tr), 'library.card.deleteConfirm{"title":"T"}\nlibrary.card.deleteKeeps{"list":"library.card.deleteConfirmSummaries{\\"n\\":\\"2\\"}"}');
   for (const l of LANGS) {
     assert.match(BUNDLES[l]['library.card.deleteConfirmSummaries'], /\{n\}/);
     assert.match(BUNDLES[l]['library.card.deleteConfirm'], /\{title\}/);

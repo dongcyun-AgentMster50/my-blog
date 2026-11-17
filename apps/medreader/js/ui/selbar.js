@@ -8,7 +8,7 @@
      · 보이는 칸: `[단어 번역]`(기본 목록에서는 `hidden` — `[8f-2]` 단어 시트가 준비되면 controls 가 `refresh(showAction(…,'word'))` 로 켠다)
        · `[문장 번역]` · `[11-4]` 셋째 칸 `[설명]`(`SEL_ACTIONS` 의 `sentence` 다음 자리) · `[⋯]`
      · `[⋯]` 안(`more:true` — 줄 위 작은 메뉴, `role="menu"`): `[요약]`(그 문단이 요약 대상이 아니면 흐림 — 누르면 `sum.notEligible` 한 줄)
-       · `[여기서부터 읽기]` · `[18]` `[찾아보기]` — `{q}` 의료 사이트 링크가 하나 이상일 때만(spec 17-9). 여는 일은 이 파일이
+       · `[여기서부터 읽기]` · `[12-2]` `[기억 카드]`(결과 한 줄은 `note(key)`) · `[18]` `[찾아보기]` — `{q}` 의료 사이트 링크가 하나 이상일 때만(spec 17-9). 여는 일은 이 파일이
          `ui/links.js` 로 곧바로(새 탭은 누름 안에서 — 팝업 차단), 그다음 `onAction('lookup')`(controls 는 듣기 취소만).
          링크가 둘 이상이면 18 목록이 `[⋯]` 메뉴 자리(선택 줄 위)에 뜬다 — 18 의 Esc 층·`armAnchor` 그대로.
      · 단추 목록은 **데이터**(`SEL_ACTIONS`)에서 그린다(crossstep-notes 8c-1).
@@ -46,6 +46,8 @@ export const SEL_ACTIONS = Object.freeze([
   // ↑ 보이는 칸 · ↓ `[⋯]` 안
   Object.freeze({ id: 'summary', key: 'sel.summary', more: true }),
   Object.freeze({ id: 'readFrom', key: 'sel.readFrom', more: true }),
+  // `[12-2 — spec 17-11 5 · 12-D5]` [기억 카드] — 선택 시작 줄의 문장을 카드로(문장 아래 표시·번역 끔에서도 · 호출 0)
+  Object.freeze({ id: 'remember', key: 'sel.remember', more: true }),
   // `[18 — spec 17-9]` `when:'links'` = `{q}` 링크가 하나 이상일 때만 보인다(`selBarModel` 셋째 인자). `[11-2]` `[⋯]` 안으로 옮겼다.
   Object.freeze({ id: 'lookup', key: 'sel.lookup', when: 'links', more: true })
 ]);
@@ -160,7 +162,17 @@ export function initSelBar(d) {
   return api();
 }
 
-function api() { return { hide: hide, clear: clear, refresh: refresh, top: top }; }
+function api() { return { hide: hide, clear: clear, refresh: refresh, top: top, note: note }; }
+
+/**
+ * `[12-2]` 줄 위 한 줄 안내(i18n 키) — [기억 카드] 결과("기억 카드에 넣었습니다" 등). 줄이 숨어 있으면 아무것도 하지 않는다.
+ * 흐린 칸의 안내(`data-sel-note`)와 같은 자리(`#selNote`) — 줄을 거두면(`hide`) 함께 지워진다.
+ */
+export function note(key) {
+  if (!els || !els.note || els.bar.hidden || !key) return;
+  els.note.textContent = t(key);
+  els.note.hidden = false;
+}
 
 /** `[8c-1b]` 줄 윗변(px, 뷰포트 기준) — 숨어 있으면 null. 탭 띠가 새로 뜰 때 선택 글자 가림 굴리기(controls `openTapFor`)가 쓴다. */
 export function top() {

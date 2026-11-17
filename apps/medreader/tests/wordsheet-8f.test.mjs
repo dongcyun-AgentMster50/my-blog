@@ -432,7 +432,8 @@ test('W13 ★ deleteKeepLines — 단어장 n>0 이면 한 줄(0 이면 없음) 
   assert.deepEqual(await deleteKeepCounts('d', { vocab: { countByDoc: async () => 2 } }), { vocab: 2 });
   assert.deepEqual(await deleteKeepCounts('d', { vocab: { countByDoc: async () => { throw new Error('x'); } } }), { vocab: 0 }, '못 읽어도 확인은 뜬다');
   const tr = (k, p) => k + (p ? JSON.stringify(p) : '');
-  assert.equal(deleteConfirmText('T', deleteKeepLines({ vocab: 2 }), tr), 'library.card.deleteConfirm{"title":"T"}\nlibrary.card.deleteConfirmVocab{"n":"2"}');
+  // `[12-2 — spec 17-11 4]` 남는 것은 한 줄(`library.card.deleteKeeps` 의 {list} 안에 조각).
+  assert.equal(deleteConfirmText('T', deleteKeepLines({ vocab: 2 }), tr), 'library.card.deleteConfirm{"title":"T"}\nlibrary.card.deleteKeeps{"list":"library.card.deleteConfirmVocab{\\"n\\":\\"2\\"}"}');
   assert.equal(deleteConfirmText('T', [], tr), 'library.card.deleteConfirm{"title":"T"}');
   const lib = strip(src('../js/ui/library.js'));
   assert.match(lib, /if \(!confirm\(deleteConfirmText\(name, deleteKeepLines\(await deleteKeepCounts\(docId\)\)\)\)\) return;/, '★ 삭제 확인이 한 함수를 거친다');
@@ -441,10 +442,11 @@ test('W13 ★ deleteKeepLines — 단어장 n>0 이면 한 줄(0 이면 없음) 
   await store.save({ surface: 'gout', srcLang: 'en', targetLang: 'ar', docId: 'docDel' });
   await store.save({ surface: 'tophus', srcLang: 'en', targetLang: 'ar', docId: 'docDel' });
   await db.put('cards', { id: 'sc1', kind: 'sentence', docId: 'docDel' });
-  assert.deepEqual(await deleteKeepCounts('docDel'), { vocab: 2 });
+  // `[12-2 — spec 17-11 4]` 확인 대화가 문장 카드(기억 카드)도 센다 — 12-1 이 남긴 몫.
+  assert.deepEqual(await deleteKeepCounts('docDel'), { vocab: 2, cards: 1 });
   await db.deleteDocument('docDel');
   assert.equal((await store.list({ docId: 'docDel' })).length, 2, '단어장은 남는다');
-  assert.ok(await db.get('cards', 'sc1'), '[12-1 — 12-D8] 문장 카드도 남는다(확인 줄은 12-2 몫)');
+  assert.ok(await db.get('cards', 'sc1'), '[12-1 — 12-D8] 문장 카드도 남는다(확인 줄은 12-2 — 위 cards:1)');
 });
 
 /* ══ 5. 선택 줄 · controls 배선 · Esc 층 ═════════════════════ */
@@ -454,10 +456,11 @@ test('W14 선택 줄 [단어 번역] 켜기 — 기본 목록은 그대로(hidde
   const on = showAction(SEL_ACTIONS, 'word');
   // `[18]` `lookup`([찾아보기])은 `hidden` 이 아니라 `when:'links'` — 보이기는 selBarModel 의 ctx(`{q}` 링크 수)가 정한다.
   // `[11-2 — 11-D3]` [요약]이 더해졌다(`[⋯]` 안) — 목록이 다섯 칸. `[11-4]` 보이는 셋째 칸 [설명] — 여섯 칸.
-  assert.deepEqual(on.map((a) => [a.id, !!a.hidden]), [['word', false], ['sentence', false], ['explain', false], ['summary', false], ['readFrom', false], ['lookup', false]]);
+  // `[12-2]` `[⋯]` 안 [기억 카드](`remember`) — 일곱 칸.
+  assert.deepEqual(on.map((a) => [a.id, !!a.hidden]), [['word', false], ['sentence', false], ['explain', false], ['summary', false], ['readFrom', false], ['remember', false], ['lookup', false]]);
   assert.equal(SEL_ACTIONS[0].hidden, true, '원본을 바꾸지 않는다');
   assert.ok(Object.isFrozen(on) && Object.isFrozen(on[0]));
-  assert.deepEqual(selBarModel(on, { text: 'arthritis' }).map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', false, false], ['readFrom', false, false], ['lookup', true, false]]);
+  assert.deepEqual(selBarModel(on, { text: 'arthritis' }).map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', false, false], ['readFrom', false, false], ['remember', false, false], ['lookup', true, false]]);
   assert.equal(selBarModel(on, { text: 'a b c d e f g' })[0].disabled, true, '6낱말 넘으면 흐림(8c-1 그대로)');
   const sb = strip(src('../js/ui/selbar.js'));
   assert.match(sb, /multi: endLine !== line \};/, '스냅숏 — 선택이 다음 줄까지 걸쳤나');

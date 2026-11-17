@@ -85,8 +85,11 @@ export default {
   'library.card.continue': 'Continue reading',
   'library.card.delete': 'Delete',
   'library.card.deleteConfirm': 'Delete "{title}"? The PDF, reading progress, quiz history and cached translations will be removed.',
-  'library.card.deleteConfirmVocab': '{n} word-list entries will be kept',
-  'library.card.deleteConfirmSummaries': '{n} saved summaries will be kept',
+  // `[12-2 — spec 17-11 4]` what is kept is **one line** (`deleteKeeps` {list} = the parts below joined with " · ").
+  'library.card.deleteConfirmVocab': '{n} word-list entries',
+  'library.card.deleteConfirmCards': '{n} memory cards',
+  'library.card.deleteConfirmSummaries': '{n} saved summaries',
+  'library.card.deleteKeeps': '{list} will be kept',
   'library.card.vocab': 'Word list for this book',   // `[8f-3]` card [⋯]
   'library.card.summaries': "Saved summaries for this book",   // `[11-3]`
 
@@ -395,6 +398,15 @@ export default {
   'explain.replay': "Listen to the explanation again",
   'explain.close': "Close explanation",
   'explain.disclaimer': "AI explanation — for study only. Check the original text.",
+  /* `[12-2 — spec 17-11 5]` [☆] memory cards — band · [⋯] menu */
+  'remember.add': "Add to memory cards",
+  'remember.added': "In memory cards — press again to remove",
+  'remember.saved': "Added to memory cards.",
+  'remember.exists': "Already in memory cards.",
+  'remember.removed': "Removed from memory cards.",
+  'remember.reviewed': "This card is being reviewed — delete it from the card list.",
+  'remember.failed': "Could not save the card.",
+  'sel.remember': "Memory card",
   'sum.title': "Paragraph summary · {page}",
   'sum.titlePage': "Page summary · {page}",
   'sum.pending': "Summarizing…",
@@ -744,6 +756,9 @@ export default {
   'voice.cmd.explain': "Explain",
   'voice.cmd.summarize': "Summarize paragraph",
   'voice.cmd.summarizePrev': "Summarize previous paragraph",
+  'voice.cmd.remember': "Save to memory cards",   // `[12-2]`
+  'voice.remember.done': "Saved.",
+  'voice.remember.none': "There is no sentence to save.",
   'voice.notYet': "That command is not available yet.",
   'voice.noSpeech': "Didn’t hear anything.",
   'voice.noMatch': "Didn’t catch a command: “{text}”",

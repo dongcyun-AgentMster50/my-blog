@@ -215,7 +215,8 @@ test('L8 ★ 새 탭 속성 한 곳 — armAnchor(target·rel·referrerPolicy) �
 test('L9 선택 줄 — SEL_ACTIONS 끝 lookup(when:links · [⋯] 안) · selBarModel 숨김·흐림·문구 키', () => {
   // `[11-2 — 11-D3]` 줄 단추 목록이 [단어 번역][문장 번역] + [⋯](요약·여기서부터 읽기·찾아보기)로 바뀌었다 — lookup 은 넷째 → 다섯째(`more`).
   // `[11-4 — 11-D3]` 보이는 셋째 칸 [설명]이 `sentence` 다음에 들어왔다 — lookup 은 여섯째(끝 자리 `[L]` 은 그대로).
-  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'explain', 'summary', 'readFrom', 'lookup']);
+  // `[12-2 — spec 17-11 5]` `[⋯]` 안 [기억 카드](`remember`)가 [여기서부터 읽기] 다음에 들어왔다 — lookup 은 일곱째(끝 자리 그대로).
+  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'explain', 'summary', 'readFrom', 'remember', 'lookup']);
   const L = SEL_ACTIONS.length - 1;
   assert.equal(SEL_ACTIONS[L].when, 'links');
   assert.equal(SEL_ACTIONS[L].key, 'sel.lookup');
@@ -226,7 +227,7 @@ test('L9 선택 줄 — SEL_ACTIONS 끝 lookup(when:links · [⋯] 안) · selBa
   assert.equal(none[L].hidden, true, '{q} 링크 0 → 없음');
   assert.equal(selBarModel(on, { text: 'asthma' })[L].hidden, true, 'ctx 없으면 없음');
   const one = selBarModel(on, { text: 'asthma' }, { links: 1 });
-  assert.deepEqual(one.map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', false, false], ['readFrom', false, false], ['lookup', false, false]]);
+  assert.deepEqual(one.map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', false, false], ['readFrom', false, false], ['remember', false, false], ['lookup', false, false]]);
   assert.equal(one[L].note, 'links.tooLong');
   assert.equal(one[0].note, 'sel.tooLong');
   const long = selBarModel(on, { text: 'a b c d e f g' }, { links: 2 });

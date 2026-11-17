@@ -597,12 +597,13 @@ test('I7b 선택 줄 — SEL_ACTIONS(단어 번역 hidden · 문장 번역 · �
   // `[18]` `lookup`([찾아보기] — `{q}` 링크가 있을 때만, ctx 없으면 숨김)이 붙었다(links-18 L9 가 본다).
   // `[11-2 — 11-D3]` [요약]이 더해지고 [요약]·[여기서부터 읽기]·[찾아보기]는 `[⋯]` 안(`more`) — 보이는 칸은 [단어 번역][문장 번역].
   // `[11-4 — 11-D3]` 보이는 셋째 칸 [설명](`sentence` 다음 — [문장 번역]과 같은 스냅숏, 흐림·숨김 없음).
-  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'explain', 'summary', 'readFrom', 'lookup']);
+  // `[12-2 — spec 17-11 5]` `[⋯]` 안 [기억 카드](`remember`) — [여기서부터 읽기] 다음(흐림·숨김 없음).
+  assert.deepEqual(SEL_ACTIONS.map((a) => a.id), ['word', 'sentence', 'explain', 'summary', 'readFrom', 'remember', 'lookup']);
   assert.deepEqual(SEL_ACTIONS.filter((a) => !a.more).map((a) => a.id), ['word', 'sentence', 'explain']);
   assert.equal(SEL_ACTIONS[0].hidden, true, '8c-1 에서는 마크업만(8f-2 가 켠다)');
   assert.equal(HIDE_DELAY_MS, 300);
   const m = selBarModel(SEL_ACTIONS, { text: 'myocardial' });
-  assert.deepEqual(m.map((x) => [x.id, x.hidden, x.disabled]), [['word', true, false], ['sentence', false, false], ['explain', false, false], ['summary', false, false], ['readFrom', false, false], ['lookup', true, false]]);
+  assert.deepEqual(m.map((x) => [x.id, x.hidden, x.disabled]), [['word', true, false], ['sentence', false, false], ['explain', false, false], ['summary', false, false], ['readFrom', false, false], ['remember', false, false], ['lookup', true, false]]);
   const long = selBarModel(SEL_ACTIONS, { text: 'a b c d e f g' });
   assert.equal(long[0].disabled, true);
   assert.equal(long[1].disabled, false, '[문장 번역]은 길어도 된다');

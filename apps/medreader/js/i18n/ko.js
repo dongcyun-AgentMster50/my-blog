@@ -84,8 +84,11 @@ export default {
   'library.card.continue': 'Continue reading',
   'library.card.delete': 'Delete',
   'library.card.deleteConfirm': '“{title}”을(를) 지울까요? PDF·읽던 자리·퀴즈 기록·번역 캐시가 지워집니다.',
-  'library.card.deleteConfirmVocab': '단어장 {n}개는 남습니다',
-  'library.card.deleteConfirmSummaries': '저장한 요약 {n}개는 남습니다',
+  // `[12-2 — spec 17-11 4]` 남는 것은 **한 줄**(`deleteKeeps` 의 {list} = 아래 조각들을 " · " 로 이음).
+  'library.card.deleteConfirmVocab': '단어장 {n}',
+  'library.card.deleteConfirmCards': '기억 카드 {n}',
+  'library.card.deleteConfirmSummaries': '저장한 요약 {n}',
+  'library.card.deleteKeeps': '{list} 는 남습니다',
   'library.card.vocab': '이 책의 단어장',   // `[8f-3]` 카드 [⋯]
   'library.card.summaries': "이 책의 저장한 요약",   // `[11-3]`
 
@@ -393,6 +396,15 @@ export default {
   'explain.replay': "설명 다시 듣기",
   'explain.close': "설명 닫기",
   'explain.disclaimer': "AI 설명 — 교육용입니다. 원문을 확인하세요.",
+  /* `[12-2 — spec 17-11 5]` [☆] 기억 카드 — 띠 · [⋯] 메뉴 */
+  'remember.add': "기억 카드에 넣기",
+  'remember.added': "기억 카드에 있음 — 다시 누르면 뺍니다",
+  'remember.saved': "기억 카드에 넣었습니다.",
+  'remember.exists': "이미 기억 카드에 있습니다.",
+  'remember.removed': "기억 카드에서 뺐습니다.",
+  'remember.reviewed': "복습 중인 카드입니다 — 목록에서 지우세요.",
+  'remember.failed': "기억 카드를 저장하지 못했습니다.",
+  'sel.remember': "기억 카드",
   'sum.title': "문단 요약 · {page}",
   'sum.titlePage': "이 쪽 요약 · {page}",
   'sum.pending': "요약 중…",
@@ -742,6 +754,9 @@ export default {
   'voice.cmd.explain': "설명",
   'voice.cmd.summarize': "문단 요약",
   'voice.cmd.summarizePrev': "앞 문단 요약",
+  'voice.cmd.remember': "기억 카드에 넣기",   // `[12-2]`
+  'voice.remember.done': "넣었습니다.",
+  'voice.remember.none': "기억할 문장이 없습니다.",
   'voice.notYet': "아직 없는 기능입니다.",
   'voice.noSpeech': "아무 말도 듣지 못했습니다.",
   'voice.noMatch': "명령을 알아듣지 못했습니다: “{text}”",
