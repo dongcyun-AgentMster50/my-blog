@@ -12,7 +12,7 @@
    ══════════════════════════════════════════════════════════════════════ */
 
 import * as realDb from '../db.js';
-import { BACKUP, LINKS, SEARCH } from '../config.js';
+import { BACKUP, LINKS, SEARCH, SRS } from '../config.js';
 import { hasSubtle } from '../hash.js';
 import { TERM_CONTENT_FIELDS } from '../text/vocab.js';
 import { lineSplitter, readHead, parseLine, remapRecord, mergeRecord, hasKeyShape } from '../text/backup.js';
@@ -136,6 +136,7 @@ export function settingTypeOk(key, value, defaults) {
  * - `links.medical`: 둘 다 사용자 목록(배열)이면 **기기 순서 먼저** + 파일 항목 중 주소가 겹치지 않는 것 · `LINKS.MAX`(30)개까지 · 겹친 id 는
  *   `cleanLinkIds` 의 결정적 새 id. 기기가 `null`(= 기본 목록 — 손대지 않음)이면 파일 값 그대로(새 휴대폰), 파일이 `null` 이면 기기 그대로.
  * - `search.recent`: 기기 먼저 + 파일의 새 글자 · `SEARCH.RECENT_MAX` 개까지.
+ * - `[12-1]` `srs.log`: 날짜 합집합 · 같은 날 칸마다 큰 값(`unionLog`).
  * 같은 파일을 두 번 넣어도 같다(이미 들어간 항목은 겹침으로 빠진다). 그 밖 키는 파일 값 그대로(덮기).
  * @returns {*} 쓸 값(기기와 깊게 같으면 병합이 `keep`)
  */
@@ -162,7 +163,28 @@ export function unionSetting(key, mine, theirs) {
     for (const q of [].concat(mine, theirs)) if (typeof q === 'string' && q && out.indexOf(q) < 0) out.push(q);
     return out.slice(0, SEARCH.RECENT_MAX);
   }
+  if (key === 'srs.log') return unionLog(mine, theirs);
   return theirs;
+}
+
+/**
+ * `[12-1]` 기억 카드 하루 기록(`srs.log` — `{'YYYY-MM-DD': {n, ms, new}}`)은 학습 기록이다 — 파일 값으로 덮으면 이 기기에만 있던 날이 사라진다.
+ * 날짜 합집합, 같은 날은 칸마다 큰 값(사용량 행과 같은 규칙 — 같은 파일 두 번 = 한 번), 최근 `SRS.LOG_DAYS` 날만(날짜 키 순).
+ * 한쪽이 객체가 아니면 다른 쪽 그대로.
+ */
+function unionLog(mine, theirs) {
+  const ok = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  if (!ok(mine)) return theirs;
+  if (!ok(theirs)) return mine;
+  const out = {};
+  const days = [...new Set(Object.keys(mine).concat(Object.keys(theirs)))].filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-SRS.LOG_DAYS);
+  const n = (x) => (Number.isFinite(Number(x)) ? Math.max(0, Number(x)) : 0);
+  for (const k of days) {
+    const a = ok(mine[k]) ? mine[k] : {};
+    const b = ok(theirs[k]) ? theirs[k] : {};
+    out[k] = { n: Math.max(n(a.n), n(b.n)), ms: Math.max(n(a.ms), n(b.ms)), new: Math.max(n(a.new), n(b.new)) };
+  }
+  return out;
 }
 
 /** 시각 값(ms 숫자·ISO 글자)이 `nowMs` 보다 늦은가. 못 읽으면 false. */

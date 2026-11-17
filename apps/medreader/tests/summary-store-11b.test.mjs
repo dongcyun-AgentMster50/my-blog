@@ -160,7 +160,7 @@ test('N5 ★ relocate — 지금 쪽 문단들(withHashes)에서 같은 해시 �
   assert.equal(S.relocate(r, changed), null);
 });
 
-test('D1 ★ deleteDocument — summary·outline 남음 · [정정 11-1 — 20-D11] 다른 annotations(가짜 highlight)도 남음 · 단어장 남음 · term 캐시·문장 카드·쪽은 지움', async () => {
+test('D1 ★ deleteDocument — summary·outline 남음 · [정정 11-1 — 20-D11] 다른 annotations(가짜 highlight)도 남음 · 단어장·[12-1] 문장 카드 남음 · term 캐시·쪽은 지움', async () => {
   await reset();
   await db.put('documents', { id: 'docZ', title: 'Book Z', fileHash: 'hz' });
   await db.put('documents', { id: 'docY', title: 'Book Y', fileHash: 'hy' });
@@ -182,7 +182,7 @@ test('D1 ★ deleteDocument — summary·outline 남음 · [정정 11-1 — 20-D
   assert.equal(c.annotations, 0, 'annotations 는 하나도 지우지 않는다');
   assert.equal(idb.peek('medreader', 'annotations', s1.id).docTitle, 'Book Z', 'docTitle 사본이 출처를 대신한다');
   assert.ok(idb.peek('medreader', 'cards', 'vt:z'), '단어장 그대로(8f-1)');
-  assert.equal(idb.peek('medreader', 'cards', 'sc:z'), undefined, '문장 카드는 지금처럼 지운다');
+  assert.ok(idb.peek('medreader', 'cards', 'sc:z'), '[12-1 — 12-D8] 문장 카드도 남는다');
   assert.equal(idb.peek('medreader', 'aiCache', 'term|ar|docZ|h|w=x'), undefined, '★ term 캐시는 지운다(RM5 — 스토어 조건)');
   assert.equal(idb.peek('medreader', 'aiCache', 'summarize|ar|docZ|h|l=ar+en'), undefined, '요약 캐시도 지운다(저장 요약만 남는다)');
   assert.equal(c.pages, 1);
@@ -190,7 +190,8 @@ test('D1 ★ deleteDocument — summary·outline 남음 · [정정 11-1 — 20-D
   assert.equal(db.keepsOnDocDelete({ kind: 'term' }), true, '기본 스토어 = cards(8f-1 호출 그대로)');
   assert.equal(db.keepsOnDocDelete({ kind: 'term' }, 'cards'), true);
   assert.equal(db.keepsOnDocDelete({ kind: 'term' }, 'aiCache'), false);
-  assert.equal(db.keepsOnDocDelete({ kind: 'sentence' }, 'cards'), false);
+  assert.equal(db.keepsOnDocDelete({ kind: 'sentence' }, 'cards'), true, '[12-1 — 12-D8]');
+  assert.equal(db.keepsOnDocDelete({ kind: 'sentence' }, 'aiCache'), false);
   assert.equal(db.keepsOnDocDelete({ kind: 'highlight' }, 'annotations'), true);
   assert.equal(db.keepsOnDocDelete(null, 'annotations'), true);
   assert.equal(db.keepsOnDocDelete({ kind: 'summary' }, 'pages'), false);

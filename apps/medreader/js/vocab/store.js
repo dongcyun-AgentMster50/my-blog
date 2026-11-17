@@ -130,6 +130,8 @@ export function createVocabStore(deps) {
         if (!t) return null;                      // 원어를 비울 수는 없다
         if (t !== cur.term) next.term = t;
       }
+      // `[12-1 — 8f1R]` 멈춤은 내용이 아니다(`updatedAt` 그대로) — 대신 `suspendedAt` 으로 9c 병합이 늦은 쪽을 고른다.
+      if (Object.prototype.hasOwnProperty.call(next, 'suspended')) next.suspendedAt = now();
       if (!o.user && typeof p.edited === 'boolean' && p.edited !== !!cur.edited) { next.edited = p.edited; content = true; }
       if (!Object.keys(next).length) return null;
       if (content) {

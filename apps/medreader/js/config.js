@@ -740,6 +740,37 @@ export const EXPLAIN = Object.freeze({
 });
 
 /* ────────────────────────────────────────────────────────
+   `[12-1]` 17-11 3·4 — 기억 카드(SRS) 상수. **추가만** 했다. 호출 0(카드·복습·뒷면 채우기 전부 기기 안).
+   SM-2 + Anki 식 4단추 변형(12-D4): 다시 10분 · 어려움 ×1.2 · 쉬움 ×1.3 · ease 바닥 1.3 · 최대 365일.
+   ──────────────────────────────────────────────────────── */
+export const SRS = Object.freeze({
+  DAY_MS: 86400000,
+  /* "다시" — 지금부터 이만큼 뒤(12-D12) */
+  AGAIN_MS: 10 * 60 * 1000,
+  MAX_INTERVAL_DAYS: 365,
+  /* sm2 처음 값 `{ease, interval(일), reps, lapses}` */
+  START: Object.freeze({ ease: 2.5, interval: 0, reps: 0, lapses: 0 }),
+  EASE_MIN: 1.3,
+  /* 단추별 ease 변화 — 다시 −0.20 · 어려움 −0.15 · 쉬움 +0.15(좋음은 그대로) */
+  EASE_DELTA: Object.freeze({ again: -0.2, hard: -0.15, good: 0, easy: 0.15 }),
+  HARD_FACTOR: 1.2,
+  EASY_BONUS: 1.3,
+  /* 처음 매길 때의 간격(일) — 좋음 1 → 두 번째 좋음 6 · 어려움 1 · 쉬움 4 */
+  FIRST_DAYS: Object.freeze({ hard: 1, good: 1, easy: 4 }),
+  SECOND_GOOD_DAYS: 6,
+  GRADES: Object.freeze(['again', 'hard', 'good', 'easy']),
+  /* 하루 새 카드(`srs.newPerDay` 기본 — 12-D11). 설정 값은 0–100 으로 자른다. */
+  NEW_PER_DAY: 20,
+  NEW_PER_DAY_MAX: 100,
+  /* 한 장 매기기 시간 상한(자리를 비운 시간을 세지 않음 — 12-3) · 하루 기록 `srs.log` 를 남기는 날 수 */
+  MAX_REVIEW_MS: 60000,
+  LOG_DAYS: 60,
+  /* 문장 카드 `origin`(17-11 4) · id 머리(12-D7) */
+  ORIGINS: Object.freeze(['band', 'tap', 'explain', 'select', 'voice']),
+  ID_PREFIX: 'sc:'
+});
+
+/* ────────────────────────────────────────────────────────
    `[8a]` 7-6 · 10-2 · 7-5 — 번역 파이프라인 상수. **추가만** 했다.
    ★ 무료 티어 한도 숫자는 여기에도 없다(15절). 상한은 사용자의 `ai.dailyCap` 이다.
    ──────────────────────────────────────────────────────── */
@@ -952,6 +983,7 @@ export const LINKS = Object.freeze({
    ★ 설정 허용 목록은 **명시 목록**이다 — 새 설정 키는 저절로 들어가지 않는다. `settings.js` `DEFAULTS` 의 모든 키가
      `SETTINGS_KEYS`(담음)·`SETTINGS_SKIP`(안 담음) 둘 중 **하나에만** 있어야 한다(tests/backup-9c.test.mjs — 빠지면 빨강).
      12·13(SRS·계획)의 `srs.*`·`reading.*`·`planner.exams` 는 아직 키가 없다 — 12-1·13-1 이 더한다.
+     `[12-1]` `srs.newPerDay`·`srs.log`(학습 기록) 담음 — `srs.log` 는 가져올 때 날짜별 큰 값으로 합친다(`backup/import.js` `unionSetting`).
    ──────────────────────────────────────────────────────── */
 export const BACKUP = Object.freeze({
   /* 파일 꼴의 판. 가져오기는 이보다 큰 판을 거절한다(17-4-1 3). */
@@ -1002,6 +1034,7 @@ export const BACKUP = Object.freeze({
     'voice.enabled', 'voice.cmdLang', 'voice.sayErrors',
     'readalong.mode', 'readalong.speakSource', 'readalong.display', 'readalong.lastOn',
     'search.recent', 'vocab.lastExportAt', 'links.medical',
+    'srs.newPerDay', 'srs.log',
     'ai.provider', 'ai.model', 'ai.translationLang', 'ai.summaryLangs', 'ai.useOnDevice', 'ai.dailyCap', 'ai.warnAt',
     'ai.cacheLimitMB', 'ai.maxReqChars',
     'privacy.piiCheck'

@@ -292,7 +292,7 @@ export function remapRecord(store, rec, remap) {
       break;
     }
     case 'progress':
-    case 'cards':
+    case 'cards':        // `[12-1b]` 문장 카드 id 는 문서 `fileHash` 바탕(docId 가 아님 — srs/cards.js `sentenceDocKey`)이라 바꿀 것이 없다 — `docId` 만
     case 'annotations':
       swapField('docId');
       break;
@@ -445,7 +445,8 @@ function termRow(rec) {
  * 백업에는 미리보기 고르기가 없다 → `importPlan` 의 충돌(`conflict` — 시각을 못 읽음·미래 시각)·거절은 **기기 값 유지**.
  * `[9c-1b]` 파일 `updatedAt` = 기기 `updatedAt` 이면 내용은 **기기 값 유지**(`importPlan` 을 부르지 않음 — CSV 의 "같음 = 파일" 규칙은 백업 갈래에서만 뺀다).
  * 내용이 파일 쪽으로 바뀌면 `edited` 는 파일 항목의 값(AI 번역이 더 새로우면 "고침" 표시가 붙지 않게).
- * 복습 필드(`sm2`·`dueAt`·`reviewedAt`·`introducedAt`)는 내용과 따로 — 파일 쪽 `reviewedAt` 이 늦을 때만(12 대비 — 지금은 늘 null).
+ * 복습 필드(`sm2`·`dueAt`·`reviewedAt`·`introducedAt`)는 내용과 따로 — 파일 쪽 `reviewedAt` 이 늦을 때만(12-1 `srs/cards.js` `review` 가 쓴다).
+ * `[12-1]` 멈춤(`suspended`·`suspendedAt`)도 따로 — 파일 쪽 `suspendedAt` 이 늦을 때만(없으면 기기 — 9c-1 의 "내용 밖 필드는 기기" 그대로).
  */
 function mergeTerm(mine, theirs, o) {
   if (mine.kind !== 'term') return { op: 'keep' };
@@ -459,15 +460,70 @@ function mergeTerm(mine, theirs, o) {
     Object.assign(p, plan.change[0].patch);
     if (Object.prototype.hasOwnProperty.call(p, 'edited')) p.edited = !!theirs.edited;
   }
-  if (num(theirs.reviewedAt) > num(mine.reviewedAt)) {
-    for (const k of TERM_REVIEW_FIELDS) if (theirs[k] !== undefined) p[k] = theirs[k];
-  }
+  laterGroup(p, mine, theirs, 'reviewedAt', TERM_REVIEW_FIELDS);
+  laterGroup(p, mine, theirs, 'suspendedAt', SUSPEND_FIELDS);
   return Object.keys(p).length ? { op: 'patch', patch: p } : { op: 'keep' };
 }
 
-/** 카드의 "늦은 쪽" 시각 — 내용 수정(`updatedAt`)·복습(`reviewedAt`) 중 큰 것(12-D9). */
-function cardTime(c) {
-  return Math.max(num(c && c.updatedAt), num(c && c.reviewedAt));
+/** `[12-1]` 멈춤(`suspended`)과 그 시각 — 내용·복습과 따로 `suspendedAt` 늦은 쪽(8f1R — `updatedAt` 을 올리지 않는 필드가 지지 않게). */
+const SUSPEND_FIELDS = Object.freeze(['suspended', 'suspendedAt']);
+
+/** 파일 쪽 `clock` 시각이 더 늦으면 `fields` 중 기기와 다른 값을 `p` 에 담는다(같거나 없으면 기기 — 멱등). */
+function laterGroup(p, mine, theirs, clock, fields) {
+  if (!(num(theirs[clock]) > num(mine[clock]))) return;
+  for (const k of fields) if (theirs[k] !== undefined && !sameValue(theirs[k], mine[k])) p[k] = theirs[k];
+}
+
+/**
+ * `[12-1 — 9c1R #8]` 문장 카드(그 밖 `kind`) — 레코드를 통째로 고르지 않고 **세 묶음을 따로** 늦은 쪽으로(같으면 기기):
+ *   내용(아래 둘을 뺀 모든 필드) ← `updatedAt` · 복습 상태(`sm2`·`dueAt`·`reviewedAt`·`introducedAt`) ← `reviewedAt` ·
+ *   멈춤(`suspended`·`suspendedAt`) ← `suspendedAt`.
+ * 그래서 다른 기기에서 뒷면만 고친 파일이 이 기기의 더 최근 복습 상태를 옛것으로 덮지 않는다. 같은 파일 두 번 = 한 번(늦은 쪽 시각이 같아진다).
+ * `[12-1c — 12-1bR #1]` 내용 묶음의 이긴 쪽: ② 만든 뒤 고치지 않은 카드(`updatedAt <= createdAt`)는 고친 카드를 이기지 못한다
+ * (둘 다 같은 꼴이면 지금처럼 `updatedAt` 늦은 쪽, 같으면 기기). ① 글자 내용(`back`·`note`·`explain`)은 필드마다 **빈 값이 비지 않은
+ * 값을 지우지 않는다** — 이긴 쪽이 비었으면 진 쪽 값을 남기고(파일이 이겨도 기기 값 유지, 기기가 이겨도 빈 칸은 파일 값으로 채움).
+ * 채움은 `updatedAt` 을 올리지 않는다(멱등 — 두 번째엔 빈 칸이 없다). 대가: 일부러 비운 글자는 다른 기기의 옛 값으로 다시 찬다.
+ */
+const SENTENCE_TEXT_FIELDS = Object.freeze(['back', 'note', 'explain']);
+
+function blankText(v) {
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/** 만든 뒤 내용을 고쳤나 — 두 시각이 숫자로 있고 `updatedAt <= createdAt` 이면 "안 고침". 모르면(옛·특이 레코드) 고친 것으로 본다(지금 규칙). */
+function sentenceEdited(c) {
+  const cr = Number(c.createdAt);
+  const up = Number(c.updatedAt);
+  if (!Number.isFinite(cr) || !Number.isFinite(up) || cr <= 0) return true;
+  return up > cr;
+}
+
+function mergeSentence(mine, theirs) {
+  if (mine.kind !== theirs.kind) return { op: 'keep' };
+  const p = {};
+  const mineEdited = sentenceEdited(mine);
+  const theirsEdited = sentenceEdited(theirs);
+  const theirsWins = mineEdited !== theirsEdited ? theirsEdited : num(theirs.updatedAt) > num(mine.updatedAt);
+  if (theirsWins) {
+    const skip = new Set(['id', 'kind'].concat(TERM_REVIEW_FIELDS, SUSPEND_FIELDS));
+    for (const k of Object.keys(theirs)) {
+      if (skip.has(k) || theirs[k] === undefined || sameValue(theirs[k], mine[k])) continue;
+      if (SENTENCE_TEXT_FIELDS.indexOf(k) >= 0 && blankText(theirs[k]) && !blankText(mine[k])) continue;
+      p[k] = theirs[k];
+    }
+  } else {
+    // `[12-1d — 12-1cR #1]` 내용 시각이 같은 자리(같은 꼴·같은 `updatedAt` — "같으면 기기")에서 글자 칸이 둘 다 비지 않고 다르면
+    // 기기·순서와 무관하게 **문자열이 큰 쪽**(UTF-16 코드 단위 비교)을 고른다 — 채움이 시각을 올리지 않아 세 기기 이상에서
+    // 같은 시각·다른 글자로 영영 남던 꼴을 막는다(교환·결합·멱등 → 수렴). 지는 값은 원래도 "같으면 기기"에서 진 쪽.
+    const tie = mineEdited === theirsEdited && num(theirs.updatedAt) === num(mine.updatedAt);
+    for (const k of SENTENCE_TEXT_FIELDS) {
+      if (blankText(mine[k])) { if (!blankText(theirs[k])) p[k] = theirs[k]; }
+      else if (tie && !blankText(theirs[k]) && String(theirs[k]) > String(mine[k])) p[k] = theirs[k];
+    }
+  }
+  laterGroup(p, mine, theirs, 'reviewedAt', TERM_REVIEW_FIELDS);
+  laterGroup(p, mine, theirs, 'suspendedAt', SUSPEND_FIELDS);
+  return Object.keys(p).length ? { op: 'patch', patch: p } : { op: 'keep' };
 }
 
 /**
@@ -519,7 +575,7 @@ export function mergeRecord(store, mine, theirs, opts) {
         if (mine.id === theirs.id && mine.targetLang !== theirs.targetLang) return { op: 'keep' };
         return mergeTerm(mine, theirs, o);
       }
-      return cardTime(theirs) > cardTime(mine) ? { op: 'put', value: theirs } : { op: 'keep' };
+      return mergeSentence(mine, theirs);
     case 'annotations':
       if (!has) return { op: 'add', value: theirs };
       return num(theirs.updatedAt) > num(mine.updatedAt) ? { op: 'put', value: theirs } : { op: 'keep' };

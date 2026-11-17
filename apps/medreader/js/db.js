@@ -455,7 +455,7 @@ const CASCADE_STORES = Object.freeze([
 
 /**
  * `[8f-1 — 9-2 `[신설 2026-10-12]` · 17-7-6 4-4]` 문서를 지워도 남기는 레코드인가 — **판정은 여기 한 곳**.
- *   - `cards`(스토어를 주지 않으면 이것): 단어장 항목(`kind:'term'`)만 — 사용자가 고르고 고친 기록이라 PDF 를 지워 공간을 비울 때
+ *   - `cards`(스토어를 주지 않으면 이것): 단어장 항목(`kind:'term'`)·`[12-1]` 기억 카드(`kind:'sentence'`) — 사용자가 고르고 고친 기록이라 PDF 를 지워 공간을 비울 때
  *     함께 사라지면 안 된다. 같은 `kind:'term'` 이어도 `aiCache`(단어 요청 캐시)는 지운다 — 스토어 조건이 그래서 있다.
  *   - `[11-1 — 17-2-1 4-4 · 11-D8 · 20-D11]` `annotations`: **스토어 전체** — 저장한 요약(`summary`)·범위 개요(`outline`)·
  *     필기·하이라이트(20) 모두 남는다(`docTitle` 사본이 출처를, 20 의 `fileHash` 사본이 다시 붙이기를 맡는다).
@@ -466,7 +466,8 @@ const CASCADE_STORES = Object.freeze([
 export function keepsOnDocDelete(rec, store) {
   const name = store === undefined ? 'cards' : store;
   if (name === 'annotations') return true;
-  return name === 'cards' && !!rec && rec.kind === 'term';
+  // `[12-1 — 12-D8]` 문장 카드(`kind:'sentence'`)도 남는다 — 앞·뒷면 사본이라 PDF 없이 완결. `kind` 없는 옛 꼴은 지운다.
+  return name === 'cards' && !!rec && (rec.kind === 'term' || rec.kind === 'sentence');
 }
 
 /* ────────────────────────────────────────────────────────
@@ -570,7 +571,7 @@ export function deleteDocument(docId) {
         const cur = req.result;
         if (!cur) { pending--; done(); return; }
         // `[8f-1 — 9-2 · 17-7-6 4-4]` 단어장(`cards` `kind:'term'`)은 문서를 지워도 남긴다(`docTitle` 사본이 출처를 대신한다).
-        // 문장 카드(`kind` 없음·'sentence')는 지금처럼 지운다 — 12-1 이 `sentence` 를 이 예외에 더한다(12-D8).
+        // `[12-1 — 12-D8]` 문장 카드(`kind:'sentence'`)도 남긴다. `kind` 없는 옛 꼴만 지운다.
         // `[11-1 — 11-D8 · 20-D11]` `annotations` 는 스토어 전체가 남는다(저장 요약·개요·필기). 판정은 `keepsOnDocDelete` 한 곳.
         if (keepsOnDocDelete(cur.value, name)) { cur.continue(); return; }
         cur.delete();

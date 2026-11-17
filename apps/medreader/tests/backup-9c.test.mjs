@@ -572,16 +572,21 @@ test('K10g cards term — importPlan 의 충돌(시각 못 읽음·미래)·거�
   assert.deepEqual(R('cards', mine, term({ surface: '', term: '', translation: 'X', updatedAt: 9000 })), { op: 'keep' }, '원어 빔 → 거절 → 기기');
 });
 
-test('K10h cards — 복습 필드는 reviewedAt 늦은 쪽 · 문장 카드는 max(updatedAt, reviewedAt) 늦은 쪽(같으면 기기)', () => {
+test('K10h cards — 복습 필드는 reviewedAt 늦은 쪽 · [12-1] 문장 카드는 내용 updatedAt·복습 reviewedAt 따로 늦은 쪽(같으면 기기)', () => {
   const mine = term({ reviewedAt: 100 });
   const r = R('cards', mine, term({ reviewedAt: 500, dueAt: 9999, sm2: { ease: 2.6, interval: 3, reps: 2, lapses: 0 }, introducedAt: 50 }));
   assert.deepEqual(r, { op: 'patch', patch: { sm2: { ease: 2.6, interval: 3, reps: 2, lapses: 0 }, dueAt: 9999, reviewedAt: 500, introducedAt: 50 } });
   assert.deepEqual(R('cards', term({ reviewedAt: 600 }), term({ reviewedAt: 500, dueAt: 1 })), { op: 'keep' });
   const sc = (o) => Object.assign({ id: 'sc:1', kind: 'sentence', front: 'f', back: 'b', updatedAt: 10, reviewedAt: null }, o);
-  assert.equal(R('cards', sc(), sc({ back: 'new', updatedAt: 20 })).op, 'put');
-  assert.equal(R('cards', sc({ reviewedAt: 30 }), sc({ back: 'new', updatedAt: 20 })).op, 'keep', '기기 복습이 더 늦다');
-  assert.equal(R('cards', sc({ updatedAt: 20 }), sc({ back: 'new', updatedAt: 10, reviewedAt: 40 })).op, 'put', '파일 복습이 더 늦다');
-  assert.equal(R('cards', sc({ updatedAt: 20 }), sc({ back: 'new', updatedAt: 20 })).op, 'keep', '같으면 기기');
+  // `[12-1 — 9c1R #8]` 문장 카드도 레코드 통째가 아니라 내용(updatedAt)·복습(reviewedAt)·멈춤(suspendedAt) 따로 늦은 쪽(같으면 기기)
+  assert.deepEqual(R('cards', sc(), sc({ back: 'new', updatedAt: 20 })), { op: 'patch', patch: { back: 'new', updatedAt: 20 } });
+  assert.deepEqual(R('cards', sc({ reviewedAt: 30, dueAt: 777 }), sc({ back: 'new', updatedAt: 20, dueAt: 1 })),
+    { op: 'patch', patch: { back: 'new', updatedAt: 20 } }, '기기 복습이 더 늦다 — 내용만 파일, 복습 상태는 기기');
+  assert.deepEqual(R('cards', sc({ updatedAt: 20 }), sc({ back: 'new', updatedAt: 10, reviewedAt: 40 })),
+    { op: 'patch', patch: { reviewedAt: 40 } }, '파일 복습이 더 늦다 — 복습 상태만 파일, 내용은 기기');
+  // [12-1d] 같은 시각 — 비글자 칸은 기기, 둘 다 비지 않은 다른 글자는 문자열이 큰 쪽
+  assert.deepEqual(R('cards', sc({ updatedAt: 20 }), sc({ back: 'new', updatedAt: 20 })), { op: 'patch', patch: { back: 'new' } }, '같으면 기기 — 글자는 큰 쪽');
+  assert.equal(R('cards', sc({ updatedAt: 20, back: 'z' }), sc({ back: 'new', updatedAt: 20 })).op, 'keep', '같으면 기기(내 글자가 큼)');
 });
 
 /* ══ K11 멱등 ════════════════════════════════════════════ */

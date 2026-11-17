@@ -336,7 +336,9 @@ test('I6 ★ 데이터 안전 — 기기 쪽이 더 새로운 진도·단어·�
     [30, '30:2', LATE, 'ko', 'user', 'general', 50, 'Mine', true]);
   assert.equal((await db.get('progress', ['docA', 'I'])).score, 9);
   assert.deepEqual(await db.get('cards', 'vt:s256:t1'), myTerm, '단어 — 내용·복습 필드·suspended 전부 그대로');
-  assert.equal((await db.get('cards', 'sc:1')).back, 'mine', '문장 카드 — 기기 복습이 더 늦다');
+  // `[12-1 — 9c1R #8]` 문장 카드는 묶음별 — 내용은 파일 updatedAt(T0)이 늦어 파일(`b`), 복습 상태는 기기 reviewedAt(LATE)이 늦어 기기
+  const sc1 = await db.get('cards', 'sc:1');
+  assert.deepEqual([sc1.back, sc1.updatedAt, sc1.reviewedAt], ['b', T0, LATE], '문장 카드 — 내용은 늦은 쪽(파일)·복습 상태는 늦은 쪽(기기)');
   assert.equal((await db.get('annotations', 'an1')).text, 'mine newer');
   assert.equal((await db.get('mistakes', 'mis1')).resolvedAt, LATE);
   const c = await db.get('aiCache', ck);

@@ -377,7 +377,7 @@ test('S5 9c 병합 꼴 — term 항목의 updatedAt·reviewedAt 이 숫자(또�
 
 /* ══ 6. 연쇄 삭제 ═════════════════════════════════════ */
 
-test('D1 ★ deleteDocument — 그 문서의 kind:term 은 남고 문장 카드·kind 없는 카드는 지워진다 · 다른 문서 카드 그대로', async () => {
+test('D1 ★ deleteDocument — 그 문서의 kind:term 은 남고 [12-1] 문장 카드도 남고 kind 없는 카드는 지워진다 · 다른 문서 카드 그대로', async () => {
   await db.put('documents', { id: 'docZ', title: 'Z', fileHash: 'hz' });
   await db.put('documents', { id: 'docY', title: 'Y', fileHash: 'hy' });
   const t = await store.save({ surface: 'Myalgia', srcLang: 'en', targetLang: 'ar', docId: 'docZ', docTitle: 'Z' });
@@ -385,15 +385,17 @@ test('D1 ★ deleteDocument — 그 문서의 kind:term 은 남고 문장 카드
   await db.put('cards', { id: 'old:z2', docId: 'docZ', term: 'legacy' });
   await db.put('cards', { id: 'sc:y1', kind: 'sentence', docId: 'docY', front: 'b' });
   const c = await db.deleteDocument('docZ');
-  assert.equal(c.cards, 2, '지운 카드 수 = 문장 카드 + kind 없는 카드');
+  // `[12-1 — 12-D8]` 문장 카드도 남는다 — 지우는 것은 kind 없는 옛 꼴만
+  assert.equal(c.cards, 1, '지운 카드 수 = kind 없는 카드');
   assert.equal(idb.peek('medreader', 'documents', 'docZ'), undefined);
   assert.ok(idb.peek('medreader', 'cards', t.entry.id), '★ 단어장 항목은 남는다');
   assert.equal(idb.peek('medreader', 'cards', t.entry.id).docTitle, 'Z', 'docTitle 사본이 출처를 대신한다');
-  assert.equal(idb.peek('medreader', 'cards', 'sc:z1'), undefined);
+  assert.ok(idb.peek('medreader', 'cards', 'sc:z1'), '[12-1] 문장 카드도 남는다');
   assert.equal(idb.peek('medreader', 'cards', 'old:z2'), undefined);
   assert.ok(idb.peek('medreader', 'cards', 'sc:y1'), '다른 문서 카드 그대로');
   assert.equal(db.keepsOnDocDelete({ kind: 'term' }), true);
-  assert.equal(db.keepsOnDocDelete({ kind: 'sentence' }), false);
+  assert.equal(db.keepsOnDocDelete({ kind: 'sentence' }), true, '[12-1 — 12-D8]');
+  assert.equal(db.keepsOnDocDelete({}), false, 'kind 없음은 지운다');
   assert.equal(db.keepsOnDocDelete(null), false);
   assert.equal(db.DB_VERSION, 3, 'DB 버전 그대로');
 });

@@ -444,7 +444,7 @@ test('W13 ★ deleteKeepLines — 단어장 n>0 이면 한 줄(0 이면 없음) 
   assert.deepEqual(await deleteKeepCounts('docDel'), { vocab: 2 });
   await db.deleteDocument('docDel');
   assert.equal((await store.list({ docId: 'docDel' })).length, 2, '단어장은 남는다');
-  assert.equal(await db.get('cards', 'sc1'), undefined, '문장 카드는 지워진다');
+  assert.ok(await db.get('cards', 'sc1'), '[12-1 — 12-D8] 문장 카드도 남는다(확인 줄은 12-2 몫)');
 });
 
 /* ══ 5. 선택 줄 · controls 배선 · Esc 층 ═════════════════════ */

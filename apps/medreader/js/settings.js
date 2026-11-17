@@ -101,6 +101,12 @@ export const DEFAULTS = Object.freeze({
      백업 파일에는 담지 않는다(`BACKUP.SETTINGS_SKIP` — 기기마다 따로 센다). DB 무관. */
   'backup.lastExportAt': null,
 
+  /* `[12-1 — spec 17-11 · 9-3 · 12-D11]` 기억 카드. `srs.newPerDay` 하루 새 카드 수(0–100, 기본 = config `SRS.NEW_PER_DAY`).
+     `srs.log` 하루 복습 기록 `{'YYYY-MM-DD': {n, ms, new}}`(60일) — **`srs/cards.js` 가 복습과 같은 트랜잭션에서 DB 에 직접 쓴다**
+     (이 메모리 맵은 그 뒤 옛 값이다 — 읽을 때는 `cards.readLog()`). 둘 다 9c 백업에 담는다. DB 무관. */
+  'srs.newPerDay': 20,
+  'srs.log': Object.freeze({}),
+
   /* AI (7·8단계) */
   'ai.provider': 'gemini',
   'ai.model': '',
