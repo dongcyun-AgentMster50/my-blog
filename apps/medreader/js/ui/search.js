@@ -32,13 +32,14 @@
 
 import * as db from '../db.js';
 import * as settings from '../settings.js';
-import { SEARCH } from '../config.js';
+import { SEARCH, ANNO } from '../config.js';
 import { t, formatNumber, onLangChange, applyTranslations, errorKey, getDir, getLang } from '../i18n/index.js';
 import { parseRoute, go, replace, readerHash, searchHash, libraryHash } from '../router.js';
 import * as engine from '../search/engine.js';
 import { printedLabel, tocOf } from '../search/outline.js';
-import { foldText, parseQuery, findIn, hitLength, snippetAt, rangesFor, SEARCH_ERR } from '../text/search.js';
-import { flowParasOf } from '../text/screen.js';
+import { foldText, parseQuery, findIn, hitLength, snippetAt, SEARCH_ERR } from '../text/search.js';
+// `[20-1]` `screenIndex`·`rangesOnScreen` 은 `text/screen.js` 에 산다(옮김만 — 아래 1절에서 다시 export).
+import { flowParasOf, screenIndex, rangesOnScreen } from '../text/screen.js';
 // 17-8-10 3-2 — `joinPieces` 는 UI 가 tts/text.js 에서 가져와 순수 `rangesFor` 에 넘긴다(검색이 tts 를 import 하지 않게).
 import { joinPieces } from '../tts/text.js';
 import { docLangOf } from '../text/lang.js';
@@ -51,6 +52,7 @@ import { domainOf } from '../ai/prompts.js';
 import { vocabStore } from '../vocab/store.js';
 import { normalizeTerm } from '../text/vocab.js';
 import * as charhl from './charhl.js';
+import { prioritize } from './annotate.js';
 import {
   onPageRender, onPageRepaint, onReaderLeave, readingSpot, currentScreen, lineElement,
   revealLine, revealRegion, revealTop, noteSearchJump, setViewAnchorHint
@@ -136,24 +138,9 @@ export function nthOnPage(list, i) {
   return n;
 }
 
-/**
- * 화면 글자 — 흐름 문단마다 `joinPieces`, 문단 사이 `'\n'`(검색 레코드 `text` 와 같은 식 — 17-8-12 U6).
- * @param {Array} paras `flowParasOf(desc)`
- * @param {function} join `joinPieces`
- * @returns {{text:string, parts:Array<{base:number, joined:{text:string, spans:Array}}>}}
- */
-export function screenIndex(paras, join) {
-  let text = '';
-  const parts = [];
-  const list = Array.isArray(paras) ? paras : [];
-  for (let i = 0; i < list.length; i++) {
-    const j = join(list[i].lines || []);
-    if (i) text += '\n';
-    parts.push({ base: text.length, joined: j });
-    text += j.text;
-  }
-  return { text: text, parts: parts };
-}
+/* `[20-1 — spec 17-16 3]` `screenIndex`(화면 글자)·`rangesOnScreen`(적중 → 줄 구간)은 `text/screen.js` 로 옮겼다(옮김만 —
+   필기 앵커·15 근거 찾기가 함께 쓴다). 여기서는 같은 함수 객체를 다시 export 한다(위 import · 기존 경로 불변). */
+export { screenIndex, rangesOnScreen };
 
 /**
  * 4-8 표 영역 글자(검색 레코드 `table` 과 같은 식 — 줄마다 공백 하나로 접고 `'\n'`) + 영역별 구간.
@@ -198,20 +185,6 @@ export function pickHit(ats, at, nth) {
   const i = ats.indexOf(at);
   if (i >= 0) return i;
   return Number.isInteger(nth) && nth >= 0 && nth < ats.length ? nth : -1;
-}
-
-/**
- * 화면 글자 적중 → 적중마다 줄 안 구간들(`rangesFor` — 줄바꿈 하이픈이면 두 줄). 문단을 넘는 적중은 없다(검색어에 '\n' 없음).
- * @returns {Array<Array<{id:string, start:number, end:number}>>}
- */
-export function rangesOnScreen(idx, hits) {
-  const out = [];
-  for (const h of hits || []) {
-    let part = null;
-    for (const p of idx.parts) { if (h.at >= p.base && h.at < p.base + p.joined.text.length) { part = p; break; } }
-    out.push(part ? rangesFor(part.joined, [{ at: h.at - part.base, len: h.len }])[0] : []);
-  }
-  return out;
 }
 
 /** 표 글자 적중 → 그 영역 id. */
@@ -1987,6 +1960,9 @@ function paint(loc) {
   if (!all.length && !loc.cur && !(loc.table && loc.regionId != null)) return;
   const okAll = all.length ? charhl.paintCharRanges(HL_HIT, all, lineElement) : false;
   const okCur = loc.cur ? charhl.paintCharRanges(HL_CUR, loc.cur, lineElement) : false;
+  // `[20-1 — 20-D9]` 겹칠 때 쌓는 순서 — 필기(0) 위, 낭독(2) 아래
+  if (okAll) prioritize(HL_HIT, ANNO.PRIORITY.SEARCH);
+  if (okCur) prioritize(HL_CUR, ANNO.PRIORITY.SEARCH);
   if (!okAll) for (const r of all) { const n = lineElement(r.id); if (n) n.classList.add('search-hit-line'); }
   if (loc.cur && !okCur) for (const r of loc.cur) { const n = lineElement(r.id); if (n) n.classList.add('search-cur-line'); }
   if (loc.cur && loc.cur.length) {

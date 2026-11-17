@@ -10,6 +10,9 @@
    ============================================================ */
 
 import { joinHyphen } from './hyphen.js';
+// `[20-1 — spec 17-16 3]` `rangesOnScreen` 이 쓴다. `text/search.js` 도 이 파일을 import 하지만(`localRange` 등) 둘 다
+// 함수 선언만 주고받고 모듈을 평가할 때 서로를 부르지 않는다 — 순환 import 가 안전하다.
+import { rangesFor } from './search.js';
 
 /**
  * 4-7 의 비본문 역할. 이 줄들은 문단에 들어가지 않고 `details` 로 접힌다
@@ -243,4 +246,40 @@ export function localRange(sp, from, to) {
   let e = cl(to - sp.start);
   if (e <= s) { s = 0; e = len; }
   return { id: sp.id, start: s, end: e };
+}
+
+/* `[20-1 — spec 17-16 3]` 아래 둘은 `ui/search.js` 에서 **줄 그대로** 옮겨 왔다(옮김만 — 검색·필기·15 근거 찾기가 함께 쓴다).
+   `ui/search.js` 는 같은 함수 객체를 다시 export 한다 — 동작·기존 import 경로 불변. */
+
+/**
+ * 화면 글자 — 흐름 문단마다 `joinPieces`, 문단 사이 `'\n'`(검색 레코드 `text` 와 같은 식 — 17-8-12 U6).
+ * @param {Array} paras `flowParasOf(desc)`
+ * @param {function} join `joinPieces`
+ * @returns {{text:string, parts:Array<{base:number, joined:{text:string, spans:Array}}>}}
+ */
+export function screenIndex(paras, join) {
+  let text = '';
+  const parts = [];
+  const list = Array.isArray(paras) ? paras : [];
+  for (let i = 0; i < list.length; i++) {
+    const j = join(list[i].lines || []);
+    if (i) text += '\n';
+    parts.push({ base: text.length, joined: j });
+    text += j.text;
+  }
+  return { text: text, parts: parts };
+}
+
+/**
+ * 화면 글자 적중 → 적중마다 줄 안 구간들(`rangesFor` — 줄바꿈 하이픈이면 두 줄). 문단을 넘는 적중은 없다(검색어에 '\n' 없음).
+ * @returns {Array<Array<{id:string, start:number, end:number}>>}
+ */
+export function rangesOnScreen(idx, hits) {
+  const out = [];
+  for (const h of hits || []) {
+    let part = null;
+    for (const p of idx.parts) { if (h.at >= p.base && h.at < p.base + p.joined.text.length) { part = p; break; } }
+    out.push(part ? rangesFor(part.joined, [{ at: h.at - part.base, len: h.len }])[0] : []);
+  }
+  return out;
 }

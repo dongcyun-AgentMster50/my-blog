@@ -115,6 +115,14 @@
   /* [수정 2026-09-22] 읽은 줄은 배경이 아니라 **옅은 글자색**이다.
      배경으로 칠하면 현재 줄 하이라이트와 색 계열이 겹쳐 어디를 읽는지 묻힌다. */
   --hl-done: #9a958c;
+
+  /* `[20-1 — spec 17-16 4 · 20-D9]` 필기 네 색 + 메모 점선 밑줄. 테마마다 다시 정의한다. 글자 대비·바탕과의 거리·낭독
+     하이라이트(--hl-bg)와의 거리는 Build 보고서(20-1)에 잰 값. 낭독 하이라이트가 늘 위에 칠해진다(우선순위 2). */
+  --anno-yellow: #ffe066;
+  --anno-green: #c3ebb5;
+  --anno-blue: #bcd8f5;
+  --anno-pink: #f9c6dc;
+  --anno-note: #8a5a00;
 }
 
 /* `[8b-2]` 띠가 켜지면(유효 모드 show·speak — `ui/trband.js` 가 `<html data-tr-band="on">` 을 건다)
@@ -165,6 +173,11 @@
     --hl-bg: #1d3f66;
     --hl-text: #f2f6fa;
     --hl-done: #6b7480;
+    --anno-yellow: #5e4b0a;
+    --anno-green: #1f4d2b;
+    --anno-blue: #16505a;
+    --anno-pink: #5e2342;
+    --anno-note: #e0b94a;
   }
 }
 
@@ -188,6 +201,11 @@
   --hl-bg: #1d3f66;
   --hl-text: #f2f6fa;
   --hl-done: #6b7480;
+  --anno-yellow: #5e4b0a;
+  --anno-green: #1f4d2b;
+  --anno-blue: #16505a;
+  --anno-pink: #5e2342;
+  --anno-note: #e0b94a;
 }
 
 /* ── 세피아 (12-3 · 16-F) ─────────────────────────────────
@@ -213,6 +231,12 @@
   --hl-bg: #e5cf94;
   --hl-text: #2a2114;
   --hl-done: #9c8e6f;
+  /* `[20-D9]` 노랑이 종이색·낭독 하이라이트(#e5cf94)에 묻히지 않게 채도를 올렸다 */
+  --anno-yellow: #f2c933;
+  --anno-green: #c5dfa4;
+  --anno-blue: #b9d3e6;
+  --anno-pink: #eebcc8;
+  --anno-note: #7a4310;
 }
 
 /* ── 고대비 (16-F: 7:1 이상) ──────────────────────────────
@@ -241,4 +265,10 @@
   /* 고대비는 검정 배경 + 흰 글자다. 읽은 줄은 흰색을 낮춘 회색으로 —
      검정 위 #a0a0a0 은 약 7.5:1 로 16-F 기준을 지킨다. */
   --hl-done: #a0a0a0;
+  /* `[20-D9]` 검정 배경 + 흰 글자 — 필기 바탕은 흰 글자가 7:1 이상인 어두운 색, 메모 밑줄은 강조 노랑 */
+  --anno-yellow: #5a5000;
+  --anno-green: #005c2a;
+  --anno-blue: #00468c;
+  --anno-pink: #7a0049;
+  --anno-note: #ffe600;
 }

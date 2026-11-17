@@ -51,7 +51,7 @@ import { initTypeset, closeTypeset, syncControls } from './typeset.js';
 import { initControls, leaveControls, speechState, closeTapBand } from './controls.js';
 // 5-4 · 5-5 제안 칩 — 퀴즈 화면은 스스로 배선된다(이 import 가 그것을 읽힌다).
 import { updateReaderChip, onQuizEntry } from './quiz.js';
-import { TTS, ORIGINAL } from '../config.js';
+import { TTS, ORIGINAL, ANNO } from '../config.js';
 import { docLangOf } from '../text/lang.js';
 import { domainOf } from '../ai/prompts.js';
 import * as render from '../pdf/render.js';
@@ -64,6 +64,8 @@ import { algoVersion as ALGO_VERSION } from '../text/layout.js';
 import { ensure as ensureOutline, isOutlineCurrent } from '../search/outline.js';
 // `[8g-4a]` 검색 화면·결과로 이동·검색 띠(spec 17-8-12 §4). 리더는 입구와 훅만 준다 — 검색 규칙은 그쪽에 있다.
 import { initSearch } from './search.js';
+// `[20-1 — spec 17-16 4]` 필기 칠하기(구독만) · 겹칠 때 쌓는 순서(낭독 2 — 맨 위)
+import { initAnnotate, prioritize } from './annotate.js';
 // `[8e — spec 12-8-1 (3)]` 낮은 화면의 상단바 숨김 [≡] — 표식·상태는 그 파일 하나가 갖는다.
 import { initChrome } from './chrome.js';
 // `[8c-1 — spec 17-7-6 3절]` 탭 판정(누름 시간·움직임·선택 풀기 탭)·가림 굴리기 — 순수 함수, 원본 보기와 같은 규칙.
@@ -578,6 +580,8 @@ export function initReader() {
   initControls();
   // `[8g-4a]` 검색 — controls 의 `onPageRender`(speaker.reload) 구독 **뒤에** 등록돼야 한다(17-8-12 §4-5). `main.js` 는 범위 밖.
   initSearch();
+  // `[20-1]` 필기 — 쪽을 그릴 때 그 쪽 필기를 다시 찾아 칠한다(검색 뒤에 구독). 본문 DOM 에 아무것도 끼우지 않는다.
+  initAnnotate();
   // `[8e]` compact(높이 ≤ 520) 상단바 [≡] — 하단 바·상단바 마크업이 다 선 뒤에. 회전으로 배치가 바뀌면 낭독 중 문장을
   // 편안 영역에 다시 들인다(자동 스크롤과 같은 조건·같은 함수 — 사용자가 스크롤해 쉬는 중이면 두지 않는다).
   // 회전은 창 크기를 바꿔 scroll 이벤트를 먼저 낸다(같은 프레임 — 미디어 변경 보고보다 앞). 그 쉼은 사용자 스크롤이 아니라 되돌린다.
@@ -1996,7 +2000,10 @@ function highlightsSupported() { return charhl.highlightsSupported(); }
 function clearCharHighlight() { charhl.clearCharRanges(HL_NAME); }
 
 function paintCharHighlight(ranges) {
-  return charhl.paintCharRanges(HL_NAME, ranges, lineElement);
+  const ok = charhl.paintCharRanges(HL_NAME, ranges, lineElement);
+  // `[20-1 — 20-D9]` 필기(0)·검색(1) 위 — 낭독 하이라이트가 늘 맨 위(`ANNO.PRIORITY`)
+  if (ok) prioritize(HL_NAME, ANNO.PRIORITY.SPEAKER);
+  return ok;
 }
 
 /**

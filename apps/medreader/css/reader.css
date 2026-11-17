@@ -173,6 +173,21 @@
 /* 하이픈 결합 줄의 끝 `-` 는 시각에서만 사라진다. 텍스트는 원본 그대로다. */
 .reflow .hy { display: none; }
 
+/* ── `[20-1 — spec 17-16 4 · 20-D9]` 필기 — CSS Custom Highlight 이름 다섯(`ui/annotate.js`) ──
+   본문 DOM 에 아무것도 끼우지 않는다. 겹치면 `Highlight.priority` 로 낭독(2)·검색(1)이 위, 필기(0)가 아래.
+   메모가 있는 곳은 점선 밑줄(`anno-note`)로만 보인다. 미지원 브라우저는 줄 클래스 `.anno-line-*`(줄 통째 — 물러섬) —
+   이 규칙들은 아래 `.is-current` **앞에** 둔다(같은 명시도 — 낭독 줄 배경이 이긴다). */
+.reflow ::highlight(anno-yellow) { background-color: var(--anno-yellow); color: var(--c-text); }
+.reflow ::highlight(anno-green) { background-color: var(--anno-green); color: var(--c-text); }
+.reflow ::highlight(anno-blue) { background-color: var(--anno-blue); color: var(--c-text); }
+.reflow ::highlight(anno-pink) { background-color: var(--anno-pink); color: var(--c-text); }
+.reflow ::highlight(anno-note) { text-decoration: underline dotted 2px var(--anno-note); }
+.reflow .line.anno-line-yellow { background: var(--anno-yellow); }
+.reflow .line.anno-line-green { background: var(--anno-green); }
+.reflow .line.anno-line-blue { background: var(--anno-blue); }
+.reflow .line.anno-line-pink { background: var(--anno-pink); }
+.reflow .line.anno-line-note { text-decoration: underline dotted 2px var(--anno-note); }
+
 /* 6-5 — 5단계 하이라이트가 이 클래스를 토글한다. */
 /* [수정 2026-09-22] 실기기에서 이음매가 낱말을 갈랐다 — "undergo just" 가
    "und|ergo jus|t" 로, "BRCA1 or" 가 "BRCA1| or" 로 보였다.
@@ -1402,7 +1417,7 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
 /* ════════════════════════════════════════════════════════
    원본 뷰 (spec 4-12 · 12-5) — 6b 단계
 
-   ★ **이 파일에서 물리 좌표를 쓰는 곳은 `.hl-line` 하나뿐이다**(16-H 가
+   ★ **이 파일에서 물리 좌표를 쓰는 곳은 `.hl-line`(와 같은 좌표계의 `[20-1]` `.anno-box`)뿐이다**(16-H 가
      명시한 예외 — spec 11-3: "원본 뷰 오버레이의 left/top 은 좌표계이므로
      허용"). 그 밖에는 논리 속성만 쓴다.
    ════════════════════════════════════════════════════════ */
@@ -1623,6 +1638,28 @@ body[data-reader-view="original"] .original-scroll {
 }
 
 .original .hl-line[hidden] { display: none; }
+
+/* `[20-1 — spec 17-16 4]` 필기 층 — 낭독 상자 층(`.hl-layer`) **아래**(DOM 에서 먼저 온다). 상자 좌표는 `.hl-line` 과 같은
+   16-H 예외(좌표계 — RTL 에서 거울이 되면 안 된다). 쪽마다 최대 `ANNO.MAX_BOXES_PAGE` 개(`ui/original.js` `annoBoxes`). */
+.original .anno-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.original .anno-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0.38;
+  border-radius: 2px;
+}
+
+.original .anno-box.anno-yellow { background: var(--anno-yellow); }
+.original .anno-box.anno-green { background: var(--anno-green); }
+.original .anno-box.anno-blue { background: var(--anno-blue); }
+.original .anno-box.anno-pink { background: var(--anno-pink); }
+.original .anno-box.anno-note { border-block-end: 2px dotted var(--anno-note); opacity: 0.9; }
 
 @media (prefers-reduced-motion: reduce) {
   .original .hl-line { transition: none; }

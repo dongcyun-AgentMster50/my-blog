@@ -6978,6 +6978,7 @@ resolve(anchor, idx, {algo, paraHashes}) → {ranges:[{id,start,end}], how:'exac
 - 쪽 번호는 PDF 쪽이라 재추출로 바뀌지 않는다 — 찾기는 그 쪽 안에서만(값싸고 오탐이 적다).
 - **찾은 결과로 레코드를 고쳐 쓰지 않는다**(20-D6) — 화면마다 다시 찾는다(쪽당 레코드 수십 개, 문자열 찾기 1ms 미만 `[추정]`). `algo` 가 다르고 `how ≠ 'exact'` 인 것만 그 쪽을 처음 그릴 때 한 번 `anchor.lineIds/start/end/algo` 를 새 값으로 `db.patch`(다음부터 1번에 걸리게).
 - `screenIndex`·`rangesOnScreen` 은 **`text/screen.js` 로 옮긴다**(순수 — 검색·필기·15 근거 찾기가 함께 씀, 옮김만 · 검색 시험 무변). `findQuote(desc, quote)` = `resolve` 의 2–4 를 감싼 이름(15 가 쓴다).
+- `[정정 2026-11-17 — 20-1 Build]` ① 판은 지금 `algoVersion = 13`(코드에서 읽는다 — 1 표의 12 는 옛 값). ② 4단계 끝에 **문단 경계를 넘는 접은 글자 찾기**를 더했다(판이 문단을 다르게 나눈 경우 — 접기가 문단 사이 '\n' 도 뺀다, `ranges` 가 두 문단에 걸친다. CMDT 실물 회귀에서 고아 1건이 이것). ③ 같은 점수(같은 글·같은 앞뒤 문맥이 쪽에 둘 — 되풀이된 문단)는 **저장한 첫 줄 번호에 가까운** 후보(스키마 무변). ④ 짧은 인용(접은 글자 < 12)은 앞뒤 문맥이 8자 이상 맞을 때만 접은 글자로 받는다(`ANNO.FUZZY_*`). ⑤ 인용이 `QUOTE_MAX`(400)를 넘는 선택은 문단을 넘는 선택처럼 같은 `group` 레코드 여럿. ⑥ 서비스에 `placeOnPage`(쪽 다시 찾기 + 20-D6 한 번 고쳐 쓰기 — 이때 `updatedAt` 은 그대로: 사용자 손이 아니다)·`pageIndex`·`splitSelection` 을 더했다. ⑦ 우선순위는 `ANNO.PRIORITY` 한 곳 + `ui/annotate.js` `prioritize` 한 함수 — 검색(`ui/search.js` 칠하기 뒤 두 줄)·낭독(`ui/reader.js`)도 이것으로 둔다(`charhl.js` 무변).
 
 #### 4. 칠하기 (20-1 — `js/ui/annotate.js`)
 

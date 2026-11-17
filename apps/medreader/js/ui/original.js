@@ -32,7 +32,7 @@
    ============================================================ */
 
 import * as render from '../pdf/render.js';
-import { ORIGINAL } from '../config.js';
+import { ORIGINAL, ANNO } from '../config.js';
 import { t, formatNumber } from '../i18n/index.js';
 // `[8c-1 — spec 17-7-6 3절]` 리플로우와 같은 탭 판정(누름 시간·움직임·선택 풀기 탭).
 import { isTap, createTapTracker } from '../text/select.js';
@@ -182,6 +182,8 @@ const state = {
   currentIds: [],
   /** 10a — `Unit.ranges`. 없으면(300자 분할) 줄 통째로 칠한다. */
   currentRanges: null,
+  /** `[20-1]` 이 쪽 필기 묶음 `[{key, ranges}]`(`ui/annotate.js` `paintGroups`) — 필기 층이 확대·회전 뒤 다시 그린다. */
+  anno: [],
   /** 늦게 끝난 옛 렌더가 새 쪽을 덮어쓰지 않게 한다. */
   token: 0,
   /** pdf.js 를 못 불러왔다. 버튼을 비활성으로 두는 근거(2-3). */
@@ -276,6 +278,7 @@ export async function showOriginal(mount, req) {
   state.layout = req.layout;
   state.currentIds = [];
   state.currentRanges = null;
+  state.anno = [];
 
   buildDom(mount);
   setStatus('reader.original.loading');
@@ -359,6 +362,7 @@ async function paint(pdfDoc, token) {
 
   paintZoom();
   moveOverlay();
+  paintAnno();
 }
 
 function availableWidth() {
@@ -430,6 +434,10 @@ function buildDom(mount) {
   canvas.setAttribute('aria-label', t('reader.original.canvas', { page: formatNumber(state.pageNo) }));
   pageWrap.appendChild(canvas);
 
+  // `[20-1]` 필기 층 — 낭독 상자 층(`hl-layer`) **아래**(먼저 붙인다). 낭독 상자 풀과 따로 산다.
+  const annoLayer = el('div', 'anno-layer');
+  pageWrap.appendChild(annoLayer);
+
   const layer = el('div', 'hl-layer');
   const hl = el('div', 'hl-line');
   hl.hidden = true;
@@ -450,7 +458,7 @@ function buildDom(mount) {
   root.appendChild(scroller);
   mount.appendChild(root);
 
-  els = { root: root, bar: bar, zoomOut: out, status: status, scroller: scroller, pageWrap: pageWrap, canvas: canvas, layer: layer, hl: hl, boxes: [hl] };
+  els = { root: root, bar: bar, zoomOut: out, status: status, scroller: scroller, pageWrap: pageWrap, canvas: canvas, layer: layer, hl: hl, boxes: [hl], annoLayer: annoLayer };
 }
 
 /** 10a — 상자 풀. 필요한 만큼만 만들고 `HL_MAX_BOXES` 에서 멈춘다. */
@@ -649,6 +657,74 @@ function unionBox(ids) {
   return acc;
 }
 
+/* ────────────────────────────────────────────────────────
+   `[20-1 — spec 17-16 4]` 필기 층 — 낭독 상자 풀(`HL_MAX_BOXES`)과 **따로**. 쪽마다 필요한 만큼 상자를 만들고(상한
+   `ANNO.MAX_BOXES_PAGE` — 넘으면 줄 통째 상자로 합친다), 확대·회전·쪽 넘김 때 다시 그린다. 회전 줄은 그리지 않는다.
+   ──────────────────────────────────────────────────────── */
+
+/**
+ * 필기 묶음 → 덮을 상자들(PDF 좌표). 낭독 오버레이와 같은 상자(`highlightBox`)·같은 가로 자르기(`narrowBox`). **순수**.
+ * @param {Object} layout `fromStored` PageLayout
+ * @param {Array<{key:string, ranges:Array<{id,start,end}>}>} groups
+ * @param {number} [max] 상한(기본 `ANNO.MAX_BOXES_PAGE`)
+ * @returns {{boxes:Array<{key:string, id:string, x0:number, y0:number, x1:number, y1:number}>, merged:boolean}}
+ */
+export function annoBoxes(layout, groups, max) {
+  const lines = (layout && layout.lines) || [];
+  const byId = new Map();
+  for (const l of lines) byId.set(String(l.id), l);
+  const page = layout ? { width: layout.width, height: layout.height } : null;
+  const cap = Number(max) > 0 ? Math.floor(Number(max)) : ANNO.MAX_BOXES_PAGE;
+  const fine = [];
+  const whole = new Map();
+  for (const g of groups || []) {
+    for (const r of (g && g.ranges) || []) {
+      if (!r || r.id == null) continue;
+      const l = byId.get(String(r.id));
+      if (!l || !render.overlayable(l)) continue;      // ★ 회전 줄은 그리지 않는다
+      const b = render.highlightBox(l, page);
+      if (!b) continue;
+      const nb = narrowBox(l, b, r);
+      fine.push({ key: g.key, id: String(l.id), x0: nb.x0, y0: nb.y0, x1: nb.x1, y1: nb.y1 });
+      const k = g.key + '|' + l.id;
+      if (!whole.has(k)) whole.set(k, { key: g.key, id: String(l.id), x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 });
+    }
+  }
+  if (fine.length <= cap) return { boxes: fine, merged: false };
+  const merged = Array.from(whole.values());
+  return { boxes: merged.length > cap ? merged.slice(0, cap) : merged, merged: true };
+}
+
+/**
+ * `[20-1]` 이 쪽 필기를 필기 층에 둔다(`ui/annotate.js` 가 부른다). 그린 상자 수.
+ * @param {Array<{key:string, ranges:Array}>} groups
+ */
+export function setAnnotations(groups) {
+  state.anno = Array.isArray(groups) ? groups : [];
+  return paintAnno();
+}
+
+/** 필기 층을 지금 viewport 로 다시 그린다. 상자는 매번 새로(쪽마다 최대 `MAX_BOXES_PAGE`). */
+function paintAnno() {
+  if (!els || !els.annoLayer) return 0;
+  clear(els.annoLayer);
+  if (!state.viewport || !state.anno.length) return 0;
+  const { boxes } = annoBoxes(state.layout, state.anno);
+  let n = 0;
+  for (const b of boxes) {
+    const r = render.viewportRect(b, state.viewport);
+    if (!(r.width > 0 && r.height > 0)) continue;
+    const box = el('div', 'anno-box anno-' + b.key);
+    box.setAttribute('data-line-id', b.id);
+    box.style.inlineSize = r.width + 'px';
+    box.style.blockSize = r.height + 'px';
+    box.style.transform = 'translate(' + r.left + 'px, ' + r.top + 'px)';
+    els.annoLayer.appendChild(box);
+    n++;
+  }
+  return n;
+}
+
 /** 6-5 자동 스크롤 — 오버레이가 스크롤 상자 밖이면 가운데로 끌어온다. */
 export function scrollCurrentIntoView(force) {
   if (!els || !els.hl || els.hl.hidden) return false;
@@ -710,7 +786,7 @@ export async function zoomBy(dir) {
 /** 화면 회전·리사이즈(12-3) — 사용자가 줌을 건드리지 않았으면 폭에 다시 맞춘다. */
 export async function refitOriginal() {
   if (!els || !state.layout) return;
-  if (state.userZoom) { moveOverlay(); return; }
+  if (state.userZoom) { moveOverlay(); paintAnno(); return; }
   await rerender();
 }
 
@@ -762,6 +838,7 @@ export function leaveOriginal() {
   markView(false);
   state.currentIds = [];
   state.currentRanges = null;
+  state.anno = [];
   state.viewport = null;
   state.layout = null;
   els = null;
