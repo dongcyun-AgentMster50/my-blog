@@ -182,7 +182,7 @@ test('V8 ★ 회전 쪽 치수로 클립하면 줄이 납작해진다 — 왜 �
    ③ 재추출 경첩을 고정한다
    ──────────────────────────────────────────────────────── */
 
-test('V9 ★ algoVersion 은 12 이다 — 바꾸려면 이 테스트를 같이 고쳐야 한다', () => {
+test('V9 ★ algoVersion 은 13 이다 — 바꾸려면 이 테스트를 같이 고쳐야 한다', () => {
   // 이 숫자를 올리면 **이미 저장된 모든 문서가 재추출된다**(9-4 planResume).
   // 7000쪽 문서에서는 그 대가가 크다. 그러니 우발적으로 바뀌면 안 된다.
   // 올릴 이유가 생겼다면 layout.js 의 버전 이력 주석에 근거를 적고 여기를 고쳐라.
@@ -192,7 +192,9 @@ test('V9 ★ algoVersion 은 12 이다 — 바꾸려면 이 테스트를 같이 
   // 10 → 11: 8i 7b 행 표(spec 4-13) — 행 표 쪽의 줄이 열별로 다시 만들어지고 rowhead·ref·colhead 가 생긴다.
   // 11 → 12: 8i-2 본문 이름표 2열 표(spec 4-13-10, ROWTABLE.REQUIRE_REF false) — 2열 표 쪽(CMDT 15·Harrison 3)의
   //          줄·문단이 바뀐다. 되돌릴 때(REQUIRE_REF=true 또는 ENABLED=false)는 지금 값 + 1 로(rowtable-8i M10 계약).
-  assert.equal(algoVersion, 12);
+  // 12 → 13: 8q 3단 본문(spec 4-14-2, LAYOUT.COL3_ENABLED) — 3단 쪽(운영자 SciAm)의 줄·순서가 바뀐다. 의학책 바뀐 쪽 0.
+  //          되돌릴 때(COL3_ENABLED=false)는 지금 값 + 1 로(cols3-8q C3-9 계약).
+  assert.equal(algoVersion, 13);
 });
 
 test('V10 storeVersion 은 1 이다 — 저장 그릇 모양이 바뀔 때만 올린다', () => {

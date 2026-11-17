@@ -456,10 +456,11 @@ test('7b 규칙은 책 고유 값을 쓰지 않는다 — 표를 통째로 옮�
 
 /* ── M10 계약: 7b 를 끄면 algoVersion 도 올린다 ────────── */
 test('M10 ★ 계약: ROWTABLE.ENABLED·REQUIRE_REF 와 algoVersion 은 함께 움직인다(되돌리면 지금 값 + 1 — 버전은 앞으로만)', () => {
-  // 11 = 8i(쪽 번호 열 있는 표만) · 12 = 8i-2(2열 표까지, REQUIRE_REF false). 되돌림은 13 이상.
-  if (ROWTABLE.ENABLED && !ROWTABLE.REQUIRE_REF) assert.equal(algoVersion, 12, '2열 표까지 켜진 판(8i-2)은 12');
-  else assert.ok(algoVersion >= 13, '7b 를 끄거나(ENABLED false) 2열 표를 끈 채(REQUIRE_REF true) algoVersion 을 그대로 두면 ' +
-    '12 로 저장된 쪽(rowhead·colhead·ref 줄)이 옛 규칙과 섞인다 — 지금 값 + 1 로 올려라');
+  // 11 = 8i(쪽 번호 열 있는 표만) · 12 = 8i-2(2열 표까지, REQUIRE_REF false) · 13 = 8q(3단 — LAYOUT.COL3_ENABLED,
+  // tests/cols3-8q C3-9). 7b 와 3단이 모두 켜진 판이 13 이고, 어느 하나라도 되돌리면 14 이상.
+  if (ROWTABLE.ENABLED && !ROWTABLE.REQUIRE_REF && LAYOUT.COL3_ENABLED) assert.equal(algoVersion, 13, '2열 표·3단까지 켜진 판(8q)은 13');
+  else assert.ok(algoVersion >= 14, '7b 를 끄거나(ENABLED false) 2열 표를 끈 채(REQUIRE_REF true) algoVersion 을 그대로 두면 ' +
+    '13 으로 저장된 쪽(rowhead·colhead·ref 줄)이 옛 규칙과 섞인다 — 지금 값 + 1 로 올려라');
 });
 
 /* 진단 함수 내보내기(측정 도구가 쓴다) — 모양만 */

@@ -638,7 +638,7 @@ test('S11 ★ runJob 를 넷째 인자 없이 불러도 TypeError 가 아니다(
 test('S12 판본·버전 불변 — DB 3 · algoVersion · SEARCH.VERSION · OUTLINE_V · 번역 PROMPT_VERSION · TERM_PROMPT_VERSION', async () => {
   const db = src('../js/db.js');
   assert.match(db, /export const DB_VERSION = 3;/);
-  assert.equal(algoVersion, 12);
+  assert.equal(algoVersion, 13);   // [8q 2026-11-17] 12 → 13(3단 본문 — 추출 변경. 요약 쪽은 무관)
   assert.equal(SEARCH.VERSION, 1);
   assert.equal(OUTLINE_V, 1);
   assert.equal(PROMPT_VERSION, 3);

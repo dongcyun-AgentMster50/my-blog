@@ -97,8 +97,15 @@ import { detectRowTables } from './rowtable.js';
  *     없으므로 — **전 책 재추출**.
  *     [되돌림] config ROWTABLE.REQUIRE_REF = true 와 함께 이 값을 **지금 값 + 1**(13)로 올린다(버전은 앞으로만 —
  *     12 로 저장된 2열 표 쪽이 옛 규칙으로 다시 뽑히게). tests/rowtable-8i M10 이 고정.
+ * 13 — 2026-11-17 8q: 4-5 컬럼 판별에 **3단 본문**(spec 4-14-2, columns.js C1–C4 · config LAYOUT COL3_*).
+ *     band ≥ 2 이고 세 구간이 모두 양끝 맞춤 산문·균형·좌변 정렬일 때만 count 3 — 줄이 단별로 다시 만들어지고
+ *     읽기 순서가 col 0 → 1 → 2 다. 실패하면 지금 경로(C0) 결과를 그대로 돌려주므로 그 밖의 쪽은 12 와 바이트 같다
+ *     (세 의학책 바뀐 쪽 0 — dev/measure-cols3-8q.mjs). 잡히는 것은 운영자 SciAm 3단 쪽. 8i-4 는 문턱을 못 넘어
+ *     넣지 않았다(14 결정) — 이 판은 8q 단독. 버전이 전역이라 전 책 재추출(14-D10).
+ *     [되돌림] config LAYOUT.COL3_ENABLED = false 와 함께 이 값을 **지금 값 + 1**(14)로(버전은 앞으로만 — 13 으로
+ *     저장된 3단 쪽이 옛 규칙으로 다시 뽑히게). tests/cols3-8q C3-9 가 고정.
  */
-export const algoVersion = 12;
+export const algoVersion = 13;
 
 // 출력용 Run — 내부 items 참조를 떼고 좌표·텍스트만 남긴다(spec 4-8 표 재구성이 run 텍스트를 쓴다).
 function publicRun(run, params) {
@@ -171,7 +178,7 @@ export function buildPageLayout(rawItems, pageInfo = {}, params = LAYOUT, rowPar
   lines = reassignByColumn(lines, columns, info, P);
 
   // 5단계 — 읽기 순서
-  let ordered = orderLines(lines, columns, info);
+  let ordered = orderLines(lines, columns, info, P);
 
   // 6단계 — 텍스트 결합과 bbox
   for (let i = 0; i < ordered.length; i++) {

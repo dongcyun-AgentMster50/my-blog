@@ -125,6 +125,25 @@ export const LAYOUT = Object.freeze({
   BODY_FONT_LO: 0.7,
   BODY_FONT_HI: 1.4,
 
+  /* `[8q — spec 4-14-2]` 3단 본문(columns.js detectThree). 책 고유 값이 아니다 — 쪽 폭·본문 글자 크기에 대한
+     비율과 run 모양만. `GUTTER_BAND_LO/HI` 는 넓히지 않는다(넓히면 의학책 2단의 다른 band 가 후보가 된다).
+     되돌림: `COL3_ENABLED = false` **와 함께** `layout.js` `algoVersion` 을 **지금 값 + 1** 로(4-13-8 과 같은 규칙 —
+     버전은 앞으로만. tests/cols3-8q C3-9 계약이 둘을 묶어 고정한다). */
+  COL3_ENABLED: true,
+  COL3_MIN_SEP: 0.2,      // C1 — 두 거터 중심 사이 ≥ 이 비율 × 쪽 폭
+  COL3_MIN_LINES: 12,     // C2 — 구간마다 본문 후보 줄 수 하한
+  COL3_PROSE: 25,         // C2 — 구간 run 평균 글자 수 하한(산문)
+  COL3_FULL: 0.5,         // C2 — 꽉 찬 run 비율 하한(양끝 맞춤 산문 — 표 칸은 누더기)
+  COL3_FULL_WIDTH: 0.85,  // C2 — "꽉 찬" = 폭 ≥ 이 값 × 그 구간 run 폭 기준값
+  COL3_FULL_PCT: 0.9,     // C2 — 그 기준값 = 구간 run 폭의 이 백분위
+  COL3_BALANCE: 0.4,      // C3 — 세 구간 줄 수 최소 ≥ 이 비율 × 최대
+  // [정정 2026-11-17 — 8q Build] 거터를 Fm 넘게 가로지르는 run 이 span 이 되는 폭 하한(× 두 거터 사이 = 단 하나 폭).
+  // 더 좁은 것(거터 위 그림 라벨)은 중심으로 단에 든다 — 라벨 하나가 세 단을 위·아래로 가르지 않게.
+  COL3_SPAN_MIN: 0.5,
+  // [정정 2026-11-17 — 8q Build] 3단 쪽에서 거터 x 를 덮는 아이템이 없고 그 틈이 이 값 × Fm 이상이면 run 을 거터에서
+  // 가른다(큰 글씨 줄이 4-4 임계를 못 넘어 옆 단 글과 붙은 run). 실측 붙은 run 틈 1.13–1.33·Fm, 걸친 글 낱말 틈 0.17·Fm.
+  COL3_SPLIT_GAP: 1.0,
+
   /* 4-9 문단 그룹핑 */
   PARA_LEADING_FACTOR: 1.6,
   PARA_INDENT_FACTOR: 0.8,
