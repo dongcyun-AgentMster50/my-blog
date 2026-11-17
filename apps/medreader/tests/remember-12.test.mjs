@@ -14,7 +14,7 @@
    R10 ★ 음성 흐름(voice.js 갈래) — «احفظ» 낭독 중 → 저장 1 · 확인 줄 · 한 마디 → 되돌림(같은 문장 speaking) ·
         sayErrors=false → 한 마디 없이 되돌림 · none → 한 마디 → 되돌림 · 저장 기다리는 사이 손 → 되돌림 없음 · 주입 없음 → notYet
    R11 ★ 명령 표 — remember 꼴 공유 0 · "save" 혼자일 때만 · 부정 · 기존 명령 그대로
-   R12 서재 삭제 확인 — 한 줄로 합침("단어장 2 · 기억 카드 3 는 남습니다" — 0 은 빠짐) · keptCount 셈
+   R12 서재 삭제 확인 — 한 줄로 합침("단어장 항목 2건 · 기억 카드 3장은 남습니다" — `[12-3]` 조사 · 0 은 빠짐) · keptCount 셈
    R13 정적 — import 방향(pipeline·ai 0) · 띠 배선·마크업·CSS 논리 속성·48px · controls 배선 · i18n 4언어 · innerHTML 0 · 판본 무변
    지어낸 글자만. 실제 키·실제 호출 없음(fetch 를 막고 센다).
    ============================================================ */
@@ -214,7 +214,7 @@ test('R5 ★ pendingBacks — 앞면만 → 번역이 오면 그 카드에 back(
   await flush();
   c = await store.get(await idOf(S2));
   assert.equal(c.back, 'معظم الحالات تزول خلال يومين.', '★ 같은 카드에 채워짐');
-  assert.equal(c.updatedAt, T0 + 1000, '채움은 내용 수정(fillBack)');
+  assert.equal(c.updatedAt, T0, '[12-3 결정] 채움(fillBack)은 updatedAt 을 올리지 않는다(전: T0 + 1000 — 내용 수정으로 봄)');
   assert.equal(rem.debug().pending, 0, '한 번 채우면 구독을 푼다');
   assert.equal(ra.listeners(S2), 0);
   assert.equal(rem.debug().filled, 1);
@@ -454,14 +454,15 @@ test('R11 ★ 명령 표 — remember 꼴 · "save" 혼자일 때만 · 부정 �
 });
 
 /* ══ R12 서재 삭제 확인 ═════════════════════════════════ */
-test('R12 서재 삭제 확인 — 한 줄("단어장 2 · 기억 카드 3 는 남습니다") · 0 은 빠짐 · keptCount 셈', async () => {
+test('R12 서재 삭제 확인 — 한 줄("단어장 항목 2건 · 기억 카드 3장은 남습니다" — [12-3] 조사) · 0 은 빠짐 · keptCount 셈', async () => {
   assert.deepEqual(deleteKeepLines({ vocab: 2, cards: 3, summaries: 0 }), [
     { key: 'library.card.deleteConfirmVocab', params: { n: 2 } }, { key: 'library.card.deleteConfirmCards', params: { n: 3 } }]);
   const ko = (k, p) => { let s = BUNDLES.ko[k]; for (const [n, v] of Object.entries(p || {})) s = s.split('{' + n + '}').join(String(v)); return s; };
   const text = deleteConfirmText('T', deleteKeepLines({ vocab: 2, cards: 3, summaries: 0 }), ko);
   assert.equal(text.split('\n').length, 2, '머리 + 한 줄');
-  assert.equal(text.split('\n')[1], '단어장 2 · 기억 카드 3 는 남습니다');
-  assert.equal(deleteConfirmText('T', deleteKeepLines({ vocab: 1, cards: 1, summaries: 4 }), ko).split('\n')[1], '단어장 1 · 기억 카드 1 · 저장한 요약 4 는 남습니다');
+  // `[12-3 — 12-2R #5 ③]` 숫자 뒤 "는" → 받침 있는 단위(건·장) + "은"("기억 카드 3장은" 꼴). 전: '단어장 2 · 기억 카드 3 는 남습니다'
+  assert.equal(text.split('\n')[1], '단어장 항목 2건 · 기억 카드 3장은 남습니다');
+  assert.equal(deleteConfirmText('T', deleteKeepLines({ vocab: 1, cards: 1, summaries: 4 }), ko).split('\n')[1], '단어장 항목 1건 · 기억 카드 1장 · 저장한 요약 4건은 남습니다');
   assert.equal(deleteConfirmText('T', deleteKeepLines({}), ko).split('\n').length, 1, '남는 것 없으면 머리만');
   for (const l of LANGS) {
     const en = (k, p) => { let s = BUNDLES[l][k]; for (const [n, v] of Object.entries(p || {})) s = s.split('{' + n + '}').join(String(v)); return s; };

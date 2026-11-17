@@ -11,7 +11,9 @@
    문서를 지워도 남는다(`db.keepsOnDocDelete` — 12-D8).
 
    ── 시각 (12-D9·D10) ─────────────────────────────────────
-   전부 **숫자 ms**. `updatedAt` 은 **내용 수정만**(뒷면·메모·설명) — 복습은 `reviewedAt`, 멈춤/다시 켬은 `suspendedAt`.
+   전부 **숫자 ms**. `updatedAt` 은 **사람이 고친 내용만**(목록 편집의 뒷면·메모) — 복습은 `reviewedAt`, 멈춤/다시 켬은 `suspendedAt`.
+   `[12-3]` 자동 채움(`saveSentence` 의 빈 뒷면·설명 채움 · `fillBack`)도 `updatedAt` 을 올리지 않는다 — 올리면 "고친 카드"가 되어
+   9c 병합(`text/backup.js` `mergeSentence` — 안 고친 카드는 고친 카드를 이기지 못함)에서 다른 기기의 **손으로 쓴** 뒷면을 덮는다.
    그래야 8f "마지막 내보내기 뒤 바뀐 항목"이 복습으로 늘지 않고, 9c 병합이 내용·복습·멈춤을 따로 늦은 쪽으로 고른다.
    8f 옛 값(ISO 문자열 `dueAt`·`createdAt`)은 읽을 때 `dueMsOf`·`timeMs` 로 숫자로 바꿔 본다.
 
@@ -167,7 +169,7 @@ export function createCardStore(deps) {
 
   /**
    * 지금 문장을 카드로. 같은 id 가 있으면 새로 만들지 않고, 기존 카드의 `back`(또는 `explain`)이 비었고 입력에 있으면 **채운다**
-   * (`updatedAt` 올림 — 내용 수정). 찾기와 쓰기는 한 트랜잭션(두 번 눌러도 한 장).
+   * (`[12-3]` `updatedAt` 은 그대로 — 자동 채움은 사람의 내용 수정이 아니다). 찾기와 쓰기는 한 트랜잭션(두 번 눌러도 한 장).
    * `[12-1b]` id 는 문서 `fileHash` 바탕으로 만든다(`sentenceDocKey`) — 같은 PDF 를 지우고 다시 가져온 문서(새 docId)에서 같은 문장을
    * 저장하면 옛 카드를 만난다: 그 카드의 `docId`·`docTitle` 을 **지금 문서로 고친다**(그래야 "이 책 복습"·`keptCount` 에 다시 잡힘).
    * 내용·복습 상태·`updatedAt` 은 그대로(문서 옮김은 사용자 내용 수정이 아니다 — 9c 는 `docId` 를 `remapRecord` 로 맞춘다).
@@ -187,13 +189,12 @@ export function createCardStore(deps) {
         const fill = {};
         if (cur.kind === KIND && !textOf(cur.back) && rec.back) fill.back = rec.back;
         if (cur.kind === KIND && !textOf(cur.explain) && rec.explain) fill.explain = rec.explain;
-        const filled = Object.keys(fill).length > 0;
         if (cur.kind === KIND && cur.docId !== rec.docId) {
           fill.docId = rec.docId;
           if (rec.docTitle && rec.docTitle !== cur.docTitle) fill.docTitle = rec.docTitle;
         }
         if (!Object.keys(fill).length) return { card: cur, created: false };
-        const nextRec = Object.assign({}, cur, fill, filled ? { updatedAt: Math.max(at, Number(cur.updatedAt) || 0) } : {});
+        const nextRec = Object.assign({}, cur, fill);   // `[12-3]` 채움·문서 옮김 모두 updatedAt 그대로
         await rq(s.cards.put(nextRec));
         return { card: nextRec, created: false };
       }
@@ -263,6 +264,10 @@ export function createCardStore(deps) {
 
   /**
    * 목록 — 전체 훑기(또는 `docId` 인덱스) 후 거름(`kind` 인덱스 없음 — 12-D10). `createdAt` 오름차순.
+   * `[12-3]` `docId` 를 주면 **"이 책" 묶음**: `docId` 필드가 같은 카드 + **지워진 문서**(문서 레코드 없음)의 문장 카드 중 id 의 책 칸이
+   * 이 문서의 책 칸(`sentenceDocKey(fileHash)`)과 같은 것 — 같은 PDF 를 지우고 다시 가져온 책에서 "다시 저장한 문장만" 새 문서로
+   * 옮겨 가던 틈(12-1bR 정보-3). 지워진 문서 하나의 카드는 모두 같은 책 칸이므로 그 문서의 카드 한 장으로 재 본다(해시는 문서마다 1번).
+   * 살아 있는 다른 문서의 카드는 가져오지 않는다(표본 해시가 겹친 다른 PDF — 변형 키 — 를 섞지 않는다). 레코드는 고치지 않는다(읽기만).
    * @param {{kind?:'sentence'|'term', docId?:string}} [q]
    * @returns {Promise<Object[]>}
    */
@@ -271,10 +276,34 @@ export function createCardStore(deps) {
     const docId = o.docId != null && o.docId !== '' ? String(o.docId) : null;
     const kinds = o.kind ? [o.kind] : [KIND, 'term'];
     const out = [];
-    await db.iterate('cards', docId ? { index: 'docId', query: docId } : {}, (v) => {
-      if (v && kinds.indexOf(v.kind) >= 0) out.push(v);
-      return true;
-    });
+    const key = docId && kinds.indexOf(KIND) >= 0 ? await docKeyFor(docId) : null;
+    if (key && key !== docId) {
+      // 이 문서에 fileHash 가 있다 — 지워진 같은 PDF 의 카드를 찾으려면 전체를 훑는다
+      const orphans = new Map();
+      await db.iterate('cards', {}, (v) => {
+        if (!v || kinds.indexOf(v.kind) < 0) return true;
+        if (String(v.docId) === docId) out.push(v);
+        else if (v.kind === KIND && typeof v.id === 'string' && v.id.indexOf(SRS.ID_PREFIX) === 0) {
+          const k = String(v.docId);
+          if (!orphans.has(k)) orphans.set(k, []);
+          orphans.get(k).push(v);
+        }
+        return true;
+      });
+      if (orphans.size) {
+        const live = new Set((await db.keysOf('documents')).map(String));
+        for (const [k, group] of orphans) {
+          if (live.has(k)) continue;
+          const c = group[0];
+          if ((await sentenceIdOf(c.targetLang, key, c.front)) === c.id) for (const g of group) out.push(g);
+        }
+      }
+    } else {
+      await db.iterate('cards', docId ? { index: 'docId', query: docId } : {}, (v) => {
+        if (v && kinds.indexOf(v.kind) >= 0) out.push(v);
+        return true;
+      });
+    }
     out.sort((a, b) => (timeMs(a.createdAt) || 0) - (timeMs(b.createdAt) || 0));
     return out;
   }
@@ -359,7 +388,8 @@ export function createCardStore(deps) {
 
   /**
    * 뒷면이 빈 문장 카드를 **주입된 조회**로 채운다(호출 0 — 조회는 메모리·캐시 읽기만, 화면이 넘긴다).
-   * `lookup(front, docId, targetLang)` → 번역 글자(없으면 빈 값). 찾으면 그사이 다른 쪽이 채우지 않았을 때만 저장(`updatedAt` 올림).
+   * `lookup(front, docId, targetLang)` → 번역 글자(없으면 빈 값). 찾으면 그사이 다른 쪽이 채우지 않았을 때만 저장.
+   * `[12-3]` `updatedAt` 은 올리지 않는다(자동 채움 — 사람의 내용 수정이 아니다. 위 머리말 "시각").
    * @returns {Promise<Object>} 채운(또는 그대로인) 카드
    */
   async function fillBack(card, lookup) {
@@ -368,13 +398,11 @@ export function createCardStore(deps) {
     try { tr = await lookup(card.front, card.docId, card.targetLang); } catch (e) { return card; }
     const back = textOf(tr);
     if (!back) return card;
-    const at = now();
-    const r = await db.patch('cards', card.id, (cur) =>
-      (cur && cur.kind === KIND && !textOf(cur.back) ? { back: back, updatedAt: Math.max(at, Number(cur.updatedAt) || 0) } : null));
+    const r = await db.patch('cards', card.id, (cur) => (cur && cur.kind === KIND && !textOf(cur.back) ? { back: back } : null));
     return r.rec || card;
   }
 
-  /** 그 문서의 기억 카드(문장) 수 — 문서를 지워도 남는다(서재 삭제 확인 "기억 카드 m" — 12-2). */
+  /** 그 문서의 기억 카드(문장) 수 — 문서를 지워도 남는다(서재 삭제 확인 "기억 카드 m" — 12-2). `[12-3]` "이 책" 묶음(`list`). */
   async function keptCount(docId) {
     return (await list({ kind: KIND, docId: docId })).length;
   }

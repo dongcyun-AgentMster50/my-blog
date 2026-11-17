@@ -13415,3 +13415,92 @@ headless: Edge · pipe · 새 프로필 `r11-4c/pV1`·`pV2`·`pT1`·`pR1` · 흉
 명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 리다이렉트로 파일에). **막힌(거절된) 명령 0.** 실수 한 번: 첫 전체 시험에 글롭 대신 폴더를 넘겨 1건 실패 → 같은 명령을 글롭으로(변형 찾기 아님 — 지침의 그 명령). `tar` 가 `C:` 를 호스트로 읽어 한 번 실패 → `--force-local`. headless 는 한 번에 하나(`run-v` 189초가 백그라운드로 넘어간 동안 다른 headless·변이 0) · Edge · pipe · 새 프로필(`pX1`·`pL1`·`pM1`·`pT1`·`pR1`·`pV1`) · 가짜 키(`…review_r12_2`) · 흉내 Gemini OPTIONS 204 + CORS · 흉내 음성 · 9b 가짜 인식기 · `setCacheEnabled(false)` · **서버 0**(가로채기) · 합성 PDF `b11-2/syn.pdf` 읽기만 · 콘솔 오류 0(run-v 의 의도한 429 한 줄 제외) · pageerror 0 · 외부 요청 0 · 빠진 파일 0. 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음 · `b12-2/`·`r9b*/`·`r11-4/` 읽기만 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음(`git diff --stat` 18파일 504+/66− — 리뷰 전과 같음).
 
 스크래치 `r12-2/`: `full1.tap`·`full2.tap` · `commands-head.txt`·`commands-head.mjs`·`rvoice.mjs` · `head.tar`·`head/`·`rbody.mjs` · `mut.mjs`·`bak/`(remember·voice·library·controls) · `mkcommon.mjs`·`common.mjs`·`run-t.mjs`·`run-r.mjs`·`run-v.mjs`(Build 사본) · `run-x.mjs`·`x1.json` · `run-l.mjs`·`l1.json` · `run-m.mjs` · `t1.json`·`r1.json`·`v1.json` · `shots/` · 프로필 `p*` · `section.md`(이 절)·`append.mjs`.
+
+---
+
+# 12-3 Review — 복습 화면 `#/cards` · 목록 · 서재 "오늘" 줄 (2026-11-17)
+
+> 지침 `.claude/tasks/medreader-review-12-3.md` · Build 지침 `medreader-build-12-3-review-screen.md` · Build 보고 `medreader-build-12-3-review-screen-report.md`(믿지 않고 다시 잼) · spec 17-11(6·7 표 12-3 행·8 "12-3"·10 · `[정정 2026-11-17 — 12-3 Build]` ①–⑧) · 17-4-1 12-1c·12-1d 줄(`text/backup.js` `mergeSentence`) · `git diff`(17파일 739+/57−) + 새 파일 `js/ui/cards.js`·`tests/cards-ui-12.test.mjs`. 앱 코드·시험·spec 무변(변이는 백업을 읽어 써서 되돌리고 `cmp` 0), 커밋 0. 스크래치 `r12-3/`.
+
+## 12-3R-1. Build 가 내린 결정 둘 — 판단
+
+**결정 ① "이 책" = `docId` + 지워진 문서의 `fileHash` 책 칸 카드 — 받아들임.**
+- node 독립 점검(`r12-3/verify.mjs` · fake-idb · 지어낸 글자): 지운 같은 PDF(이 기기에선 꼬리 `:n40` 이 붙은 다시 가져온 문서)의 카드 둘(대상 언어 ar·ko) **묶임** · 살아 있는 다른 문서 카드 **빠짐** · 지운 **다른** PDF 의 같은 문장 카드 **빠짐** · 지운 문서의 단어 카드는 묶지 않음(문장만) · `keptCount` 2 · 없는 id → 0장.
+- headless V2(합성 PDF 두 권 — 둘째는 `b9c2/syn.pdf`): `#/cards/:docId` 줄 4 = 이 책 문장 둘 + 지운 사본 카드 + 이 책 단어 · **다른 책 문장·단어 0**. 서재 삭제 확인 셈도 묶음(기억 카드 3장).
+- 변이 X4(지운 **다른** PDF 카드도 묶음) → C5·K9 빨강 — 섞임을 시험이 지킨다.
+- 대가 ⓐ(변형 키 — 표본 해시가 겹친 다른 PDF): `fileIdentityHash` 는 **크기 + 표본 바이트**라 다른 PDF 가 크기·표본까지 같아야 생김 — 12-1b 가 이미 "id 가 합쳐짐"으로 받아들인 위험의 연장이라 "다른 책 카드를 섞음"(중간) 기준에 들지 않는다고 판단. 대신 묶음을 **첫 카드 한 장**으로만 재는 데서 새 틈 하나를 찾음 → 아래 #2(빠짐 쪽 · 낮음).
+
+**결정 ② 자동 채움은 `updatedAt` 을 올리지 않음(12-1 시험 기대 다섯 줄 바꿈) — 받아들임.**
+- 세 기기(C 가 먼저 만들고 손으로 뒷면 · B 나중에 만들고 자동 채움 · A 가장 나중에 만들고 실제 `fillBack`)를 `mergeRecord` 로 서로 가져오기 — 방향 6쌍의 **모든 순서 720 × 두 바퀴**: **720/720 세 기기 모두 손으로 쓴 뒷면 · 720/720 수렴**.
+- 비교: 옛 규칙(자동 채움이 `updatedAt` 을 올림) 모사 → **0/720** — 모든 순서에서 손 값을 잃고 자동 채움 값으로 수렴. 결정이 꼭 필요했음.
+- `fillBack`·`saveSentence` 채움 뒤 `updatedAt` = 만든 시각 · 8f `changedSince` 0 → 0(단어만 셈) · 문장 카드 중 바뀐 것 0. 사람 편집·**비우기**는 `updatedAt` 오름·`sm2` 그대로. 비운 뒤 다른 기기 백업을 가져오면 **다시 참**(spec ② 기록과 같음).
+- 기대 변경 다섯(`cards-12` C1 둘·C4·C10 · `remember-12` R5): 모두 `updatedAt` 값 한 줄 — 채움 자체·이미 있는 뒷면을 덮지 않음·`createdAt` 단정은 그대로라 뜻을 지킴. 변이 M5(Build)·위 비교가 되돌림을 잡음.
+
+## 12-3R-2. 복습 흐름 · 데이터 (확인 1)
+
+`verify.mjs`(fails 0 · fetch 0) + headless:
+- 미리보기 = 저장 `dueAt` — 단추 **넷 다**(다시·어려움·좋음·쉬움, 같은 카드에서 하나씩 되돌려 가며).
+- 하루 새 카드 상한(`readLog` — DB): 상한 3 · 새 5장 → 줄 3 → 둘 매김 → 기록 new 2 → 같은 흐름 `reload`·새 흐름 모두 남은 새 카드 1. "다시"를 새 카드에 → 바로 다시(남은 1장) · `dueAt − reviewedAt` = 600,000 · new 는 **한 번만** 셈.
+- 자정: 23:59:50 끝 화면 → 00:00:30 `rollover` → 새 카드 셈 0 부터(새 2 · 어제 매긴 3장 due) · 보이던 카드·뒷면 유지 · 날 키 지역 날짜. headless C1(가짜 시계 · **화면에서 실제로 매겨** 상한을 채움 — Build A6 은 기록을 심음): 상한 1 → 한 장 매김 → 끝 "오늘 1 · 내일 2" → [목록] 탭을 연 채 자정 → 목록 줄 문구 다시 그림 · [복습] 줄 2(새 1 + 어제 매긴 카드) · POST 0.
+- 보이던 카드를 목록에서 지운 뒤 매김 → `null` · 줄이 넘어감(오류 없음). 멈춤 → `suspendedAt` · `updatedAt` 그대로 · 줄에서 빠짐.
+- `requeue` 경계: 혼자면 그대로 · 적으면 끝 · 5장이면 3장 뒤 · 중복 id 정리. `markParts` 는 정규식 글자(`(a+b)*`)도 글자로.
+
+## 12-3R-3. 호출 0 (확인 2)
+
+- headless 전 구간 **POST 0**: V1–V8(복습·답 보기·뒷면 조회·[쪽으로 가기]→리더·뒤로·목록·편집·선택 줄 [기억 카드]) · C1 · L1(배치 12판) · P1(5,000장).
+- **본문 바이트**: `r12-3/rbody.mjs`(r12-2 사본 — 경로만) · 내 HEAD 사본(`git archive` a9add92 → `r12-3/head`) vs 작업 트리 — **6조합 39본문 같음**. `ai/*`·`config.js`·`db.js`·`backup/*` git diff 0.
+- 구조: `ui/cards.js` 의 ai import 는 `cache.js` `keyFor` 하나(K11) · `fetch`/XHR 0.
+
+## 12-3R-4. 회귀 (확인 3)
+
+- headless V1 서재 "오늘" 줄 = `queue().counts`(0·6) · 삭제 확인(confirm 거절) 두 줄 · **"기억 카드 3장" · "…은 남습니다"** · 숫자 뒤 "는" 0 · 문서 그대로. V6 단어장 `[복습 (n)]` n = queue(term) 1 · 누르면 `#/cards` [단어] 칩 · 줄 단어만. V7 11-3 요약 화면 전체·그 책 열림. V8 선택 줄 `[⋯]` → [기억 카드] → 카드 +1 · 확인 줄 · POST 0.
+- L1 선택 줄 `[⋯]` 메뉴: **915×412 네 언어 두 열(상자 110px) · 넷 다 보임 · [찾아보기] 다 보임 · 선택 줄 위** · ar 은 첫 칸이 오른쪽(거울) · **360×740·412×915 는 한 열(214px) 그대로** · 순서 요약·여기서부터·기억 카드·찾아보기.
+- 라우터(V5): `#/cards/:docId` 새로고침 → 그 범위 · 없는 id → "아직 없음"(empty) · 지운 책 id → 목록 1장 · 서재 → 뒤로 → `#/cards/goneDoc` → 뒤로 → `#/cards/nope…` 화면 그대로. V4 편집 [쪽으로 가기] → 리더 그 줄 편안 영역 안 · 대화 닫힘 → 뒤로 → [목록] 탭·줄 3 그대로(세션 이어 감).
+- 9c 백업·CSV·띠 [☆]·음성 "기억": node 전체 통과(backup-9c·backup-import-9c·cards-12 C6b·vocab-8f3b·remember-12 R1–R13) + 위 결정 ② 병합 720순서. **headless 로 띠 [☆]·음성은 다시 돌리지 않았다**(Build `reg-run-a`·`reg-run-r` 결과를 인용하지 않고 이 Review 의 근거에서 뺌).
+- `tests/router.test.mjs`(NUL 포함) 바이트 비교(`r12-3/bytecmp.mjs` — HEAD 를 `git show` 로 꺼냄): 바뀐 덩어리 **둘**(R1 `cards` 도달 3줄 더함 · R6 단정 1줄 → 2줄) — 보고서 5절에 둘 다 적힘(12절 "일치 1곳"은 바꾸기마다 1곳이라는 뜻) · **NUL 1개 같은 줄 그대로** · UTF-8 유효 · LF · BOM 없음 — 손상 0.
+
+## 12-3R-5. 화면 · 접근성 (확인 4)
+
+- L1(`r12-3/run-l.mjs` — b12-3 사본 + 메뉴 순서·[찾아보기]·줄 위 단정) pL1 46초: **12판 나쁨 0** — 가로 넘침 0 · 서재 [복습 시작] 48 · 단추 넷 최소 68×56(915×412 168×56) · ar 거울 · 앞면 `dir=ltr`·뒷면 `dir=rtl` 12/12 · 목록 줄·편집 대화 화면 안. 스크린샷 `r12-3/shots/` `r1-back-ar-412.png` · `r2-menu-ar-915x412.png` · `r3-menu-ko-360.png` · `r4-list-ar-360.png`.
+- 키보드(V3, 카드 4장 — 문장 3·단어 1): **앞면에서 `1` → 매기지 않음** · Space → 뒷면 · 초점 `#cardsBack` · **뒷면에서 Space → 그대로** · `3` → 다음 · 초점 [답 보기](끝이면 끝 문구) — 4/4. `#cardsStatus` `role=status`·`aria-live=polite` · 편집 저장 뒤 상태 문구·그 줄로 초점.
+- **XSS**: 앞면 `<img onerror>`·`<b>` · 뒷면 `<img onerror>`·`<script>` · 설명 `<svg onload>` · 메모 `<iframe>` · 지운 책 제목 `<i onmouseover>` · 단어 원어·문맥·번역에 `<img onerror>` → 복습 네 장·[목록]·편집 대화·책 고르기·단어장·서재 어디서도 **`window.__xss` 0 · 태그 요소 0** · `<select>` 아래는 `<option>` 만. 변이 X5(앞면 `innerHTML`)는 headless 에서 `__xss`=1·태그 2 로 잡힘.
+- 문안(낮음 #1·#4)은 아래.
+
+## 12-3R-6. 성능 (확인 5)
+
+`r12-3/run-p.mjs`(b12-3 사본) pP1 · 412×915 · 합성 5,000장(문장 2,500 · 단어 2,500 · 지운 같은 PDF 1,250): 서재 부팅 → "오늘" 줄 543ms(queue 94) · 복습 화면 열기 89(벽 93) · `reload` 85 · 목록 읽기 76 · 200줄 그리기 6 · [더 보기] 55 · "이 책" list 180 · keptCount 167 · 단어장 [복습 (n)] 214 · 한 장 매기기 12. **1초 넘는 것 0.** 콘솔 0.
+
+## 12-3R-7. 시험 · 점검 · 변이 (확인 6·7)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,879/1,879 · 1,879/1,879**(13.1초 · 13.0초 — `r12-3/full1.tap`·`full2.tap`, 2회째는 변이 복원 뒤).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 90개 · CSS 4개)" · `git diff --check` 0 · 새 파일 둘 `--no-index --check` 0 · `splitSentences` 3파일 그대로.
+- 변이(Build M1–M12 와 다른 곳 · 원본 `r12-3/bak/` → 한 곳 고침 → 전체 시험 → **bak 을 읽어 그대로 써** 되돌림 → `cmp` 0). 모든 변이에서 stamp 시험 IM2·IM6·IM7b 도 빨강(파일 해시 — 아래 표에선 뺌):
+
+| # | 변이 | 빨강 |
+|---|---|---|
+| X1 | `srs/cards.js` `queue` 새 카드 상한이 오늘 기록(`doneNew`)을 무시 | C3 · K7 |
+| X2 | `ui/cards.js` `cacheLookup` 이 지금 책 docId 키를 안 봄(지운 문서 카드의 뒷면 채움) | K6 |
+| X3 | 끝 화면 "내일 m" 을 오늘 창으로 셈 | K3 |
+| X4 | "이 책" 묶음이 책 칸 확인 없이 지운 문서 카드를 모두 묶음(다른 PDF 섞임) | C5 · K9 |
+| X5 | 앞면을 `innerHTML` 로 | K11 + headless pM1 V3(`__xss` 1 · 태그 2 · 이미지 404 콘솔) |
+| X6 | 답 보기 뒤 초점을 뒷면으로 옮기지 않음 | **node 없음**(stamp 만) → headless pM2 V3 초점 0/4 — 시험 틈 #3 |
+
+## 12-3R-8. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(문안) | `#/cards/:docId` 제목이 **지운 책 id·없는 id** 면 "기억 카드 — " 뒤가 빈 채. 지운 책 제목은 `S.scoped`·`S.all`(목록 탭에서만 읽음)에서 찾는데 [목록] 탭으로 바꿔도 `renderTitle` 을 다시 부르지 않음. 목록 책 고르기로 들어오면(목록 탭) 보임 | V5 `gone.titleRest` 0 · `nope.titleRest` 0. 방향: `loadList` 뒤 `renderTitle` · 모르는 id 는 "기억 카드" 만 |
+| 2 | 낮음(결정 ① 대가 보강 — 빠짐 쪽) | 지운 문서 묶음을 **첫 카드 한 장**으로만 재서, 책 칸이 다른 카드(예: 같은 기기에서 https·LAN http 를 섞어 써서 해시 종류가 다른 id) 하나가 첫째로 오면 **같은 책의 나머지 카드까지** "이 책"·`keptCount` 에서 빠짐. 섞임은 아님 · 전체 복습엔 잡힘 · 지금 배포(https 하나)에선 생기기 어려움. spec ⓑ "fnv 카드는 못 묶음"보다 넓음 | `verify.mjs` `d1_mixedFirst`(a·b 빠짐). 방향: spec ⓑ 에 한 줄 기록, 또는 묶음 안 카드마다 재기(해시 n번 — 5,000장 영향 작음)·"맞는 것만" 꼴 |
+| 3 | 낮음(시험 틈) | 답 보기 뒤 초점을 뒷면으로 옮기지 않아도 node 는 stamp 시험만 빨강(X6) — 키보드·화면 읽기 흐름을 node 가 지키지 않음. 코드는 맞음 | X6. 방향: K11 에 정적 한 줄(`els.back.focus`) 또는 DOM 흉내 시험 |
+| 4 | 낮음(문안 — `[검토 — Nour·운영자]`) | 간격 단위 수 일치: ar «10 دقيقة»(3–10 은 «دقائق»)·«4 يوم»(«أيام»)·«2 شهر» · fr «2 an»(«ans»)·소수 «1,5 an» | 스크린샷 r1. 방향: 수에 따른 꼴(`Intl.PluralRules`) 또는 «يوم: 4» 꼴 |
+| 5 | 낮음(실기기) | 키 1–4 가 `ev.key` 의 라틴 숫자만 — 아랍-인도 숫자(١–٤)를 내는 자판 배열에선 매기기 키가 안 먹음 | `onKey`. 방향: `ev.code` `Digit1`–`4`·`Numpad1`–`4` 도 받기. 실기기 묶음(블루투스 키보드) 항목에 더함 |
+| 6 | 낮음(접근성 — 읽기로 봄, headless 로 재지 않음) | [목록] 편집 → 삭제 확인 → 지운 뒤 초점 갈 곳 없음(`editFrom=null` · 지운 줄은 사라짐 → body) | `onDelClick`. 방향: 다음 줄 또는 목록 머리로 |
+| 7 | 정보 | Build 보고 다시 잼 — 1,879×2 · stamp 90·4 · 호출 0(구조·headless·본문 39) · 수용 기준 · 결정 둘 · 12판 배치 · 5,000장 · router 바이트 — 모두 맞음. 내 쪽에서 더 잰 것: 결정 ② 720순서·옛 규칙 비교 · 결정 ① 두 권 headless · 미리보기 넷 · 실제 매김 상한+자정 · 틀린 면 키 · XSS 아홉 자리 · 라우터 뒤로 가기 · 변이 X1–X6 | — |
+
+**판정: 배포 가능** — 중간 이상 0. AI 호출 0(본문 39개 HEAD 와 같음), 복습 상태·내용·멈춤 손실 0, 엉뚱한 카드 갱신 0, 새 카드 상한·자정 맞음, 결정 ① 다른 책 카드 섞임 0(#2 는 빠짐 쪽), 결정 ② 손으로 쓴 뒷면 지킴(720/720), 회귀 0, 키보드만으로 한 세션, XSS 0, 콘솔 오류 0, 시험 파일 손상 0. 낮음 #1(제목)·#2(묶음 재기)는 다음 다듬기에서, #4·#5 는 Nour·실기기 묶음으로.
+
+## 12-3R-9. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 리다이렉트·`--test-reporter-destination` 로 파일에). **막힌(거절된) 명령 0.** `tar` 가 `C:` 를 호스트로 읽어 한 번 실패 → `--force-local`(12-2R 과 같음). headless 는 한 번에 하나 · Edge · pipe · 새 프로필(`pL1`·`pP1`·`pV1`·`pC1`·`pM1`·`pM2`) · 가짜 키(`…review_r12_3`) · 흉내 Gemini OPTIONS 204 + CORS · 흉내 음성 · `setCacheEnabled(false)`(변이 실행 포함) · 가짜 시계(`__setClock`) · **서버 0**(가로채기) · 합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 · 콘솔 오류 0(변이 pM1 의 의도한 이미지 404 제외) · pageerror 0 · 외부 요청 0 · 빠진 파일 0. 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음 · `b12-3/`·`r12-2/` 읽기만(사본만 만듦) · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
+
+스크래치 `r12-3/`: `full1.tap`·`full2.tap`·`mx1–6.tap` · `verify.mjs` · `router.head.mjs`·`bytecmp.mjs` · `head.tar`·`head/`·`rbody.mjs` · `bak/`·`restore.mjs` · `common.mjs`(b12-3 사본) · `run-l.mjs`·`l1.json` · `run-p.mjs`·`p1.json` · `run-v.mjs`·`v1.json`·`m5.json`·`m6.json` · `run-c.mjs`·`c1.json` · `shots/` · 프로필 `p*` · `section.md`(이 절)·`append.mjs`.

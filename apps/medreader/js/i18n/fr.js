@@ -86,12 +86,18 @@ export default {
   // `[11-2]` [검토 — Nour·운영자]
   'library.card.deleteConfirm': 'Supprimer « {title} » ? Le PDF, la progression de lecture, l’historique des quiz et les traductions en cache seront supprimés.',
   // `[12-2 — spec 17-11 4]` 남는 것은 **한 줄**(`deleteKeeps` 의 {list} = 아래 조각들을 " · " 로 이음). [검토 — Nour·운영자] 조각·줄 전부.
-  'library.card.deleteConfirmVocab': '{n} entrées du lexique',   // `[8f-2]` → `[12-2]` 조각
-  'library.card.deleteConfirmCards': '{n} fiches de révision',
-  'library.card.deleteConfirmSummaries': '{n} résumés enregistrés',   // `[11-2]` → `[12-2]` 조각
+  // `[12-3 — 12-2R #5 ②]` "lexique (n)" 꼴 — n=1 복수("1 fiches") 없음(숫자는 미리 꼴을 맞춰 넘어온다).
+  'library.card.deleteConfirmVocab': 'lexique ({n})',   // `[8f-2]` → `[12-2]` 조각
+  'library.card.deleteConfirmCards': 'fiches de révision ({n})',
+  'library.card.deleteConfirmSummaries': 'résumés enregistrés ({n})',   // `[11-2]` → `[12-2]` 조각
   'library.card.deleteKeeps': 'Seront conservés : {list}',
   'library.card.vocab': 'Lexique de ce livre',   // `[8f-3]` [검토 — Nour·운영자]
   'library.card.summaries': "Résumés enregistrés de ce livre",   // `[11-3]` [검토 — Nour·운영자]
+  'library.card.cards': "Réviser ce livre",   // `[12-3]` [검토 — Nour·운영자]
+  // `[12-3 — spec 17-11 6]` ligne « Aujourd’hui » de la bibliothèque [검토 — Nour·운영자]
+  'library.today': "À réviser : {n} · nouvelles fiches : {m}",
+  'library.today.start': "Commencer la révision",
+  'library.today.open': "Fiches de révision",
 
   /* 7c — 원문 언어(9-2 · 12-6). 언어 이름은 `onboarding.lang.*` 를 쓴다. */
   'library.card.srcLang': 'Langue d’origine : {lang}',
@@ -406,6 +412,58 @@ export default {
   'remember.reviewed': "Cette fiche est en cours de révision — supprimez-la depuis la liste.",
   'remember.failed': "Impossible d’enregistrer la fiche.",
   'sel.remember': "Fiche de révision",
+  /* `[12-3 — spec 17-11 6]` écran des fiches #/cards — révision · liste (aucun appel IA) [검토 — Nour·운영자] 전부 */
+  'cards.title': "Fiches de révision",
+  'cards.titleDoc': "Fiches de révision — {title}",
+  'cards.settings': "Réglages des fiches",
+  'cards.newPerDay': "Nouvelles fiches par jour (0–100)",
+  'cards.tab.review': "Réviser",
+  'cards.tab.list': "Liste",
+  'cards.chips.label': "Type de fiche",
+  'cards.chip.all': "Toutes",
+  'cards.chip.sentence': "Phrases",
+  'cards.chip.term': "Mots",
+  'cards.left': "Restantes : {n} · nouvelles : {m}",
+  'cards.show': "Voir la réponse",
+  'cards.play.src': "Écouter l’original",
+  'cards.play.tr': "Écouter la traduction",
+  'cards.explain': "Explication",
+  'cards.noBack': "Pas encore de traduction — ouvrez cette page et touchez la ligne pour la traduire.",
+  'cards.goto': "Aller à la page",
+  'cards.disclaimer': "Traduction IA — pour l’étude uniquement. Vérifiez le texte original.",
+  'cards.grades.label': "Vous en souveniez-vous ?",
+  'cards.grade.again': "Encore",
+  'cards.grade.hard': "Difficile",
+  'cards.grade.good': "Bien",
+  'cards.grade.easy': "Facile",
+  'cards.span.min': "{n} min",
+  'cards.span.hour': "{n} h",
+  'cards.span.day': "{n} j",
+  'cards.span.month': "{n} mois",
+  'cards.span.year': "{n} an",
+  'cards.done': "Révisées aujourd’hui : {n} · demain : {m}",
+  'cards.empty': "Aucune fiche pour l’instant. En lisant, appuyez sur [☆] dans le bandeau de traduction, ou faites un appui long sur le texte → [⋯] → [Fiche de révision].",
+  'cards.noTr': "Mots sans traduction : {n} — traduisez-les dans le lexique",
+  'cards.toLibrary': "Bibliothèque",
+  'cards.sort.created': "Date d’ajout",
+  'cards.sort.due': "Prochaine révision",
+  'cards.list.terms': "Les fiches de mots se modifient dans le lexique",
+  'cards.list.count': "Fiches de phrases : {n}",
+  'cards.list.empty': "Aucune fiche de phrase ici.",
+  'cards.list.back': "traduite",
+  'cards.list.noBack': "sans traduction",
+  'cards.list.due': "prochaine : {date}",
+  'cards.list.dueToday': "à réviser aujourd’hui",
+  'cards.list.new': "nouvelle",
+  'cards.list.suspended': "en pause",
+  'cards.edit.back': "Verso (traduction)",
+  'cards.edit.delete': "Supprimer",
+  'cards.edit.suspend': "Mettre en pause",
+  'cards.edit.resume': "Reprendre",
+  'cards.edit.paused': "En pause — cette fiche n’apparaît pas dans les révisions.",
+  'cards.delete.title': "Supprimer cette fiche ?",
+  'cards.delete.body': "Son historique de révision sera aussi supprimé. Cette action est définitive.",
+  'cards.deleted': "Fiche supprimée.",
   'sum.title': "Résumé du paragraphe · {page}",
   'sum.titlePage': "Résumé de la page · {page}",
   'sum.pending': "Résumé en cours…",
@@ -525,6 +583,7 @@ export default {
   /* `[8f-3 — spec 17-7-6 4-6·7]` Écran du lexique — [검토 — Nour·운영자] */
   'vocab.open': "Lexique",
   'vocab.title': "Lexique",
+  'vocab.review': "Réviser ({n})",   // `[12-3]` [검토 — Nour·운영자]
   'vocab.titleDoc': "Lexique — {title}",
   'vocab.scope.label': "Choisir un livre",
   'vocab.scope.all': "Tous les livres ({n})",

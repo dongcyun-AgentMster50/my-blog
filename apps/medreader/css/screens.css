@@ -1692,3 +1692,159 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 .backup-pdf-text { flex: 1 1 10em; min-inline-size: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
 .backup-pdf-size { font-size: var(--fs-sm); color: var(--c-text-dim); font-variant-numeric: tabular-nums; }
 .backup-pdf-row button { margin-inline-start: auto; }
+
+/* ── `[12-3 — spec 17-11 6]` 기억 카드 화면 · 서재 "오늘" 줄 ───────────────────
+   ★ 논리 속성만(16-H) — 표 방향은 UI 를 따르고 앞면 칸만 `dir=ltr`(그 칸 안 정렬은 UI 쪽 가장자리 — 아랍어 UI 는 `text-align: end`),
+     뒷면 칸은 대상 언어 방향(JS 가 `dir`). 단추 넷은 논리 순서(아랍어에서 저절로 거울).
+   ★ 단추·줄 48px 이상(16-G). 360px 가로 넘침 0 — 칸은 `min-inline-size: 0`, 긴 문장은 `overflow-wrap: anywhere`.
+   ★ 편집은 단어장 편집과 같은 대화 식(`.vocab-edit`), 삭제 확인은 `.confirm-dialog`. */
+.lib-today { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.lib-today[hidden] { display: none; }
+.lib-today-text { flex: 1 1 12em; min-inline-size: 0; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.lib-today-extra { flex: 1 1 100%; }
+.lib-today-extra[hidden] { display: none; }
+.lib-today > button { flex: 0 1 auto; min-inline-size: 0; }
+
+.cards-screen .topbar .cards-gear { min-inline-size: var(--tap); padding-inline: var(--sp-2); font-size: var(--fs-lg); line-height: 1; }
+.cards-gear[aria-expanded="true"] { border-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-accent); }
+.cards-settings { margin-block: var(--sp-3) 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.cards-settings[hidden] { display: none; }
+.cards-settings label { flex: 1 1 12em; min-inline-size: 0; }
+.cards-num {
+  inline-size: 6em;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.cards-tabs,
+.cards-chips,
+.cards-sort { display: flex; gap: var(--sp-2); }
+.cards-tabs { margin-block: var(--sp-3) var(--sp-2); }
+.cards-tabs button,
+.cards-chips button,
+.cards-sort button { flex: 1 1 0; min-inline-size: 0; padding-inline: var(--sp-2); }
+.cards-tabs button[aria-pressed="true"],
+.cards-chips button[aria-pressed="true"],
+.cards-sort button[aria-pressed="true"] {
+  background: var(--c-accent);
+  color: var(--c-accent-text);
+  border-color: var(--c-accent);
+}
+.cards-status { margin-block: 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.cards-status:empty { display: none; }
+.cards-review[hidden],
+.cards-listpanel[hidden] { display: none; }
+.cards-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-block-end: var(--sp-2); }
+.cards-chips { flex: 1 1 18em; min-inline-size: 0; }
+.cards-remain { margin: 0; font-size: var(--fs-sm); color: var(--c-text-dim); font-variant-numeric: tabular-nums; }
+.cards-remain:empty { display: none; }
+.cards-notr { min-block-size: var(--tap); text-align: start; overflow-wrap: anywhere; }
+.cards-notr[hidden] { display: none; }
+.cards-card[hidden],
+.cards-done[hidden] { display: none; }
+.cards-src { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--c-text-dim); overflow-wrap: anywhere; }
+.cards-src:empty { display: none; }
+.cards-face { display: flex; flex-direction: column; gap: var(--sp-2); }
+.cards-face[hidden] { display: none; }
+.cards-front-text { margin: 0; font-size: var(--fs-lg); line-height: 1.45; text-align: start; overflow-wrap: anywhere; }
+.cards-card[data-kind="term"] .cards-front-text { font-size: var(--fs-xl); font-weight: 600; }
+.cards-ctx { margin: 0; padding: var(--sp-2) var(--sp-3); background: var(--c-surface-2); border-radius: var(--radius-sm); text-align: start; overflow-wrap: anywhere; }
+.cards-ctx[hidden] { display: none; }
+.cards-ctx u { text-decoration-thickness: 2px; text-underline-offset: 3px; }
+/* 원문(`dir=ltr`)은 UI 쪽 가장자리에 붙인다 — 아랍어 UI 에서는 ltr 글자의 끝(end)이 오른쪽(물리 속성 없이 — 단어장과 같은 규칙) */
+:root[dir="rtl"] .cards-front-text,
+:root[dir="rtl"] .cards-ctx,
+:root[dir="rtl"] .cards-row-front,
+:root[dir="rtl"] .cards-edit-head { text-align: end; }
+.cards-play { align-self: flex-start; min-inline-size: var(--tap); padding-inline: var(--sp-3); }
+.cards-play[hidden] { display: none; }
+.cards-show { inline-size: 100%; margin-block: var(--sp-3) 0; }
+.cards-show[hidden] { display: none; }
+.cards-back { margin-block-start: var(--sp-3); padding-block-start: var(--sp-3); border-block-start: 1px solid var(--c-border); }
+.cards-back:focus { outline: none; }
+.cards-back:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+.cards-back-text { margin: 0; font-size: var(--fs-lg); line-height: 1.5; text-align: start; overflow-wrap: anywhere; }
+.cards-back-text[hidden],
+.cards-gloss[hidden],
+.cards-ctx-tr[hidden],
+.cards-explain[hidden],
+.cards-noback[hidden] { display: none; }
+.cards-gloss { margin: 0; text-align: start; overflow-wrap: anywhere; }
+.cards-ctx-tr { margin: 0; padding: var(--sp-2) var(--sp-3); background: var(--c-surface-2); border-radius: var(--radius-sm); font-size: var(--fs-sm); text-align: start; overflow-wrap: anywhere; }
+.cards-explain { font-size: var(--fs-sm); }
+.cards-tag { display: inline-block; font-size: var(--fs-sm); color: var(--c-text-dim); }
+.cards-explain-text { margin: var(--sp-1) 0 0; text-align: start; overflow-wrap: anywhere; }
+.cards-back-text:lang(ar),
+.cards-gloss:lang(ar),
+.cards-ctx-tr:lang(ar),
+.cards-explain-text:lang(ar),
+.cards-row-front:lang(ar) { font-family: var(--font-ar); }
+.cards-noback { padding: var(--sp-2) var(--sp-3); background: var(--c-warn-bg); color: var(--c-warn-text); border-radius: var(--radius-sm); }
+.cards-noback p { margin: 0 0 var(--sp-2); overflow-wrap: anywhere; }
+.cards-noback button[hidden] { display: none; }
+.cards-disclaimer { margin: 0; overflow-wrap: anywhere; }
+.cards-grades { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); margin-block-start: var(--sp-2); }
+.cards-grades button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-inline-size: 0;
+  min-block-size: calc(var(--tap) + 8px);
+  padding: var(--sp-1);
+  overflow-wrap: anywhere;
+}
+.cards-grade-name { font-weight: 600; line-height: 1.2; }
+.cards-grade-span { font-size: var(--fs-sm); color: var(--c-text-dim); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.cards-done-text { margin: 0 0 var(--sp-3); font-weight: 600; overflow-wrap: anywhere; }
+.cards-done-text:focus { outline: none; }
+.cards-done .row button { flex: 1 1 8em; min-inline-size: 0; }
+
+.cards-tools { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block: var(--sp-2); }
+.cards-scope {
+  flex: 1 1 12em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.cards-sort { flex: 1 1 100%; }
+.cards-terms { min-block-size: var(--tap); text-align: start; overflow-wrap: anywhere; }
+.cards-count { margin-block: 0 var(--sp-2); }
+.cards-list { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--c-border); }
+.cards-list li { margin: 0; }
+.cards-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-block-end: 1px solid var(--c-border);
+  border-radius: 0;
+  background: transparent;
+  text-align: start;
+}
+.cards-row[data-suspended] { opacity: 0.6; }
+.cards-row-front { text-align: start; overflow-wrap: anywhere; }
+.cards-row-meta { font-size: var(--fs-sm); color: var(--c-text-dim); text-align: start; overflow-wrap: anywhere; }
+.cards-more { inline-size: 100%; margin-block-start: var(--sp-3); }
+.cards-more[hidden] { display: none; }
+.cards-edit-explain:lang(ar) { font-family: var(--font-ar); }
+.cards-edit-state:empty { display: none; }
+.cards-edit-row { gap: var(--sp-2); margin-block-end: var(--sp-2); }
+.cards-edit-row button { flex: 1 1 8em; min-inline-size: 0; }
+.cards-edit-row button[hidden],
+.cards-edit [hidden] { display: none; }

@@ -302,6 +302,7 @@ function openMore(byKey) {
     try { summaryOk = !!deps.canSummarize(Object.assign({}, snap)); } catch (e) { summaryOk = undefined; }
   }
   render(snap);
+  els.menu.classList.remove('sel-more-cols');
   try {
     const top = els.bar.getBoundingClientRect().top;
     els.menu.style.maxBlockSize = Math.max(96, Math.floor(top - 8)) + 'px';
@@ -310,6 +311,9 @@ function openMore(byKey) {
   const downFn = (ev) => { if (more && !els.bar.contains(ev.target)) closeMore(false); };
   more = { keyFn: keyFn, downFn: downFn };
   els.menu.hidden = false;
+  // `[12-3 — 12-2R #1]` 가로 짧은 화면(915×412)에서 줄 위 공간에 칸이 다 들어가지 않으면(안이 굴러 넷째 칸이 가려짐) 두 열로 —
+  // 세로 화면은 한 열 그대로(공간이 남는다). 두 열로도 넘치면 지금처럼 안 굴림.
+  try { if (els.menu.scrollHeight > els.menu.clientHeight + 1) els.menu.classList.add('sel-more-cols'); } catch (e) { /* 한 열 그대로 */ }
   els.moreBtn.setAttribute('aria-expanded', 'true');
   window.addEventListener('keydown', keyFn, true);        // 띠(document 캡처)·시트보다 먼저 — Esc 는 메뉴만 닫는다(18 목록과 같은 층)
   document.addEventListener('pointerdown', downFn, true);

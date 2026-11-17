@@ -1,7 +1,7 @@
 /* ============================================================
    tests/cards-12.test.mjs — 12-1 기억 카드 서비스 (spec 17-11 4 · 8 "12-1" 수용 기준 — fake-idb)
 
-   C1  ★ saveSentence — 두 번 → 한 장(created:false) · 대상 언어 다르면 둘 · 앞면만 → back 채움(updatedAt 오름) · id 경계(U+0001)
+   C1  ★ saveSentence — 두 번 → 한 장(created:false) · 대상 언어 다르면 둘 · 앞면만 → back 채움(`[12-3]` updatedAt 그대로) · id 경계(U+0001)
    C2  ★ review — sm2·dueAt·reviewedAt·introducedAt(처음만)만 바뀜, updatedAt·내용 그대로 · srs.log[오늘] n·ms·new · 60일
    C3  ★ queue — due(dueAt 순) → fresh(createdAt 순) · 오늘 새 카드 18 이면 20 중 2 · 멈춤·번역 빈 term 빠짐(noTr) ·
         뒷면 빈 문장 카드 들어감(noBack) · ISO 문자열 dueAt(8f 옛 값)도 숫자처럼
@@ -60,7 +60,7 @@ const input = (o) => Object.assign({ front: 'Fever is common after surgery.', sr
   pageNo: 3, lineId: '3:4', paraId: '3:p1', origin: 'band', domain: 'medical' }, o || {});
 
 /* ══ C1 saveSentence ═════════════════════════════════════ */
-test('C1 ★ saveSentence — 한 장·created:false · 대상 언어 다르면 둘 · 앞면만 저장 뒤 back 채움(updatedAt 오름) · id 경계', async () => {
+test('C1 ★ saveSentence — 한 장·created:false · 대상 언어 다르면 둘 · 앞면만 저장 뒤 back 채움([12-3] updatedAt 그대로) · id 경계', async () => {
   await reset();
   clock = T0;
   const a = await cards.saveSentence(input());
@@ -86,19 +86,20 @@ test('C1 ★ saveSentence — 한 장·created:false · 대상 언어 다르면 
   const k = await cards.saveSentence(input({ targetLang: 'ko' }));
   assert.equal(k.created, true);
   assert.notEqual(k.card.id, c.id);
-  // 앞면만 저장 뒤 back 을 주면 채워지고 updatedAt 오름 · explain 도
+  // 앞면만 저장 뒤 back 을 주면 채워진다 · explain 도. `[12-3 결정]` 자동 채움은 updatedAt 을 올리지 않는다(사람의 내용 수정만 — 9c 에서
+  // 다른 기기의 손으로 쓴 뒷면을 덮지 않게). 전: updatedAt = T0 + 500.
   clock = T0 + 500;
   const f = await cards.saveSentence(input({ back: 'الحمى شائعة بعد الجراحة.', explain: 'شرح' }));
   assert.equal(f.created, false);
   assert.equal(f.card.back, 'الحمى شائعة بعد الجراحة.');
   assert.equal(f.card.explain, 'شرح');
-  assert.equal(f.card.updatedAt, T0 + 500);
+  assert.equal(f.card.updatedAt, T0, '[12-3] 자동 채움 — updatedAt 그대로');
   assert.equal(f.card.createdAt, T0);
   // 이미 있는 back 은 덮지 않는다
   clock = T0 + 600;
   const g = await cards.saveSentence(input({ back: 'other' }));
   assert.equal(g.card.back, 'الحمى شائعة بعد الجراحة.');
-  assert.equal(g.card.updatedAt, T0 + 500);
+  assert.equal(g.card.updatedAt, T0);
   // id 경계 — 앞면 "a b" + 문서 "c" 와 앞면 "a" + 문서 "b c" 는 다른 id(U+0001 은 공백으로 접히지 않는다)
   const x = await cards.saveSentence(input({ front: 'a b', docId: 'c' }));
   const y = await cards.saveSentence(input({ front: 'a', docId: 'b c' }));
@@ -221,7 +222,7 @@ test('C3 ★ queue — due(dueAt 순) → fresh(createdAt 순) · 새 카드 상
 });
 
 /* ══ C4 fillBack ═════════════════════════════════════════ */
-test('C4 ★ fillBack — 주입 조회로 채움·저장(updatedAt 오름) / 못 찾으면 그대로 · 이미 있으면 조회 안 함 · 조회 밖 호출 0', async () => {
+test('C4 ★ fillBack — 주입 조회로 채움·저장([12-3] updatedAt 그대로) / 못 찾으면 그대로 · 이미 있으면 조회 안 함 · 조회 밖 호출 0', async () => {
   await reset();
   clock = T0;
   const c = (await cards.saveSentence(input())).card;
@@ -235,7 +236,7 @@ test('C4 ★ fillBack — 주입 조회로 채움·저장(updatedAt 오름) / �
   clock = T0 + 77;
   const f1 = await cards.fillBack(c, async (front) => mem.get(front) || null);
   assert.equal(f1.back, 'الحمى شائعة.');
-  assert.equal(f1.updatedAt, T0 + 77);
+  assert.equal(f1.updatedAt, T0, '[12-3 결정] 자동 채움 — updatedAt 그대로(전: T0 + 77)');
   assert.equal((await cards.get(c.id)).back, 'الحمى شائعة.', '저장됨');
   let called = 0;
   const f2 = await cards.fillBack(f1, async () => { called++; return 'x'; });
@@ -486,11 +487,11 @@ test('C10 ★ 문장 카드 id = fileHash 바탕(변형 꼬리 뗌) · 같은 PD
   // 같은 문서에서 다시 → 쓰지 않음(같은 객체 값)
   clock = T0 + 6000;
   assert.deepEqual((await cards.saveSentence(input({ docId: 'd2', docTitle: 'Book d2' }))).card, b.card);
-  // 옮기면서 빈 뒷면을 채우면 그때만 updatedAt 오름
+  // 옮기면서 빈 뒷면을 채운다 — `[12-3 결정]` 채움도 updatedAt 그대로(전: 그때만 T0 + 7000)
   const e = (await cards.saveSentence(input({ docId: 'd1', front: 'Empty back.' }))).card;
   clock = T0 + 7000;
   const e2 = (await cards.saveSentence(input({ docId: 'd2', front: 'Empty back.', back: 'ف' }))).card;
-  assert.deepEqual([e2.id, e2.docId, e2.back, e2.updatedAt], [e.id, 'd2', 'ف', T0 + 7000]);
+  assert.deepEqual([e2.id, e2.docId, e2.back, e2.updatedAt], [e.id, 'd2', 'ف', e.updatedAt]);
   // 같은 기기 — 문서를 지우고 같은 PDF 를 다시 가져옴(새 docId) → 남은 카드를 만남(한 장, docId 새 문서)
   await db.deleteDocument('d2');
   await db.deleteDocument('d1');

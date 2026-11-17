@@ -27,7 +27,7 @@ import { t, applyTranslations, onLangChange, dirOf, formatNumber } from '../i18n
 import * as db from '../db.js';
 import * as settings from '../settings.js';
 import { VOCAB } from '../config.js';
-import { go, replace, vocabHash, readerHash } from '../router.js';
+import { go, replace, vocabHash, readerHash, cardsHash } from '../router.js';
 import { buildCsv, buildAnki, parseCsv, importPlan, planToApply, fieldValue, normalizeTerm, baseOf, TERM_CONTENT_FIELDS } from '../text/vocab.js';
 import { docLangOf } from '../text/lang.js';
 import { domainOf } from '../ai/prompts.js';
@@ -36,6 +36,9 @@ import { appendBidiText } from './bididom.js';
 import { GATE_KEYS, BLOCKED_KEYS, TAP_BANNER_NOW, noticeBanner } from './trband.js';
 import { termServices } from './wordsheet.js';
 import { onPageRender, revealLine } from './reader.js';
+// `[12-3 — spec 17-11 6]` 머리 [복습 (n)] — 오늘 복습할 단어 카드 수(`queue` — 읽기만) · 누르면 기억 카드 화면을 [단어] 칩으로.
+import { cardStore, clampNewPerDay } from '../srs/cards.js';
+import { presetCardsChip } from './cards.js';
 import { resolveSpeech, speechPref } from '../tts/voices.js';
 import { trSpeechText } from '../tts/text.js';
 
@@ -398,7 +401,7 @@ export function initVocab() {
   if (!root) return;
   const q = (s) => root.querySelector(s);
   els = {
-    title: q('#vocabTitle'), scope: q('#vocabScope'), find: q('#vocabFind'), sort: q('#vocabSort'),
+    title: q('#vocabTitle'), review: q('#vocabReview'), scope: q('#vocabScope'), find: q('#vocabFind'), sort: q('#vocabSort'),
     bulk: q('#vocabBulk'), exportBtn: q('#vocabExportBtn'), file: q('#vocabFile'),
     changed: q('#vocabChanged'), status: q('#vocabStatus'),
     exportPanel: q('#vocabExport'), exportWhat: q('#vocabExportWhat'),
@@ -484,6 +487,20 @@ async function load() {
   S.all = all;
   S.docs = docs;
   render();
+  renderReview(my);
+}
+
+/** `[12-3]` 머리 [복습 (n)] — n = 이 범위의 오늘 복습할 단어 카드(복습할 것 + 새 카드). 0 이면 숨김. */
+async function renderReview(my) {
+  let n = 0;
+  try {
+    const q = await cardStore.queue({ kinds: ['term'], docId: S.docId || undefined, newPerDay: clampNewPerDay(settings.get('srs.newPerDay')) });
+    n = q.counts.due + q.counts.fresh;
+  } catch (e) { n = 0; }
+  if (my !== S.seq || !els) return;
+  els.review.hidden = n === 0;
+  els.review.textContent = t('vocab.review', { n: formatNumber(n) });
+  els.review.setAttribute('data-n', String(n));
 }
 
 function docsById() { return docMap(S.docs); }
@@ -605,6 +622,7 @@ function onClick(ev) {
   const b = ev.target && ev.target.closest ? ev.target.closest('[data-va]') : null;
   if (!b || !root.contains(b) || b.getAttribute('aria-disabled') === 'true') return;
   const a = b.getAttribute('data-va');
+  if (a === 'review') { presetCardsChip('term'); go(cardsHash(S.docId)); return; }   // `[12-3]` 단어 복습
   if (a === 'sort') { S.sort = SORTS.indexOf(b.getAttribute('data-sort')) >= 0 ? b.getAttribute('data-sort') : 'added'; S.shown = VOCAB_PAGE; render(); return; }
   if (a === 'more') { S.shown += VOCAB_PAGE; renderList(); return; }
   if (a === 'bulk') { bulk(); return; }

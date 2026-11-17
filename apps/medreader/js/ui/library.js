@@ -38,7 +38,7 @@ import { fileIdentityHash } from '../hash.js';
 import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
-import { go, replace, readerHash, vocabHash, summariesHash, libraryHash } from '../router.js';
+import { go, replace, readerHash, vocabHash, summariesHash, cardsHash, libraryHash } from '../router.js';
 import { fromStored } from '../text/store.js';
 import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
@@ -47,7 +47,7 @@ import {
 // `[8g-2]` 검색 엔진 캐시 배선만(화면 변화 없음) — 새로 쓰인 쪽은 다음 검색 전에 다시 읽고, 다시 추출·삭제면 버린다.
 import { notePage as searchNotePage, invalidate as searchInvalidate } from '../search/engine.js';
 // `[8g-4a]` 서재 [검색](서재 전체 범위) — 되돌림 스위치(17-8-12 §9)가 끄면 숨긴다.
-import { SEARCH, SCAN, PDF_TEXT_CONTENT_OPTIONS } from '../config.js';
+import { SEARCH, SCAN, SRS, PDF_TEXT_CONTENT_OPTIONS } from '../config.js';
 // `[8l]` 스캔본·글자 깨짐 판정(spec 17-5-1 2 · 19-1-3 §3) — 판정은 순수 `text/scan.js`, 표본 읽기·저장은 여기.
 import {
   probePages, countItems, imageCheckPages, scanVerdict, scanRecord, needsScan, badgeKey,
@@ -60,7 +60,8 @@ import { vocabStore } from '../vocab/store.js';
 // `[11-2]` 삭제 확인 "저장한 요약 n개는 남습니다"(셈만 — 읽기)
 import { summaryStore } from '../notes/summaries.js';
 // `[12-2 — spec 17-11 4]` 삭제 확인 "기억 카드 m 는 남습니다" — 그 문서의 문장 카드 수(읽기만).
-import { cardStore } from '../srs/cards.js';
+// `[12-3 — spec 17-11 6]` 서재 맨 위 "오늘" 줄 — 오늘 복습 줄의 셈(`queue().counts` — 읽기만, 호출 0).
+import { cardStore, dayStartOf, dayKeyOf, clampNewPerDay } from '../srs/cards.js';
 // `[18 — spec 17-9 · 결정 18-D2]` 저장 줄 위 "의료 사이트" 접는 카드(열기만) — 그리기는 `ui/links.js` 한 곳.
 import { renderLibraryLinks } from './links.js';
 
@@ -153,7 +154,10 @@ export function initLibrary() {
     list: root.querySelector('#docList'),
     empty: root.querySelector('#libraryEmpty'),
     fileProto: root.querySelector('#fileProtoNote'),
-    storage: root.querySelector('#storageLine')
+    storage: root.querySelector('#storageLine'),
+    today: root.querySelector('#libraryToday'),
+    todayText: root.querySelector('#libraryTodayText'),
+    todayBtn: root.querySelector('#libraryTodayBtn')
   };
 
   els.importBtn.addEventListener('click', openFilePicker);
@@ -202,9 +206,62 @@ export function openFilePicker() {
 export async function showLibrary() {
   if (!root) return;
   renderLibraryLinks();   // `[18]` 설정에서 고친 목록을 다시 읽는다(호출 0 — 설정 메모리)
+  await renderToday();
   await renderList();
   focusPending();
   await renderStorage();
+}
+
+/* ── `[12-3 — spec 17-11 6 · 12-D14]` "오늘" 줄 — 기억 카드가 1장 이상일 때만. 13-2 가 같은 줄(`#libraryTodayExtra`)에 시험 줄을 더한다 ── */
+
+/**
+ * "오늘" 줄 모양 — 카드가 없으면 숨김. 셈은 복습 화면의 오늘 줄과 **같은** `queue().counts`(복습할 것 · 새 카드). 순수 함수.
+ * @param {number} total  카드 수(단어·문장)
+ * @param {?{due:number, fresh:number}} counts
+ * @returns {{show:boolean, due:number, fresh:number, start:boolean}}
+ */
+export function todayLine(total, counts) {
+  const c = counts || {};
+  const due = Math.max(0, Math.floor(Number(c.due)) || 0);
+  const fresh = Math.max(0, Math.floor(Number(c.fresh)) || 0);
+  return { show: Number(total) > 0, due: due, fresh: fresh, start: due + fresh > 0 };
+}
+
+let todayTimer = null;
+let todayKey = '';
+
+async function renderToday() {
+  if (!els || !els.today) return;
+  const n = Date.now();
+  const ds = dayStartOf(n);
+  let line = todayLine(0, null);
+  try {
+    const total = await db.count('cards');
+    if (total > 0) {
+      const q = await cardStore.queue({ nowMs: n, dayStartMs: ds, dayEndMs: ds + SRS.DAY_MS, newPerDay: clampNewPerDay(settings.get('srs.newPerDay')) });
+      line = todayLine(total, q.counts);
+    }
+  } catch (e) { line = todayLine(0, null); }
+  todayKey = dayKeyOf(ds);
+  els.today.hidden = !line.show;
+  els.today.setAttribute('data-due', String(line.due));
+  els.today.setAttribute('data-fresh', String(line.fresh));
+  els.todayText.textContent = t('library.today', { n: formatNumber(line.due), m: formatNumber(line.fresh) });
+  els.todayBtn.textContent = t(line.start ? 'library.today.start' : 'library.today.open');
+  armToday();
+}
+
+/** 자정을 넘기면 다시 센다 — 서재가 보이는 동안만. 자정 직후에 깨고, 늦어도 30초 안에 알아챈다(기기 잠듦). */
+function armToday() {
+  if (todayTimer) clearTimeout(todayTimer);
+  todayTimer = null;
+  if (!root || root.hidden) return;
+  const n = Date.now();
+  todayTimer = setTimeout(() => {
+    todayTimer = null;
+    if (!root || root.hidden) return;
+    if (dayKeyOf(dayStartOf(Date.now())) !== todayKey) renderToday(); else armToday();
+  }, Math.max(250, Math.min(dayStartOf(n) + SRS.DAY_MS - n + 250, 30000)));
 }
 
 async function renderList() {
@@ -457,6 +514,11 @@ function langPanel(doc, panelId) {
   sb.type = 'button';
   sb.setAttribute('data-action', 'summaries');
   panel.appendChild(sb);
+  // `[12-3 — spec 17-11 6 · 12-D14]` "이 책 복습" → `#/cards/:docId` — 같은 패널, 같은 위임. 호출 0.
+  const cb = el('button', 'doc-cards', t('library.card.cards'));
+  cb.type = 'button';
+  cb.setAttribute('data-action', 'cards');
+  panel.appendChild(cb);
 
   // `[배포 안전장치]` 9-4 [텍스트 다시 추출] — 같은 [⋯] 패널, 같은 위임(`data-action`).
   const rx = el('div', 'doc-reextract');
@@ -1276,6 +1338,11 @@ async function onListClick(ev) {
 
   if (btn.getAttribute('data-action') === 'summaries') {
     go(summariesHash(docId));      // `[11-3]` 이 책의 저장한 요약
+    return;
+  }
+
+  if (btn.getAttribute('data-action') === 'cards') {
+    go(cardsHash(docId));          // `[12-3]` 이 책 복습
     return;
   }
 

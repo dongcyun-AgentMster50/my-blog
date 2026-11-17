@@ -785,6 +785,13 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
   min-block-size: var(--tap);
   text-align: start;
 }
+/* `[12-3 — 12-2R #1]` 줄 위 공간이 칸 넷에 모자라면(가로 915×412) JS 가 두 열로 — 칸 48px 그대로, 논리 순서(아랍어에서 저절로 거울).
+   `:not([hidden])` — 위 `[hidden]` 규칙과 특이성이 같아 뒤에 오는 이 규칙이 닫힌 메뉴를 보이게 하지 않도록. */
+.sel-bar .sel-more-menu.sel-more-cols:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
 
 /* ── `[8f-2 — spec 17-7-6 4-5]` 단어 시트 ─────────────
    ★ Aa·속도 팝오버와 **같은 아래 붙임·높이 식**(`--reader-chrome-bottom` 하나 — 띠가 켜져 있으면 띠 위, 8e compact 에서도 같은 식.
