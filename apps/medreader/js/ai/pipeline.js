@@ -3,7 +3,7 @@
 
    ── 서비스 계층이다(3-1 · 3-2) ──────────────────────────
    `config`·`db`·`settings`·`ai/provider`·`ai/prompts`·`ai/jsonrepair`·`ai/cache`·`ai/tokens`
-   만 import 한다. **`ui/` 를 import 하지 않고, 문장을 나누지 않는다**(분할은 `tts/text.js`
+   (`[11-4]` + 순수 `hash` — 설명 키의 문단 해시) 만 import 한다. **`ui/` 를 import 하지 않고, 문장을 나누지 않는다**(분할은 `tts/text.js`
    의 `Unit.src` 를 받기만 한다 — 7-8-2). 사용자에게 보일 문장을 만들지 않는다 — 상태 이름과
    코드만 낸다. 언어는 값으로만 다룬다(특정 언어 코드를 이 파일에 적지 않는다 — 16-D2 grep).
 
@@ -41,7 +41,7 @@
    진행 중인 캐시 키의 요청이 또 오면 **진행 중인 Promise 를 공유한다**(호출 1건).
    ============================================================ */
 
-import { PIPELINE, AI, VOCAB, OUTLINE } from '../config.js';
+import { PIPELINE, AI, VOCAB, OUTLINE, EXPLAIN } from '../config.js';
 import * as realProvider from './provider.js';
 import { CODES, localDay, bumpUsage } from './provider.js';
 import { parseAIJson } from './jsonrepair.js';
@@ -49,9 +49,12 @@ import {
   buildTranslateRequest, checkTranslation, TRANSLATE_SCHEMA, PROMPT_VERSION, langName, normalizeDomain,
   buildTermRequest, checkTerms, TERM_SCHEMA, TERM_PROMPT_VERSION,
   buildSummaryRequest, checkSummary, SUMMARY_SCHEMA, SUMMARY_PROMPT_VERSION,
-  buildOutlineRequest, checkOutline, OUTLINE_SCHEMA, OUTLINE_PROMPT_VERSION, outlinePayload
+  buildOutlineRequest, checkOutline, OUTLINE_SCHEMA, OUTLINE_PROMPT_VERSION, outlinePayload,
+  buildExplainRequest, checkExplain, EXPLAIN_SCHEMA, EXPLAIN_PROMPT_VERSION
 } from './prompts.js';
 import { keyFor, defaultCache } from './cache.js';
+// `[11-4 — 11-D20]` 설명 캐시 키의 `ctx=` 문단 해시 — 요약 저장 `textHash` 와 같은 함수(순수 `hash.js` — `cache.js` 가 이미 쓰는 것).
+import { hashHex, normalizeForHash } from '../hash.js';
 import { exceedsRequestBudget } from './tokens.js';
 import * as realDb from '../db.js';
 import * as realSettings from '../settings.js';
@@ -343,6 +346,53 @@ export const OUTLINE_JOB = Object.freeze({
   maxItems: 1,
   maxChunks: 1
 });
+
+/**
+ * `[11-4 — 17-2-1 4-7 · 11-D9 · 11-D15]` 문장 설명 job(`kind:'explain'`). 항목은 늘 하나(`{sentence, context}` — context = 그 문단 글,
+ * 맥락 창 1,500자는 `buildExplainRequest` 가 자른다), **한 번 부름 = 최대 1호출**. 상태 기계는 번역과 한 벌(`runJob`). 기기 내 없음.
+ * 결과 `{value:{t, terms}}`.
+ */
+export const EXPLAIN_JOB = Object.freeze({
+  name: AI.EXPLAIN_KIND,
+  build: (chunk, ctx) => buildExplainRequest(chunk[0], { src: ctx.src, target: ctx.target, domain: ctx.domain }),
+  schema: EXPLAIN_SCHEMA,
+  check: (chunk, value) => {
+    const chk = checkExplain(chunk[0], value);
+    return {
+      chunkFailed: false,
+      items: chk.items.map((it) => (it.state === 'ok'
+        ? { state: 'ok', value: it.value }
+        : { state: 'failed', code: failCodeOf(it.reason) }))
+    };
+  },
+  accepts: (v) => !!v && typeof v === 'object' && typeof v.t === 'string' && v.t.trim() !== '' && Array.isArray(v.terms),
+  toResult: (v) => ({ value: deepCopy(v) }),
+  /**
+   * `[11-4]` 11-1b `tailOf` 꼴을 개요처럼 따른다 — 항목이 하나라, 잘린 응답(`MAX_TOKENS`·`truncated`)의 JSON 이 루트까지 닫히지
+   * 않았으면 그 설명은 반쪽일 수 있다(`t` 안에서 끊겨 `jsonrepair` 가 닫음) → `failed(MISSING)`(캐시 0 · [다시 시도]).
+   * 600 토큰은 3문장·400자의 몇 배라, 넘쳤다는 것은 지시를 벗어난 긴 출력이다 — 반쪽을 보이지 않는다.
+   */
+  tailOf: (chunk, value, text) => (scanCut(text).depth <= 0 ? -1 : 0),
+  promptVersion: EXPLAIN_PROMPT_VERSION,
+  size: (it) => charCount(it.sentence) + charCount(it.context),
+  usageChars: () => 0,
+  ondevice: false,
+  maxItems: 1,
+  maxChunks: 1
+});
+
+/**
+ * `[11-4 — 11-D20]` 설명 캐시 키 — `keyFor(docId, 문장, target, 'explain', 'ctx=' + 문단 해시 앞 12자)`. 문단 해시는 요약 저장
+ * `textHash` 와 같은 `hashHex(normalizeForHash(문단 글))` 의 `s256:`·`fnv:` 머리를 뗀 16진 앞 `EXPLAIN.CTX_HASH_CHARS` 자.
+ * 같은 문장·같은 문단이면 같은 키(0회), 같은 문장이라도 문단이 다르면 다른 키("See Table 1" 같은 반복 문장).
+ * `domain`·판본은 키에 없다(7-5).
+ */
+export async function explainKey(docId, sentence, para, target) {
+  const h = await hashHex(normalizeForHash(String(para == null ? '' : para)));
+  const hex = h.replace(/^[a-z0-9]+:/, '');
+  return keyFor(String(docId == null ? '' : docId), String(sentence == null ? '' : sentence), String(target == null ? '' : target),
+    AI.EXPLAIN_KIND, 'ctx=' + hex.slice(0, EXPLAIN.CTX_HASH_CHARS));
+}
 
 /**
  * 파이프라인 하나. 앱은 UI 가 키·설정을 주입해 하나 만든다. 테스트는 `fetch`·`db`·시계·타이머를 주입한다.
@@ -1025,6 +1075,33 @@ export function createPipeline(deps) {
     return Object.assign(out, { input: pick.points ? 'points' : 'gist', n: list.length });
   }
 
+  /**
+   * `[11-4 — spec 17-2-1 4-7 · 11-D15 · 11-D20]` 문장 설명 `pipeline.explain({sentence, context}, {src, target, docId, domain, force, retry, signal})`.
+   * `sentence` = 대상 문장(`Unit.src`), `context` = 그 문단 글(`paraTextsOf` — 없으면 문장만). **같은 언어도 설명한다**(쉬운 말 풀이 — 4-7).
+   * 언어 이름이 없으면 `unsupported-lang`, 문장이 비면 `empty`(호출 0). 키 = `explainKey`(같은 문장·같은 문단이면 0회).
+   * 상태 기계·`gate`·5xx 1회·429·cooldown·진행 중 공유·실패 기억·사용량(`byKind.explain`)·상한은 번역과 한 벌.
+   * ★ 보내는 것은 문장과 그 문단 글뿐(항목의 다른 필드는 옮겨 담지 않는다).
+   * @returns {Promise<{status:string, calls:number, results:[{state:string, value?:{t:string, terms:Array}, code?:string, cached?:boolean}]}>}
+   *   던지지 않는다
+   */
+  async function explain(item, opts) {
+    const o = opts || {};
+    const x = item || {};
+    const src = typeof o.src === 'string' ? o.src.trim() : '';
+    const target = typeof o.target === 'string' ? o.target.trim() : '';
+    const sentence = String(x.sentence == null ? '' : x.sentence).trim();
+    const context = String(x.context == null ? '' : x.context).trim() || sentence;
+    const skip = (status) => ({ status: status, calls: 0, results: [{ state: SEG.SKIPPED, code: status }] });
+    if (!sentence) return skip(STATUS.EMPTY);
+    if (!langName(src) || !langName(target)) return skip(STATUS.UNSUPPORTED_LANG);
+    const docId = String(o.docId == null ? '' : o.docId);
+    const key = await explainKey(docId, sentence, context, target);
+    return runJob(EXPLAIN_JOB, [{ sentence: sentence, context: context }], [key], {
+      src: src, target: target, kind: AI.EXPLAIN_KIND, docId: docId, signal: o.signal,
+      retry: !!o.retry, force: !!o.force, domain: o.domain
+    });
+  }
+
   /* ── 사용자·환경이 상태를 바꾸는 길 ───────────────── */
 
   /**
@@ -1086,6 +1163,8 @@ export function createPipeline(deps) {
     planSummary: planSummary,
     /** `[11-1]` 범위 개요(11c — 4-6) — 저장한 요약에서만, 최대 1호출. */
     outline: outline,
+    /** `[11-4]` 문장 설명(11a — 17-2-1 4-7) — 번역과 같은 상태 기계, 최대 1호출. */
+    explain: explain,
     retry: retry,
     configChanged: configChanged,
     setOnline: setOnline,

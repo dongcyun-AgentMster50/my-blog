@@ -13,7 +13,7 @@
    U6  ★ V11 겹침 — 듣는 중 [▶](pressPlay)·9a play 액션 → abort 1회 후 평소 · 두 번째 탭 = 취소 · 듣는 중 start 재호출 무시
    U7  ★ V12 같은 인프라 오류 두 번째 → 음성 0 · 미지원 → 단추 0 · 예외 0
    U8  첫 사용 고지 카드 — [시작] 제스처 안에서 start · [취소] = 듣지 않음 · 꺼짐(voice.enabled=false) → 탭 무시
-   U9  explain(꺼진 명령) · 부정문 → 실행 0 · 안내
+   U9  explain — `[11-4]` 켰다: 주입 함수로 설명 흐름 · 되돌림(주입 없으면 9b 안내) · 부정문 → 실행 0 · 안내
    U10 [말해 보기] — 실행 없이 기록 · tryLines · historyText · 최근 HISTORY 개
    U11 speaker.again() — 공개 함수 하나(약 8줄) · 다른 길에서 부르지 않음
    U12 `[9b-3]` D10 — 안내 중 다시 탭은 그 누름의 되돌림(`was`)을 이어받는다(9b2R-6 R5 빈틈)
@@ -202,6 +202,8 @@ function harness(o) {
     vibrate: () => { env.vibes++; },
     timers: timers,
     now: timers.now,
+    // `[11-4]` 음성 "설명" 주입(없으면 9b 의 "아직 없는 기능" 안내 그대로 — U9)
+    onExplain: opt.onExplain,
     view: {
       paint: (s) => env.paints.push(s),
       status: (m) => env.statuses.push(m),
@@ -625,7 +627,28 @@ test('U8 첫 사용 고지 카드 — [시작] 제스처 안에서 start · noti
 
 /* ══ U9 explain · 부정문 · 아랍어 ════════════════════════ */
 
-test('U9 explain(꺼진 명령) → "아직 없는 기능" · 부정문 → 실행 0 · ar UI → ar-SY 태그 · 아랍어 명령', () => {
+test('U9 explain → `[11-4]` 설명 흐름(주입 함수) — "아직 없는 기능" 아님 · 주입이 없으면 안내 · 부정문 → 실행 0 · ar UI → ar-SY 태그 · 아랍어 명령', async () => {
+  // `[11-4 — spec 17-2-1 4-5]` explain 을 켰다 — 9b 의 notYet 기대를 고친다: 주입(`onExplain`)이 있으면 설명 흐름, 끝나면 되돌림.
+  const calls = [];
+  let finish = null;
+  const e = harness({ onExplain: (o) => { calls.push(o); return Promise.resolve({ ok: true, done: new Promise((r) => { finish = r; }) }); } });
+  startAt(e, 1);
+  e.voice.press();
+  e.rec().fire('result', ['explain this']);
+  assert.equal(calls.length, 1, '주입 함수 한 번');
+  assert.equal(calls[0].via, 'voice');
+  assert.equal(calls[0].was, 'speaking', '9b 흐름의 was');
+  assert.notEqual(e.lastStatus().text, BUNDLES.en['voice.notYet'], '★ "아직 없는 기능" 이 아니다');
+  assert.equal(e.lastStatus().text, BUNDLES.en['explain.pending']);
+  await flush();
+  assert.equal(e.lastStatus().kind, 'confirm');
+  assert.equal(e.sp.getState(), 'paused', '설명을 말하는 동안 멈춤');
+  finish('end');
+  await flush();
+  await flush();
+  assert.equal(e.sp.getState(), 'speaking', '끝나면 그 문장부터 이어 읽기');
+  assert.equal(e.sp.getIndex(), 1);
+  // 주입이 없으면(옛 배선) 9b 안내 장치 그대로 — 되돌림
   const h = harness();
   startAt(h, 1);
   h.voice.press();

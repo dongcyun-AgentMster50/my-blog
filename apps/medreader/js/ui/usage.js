@@ -37,8 +37,8 @@ export const KEEP_DAYS = 90;
 /** "오늘 상한까지 약 n쪽" 은 그 책의 실측 쪽이 이만큼은 있어야 보인다(15절). */
 export const MIN_STAT_PAGES = 5;
 
-/** 늘 보이는 종류(0 이어도) — 번역(탭·문장) · 낭독 번역 · 단어 · 요약(11 자리) · 검증. 그 밖은 0 보다 클 때만. */
-export const SHOW_KINDS = Object.freeze(['translate', AI.READALONG_KIND, AI.TERM_KIND, 'summarize', AI.VERIFY_KIND]);
+/** 늘 보이는 종류(0 이어도) — 번역(탭·문장) · 낭독 번역 · 단어 · 요약(11 자리) · `[11-4]` 설명 · 검증. 그 밖은 0 보다 클 때만. */
+export const SHOW_KINDS = Object.freeze(['translate', AI.READALONG_KIND, AI.TERM_KIND, 'summarize', AI.EXPLAIN_KIND, AI.VERIFY_KIND]);
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 

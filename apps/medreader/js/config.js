@@ -644,7 +644,12 @@ export const AI = Object.freeze({
   /* `[8f-1]` 17-7-6 4-3 — 단어 요청(단어장 [AI 로 번역]·[번역 안 된 것 모두 번역])의 `usage.byKind` 키이자
      캐시 `kind`. `READALONG_KIND` 와 같은 까닭으로 `USAGE_KINDS` 에 넣지 않는다(7a 빈 행 테스트 무변) —
      처음 쓰일 때 행에 생긴다. 상한(`ai.dailyCap`)에는 들어간다(검증만 빠진다 — 15절). */
-  TERM_KIND: 'term'
+  TERM_KIND: 'term',
+
+  /* `[11-4 — spec 17-2-1 4-7]` 문장 설명(11a — 선택 줄 [설명]·음성 "설명")의 `usage.byKind` 키이자 캐시 `kind`.
+     `READALONG_KIND`·`TERM_KIND` 와 같은 까닭으로 `USAGE_KINDS` 밖(7a 빈 행 키 여섯 그대로) — 처음 쓰일 때 행에 생긴다.
+     상한(`ai.dailyCap`)·80% 경고에는 들어간다. */
+  EXPLAIN_KIND: 'explain'
 });
 
 /* ────────────────────────────────────────────────────────
@@ -715,6 +720,22 @@ export const OUTLINE = Object.freeze({
   OUT_TOKENS: 4000,
   /* 캐시 키 `extra`(4-6 — `keyFor(docId, 입력 글, target, 'summarize', 'outline')`) */
   KEY_EXTRA: 'outline',
+  PROMPT_VERSION: 1
+});
+
+/* `[11-4]` 17-2-1 4-7 · 11-D15 · 11-D20 — 문장 설명(11a) 상수. **추가만** 했다. 무료 티어 숫자 없음(15절). */
+export const EXPLAIN = Object.freeze({
+  /* 맥락 = 그 문단 글 — 문장을 가운데 두고 앞뒤로 잘라 이 글자 수까지(11-D15) */
+  CONTEXT_CHARS: 1500,
+  /* `checkExplain` — 결과 ≤ 3문장·400자(약 20–30초) · 넘으면 **문장 경계에서 자른다**(실패 아님) */
+  MAX_SENTENCES: 3,
+  MAX_CHARS: 400,
+  MAX_TERMS: 3,
+  TERM_MAX: 80,
+  OUT_TOKENS: 600,
+  /* 캐시 키 `extra` = `'ctx=' + 문단 해시 앞 12자`(11-D20 — 같은 문장이라도 문단이 다르면 다른 설명) */
+  CTX_HASH_CHARS: 12,
+  /* 캐시 값의 `promptVersion`(키에는 넣지 않는다 — 7-5). 번역·요약 판본과 따로 센다. */
   PROMPT_VERSION: 1
 });
 

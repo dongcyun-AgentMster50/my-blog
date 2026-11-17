@@ -642,6 +642,25 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
 }
 /* 12 의 [☆] 자리 — 지금은 숨김(자리만 마크업에). */
 .tr-band .tr-tools > .tr-slot { inline-size: var(--tap); min-block-size: var(--tap); }
+/* `[11-4 — spec 17-2-1 4-7]` 설명 모드 — 꼬리표 "설명"(번역과 구별 — 색만이 아니라 테두리 글자) · [▶ 다시 듣기](48×48 아이콘 단추). */
+.tr-band .tr-tools > .tr-kind {
+  flex: 0 0 auto;
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+  border: 1px solid var(--c-accent);
+  border-radius: var(--radius-sm);
+  color: var(--c-accent);
+  white-space: nowrap;
+}
+.tr-band .tr-tools > .tr-replay {
+  inline-size: var(--tap);
+  padding: 0;
+  font-size: var(--fs-base);
+  line-height: 1;
+}
+/* 설명 글을 말하는 동안 — 굵은 테두리(번역문 단계 `data-speaking="tr"` 와 같은 표시). */
+.tr-band[data-note][data-saying="on"] { border-inline-start-color: var(--c-accent); }
 
 /* ── `[8c-1 — spec 17-7-6 4-2]` 선택 동작 줄 ─────────────
    ★ 컨트롤 바(띠가 켜져 있으면 띠 — `--reader-chrome-bottom` 하나가 띠 높이를 품는다) **바로 위 4px**. 8e compact 에서도 같은 토큰.
@@ -688,6 +707,9 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
   color: var(--c-text);
   touch-action: manipulation;
 }
+/* `[11-4 — 11-D3]` 보이는 칸이 셋([단어 번역][문장 번역][설명]) + [⋯] — 칸 안쪽 여백만 4px 로 줄인다(48px·글자 크기 그대로 —
+   언어별 폭은 재지 않는다). 긴 이름(en·fr "Translate sentence")은 칸 안에서 두 줄(56px, 넘침 0 — 11-2 와 같은 태도). */
+.sel-bar .sel-actions > .sel-btn { padding-inline: var(--sp-1); }
 .sel-bar .sel-btn[hidden] { display: none; }
 .sel-bar .sel-btn[aria-disabled="true"] { opacity: 0.5; }
 .sel-bar .sel-note {

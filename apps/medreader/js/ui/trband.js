@@ -25,6 +25,13 @@
    `suspendInline(true)`(controls → `inlinetr.suspend` — `data-tr-inline` 을 뗀다). 머리 끝 단추 칸: [문단 전체] · (12 의 [☆] 자리) · [×].
    닫기 = [×] · 다른 줄 탭(새 내용) · [▶] · 쪽 넘김 · 리더 떠남 · 낭독의 다음 문장(`linechange` — 7-7 낭독 문장으로 돌아감,
    유효 모드 `off` 면 닫힌 채 숨음). 요청은 하지 않는다 — controls 가 `readalong.requestTap` 을 부르고 띠는 `onChange` 로 안다.
+
+   ── `[11-4]` 설명 모드 (spec 17-2-1 4-7 · 11-D16) ─────────
+   `openNote(o)` — 탭 모드를 **넓힌 것**(같은 `tap` 자리 — 그래서 8c-1·8c-1b·8c-1c 의 닫기 다섯·Esc 층·포커스 되돌림·
+   `data-tr-inline` 떼기/붙이기가 그대로 선다). 머리 단추 칸에 꼬리표 "설명"(`.tr-kind`)·[▶ 다시 듣기]·[×]. 상태는 순수 `noteView`
+   (준비 중 · 글(+ 고지 한 줄) · 실패 + [다시 시도] · 막힘 짧은 줄 · 대상 아님). 요청·소리는 하지 않는다 — `ui/ask.js` 가 파이프라인을
+   부르고 `updateNote` 로 알린다. 말하는 동안 `noteRoll` 이 기존 경과 비율 스크롤(`startRoll` 장치 하나)을 설명 글 길이로 돌린다.
+   [×]·Esc 로 닫으면 `onClose`(ask — 말하기 멈춤, 되돌림 없음).
    ============================================================ */
 
 import * as settings from '../settings.js';
@@ -164,6 +171,42 @@ export function tapView(recs, ctx) {
 }
 
 /**
+ * `[11-4 — spec 17-2-1 4-7]` 설명 모드 띠 한 장. `rec` = ask 가 넘긴 `{state, text?, code?, key?}`. 순수 함수.
+ *   · `pending` → "설명 준비 중…" · `ready` → 글 + 고지 한 줄(`explain.disclaimer` — 11-D18) · `failed` → "설명을 받지 못했습니다" + [다시 시도]
+ *   · `blocked` → 8c-1 과 같은 짧은 줄(원격 `BLOCKED_KEYS` · 문지기 `GATE_KEYS`), [다시 시도]는 원격 `RETRYABLE_REMOTE` 만
+ *     (사유가 `NETWORK`·`ABORTED` 처럼 표에 없으면 원격 상태 `remote` 로 — 그래도 없으면 실패와 같게)
+ *   · `none` → 대상 아님 한 줄(`key` — 기본 `explain.notExplainable`, 표 안내·인용)
+ * @param {?{state:string, text?:string, code?:string, key?:string}} rec
+ * @param {{remote?:string}} [ctx]
+ * @returns {{state:string, text:string, noteKey:string|null, retry:boolean, code:string|null}}
+ */
+export function noteView(rec, ctx) {
+  const r = rec || { state: 'pending' };
+  const c = ctx || {};
+  if (r.state === 'ready') return { state: 'ready', text: String(r.text == null ? '' : r.text), noteKey: 'explain.disclaimer', retry: false, code: null };
+  if (r.state === 'none') return { state: 'none', text: '', noteKey: r.key || 'explain.notExplainable', retry: false, code: null };
+  if (r.state === 'blocked') {
+    const code = BLOCKED_KEYS[r.code] || GATE_KEYS[r.code] ? r.code : (BLOCKED_KEYS[c.remote] ? c.remote : null);
+    if (code) {
+      return { state: 'blocked', text: '', noteKey: BLOCKED_KEYS[code] || GATE_KEYS[code], retry: RETRYABLE_REMOTE.indexOf(code) >= 0, code: code };
+    }
+    return { state: 'failed', text: '', noteKey: 'explain.failed', retry: true, code: r.code || null };
+  }
+  if (r.state === 'failed') return { state: 'failed', text: '', noteKey: 'explain.failed', retry: true, code: r.code || null };
+  return { state: 'pending', text: '', noteKey: 'explain.pending', retry: false, code: null };
+}
+
+/**
+ * `[11-4b — 11-4R #1]` 낭독 중 단추로 부른 설명이 실패해 곧 되돌렸을 때의 상태 바 배너 모양 — 띠 실패 줄은 재개와 함께 닫히므로.
+ * `noteView` 가 "실패"(PARSE·MISSING·SAFETY·EMPTY·DIGITS·표에 없는 사유)일 때만 — 원격 막힘(429·상한·offline·키 없음 …)은
+ * 이미 원격 상태 배너가 있어 null. [다시 시도] 단추는 `noteBanner` 가 붙인다(동작이 함수라 `actions`(이동만)에 담지 않는다). 순수 함수.
+ * @returns {{key:string, params:null, actions:Array}|null}
+ */
+export function noteFailBanner(rec, ctx) {
+  return noteView(rec, ctx).state === 'failed' ? { key: 'explain.failed', params: null, actions: [] } : null;
+}
+
+/**
  * 7-7 경과 비율 스크롤 — `(경과 − 1s) / 예상 시간` 을 0~1 로 자른다. 순수 함수.
  * @returns {number}
  */
@@ -259,6 +302,11 @@ const banners = { notice: new Map(), remote: null, deferred: new Map() };
 let tap = null;
 /** `[8c-1]` controls 가 넘긴 문장 아래 표시 멈춤(`inlinetr.suspend`). */
 let suspendInline = null;
+/**
+ * `[11-4]` 설명 모드 번호 — `openNote` 마다 하나씩 오른다. `tap.note.id` 와 다르면 그 설명은 이미 닫혔거나 다른 것으로 바뀌었다
+ * (`updateNote`·`noteRoll` 이 늦게 와도 다른 띠를 칠하지 않는다).
+ */
+let noteSeq = 0;
 
 /**
  * @param {{readalong:Object, speaker:Object}} deps  controls 가 만든 그 둘(8b-1 계약 8절)
@@ -278,7 +326,10 @@ export function initTrBand(deps) {
     // `[8c-1]` 탭 모드 머리 끝 단추 칸 — [문단 전체] · [☆] 자리(12) · [×]
     tools: band.querySelector('#trTools'),
     para: band.querySelector('#trPara'),
-    close: band.querySelector('#trClose')
+    close: band.querySelector('#trClose'),
+    // `[11-4]` 설명 모드 — 꼬리표 "설명" · [▶ 다시 듣기]
+    kind: band.querySelector('#trKind'),
+    replay: band.querySelector('#trReplay')
   };
   ra = d.readalong;
   sp = d.speaker;
@@ -290,6 +341,7 @@ export function initTrBand(deps) {
     if (b.getAttribute('data-tr-action') === 'retry') onRetry(b);
     else if (b.getAttribute('data-tr-action') === 'close') closeTapByUser(ev.detail === 0);   // `[8c-1c]` 0 = 키보드로 누름
     else if (b.getAttribute('data-tr-action') === 'para') toggleFull();
+    else if (b.getAttribute('data-tr-action') === 'replay') onReplay();   // `[11-4]` [▶ 다시 듣기]
   });
 
   /* ── `[8c-1b]` Esc — 탭 띠가 **가장 위**일 때만 닫는다. 붙잡기 단계에서 먼저 본다: 팝오버(Aa·속도)·시트(음성 고지 카드)·
@@ -326,7 +378,10 @@ export function initTrBand(deps) {
 
 function api() {
   return { sync: sync, leave: leave, openTap: openTap, closeTap: closeTap, isTapOpen: isTapOpen, bandTop: bandTop,
-    setInlineSuspend: setInlineSuspend };
+    setInlineSuspend: setInlineSuspend,
+    // `[11-4]` 설명 모드
+    openNote: openNote, updateNote: updateNote, noteRoll: noteRoll, isNoteOpen: isNoteOpen, noteView: noteView,
+    noteBanner: noteBanner, dropNoteBanner: dropNoteBanner };   // `[11-4b]` · `[11-4c]`
 }
 
 /** `[8c-1]` 문장 아래 표시 멈춤 함수(controls → `inlinetr.suspend`). 탭 모드가 열리고 닫힐 때 부른다. */
@@ -358,8 +413,9 @@ export function sync() {
   attachDebugHook();
 }
 
-/** 리더를 떠난다 — 자리를 비운다(다른 화면의 세로 예산을 건드리지 않는다). */
+/** 리더를 떠난다 — 자리를 비운다(다른 화면의 세로 예산을 건드리지 않는다). `[11-4c]` 설명 실패 배너도 거둔다. */
 export function leave() {
+  dropNoteBanner();
   if (!els) return;
   dropTap();
   stopRoll();
@@ -413,8 +469,8 @@ function onSpeakerState() {
     if (roll.kind) { roll.origin = Date.now(); armTimer(); }
     // 멈춰 있던 **같은 문장**에서 재생을 시작했다(linechange 가 새 문장이 아니다) — show 모드는 원문 발화로 흐른다.
     else if (shownMode === 'show' && cur.src && cur.seg !== null) { roll.held = false; startRoll('src'); }
-  } else {
-    disarmTimer();
+  } else if (roll.kind !== 'note') {
+    disarmTimer();                       // `[11-4]` 설명을 말하는 동안(낭독은 멈춤)의 굴림은 낭독 상태와 무관하다
   }
 }
 
@@ -484,6 +540,8 @@ function onRetry(btn) {
 
 function expectedFor(kind) {
   const rate = (sp && typeof sp.getRate === 'function') ? sp.getRate() : 1;
+  // `[11-4]` 설명 글 — 대상 언어 음성(번역문과 같은 초당 글자), 소리에서 빠지는 괄호 원어는 빼고 센다.
+  if (kind === 'note') return speechMs(tap && tap.note ? trSpeechText(tap.note.text) : '', TR_CHARS_PER_SEC, rate);
   if (kind === 'tr') {
     const rec = cur.src ? ra.get(cur.src) : null;
     const text = rec && rec.state === 'ready' ? trSpeechText(rec.text) : '';
@@ -524,7 +582,7 @@ function reducedMotion() {
 }
 
 function tick() {
-  if (!els || !roll.kind || roll.held || els.band.hidden || tap) return;
+  if (!els || !roll.kind || roll.held || els.band.hidden || (tap && roll.kind !== 'note')) return;
   if (roll.kind === 'tr' && !(roll.expected > 0)) roll.expected = expectedFor('tr');
   const max = els.band.scrollHeight - els.band.clientHeight;
   if (max <= 0) return;
@@ -567,6 +625,7 @@ export function openTap(o) {
     tap.offs.push(ra.onChange(s.src, () => { if (tap) paint(); }));
   }
   stopRoll();
+  els.band.removeAttribute('data-saying');   // `[11-4]` 설명을 말하던 띠를 번역 탭으로 바꿨다
   if (!was && suspendInline) { try { suspendInline(true); } catch (e) { /* 띠는 그래도 연다 */ } }
   // 막힘 안내 — 키 없음·동의는 상태 바도 **즉시**(사용자가 번역을 불렀다). 재생을 기다리던 같은 안내는 거둔다(두 번 뜨지 않게).
   const reason = tap.gate.ok ? null : tap.gate.reason;
@@ -597,7 +656,10 @@ export function closeTap() {
 function closeTapByUser(byKey) {
   if (!tap) return;
   const back = tap.focusBack;
+  const onClose = tap.note && typeof tap.note.onClose === 'function' ? tap.note.onClose : null;
   closeTap();
+  // `[11-4]` 설명 모드를 손으로 닫았다 — 말하고 있으면 멈춘다(ask — 되돌림 없음, 손이 이긴다).
+  if (onClose) { try { onClose(); } catch (e) { /* 띠는 닫혔다 */ } }
   if (back) { try { back(!!byKey); } catch (e) { /* 포커스를 못 옮겨도 띠는 닫혔다 */ } }
 }
 
@@ -633,8 +695,11 @@ function dropTap() {
   if (!tap) return;
   unwatchTap();
   tap = null;
+  if (roll.kind === 'note') stopRoll();  // `[11-4]` 설명 글 굴림도 거둔다
   if (els) {
     els.band.removeAttribute('data-tap');
+    els.band.removeAttribute('data-note');
+    els.band.removeAttribute('data-saying');
     if (els.tools) els.tools.hidden = true;
   }
   if (suspendInline) { try { suspendInline(false); } catch (e) { /* 되돌림 실패가 띠를 막지 않는다 */ } }
@@ -665,6 +730,11 @@ function toggleFull() {
 }
 
 function paintTap() {
+  if (tap.note) { paintNote(); return; }
+  if (els.kind) els.kind.hidden = true;            // `[11-4]` 번역 탭에는 설명 꼬리표·[▶ 다시 듣기]가 없다
+  if (els.replay) els.replay.hidden = true;
+  if (els.close) els.close.setAttribute('aria-label', t('tap.close'));
+  els.band.removeAttribute('data-note');
   const list = tap.full ? tap.paraSegs : tap.segs;
   const v = tapView(tap.gate.ok ? list.map((s) => ra.get(s.src)) : null, { gate: tap.gate, remote: safeRemote() });
   const a = translationBlockAttrs(targetLang());
@@ -693,6 +763,108 @@ function paintTap() {
   els.status.hidden = !v.noteKey && !v.retry;
 }
 
+/* ── `[11-4 — spec 17-2-1 4-7 · 11-D16]` 설명 모드 — 탭 모드 자리(`tap`)를 넓힌 것 ── */
+
+/**
+ * 설명 띠를 연다(번역 탭·다른 설명이 열려 있으면 바꾼다). 요청·소리는 하지 않는다(`ui/ask.js`). 돌려준 번호로 `updateNote`·`noteRoll`.
+ * @param {{lineId?:string, rec?:{state:string, text?:string, code?:string, key?:string}, gate?:{ok:boolean, reason:?string},
+ *          retry?:Function, replay?:Function, onClose?:Function, focusBack?:Function}} o
+ *   `rec` 첫 상태(기본 pending) · `gate` 문지기가 막았으면 no-key·consent 는 상태 바 배너도 **즉시**(탭 모드와 같은 규칙)
+ *   · `retry` [다시 시도] · `replay` [▶ 다시 듣기] · `onClose` [×]·Esc 로 닫힘 · `focusBack(byKey)` 닫은 뒤 포커스
+ * @returns {number} 설명 번호(띠가 없으면 0)
+ */
+export function openNote(o) {
+  if (!els || !ra) return 0;
+  const x = o || {};
+  const was = !!tap;
+  unwatchTap();
+  if (roll.kind === 'note') stopRoll();
+  els.band.removeAttribute('data-saying');
+  noteSeq++;
+  tap = { lineId: x.lineId == null ? null : String(x.lineId), segs: [], paraSegs: [], gate: { ok: true, reason: null },
+    full: false, retry: typeof x.retry === 'function' ? x.retry : null, offs: [], resend: null, resent: false,
+    focusBack: typeof x.focusBack === 'function' ? x.focusBack : null,
+    note: { id: noteSeq, kind: 'explain', rec: x.rec || { state: 'pending' }, text: '',
+      replay: typeof x.replay === 'function' ? x.replay : null, onClose: typeof x.onClose === 'function' ? x.onClose : null } };
+  tap.note.text = tap.note.rec.state === 'ready' ? String(tap.note.rec.text || '') : '';
+  stopRoll();
+  if (!was && suspendInline) { try { suspendInline(true); } catch (e) { /* 띠는 그래도 연다 */ } }
+  const reason = x.gate && x.gate.ok === false ? x.gate.reason : null;
+  if (reason && TAP_BANNER_NOW.indexOf(reason) >= 0) {
+    const b = noticeBanner(reason, null);
+    if (b) { banners.deferred.delete(reason); banners.notice.set(reason, b.key); banner(b); }
+  }
+  lastPaint = '';
+  resetScroll();
+  sync();
+  return noteSeq;
+}
+
+/** 열린 설명(번호 `id`)의 상태를 바꾼다. 이미 닫혔거나 다른 띠면 아무 일도 없이 false. */
+export function updateNote(id, rec) {
+  if (!tap || !tap.note || tap.note.id !== id) return false;
+  tap.note.rec = rec || { state: 'pending' };
+  tap.note.text = tap.note.rec.state === 'ready' ? String(tap.note.rec.text || '') : '';
+  lastPaint = '';
+  resetScroll();
+  paint();
+  return true;
+}
+
+/** 설명을 말하는 동안 띠 안을 발화 경과 비율로 굴린다(`on`) / 멈춘다. 기존 굴림 장치(`roll`·`tick`) 그대로 — 낭독 상태와 무관. */
+export function noteRoll(id, on) {
+  if (!tap || !tap.note || tap.note.id !== id) return;
+  if (!on) { if (roll.kind === 'note') stopRoll(); els.band.removeAttribute('data-saying'); return; }
+  els.band.setAttribute('data-saying', 'on');
+  roll.kind = 'note';
+  roll.held = false;
+  roll.origin = Date.now();
+  roll.expected = expectedFor('note');
+  resetScroll();
+  armTimer();
+}
+
+/** 설명 띠가 열려 있는가(`id` 를 주면 그 설명인가). */
+export function isNoteOpen(id) {
+  return !!tap && !!tap.note && (id == null || tap.note.id === id);
+}
+
+/** [▶ 다시 듣기] — ask 가 넘긴 함수(낭독 중이면 멈추고 말한 뒤 이어 읽기 — `ask.listen` 과 같은 규칙). */
+function onReplay() {
+  if (!tap || !tap.note || typeof tap.note.replay !== 'function' || tap.note.rec.state !== 'ready') return;
+  try { tap.note.replay(); } catch (e) { /* 소리를 못 내도 띠는 그대로 */ }
+}
+
+function paintNote() {
+  const n = tap.note;
+  const v = noteView(n.rec, { remote: safeRemote() });
+  const a = translationBlockAttrs(targetLang());
+  const sig = ['note', n.id, v.state, v.text, v.noteKey, v.retry, a.lang, a.dir].join('\u0001');
+  els.band.setAttribute('data-state', v.state);
+  els.band.setAttribute('data-tap', 'on');
+  els.band.setAttribute('data-note', n.kind);
+  if (sig === lastPaint) return;
+  lastPaint = sig;
+
+  if (els.tools) els.tools.hidden = false;
+  if (els.para) els.para.hidden = true;                 // 설명에는 [문단 전체]가 없다
+  if (els.kind) els.kind.hidden = false;
+  if (els.close) els.close.setAttribute('aria-label', t('explain.close'));
+  if (els.replay) els.replay.hidden = !(v.state === 'ready' && n.replay);
+  // 설명 글 — 대상 언어(`ai.translationLang`)의 dir·lang, 라틴 괄호는 `appendBidiText`(번역문과 같은 함수 — 13절 textContent).
+  const tx = els.text;
+  while (tx.firstChild) tx.removeChild(tx.firstChild);
+  tx.lang = a.lang;
+  tx.dir = a.dir;
+  if (v.text) appendBidiText(tx, v.text, a.dir);
+  tx.hidden = !v.text;
+  els.note.dir = getDir();
+  els.note.textContent = v.noteKey ? t(v.noteKey) : '';
+  els.retry.hidden = !v.retry;
+  els.retry.disabled = false;
+  els.status.hidden = !v.noteKey && !v.retry;
+}
+
 /* ── 상태 바 (14절 배너) — 바뀔 때 한 번 ──────────────── */
 
 function banner(b) {
@@ -700,6 +872,50 @@ function banner(b) {
   document.dispatchEvent(new CustomEvent('medreader:banner', {
     detail: { key: b.key, tone: 'warn', params: b.params || null, actions: b.actions || [] }
   }));
+}
+
+/** `[11-4b]` 설명 실패 배너의 [다시 시도]가 부를 함수 — 마지막 실패의 것(같은 키 배너는 한 장이라 단추도 하나). */
+let noteRetryFn = null;
+
+/**
+ * `[11-4b — 11-4R #1]` 낭독 중 단추 설명이 실패해 곧 되돌렸다 — 상태 바에 `explain.failed` 한 줄 + [다시 시도](`retry` — ask 가 넘긴,
+ * 그 문장을 `retry:true` 로 다시 부르는 함수). 원격 막힘이면(`noteFailBanner` null) 아무것도 하지 않고 false.
+ * 배너 상자(`#banners`)는 `role=status`·`aria-live=polite` 라 화면 읽기에도 알려진다(11-4R #5). 단추는 `main.js` 가 만든 배너에
+ * 붙인다 — 글은 `readalong.retry`(띠 [다시 시도]와 같은 문구 · `data-i18n` 이라 언어가 바뀌면 `relabelBanners` 가 다시 쓴다).
+ * 누르면 배너를 거두고(`withdraw`) 한 번 부른다.
+ * @returns {boolean} 띄웠는가
+ */
+export function noteBanner(rec, retry) {
+  const b = noteFailBanner(rec, { remote: safeRemote() });
+  if (!b || typeof document === 'undefined') return false;
+  noteRetryFn = typeof retry === 'function' ? retry : null;
+  banner(b);
+  const bar = document.querySelector('#banners .banner[data-key="' + b.key + '"]');
+  if (bar && noteRetryFn && !bar.querySelector('button[data-note-retry]')) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'banner-action';
+    btn.setAttribute('data-note-retry', '1');
+    btn.setAttribute('data-i18n', 'readalong.retry');
+    btn.textContent = t('readalong.retry');
+    btn.addEventListener('click', () => {
+      const fn = noteRetryFn;
+      noteRetryFn = null;
+      withdraw(b.key);
+      if (fn) { try { Promise.resolve(fn()).catch(() => null); } catch (e) { /* 결과는 띠가 그린다 */ } }
+    });
+    bar.insertBefore(btn, bar.querySelector('button.banner-close'));
+  }
+  return true;
+}
+
+/**
+ * `[11-4c — 11-4bR #1]` 설명 실패 배너와 그 [다시 시도]를 거둔다 — 리더를 떠날 때(`leave`)·쪽이 바뀔 때(controls `onPageRender`).
+ * 옛 문장을 다른 화면·쪽·문서에서 다시 부르지 않게(8c-1 "다른 쪽 문장의 번역이 남지 않게"와 같은 결). 떠 있지 않으면 아무 일도 없다.
+ */
+export function dropNoteBanner() {
+  noteRetryFn = null;
+  withdraw('explain.failed');
 }
 
 /** 띄운 배너를 거둔다 — 배너 자신의 닫기 단추를 누른다(`main.js` 의 기록까지 지워진다. 장치를 두 벌로 만들지 않는다). */
@@ -781,7 +997,10 @@ function attachDebugHook() {
         mode: shownMode, roll: roll.kind, held: roll.held, expected: Math.round(roll.expected),
         scrollTop: els.band.scrollTop, scrollMax: els.band.scrollHeight - els.band.clientHeight,
         // `[8c-1]` 탭 모드 — 문장 수·문단 전체·문지기 사유만(글자 없음)
-        tap: tap ? { segs: tap.segs.length, para: tap.paraSegs.length, full: tap.full, gate: tap.gate.reason } : null
+        tap: tap ? { segs: tap.segs.length, para: tap.paraSegs.length, full: tap.full, gate: tap.gate.reason } : null,
+        // `[11-4]` 설명 모드 — 번호·상태·글자 수·사유만(글 없음)
+        note: tap && tap.note ? { id: tap.note.id, state: tap.note.rec.state, code: tap.note.rec.code || null,
+          chars: tap.note.text.length, replay: !!(els.replay && !els.replay.hidden), kind: !!(els.kind && !els.kind.hidden) } : null
       };
     }
   };

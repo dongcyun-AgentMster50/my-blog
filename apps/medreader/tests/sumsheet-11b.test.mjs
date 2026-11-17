@@ -470,11 +470,12 @@ test('K9 ★ 글 트리 — details open 중첩 · 하위 없으면 li · 깊이
 /* ══ K10 선택 줄 ═══════════════════════════════════ */
 
 test('K10 ★ 선택 줄 — 보이는 칸 [단어 번역][문장 번역] + [⋯] · [⋯] 안 [요약]·[여기서부터 읽기]·[찾아보기] · [요약] 흐림 · 마크업', () => {
-  assert.deepEqual(SEL_ACTIONS.filter((a) => !a.more).map((a) => a.id), ['word', 'sentence'], '★ 보이는 칸 고정(11-D3 — 폭을 재지 않는다)');
+  // `[11-4 — 11-D3]` 보이는 칸 = [단어 번역][문장 번역][설명] + [⋯](셋째 칸 [설명]은 11-4 가 끼웠다).
+  assert.deepEqual(SEL_ACTIONS.filter((a) => !a.more).map((a) => a.id), ['word', 'sentence', 'explain'], '★ 보이는 칸 고정(11-D3 — 폭을 재지 않는다)');
   assert.deepEqual(SEL_ACTIONS.filter((a) => a.more).map((a) => a.id), ['summary', 'readFrom', 'lookup']);
   const on = showAction(SEL_ACTIONS, 'word');
   const m = selBarModel(on, { text: 'arthritis' }, { links: 0 });
-  assert.deepEqual(m.map((x) => [x.id, x.more, x.hidden]), [['word', false, false], ['sentence', false, false], ['summary', true, false], ['readFrom', true, false], ['lookup', true, true]]);
+  assert.deepEqual(m.map((x) => [x.id, x.more, x.hidden]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', true, false], ['readFrom', true, false], ['lookup', true, true]]);
   assert.equal(moreVisible(m), true);
   assert.equal(moreVisible(m.filter((x) => !x.more)), false);
   // [요약] 흐림 — 모름이면 그대로, false 면 흐림 + sum.notEligible
@@ -717,7 +718,9 @@ test('K12 음성 명령 summarize — ar·en · 정규화 · 부정 · 일상 �
     assert.equal(matchCommand([s], s.match(/[a-z]/) ? 'en' : 'ar').id, null, '긴 일상 문장 — 한 낱말 포함 일치 없음(9b ①): ' + s);
   }
   assert.equal(matchCommand(['التالي'], 'ar').id, 'next', '기존 명령 그대로');
-  assert.equal(matchCommand(['اشرح'], 'ar').enabled, false, 'explain 은 11-4 가 켠다');
+  // `[11-4]` explain 을 켰다 — 같은 말이 같은 id(맞춤 결과 불변) · 이제 enabled.
+  assert.equal(matchCommand(['اشرح'], 'ar').id, 'explain');
+  assert.equal(matchCommand(['اشرح'], 'ar').enabled, true, 'explain 은 11-4 가 켰다');
 });
 
 /* ══ K13 서재 삭제 확인 ════════════════════════════ */

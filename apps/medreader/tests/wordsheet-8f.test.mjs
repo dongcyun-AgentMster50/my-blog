@@ -453,11 +453,11 @@ test('W14 선택 줄 [단어 번역] 켜기 — 기본 목록은 그대로(hidde
   assert.equal(SEL_ACTIONS[0].hidden, true, '기본 목록은 8c-1 그대로');
   const on = showAction(SEL_ACTIONS, 'word');
   // `[18]` `lookup`([찾아보기])은 `hidden` 이 아니라 `when:'links'` — 보이기는 selBarModel 의 ctx(`{q}` 링크 수)가 정한다.
-  // `[11-2 — 11-D3]` [요약]이 더해졌다(`[⋯]` 안) — 목록이 다섯 칸.
-  assert.deepEqual(on.map((a) => [a.id, !!a.hidden]), [['word', false], ['sentence', false], ['summary', false], ['readFrom', false], ['lookup', false]]);
+  // `[11-2 — 11-D3]` [요약]이 더해졌다(`[⋯]` 안) — 목록이 다섯 칸. `[11-4]` 보이는 셋째 칸 [설명] — 여섯 칸.
+  assert.deepEqual(on.map((a) => [a.id, !!a.hidden]), [['word', false], ['sentence', false], ['explain', false], ['summary', false], ['readFrom', false], ['lookup', false]]);
   assert.equal(SEL_ACTIONS[0].hidden, true, '원본을 바꾸지 않는다');
   assert.ok(Object.isFrozen(on) && Object.isFrozen(on[0]));
-  assert.deepEqual(selBarModel(on, { text: 'arthritis' }).map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['summary', false, false], ['readFrom', false, false], ['lookup', true, false]]);
+  assert.deepEqual(selBarModel(on, { text: 'arthritis' }).map((m) => [m.id, m.hidden, m.disabled]), [['word', false, false], ['sentence', false, false], ['explain', false, false], ['summary', false, false], ['readFrom', false, false], ['lookup', true, false]]);
   assert.equal(selBarModel(on, { text: 'a b c d e f g' })[0].disabled, true, '6낱말 넘으면 흐림(8c-1 그대로)');
   const sb = strip(src('../js/ui/selbar.js'));
   assert.match(sb, /multi: endLine !== line \};/, '스냅숏 — 선택이 다음 줄까지 걸쳤나');

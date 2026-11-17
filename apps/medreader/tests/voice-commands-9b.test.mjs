@@ -3,14 +3,14 @@
 
    C1  ★ V1 정규화 표 — 타슈킬·타트윌·أإآٱ/ى/ة/ؤ/ئ·아랍·페르시아 숫자·문장부호·라틴 소문자·군말(남는 낱말 ≥ 1)
    C2  ★ V1 한 벌 — `text/specialty.js` 의 `foldArabic` 를 import 해서 쓴다(드문 타슈킬·ٱ 까지 같은 결과 + 소스)
-   C3  ★ V2 표 무결성 — id 10 · explain 만 꺼짐 · 정규화 꼴이 두 명령에 겹치는 것 = `SHARED_FORMS`(지금 없음) ·
+   C3  ★ V2 표 무결성 — id 11 · 꺼진 명령 0(`[11-4]` explain 켬) · 정규화 꼴이 두 명령에 겹치는 것 = `SHARED_FORMS`(지금 없음) ·
        exact 낱말은 표 안에 · 동의어 끝에 군말·숫자 없음
    C4  ★ V2 전수 — 모든 동의어가 자기 명령으로 전체 일치(ar·차용어 = ar 모드, en = en 모드 + ar 모드 두 번째 표)
    C5  ★ V2 exact 낱말은 문장 속에서 무시(«بس هيك»·«يلا يا جماعة»·«go now»)
    C6  ★ V3 포함 일치 — 가장 긴 구 · 같은 길이 다른 명령 = 모호 · 낱말 일부 일치 없음 · 숫자 떼기
    C7  ★ V4 대안 — 셋째에서 맞음(altIndex 2) · 다섯 모두 실패 = nomatch(첫 대안 글자) · 여섯째는 안 봄 · 확신도 무관
    C8  명령 언어 — auto/ar/en · ar 모드는 라틴 영어도(두 번째 표) · en 모드는 아랍 문자 차용어를 받지 않음
-   C9  explain — 꺼진 명령은 nomatch 가 아니라 `{id:'explain', enabled:false}`
+   C9  explain — 9b: 꺼진 명령은 nomatch 가 아니라 `{id:'explain', enabled:false}` → `[11-4]` 켰다: 같은 id · `enabled:true`
    C10 속도 계단 `stepRate` — 한 칸 · 끝에서 edge · 계단 밖 값은 가까운 계단으로
    C11 import 방향(3-2) — commands.js 는 text/specialty.js · config.js 만
    ── `[9b-2]` 오탐 규칙(운영자 결정 2026-11-15) · 9b-1 Review 말뭉치(`r9b1/corpus.mjs`·`neg.mjs` — 짧은 발화라 원문 그대로)
@@ -101,7 +101,8 @@ test('C3 ★ V2 표 무결성 — id · 켜짐 · 겹침 = SHARED_FORMS · exact
   // `[11-2 — spec 17-2-1 4-5 · 11-D11]` `summarize` 를 explain 앞에 더했다(표 무결성 규칙은 그대로 — 아래 겹침·exact·군말·숫자).
   assert.deepEqual(COMMAND_IDS, ['play', 'pause', 'next', 'prev', 'again', 'trOn', 'trOff', 'slower', 'faster', 'summarize', 'explain']);
   assert.equal(new Set(COMMAND_IDS).size, COMMAND_IDS.length, 'id 중복');
-  assert.deepEqual(VOICE_COMMANDS.filter((c) => !c.enabled).map((c) => c.id), ['explain']);
+  // `[11-4 — spec 17-2-1 4-5 · 9b-D14]` explain 을 켰다 — 꺼진 명령 0(id 목록·낱말·겹침 규칙은 그대로).
+  assert.deepEqual(VOICE_COMMANDS.filter((c) => !c.enabled).map((c) => c.id), []);
   assert.equal(MAX_ALTS, 5);
 
   // 같은 정규화 꼴 → 명령 집합
@@ -306,14 +307,16 @@ test('C8 명령 언어 auto/ar/en · 표 순서', () => {
 
 /* ══ C9 explain ════════════════════════════════════════════ */
 
-test('C9 explain — 꺼진 명령은 enabled:false 로 돌아온다(nomatch 아님)', () => {
-  for (const [s, lang] of [['اشرح', 'ar'], ['اشرح هنا', 'ar'], ['explain this', 'en']]) {
+test('C9 explain — `[11-4]` 켰다: 같은 말이 같은 id 로 · enabled:true(9b 의 "꺼진 자리" 기대를 11-4 가 뒤집음)', () => {
+  // 9b 는 "꺼진 명령은 nomatch 가 아니라 enabled:false" 를 지켰다. 11-4(spec 17-2-1 4-5)가 explain 을 켰으므로 맞춤 결과(id)는 그대로,
+  // enabled 만 true 다 — 흐름은 "아직 없는 기능" 이 아니라 설명(voice-ui-9b U9 · explain-11a X9).
+  for (const [s, lang] of [['اشرح', 'ar'], ['اشرح هنا', 'ar'], ['شرح', 'ar'], ['فسر', 'ar'], ['وضح', 'ar'], ['explain this', 'en'], ['explain', 'en']]) {
     const r = matchCommand([s], lang);
     assert.equal(r.id, 'explain', s);
-    assert.equal(r.enabled, false, s);
+    assert.equal(r.enabled, true, s);
   }
   assert.equal(matchCommand(['التالي'], 'ar').enabled, true);
-  assert.equal(commandById('explain').enabled, false);
+  assert.equal(commandById('explain').enabled, true);
   assert.equal(commandById('nope'), null);
 });
 

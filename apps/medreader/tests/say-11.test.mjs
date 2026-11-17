@@ -234,7 +234,9 @@ test('Y8 계층 — say.js 는 config·tts/text 만 · 전역 0 · innerHTML 0 �
   assert.ok(!/\b(window|document|navigator|speechSynthesis|SpeechSynthesisUtterance)\b/.test(s), 'synth 는 주입(speaker.js 와 같다)');
   assert.ok(!/innerHTML/.test(s));
   const a = strip(read('../js/ui/ask.js'));
-  assert.equal((a.match(/sayer\.say\(trSpeechText\(/g) || []).length, 2, '[▶ 듣기]·음성 "요약" 모두 괄호 원어를 뺀 글');
+  // `[11-4]` 설명 말하기(`sayNote` — [설명]·음성 "설명"·[▶ 다시 듣기])가 셋째 — 셋 모두 괄호 원어를 뺀 글.
+  assert.equal((a.match(/sayer\.say\(trSpeechText\(/g) || []).length, 3, '[▶ 듣기]·음성 "요약"·설명 모두 괄호 원어를 뺀 글');
+  assert.equal((a.match(/sayer\.say\(/g) || []).length, 3, 'sayer.say 를 trSpeechText 없이 부르는 곳 0');
   const c = strip(read('../js/ui/controls.js'));
   assert.match(c, /speechOf: function \(lang\) \{ return langSpeechOf\(lang, voices, settings\.get\); \}/, '번역문 음성과 같은 해석(8k)');
   assert.match(c, /function cancelVoice\(\) \{ if \(voice\) voice\.cancel\(\); if \(sayer\) sayer\.stop\(\); \}/, '★ 손이 이긴다 — [▶]·이전·다음·줄 탭·9a 가 같은 자리');

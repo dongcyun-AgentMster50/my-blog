@@ -48,8 +48,17 @@ export const ERROR_KEYS = Object.freeze({
   [CODES.UNSUPPORTED]: 'voice.unsupported'
 });
 
-/** 명령 id → 확인 줄의 이름 키(`explain` 은 꺼진 자리 — "아직 없는 기능"). */
+/** 명령 id → 확인 줄의 이름 키. */
 export function commandKey(id) { return 'voice.cmd.' + id; }
+
+/**
+ * `[11-2]`·`[11-4]` "부르면 묻기" 음성 갈래 — 주입 함수 이름 · 기다리는 동안 상태 줄 · 실패 기본 문구 · 확인 줄 명령.
+ * 흐름은 하나(`askFor`) — 요약(11-D13)·설명(11-D15)이 같은 되돌림 규칙(`done` 뒤 `restore(was)`)을 탄다.
+ */
+export const ASK_KINDS = Object.freeze({
+  summarize: Object.freeze({ dep: 'onSummarize', pending: 'sum.pending', failed: 'sum.failed', cmd: 'summarize', prevCmd: 'summarizePrev' }),
+  explain: Object.freeze({ dep: 'onExplain', pending: 'explain.pending', failed: 'explain.failed', cmd: 'explain', prevCmd: 'explain' })
+});
 
 /**
  * 못 맞춤 문구 — 들은 말이 있으면 따옴표 안에, 없으면(인식기 `no-match` · 빈 대안) 따옴표 없는 키(9b-3 — 빈 “” 를 보이지 않는다).
@@ -168,7 +177,7 @@ export function createVoice(deps) {
 
   let flow = null;           // 지금 누름 {was, lang}
   let sayJob = null;         // 실패 안내 한 마디 {was, u, timer}
-  let askJob = null;         // `[11-2]` 음성 "요약" — 요약을 기다리거나 요지를 말하는 중 {was}
+  let askJob = null;         // `[11-2]` 음성 "요약"·`[11-4]` "설명" — 결과를 기다리거나 말하는 중 {was}
   let statusTimer = null;
   const saidInfra = new Set();   // 같은 인프라 실패는 두 번째부터 음성 없이(세션 동안 — 5절)
   const stats = { presses: 0, cancels: 0, says: 0, restores: 0, commands: {} };
@@ -299,6 +308,9 @@ export function createVoice(deps) {
       case 'summarize':
         summarize(was, heard);
         return;                                    // 확인 줄은 결과 뒤("앞 문단 요약"인지 알 때)
+      case 'explain':
+        explain(was, heard);                       // `[11-4]` 같은 꼴 — 확인 줄은 결과 뒤
+        return;
       default:
         return;
     }
@@ -310,8 +322,18 @@ export function createVoice(deps) {
    * 준비되면 ask 가 요지를 대상 언어로 한 번 말하고(`done`), 끝나면 여기서 **되돌린다**(`restore(was)` — 읽던 중이었으면 이어 읽기).
    * 대상 아님·막힘·실패면 상태 줄 + 한 마디 → 되돌림(9b 규칙 그대로). 손이 닿으면(`cancel`) 되돌림 없음.
    */
-  function summarize(was, heard) {
-    if (typeof d.onSummarize !== 'function') {
+  function summarize(was, heard) { askFor(ASK_KINDS.summarize, was, heard); }
+
+  /**
+   * `[11-4 — spec 17-2-1 4-7 · 11-D15]` 음성 "설명" — 요약과 **같은 꼴**(`askFor`): 주입 함수(`deps.onExplain` = `ui/ask.js` `explain`)가
+   * 지금 문장의 설명을 띠에 열고, 준비되면 대상 언어로 한 번 말한다(`done`) → 끝나면 여기서 `restore(was)`.
+   * 대상 아님·막힘·실패는 상태 줄 + 한 마디 → 되돌림. 기다리는 사이 띠가 손으로 닫혔으면(`cancelled`) 되돌림 없음.
+   */
+  function explain(was, heard) { askFor(ASK_KINDS.explain, was, heard); }
+
+  function askFor(k, was, heard) {
+    const fn = d[k.dep];
+    if (typeof fn !== 'function') {
       status({ text: tr('voice.notYet'), kind: 'info' }, VOICE.NOTICE_MS);
       say('voice.notYet', was);
       return;
@@ -319,26 +341,28 @@ export function createVoice(deps) {
     const job = { was: was };
     askJob = job;
     const alive = function () { return askJob === job; };
-    status({ text: tr('sum.pending'), kind: 'info' }, 0);
+    status({ text: tr(k.pending), kind: 'info' }, 0);
     const fail = function (key) {
       if (!alive()) return;
       askJob = null;
-      status({ text: tr(key || 'sum.failed'), kind: 'error' }, VOICE.NOTICE_MS);
-      say(key || 'sum.failed', was);                // 한 마디가 끝나면 restore(was)
+      status({ text: tr(key || k.failed), kind: 'error' }, VOICE.NOTICE_MS);
+      say(key || k.failed, was);                    // 한 마디가 끝나면 restore(was)
     };
     let p = null;
-    try { p = Promise.resolve(d.onSummarize({ via: 'voice', was: was, heard: heard, alive: alive })); } catch (e) { p = Promise.resolve(null); }
+    try { p = Promise.resolve(fn({ via: 'voice', was: was, heard: heard, alive: alive })); } catch (e) { p = Promise.resolve(null); }
     p.then(function (r) {
       if (!alive()) return;                        // 손이 끊었다 — 되돌림 없음
+      // `[11-4]` 기다리는 사이 띠가 손으로 닫혔다([×]·줄 탭 …) — 손이 이긴다: 말하지 않고 되돌리지 않는다.
+      if (r && r.cancelled) { askJob = null; status(null); paint(); return; }
       if (!r || !r.ok) { fail(r && r.key); return; }
-      confirm(r.prev ? 'summarizePrev' : 'summarize', heard);
+      confirm(r.prev ? k.prevCmd : k.cmd, heard);
       Promise.resolve(r.done).then(function (how) {
         if (!alive()) return;
         askJob = null;
         if (how !== 'stopped') restore(was);
         paint();
       }, function () { if (alive()) { askJob = null; restore(was); } });
-    }, function () { fail('sum.failed'); });
+    }, function () { fail(k.failed); });
   }
 
   /* ── 인식기 이벤트 → 흐름 ─────────────────────────── */
@@ -355,7 +379,7 @@ export function createVoice(deps) {
       say('voice.noMatch.say', f.was);
       return;
     }
-    if (!m.enabled) {                                   // explain — 표에 자리만(9b-D14)
+    if (!m.enabled) {                                   // 꺼진 명령 — 표에 자리만(9b-D14 · `[11-4]` explain 을 켠 뒤 지금은 0)
       status({ text: tr('voice.notYet'), kind: 'info' }, VOICE.NOTICE_MS);
       say('voice.notYet', f.was);
       return;

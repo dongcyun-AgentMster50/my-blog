@@ -6,7 +6,7 @@
    **바로 위**에 동작 줄을 띄운다. 자체 타이머로 길게 누르기를 잡지 않는다 — `selectionchange` 만 듣는다(17-7-1).
    `[11-2 — spec 17-2-1 · 결정 11-D3 (가)]` **보이는 칸 고정 + `[⋯]`** — 언어별 폭을 재지 않는다(10b 결함 교훈):
      · 보이는 칸: `[단어 번역]`(기본 목록에서는 `hidden` — `[8f-2]` 단어 시트가 준비되면 controls 가 `refresh(showAction(…,'word'))` 로 켠다)
-       · `[문장 번역]` · (셋째 칸 `[설명]` 은 11-4 가 `SEL_ACTIONS` 의 `sentence` 다음 자리에 한 줄로 끼운다) · `[⋯]`
+       · `[문장 번역]` · `[11-4]` 셋째 칸 `[설명]`(`SEL_ACTIONS` 의 `sentence` 다음 자리) · `[⋯]`
      · `[⋯]` 안(`more:true` — 줄 위 작은 메뉴, `role="menu"`): `[요약]`(그 문단이 요약 대상이 아니면 흐림 — 누르면 `sum.notEligible` 한 줄)
        · `[여기서부터 읽기]` · `[18]` `[찾아보기]` — `{q}` 의료 사이트 링크가 하나 이상일 때만(spec 17-9). 여는 일은 이 파일이
          `ui/links.js` 로 곧바로(새 탭은 누름 안에서 — 팝업 차단), 그다음 `onAction('lookup')`(controls 는 듣기 취소만).
@@ -35,12 +35,14 @@ import { lookup, queryLinkCount, closeLookupMenu, lookupMenuOpen } from './links
 
 /**
  * 선택 동작 줄의 단추 — 논리 순서(RTL 에서 저절로 거울). `hidden` 은 아직 켜지 않은 칸.
- * `[11-2 — 11-D3]` `more:true` 는 `[⋯]` 메뉴 안. 보이는 칸 = [단어 번역][문장 번역] + `[⋯]`(요약·여기서부터 읽기·찾아보기).
- * 11-4 는 `sentence` 다음에 `{ id: 'explain', key: 'sel.explain' }`(보이는 셋째 칸) 한 줄을 더한다.
+ * `[11-2 — 11-D3]` `more:true` 는 `[⋯]` 메뉴 안. 보이는 칸 = [단어 번역][문장 번역][설명] + `[⋯]`(요약·여기서부터 읽기·찾아보기).
+ * `[11-4]` `sentence` 다음에 `explain`(보이는 셋째 칸)을 더했다.
  */
 export const SEL_ACTIONS = Object.freeze([
   Object.freeze({ id: 'word', key: 'sel.word', hidden: true }),      // 8f-2 가 켠다
   Object.freeze({ id: 'sentence', key: 'sel.sentence' }),
+  // `[11-4 — spec 17-2-1 4-7 · 11-D3]` 보이는 셋째 칸 — [문장 번역]과 같은 선택 스냅숏(선택 시작 줄의 문장)
+  Object.freeze({ id: 'explain', key: 'sel.explain' }),
   // ↑ 보이는 칸 · ↓ `[⋯]` 안
   Object.freeze({ id: 'summary', key: 'sel.summary', more: true }),
   Object.freeze({ id: 'readFrom', key: 'sel.readFrom', more: true }),

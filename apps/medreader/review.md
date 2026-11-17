@@ -12726,3 +12726,290 @@ Edge · pipe · 새 프로필 `r11-3/p*` · 가짜 키(`…review_r11_3`) · 흉
 명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0). **막힌(거절된) 명령 0.** `tar -xf C:/…` 가 "Cannot connect to C:" 로 실패(거절 아님 — 드라이브 문자를 원격 호스트로 읽음) → `--force-local` 로 풀었다. 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음(합성 PDF·지어낸 글만 — 결과에 글 0) · `b11-3/` 쓰기 0 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
 
 스크래치 `r11-3/`: `head.tar`·`head/`(HEAD 사본) · `probe-req.mjs` · `prep.mjs` → `common.mjs` · `run-a/r/u.mjs`(Build 사본) · `run-c.mjs`·`run-e.mjs`(+`fix-e.mjs`)·`run-v.mjs`·`run-l2.mjs` · `router-diff.mjs` · `mut.mjs`·`bak/`·`mut/` · `full1.tap`·`full2.tap` · `shots/` · `section.md`(이 절)·`append.mjs` · 프로필 `pA1`·`pC1`·`pE1`·`pR1`·`pU1`·`pV1`·`pV2`·`pL1`.
+
+# 11-4 Review — 설명 (선택 줄 [설명] · 음성 "설명" · 띠 설명 모드) (spec 17-2-1) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-11-4.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: spec 17-2-1(4-5·4-7·5 표 11-4 행·6·7·8 "11-4"·10 — 11-D15·D16·D20, `[정정 2026-11-17 — 11-4 Build]` 세 곳), 17-1-2 명령 표 explain 행, 10-1 규칙 1–6, 13·18절 의료 안전, Build 지침·보고서(믿지 않고 다시 잼), `git diff` 26파일 + 새 `tests/explain-11a.test.mjs`. 스크래치 `r11-4/`(Build `b11-4/` 는 읽기만 — `common.mjs` 는 `mkcommon.mjs` 로 사본을 만들어 자리·가짜 키 이름·설명 흉내 꼴(`parse`·`digits`·`xss`)만 더함, `run-l/r/u.mjs` 는 사본을 새 프로필로).
+
+## 11-4R-0. 판정 — **고친 뒤 배포** (중간 1 · 낮음 6 · 정보 4)
+
+요청 바이트 변화 0(번역·낭독·단어·요약·개요 — 파이프라인을 거친 실제 HTTP 본문 40개 HEAD 와 같음) · 설명 system = HEAD `commonSystem` 바이트 그대로 · DOC 밖 사실·치료를 끌어들이는 문구 0 · 지어낸 숫자 통과 0(12꼴) · 반쪽 캐시 0 · 호출 수 설계 그대로(연타 5 → 1) · 소리 겹침 0 · 재개 자리 같은 문장 · 회귀 0(9b 말뭉치 692판 결과 객체 전체 변화 0) · XSS 0 · 콘솔 오류 0 · **controls.js +10줄은 배선뿐**(다른 동작 변화 0).
+**중간 1건 = Build 남은 2의 판단**: 낭독 중 단추로 부른 설명이 실패하면 실패 줄이 **0ms**(20ms 간격 표본에서 한 번도 안 잡힘) 보이고 배너도 없다 — 사용자에게는 "잠깐 멈췄다 그냥 다시 읽음". 같은 문장을 다시 누르면 실패 기억 때문에 요청 0 · 역시 아무 표시 없음(11-4R-9 #1).
+
+## 11-4R-1. 요청 바이트 · 안전 (확인 1)
+
+- **번역·낭독·단어·요약·개요 = HEAD**(`r11-4/rbody.mjs` — Build 의 빌더 sha 와 다른 길: **파이프라인 → 가짜 fetch 의 URL·헤더·본문 전체**를 HEAD 사본(`git archive HEAD` → `r11-4/head/`)과 작업 트리에서 같은 입력으로): 6조합(ko→ar 의학 · ar→en · en→fr 일반 · fr→ko · en→ar · es→es 일반) × translate·readalong·translateTerms·summarize(3문단)·summarize(14문단 → 2묶음)·outline = **본문 40개 모두 바이트 같음**(es→es 는 같은 언어 번역이 건너뛰어 5). 입력에 한글·아랍어 원문·😀·U+202E·U+2028·`>>>`·`<<<DOC`·`\\`·`7.5 mg/kg`.
+- **설명 system**(`r11-4/rexplain.mjs`): `medical`·`general`·없음·`weird` 넷 모두 HEAD `commonSystem(true, d)` 와 **바이트 같음**(규칙 1–6 · 규칙 4 "Do not add medical facts that are not in the DOC." 그대로 — 11-Q2 "아니다").
+- **TASK**: 6언어쌍 × 2문체 = 12개 모두 "Use ONLY information in the SENTENCE and CONTEXT — do not add facts, causes, numbers, treatments or advice." + "say so in one short sentence" 있음. 위험 낱말(dictionary · general knowledge · your knowledge · background · recommend · you may add · common usage · outside the …) **0**. 대상 ko·fr 지시문에 `Arabic`·아랍 글자 0. 설계 문안에 없는 것은 안전 쪽 한 줄("Keep numbers, units and drug names exactly as written.")과 용어 예시 괄호뿐.
+- **맥락 창**: 아랍어 문단(600낱말 + 줄바꿈) → 1,494자 · 문장 포함 · 가운데에서 −1자 · 가장자리 낱말 온전 · 문단에 없는 문장 → 문단 앞 1,499자 · 같은 문장이 두 번("See Table 1.") → 첫 자리 기준 · 문장 자체가 1,500 초과 → 1,499자. 탈출: `<<<DOC` 1 · `>>>` 1 · U+202E 는 DOC 안에 글자로(구조 무관).
+- **숫자 거름**(문장 단위 — 입력 "5 mg/kg every 8 hours for 3 days"): 지어낸 50 · 58(이어 붙임) · 0.5 · ٥٠(동방) · 3→7 범위의 7 · 30% · 5,000 · `8 ساعات.لمدة 30`(띄어쓰기 없는 문장 경계) → **12꼴 모두 그 문장이 빠짐**(통과 0). 입력 숫자만(서방·동방) → 통과. 낱말로 쓴 수("ثلاثة") → 통과(숫자 아님 — 설계대로). 용어: `dose 50` 빠짐 · `q8h` 남음. 400자 경계에 걸친 `123456` → 숫자를 쪼개지 않고 그 앞(394자)에서 자름.
+- **잘린 응답**: `t` 가운데 끊김 → `PARSE` · `t` 는 닫히고 그 뒤 끊김 → `MISSING`(tailOf) · `SAFETY` · 빈 `t` → `EMPTY` — **넷 모두 캐시 0**. 루트까지 닫힌 `MAX_TOKENS` → ready·캐시 1(온전한 응답이라 맞음) · `terms` 없는 응답 → ready.
+
+## 11-4R-2. 호출 수 (확인 2)
+
+| 동작 | 설계 | node(`rexplain`) | headless |
+|---|---|---|---|
+| 미적중 / 적중 | 1 / 0 | 1 / 0 | 1 / 0(`run-l` 12조합 첫 1 · 나머지 11 0) |
+| 같은 문장·다른 문단 · 공백만 다른 문단 · 다른 docId · 다른 대상 · 다시 | 1 · 0 · 1 · 1 · 0 | 합 **4** — 설계대로 | — |
+| 진행 중 같은 키 5번 동시(pipeline) | 1 | **1** · 다섯 모두 ready · `byKind.explain` 1 | — |
+| 단추 연타 5번(ask — 같은 선택) | 1 | **1** · 앞 넷 `cancelled` · 말하기 1 | 같은 틱 두 번 누름 → **1**(`run-x` S1) |
+| 키 없음 · offline | 0 | 0 `no-key` · 0 `offline` | — |
+| capped | 0 | Build X4(상한 1 뒤 0) 로 갈음 — 상한 0 은 `dailyCapOf` 가 1로 읽어(15절 "0 = 무제한 아님") 첫 1회가 감 | — |
+| 5xx | 번역과 한 벌 | 1회 즉시 다시 → `SERVER` · cooldown(자동 재시도는 그 1회뿐) | — |
+| 낭독·쪽 넘김·자동 | 0 | `.explain(` 부르는 곳 grep: ask(사용자 동작) · controls 선택 줄 · voice 주입뿐 | 낭독·쪽 넘김 중 요청 0 |
+| 대상 아님(표 안내) | 0 | Build X8·X9 · 내 S3 재탭도 0 | — |
+
+## 11-4R-3. 흐름 (확인 3 — 11-D15)
+
+- **멈춤 → 설명 → 멈춘 채**: idle 에서 [설명] → 말한 뒤 `idle` · 다시 0(node) · 원본 보기 915×412 ar UI 음성 «شرح» → 띠 ready·`data-note=explain` · 말하는 동안 paused · 끝나면 speaking 같은 idx · 되돌림 +1(`run-o`).
+- **낭독 중 → 멈춤 → 설명 → 그 문장부터**: 말하는 발화 모두 reader `paused` 일 때(겹침 0) · 끝나면 speaking · **같은 idx**(node · headless S3 `idxAtPause 1 = idxAtResume 1`).
+- **손이 이김**(`run-x` S4 · node): 말하는 중 Esc → 띠 닫힘·sayer 멈춤·paused 그대로(1.5초 뒤도) · 이어폰 play(mediaSession) → sayer 멈춤·띠 닫힘·speaking(한 번) · 화면 떠남(서재) → sayer 멈춤·idle · **화면 숨김**(visibility 흉내) → sayer 곧 멈춤·설명이 끝난 뒤에도 paused(숨긴 채 다시 읽지 않음 — 6-4 그대로) · 기다리는 사이 [▶] → 말하기 0·되돌림 두 번 0(presses 1).
+- **9b «اشرح»**: 끝까지 들음 → 되돌림 **1**(ask 의 `resumeIf` 는 음성 갈래에서 부르지 않음 — pressPlay 1) · 말하는 중 [×] → 되돌림 0·paused · 기다리는 사이 [×] → `cancelled` → 말하기 0·상태 줄 지움·되돌림 0 · 말하는 중 [▶] → 되돌림 +0·speaking(`run-x` S5).
+- **inline 표시**: 낭독 중 설명 → `data-tr-inline` 떨어짐 → 재개 뒤 `on` · `.ra-tr` 3 → 3(`run-x` S6) · 설명 → 탭 → 설명 → Esc 바꿔 끼우는 동안 `on,null,null,null,on`(`run-t`).
+- **Build 남은 2 — 사용자 관점 판단**: 낭독 중 [설명] 실패(`parse`·`digits`, 응답 300ms 늦춤)를 20ms 간격으로 표본: pending 300–320ms → **failed/blocked 상태 표본 0** · 배너 0 · 같은 문장 재개. 실패 줄은 `updateNote` 와 같은 틱의 `pressPlay → closeTap` 으로 바로 지워진다. 다시 누르면 실패 기억으로 요청 0 · 띠 null · 배너 0 · 낭독은 잠깐 끊겼다 이어짐. **사용자는 왜 설명이 안 나오는지 알 길이 없고 단추가 고장 난 것처럼 보인다** → 중간(#1). 설계 4-7 흐름("아니면 → band 실패/막힘 한 줄")도, Build 정정 ⑤의 "잠깐만 보인다"도 실제(0ms)와 다르다. 원격 막힘(429·상한·offline)은 상태 바 배너가 남아 괜찮다(Build E8·X7). 멈춘 상태에서는 실패 줄 + [다시 시도]가 남아 괜찮다.
+
+## 11-4R-4. 회귀 (확인 4)
+
+- **8c-1 탭 띠**(`run-t` · 26초): 설명 뒤 [문장 번역] → 꼬리표·[▶ 다시 듣기] 숨음 · [문단 전체] 보임 · [×] 이름 "번역 닫기" · `data-note` 없음 · 탭 요청 1 · 닫기 다섯 — [×] · 다른 줄 탭(새 탭) · [▶](닫힘 + speaking) · 낭독 중 탭 → 다음 linechange 에 닫힘 · 쪽 넘김.
+- `run-r.mjs` 사본(`pR1` · 28초): 18 [⋯] → 링크 둘 · Esc 층 셋(메뉴/단어 시트/요약 시트 → 띠) · 손가락 탭 띠 · 9a 이어폰 play(sayer 멈춤 → speaking) · 9b «التالي»·«توقف» · 8e 915×412 겹침 0 — **Build `b11-4/r1.json` 과 값까지 같음**(11-2·11-3 값).
+- `run-u.mjs` 사본(`pU1` · 10초): 8c-2 사용량 종류 **6**(설명 한 줄) · 단어장·요약 화면·카드 그대로 · 요청 0.
+- **9b 말뭉치**(`rvoice.mjs` — Build 는 id·마지막 판정만, 여기는 **결과 객체 전체**(id·enabled·altIndex·how·table·trace)를 깊은 비교, explain 의 enabled 만 뺌): 346발화 × 명령 언어 둘 = **692판 차이 0** · 이웃 셋 묶음 688판 차이 0 · 말뭉치에서 explain 으로 맞은 것 0 · 표 행 7개 낱말 같음(explain 만 `enabled` false→true).
+- **옛 시험 기대 8파일**: 뜻 지킴. 선택 줄 목록 5곳은 `explain` 한 칸만 끼움(lookup 끝 자리 단언 그대로) · C3·C9·K12 는 "꺼진 명령 0"·"같은 말 같은 id + enabled" 로 — C9 는 낱말 넷 더 확인(강해짐) · U9 는 주입이 있을 때 설명 흐름 + **주입이 없으면 9b notYet 그대로**(장치 시험 남음) · Y8 은 `sayer.say(` 전체 3 단언을 더함(강해짐) · U1 은 늘 보이는 종류 한 줄. I7e 만 정규식이 `\s*` → `[\s\S]*?` 로 느슨해졌으나 "닫기 → 포커스" 순서 단언을 따로 더함(낮음 #6).
+
+## 11-4R-5. 화면 (확인 5)
+
+- `run-l.mjs` 사본(`pL1` · 32초 — Build 와 같은 하네스를 내 프로필로 다시): 12조합 모두 보이는 칸 `word,sentence,explain,more` · 한 줄 · 최소 48×48 · 넘침 0 · 화면 안 · 가로 스크롤 0 · ar 은 x 좌표가 거울(오른쪽부터) · 두 줄 칸 = 360 ar·en·fr 와 412 en·fr 의 [단어 번역]·[문장 번역](56px — Build 와 같음) · 설명 띠 12조합 보임·꼬리표·[▶ 다시 듣기]·[×] 48×48·`elementFromPoint` 눌림·글 `rtl/ar` · Esc → 닫힘·말하기 멈춤·포커스 그 줄.
+- **XSS**(`run-x` S1 — 흉내 응답의 설명 글·용어에 `<img src=x onerror>`·`<b>`): 띠 안 img·b **0** · 문서 전체 img 0 · 발동 0 · 글자로 보임. diff 의 `innerHTML`·`insertAdjacentHTML`·`outerHTML`·`document.write` 더한 줄 0.
+- **이름**: 꼬리표 "설명" · [×] "설명 닫기" · [▶] "설명 다시 듣기" · 고지 줄(ready) 있음.
+- **`aria-live`**: 띠에는 없다(8b-2 설계 — 낭독이 소리로 읽는다). 설명 글은 sayer 가 읽지만 "준비 중"·실패 줄은 화면 읽기에 알려지지 않음(낮음 #5).
+- **가림**(S2): 화면 아래쪽 줄을 [설명] → 줄 아래끝 669 · 띠 윗변 667(2px 덮임). 같은 줄 [문장 번역]은 `liftLineAbove` 로 506–601(가림 0). 설명은 줄을 띠 위로 올리지 않는다(낮음 #3).
+
+## 11-4R-6. 시험 · 점검 (확인 6)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,820/1,820 · 1,820/1,820**(fail 0 · 10.9초 · 10.9초 · `r11-4/full1.tap`·`full2.tap`).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 86개 · CSS 4개)" · `git diff --check` 0 · 새 시험 `--no-index --check` 0 · `grep -rn "splitSentences" js/` = `git grep HEAD` 와 같음(cite.js 3 · segment.js 1 · tts/text.js 6).
+- **controls.js +10줄**(diff 세 덩이): ① `createAsk` 에 `band: trband`·`pipeline: pipeline`·`focusBack`(탭 띠와 같은 `focusLine(lineId, reveal)`) ② voice 에 `onExplain` ③ `onSelAction` 에 `explain` 갈래(첫 줄 `cancelVoice()` 는 기존 그대로 거침). ask.js 에서 새 셋(`d.band`·`d.pipeline`·`d.focusBack`)을 쓰는 곳은 설명 갈래뿐(grep) — 요약·[▶ 듣기]·문지기 길 무변. 회귀 하네스 값 같음 → **배선뿐, 다른 동작 변화 0**.
+
+## 11-4R-7. 변이 (확인 7) — `r11-4/rmut.mjs`(Build M1–M11 과 다른 곳 · 원본 바이트를 `r11-4/bak/` 에 쓰고 한 곳만 바꿈 → 11-4·8c·9b·11-2·18·8f·8c-2 시험 10파일 161건 → `bak/` 를 읽어 되씀 → 바이트 비교 · 끝에 `cmp` 4파일 0)
+
+| # | 변이 | 결과 |
+|---|---|---|
+| V1 | **controls 배선** — 선택 줄 [설명]이 `via:'voice'`(선택 문장 대신 낭독 중 문장) | **빨강** X10 |
+| V3 | 맥락(context)만 `escapeDoc` 빼기 | **빨강** X1 |
+| V4 | 단추 설명 실패 뒤 되돌림 빼기(멈춘 채 남음) | **빨강** X7 |
+| V5 | 낭독 멈춤을 응답 뒤로 미룸(기다리는 동안 계속 읽음) | **빨강** X8 |
+| V2 | controls 배선 — 설명 띠 포커스 되돌림이 `reveal`(키보드 닫음)을 버림 | 살아남음 — **시험 틈**(#4) |
+| V6 | voice.js — 음성 갈래가 `cancelled` 를 무시(손으로 닫았는데 실패 한 마디 + 되돌림) | 살아남음 — **시험 틈**(#4) · 지금 코드는 맞음(node: 되돌림 0·상태 줄 지움) |
+
+변이 전후 기준선 161/161 · 모두 복원 바이트 같음 · `cmp` controls·prompts·ask·voice ↔ `bak/` 차이 0. headless 변이는 하지 않았다.
+
+## 11-4R-8. headless (확인 8)
+
+Edge · pipe · 새 프로필 `r11-4/p*` · 가짜 키(`…review_r11_4`) · 흉내 Gemini(OPTIONS 204 + CORS · `responseSchema` 의 `t` 로 설명 갈래 · `parse`·`digits`·`xss` 꼴 더함) · 흉내 음성 · 9b 가짜 인식기 · `setCacheEnabled(false)` · **서버 띄우지 않음**(가로채기) · 합성 PDF `b11-2/syn.pdf` 읽기만 · 한 번에 하나.
+
+| 실행 | 프로필 | 시간 | 콘솔 오류 · pageerror · 외부 · 없는 파일 · 흉내 오류 |
+|---|---|---|---|
+| `run-x.mjs`(XSS·연타·가림·실패 표본·손이 이김·음성 [▶]·inline) | pX1 · pX2 | 33초 · 55초 | 0 · 0 · 0 · 0 · 0(pX1 은 내 XSS 꼴에 `=1` 이 있어 숫자 거름에 걸림 → 꼴을 고쳐 pX2. 앱 무관 — 오히려 거름이 일함) |
+| `run-l.mjs`(Build 사본 — 12조합) | pL1 | 32초 | 0 |
+| `run-r.mjs`(Build 사본 — 18·Esc 층·9a·9b·8e) | pR1 | 28초 | 0 |
+| `run-u.mjs`(Build 사본 — 사용량·단어장·카드) | pU1 | 10초 | 0 |
+| `run-t.mjs`(8c-1 탭 회귀·inline 바꿔 끼우기) | pT1 · pT2 | 62초 · 26초 | 0(pT1 은 PDF 올린 뒤 리더로 안 넘어가 하네스 60초 대기 끝 — 새 프로필로 다시 그대로 통과) |
+| `run-o.mjs`(원본 보기·915×412·ar UI·«شرح») | pO1 | 10초 | 0 |
+
+스크린샷 `r11-4/shots/`: `r1-xss-band-ko-412.png` · `r2-voice-original-ar-915x412.png`.
+
+## 11-4R-9. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | **중간**(사용자 관점 — Build 남은 2) | 낭독 중 단추로 부른 설명이 **원격 막힘이 아닌 이유**(PARSE·MISSING·SAFETY·EMPTY·DIGITS)로 실패하면 실패 줄이 0ms 보이고 배너도 없다 — 낭독이 잠깐 끊겼다 그대로 이어질 뿐. 실패 기억 때문에 다시 눌러도 요청 0·표시 0. Gemini 의 의학 글 SAFETY 차단·숫자 거름 DIGITS 는 드물지 않을 수 있어 "단추가 안 된다"로 보인다. 설계 4-7 "아니면 → band 실패/막힘 한 줄"과도 어긋남 | 11-4R-3 표본(`run-x` S3). 방향(작음 — ask.js 한 곳): ⓐ 되돌린 뒤 상태 바 배너 `explain.failed` 한 줄(+[다시 시도] 동작 — `noReadNotice` 와 같은 `medreader:banner`) — 11-D15 "곧 되돌림" 그대로, 또는 ⓑ 실패면 되돌리지 않고 멈춘 채 실패 줄 + [다시 시도](11-D15 변경 — 운영자). 고친 뒤 spec 정정 ⑤ 문장("잠깐만 보인다")도 맞춤 |
+| 2 | 낮음(흐름 — 설계 글자대로) | 낭독 중 설명 A 를 말하는(또는 기다리는) 동안 다른 문장 [설명] B → B 가 끝나도 **이어 읽지 않음**(paused, 같은 문장). B 의 `was` 가 A 가 만든 `paused` 라서 — 설계 "`was` = 누른 순간의 상태" 그대로이고 [▶] 한 번이면 그 자리부터라 해는 없다 | node `chain`(A 말하는 중 → B · A 기다리는 중 → B 둘 다 paused · presses 0). 방향: 열린 설명 띠가 있으면 그 띠의 `was` 를 이어받기(9b-3 D10 "안내 중 다시 탭은 그 누름의 was 를 이어받는다"와 같은 결) |
+| 3 | 낮음(배치) | [설명]은 고른 줄을 띠 위로 올리지 않는다([문장 번역]은 `liftLineAbove`). 화면 아래쪽 줄을 설명하면 띠가 그 줄 끝에 닿거나(측정 2px) 더 아래면 덮을 수 있다 | 11-4R-5 S2. 방향: controls 가 설명에도 `liftLineAbove(lineId, liftEdge(…))` 한 줄(배선 — 또는 ask `beforeOpen` 뒤 주입 함수) · 실기기 확인 |
+| 4 | 낮음(시험 틈) | V2(설명 띠 포커스 `reveal`)·V6(음성 갈래 `cancelled` → 되돌림 없음)을 지키는 시험 없음. V6 이 빠지면 [×] 로 닫았는데 "설명을 받지 못했습니다" 한 마디 + 이어 읽기 — 손이 이김 규칙이 깨진다 | 11-4R-7. 방향: X9 에 "기다리는 사이 `band.userClose()` → restores 0·한 마디 0" 한 줄 · X10 에 `focusLine(lineId, reveal)` 정규식 한 줄 |
+| 5 | 낮음(접근성 — 설계 8b-2 그대로) | 띠에 `aria-live` 없음 — 설명 글은 sayer 가 소리로 읽지만 "설명 준비 중…"·실패 줄은 화면 읽기에 알려지지 않는다(#1 과 겹치면 화면 읽기 사용자에게도 무음) | 11-4R-5. 방향: #1 의 배너(이미 `role=status`·`aria-live=polite`)로 함께 풀림 |
+| 6 | 낮음(시험 손질) | `taptr-8c` I7e 정규식이 `\s*` → `[\s\S]*?` 로 느슨해짐(닫기와 포커스 사이에 무엇이든 허용) — 순서 단언을 따로 더해 뜻은 지킴 | 11-4R-4 |
+| 7 | 정보 | Build 보고 다시 잼 — 1,820×2 · stamp 86·4 · `splitSentences` · 12조합 값 · 회귀 값 · 9b 692판 · 사용량 6 — 모두 맞음. Build 의 `bodiesSame` 대신 내 파이프라인 본문 40개 | — |
+| 8 | 정보 | 화면 숨김(visibility)이면 설명 말하기가 곧 멈추고 숨긴 채 낭독을 다시 시작하지 않는다(6-4 그대로) — 실기기(화면 끔·잠금)에서 같은지는 Build 12절 목록에 | 11-4R-3 S4d |
+| 9 | 정보 | `[▶ 다시 듣기]` 아이콘이 컨트롤 바 [▶](재생)와 같은 ▶ — RTL 에서도 같은 방향(미디어 아이콘이라 거울 안 함이 보통). 헷갈림은 실기기 확인 거리 | `r2-voice-original-ar-915x412.png` |
+| 10 | 정보 | 하네스 메모: 흉내 응답 글에 숫자가 섞이면(`onerror=…=1`) 숫자 거름이 문장을 버린다 — 시험 꼴을 짤 때 숫자 0 으로 | 11-4R-8 |
+
+**판정: 고친 뒤 배포** — 중간 1(#1, ask.js 한 곳·작음). #1 을 ⓐ(배너)로 고치면 #5 도 함께 풀린다. #2·#3·#4 는 같은 다듬기에 한 줄씩 권함.
+
+## 11-4R-10. 실행 · 정리
+
+명령은 한 호출에 한 가지(파이프·`; echo` 0). **규칙 어김 1회(알림)**: 첫 전체 시험을 `cd D:/01_claude_my-blog && timeout 560 node --test …` 로 묶어 실행했다(지침 "`cd … &&` 로 묶지 말 것") — 작업 폴더가 이미 저장소 뿌리임을 확인한 뒤 2회차부터 모두 단독 명령. 결과 무관. **막힌(거절된) 명령 0.** `tar -xf C:/…` 가 "Cannot connect to C:" 로 실패(거절 아님) → `--force-local` 로 풀었다(11-3R 과 같음). 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음(합성 PDF·지어낸 글만 — 결과에 글 0) · `b11-4/` 쓰기 0 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음 · `git diff --stat` 변이 전후 같음(26파일 +856 −81).
+
+스크래치 `r11-4/`: `head.tar`·`head/`(HEAD 사본) · `rbody.mjs` · `rexplain.mjs` · `rvoice.mjs` · `mkcommon.mjs` → `common.mjs` · `run-l/r/u.mjs`(Build 사본) · `run-x.mjs`·`run-t.mjs`·`run-o.mjs` · `x1.json`·`x2.json`·`l1.json`·`r1.json` · `rmut.mjs`·`mut.json`·`bak/` · `full1.tap`·`full2.tap` · `shots/` · `section.md`(이 절)·`append.mjs` · 프로필 `pX1`·`pX2`·`pL1`·`pR1`·`pU1`·`pT1`·`pT2`·`pO1`.
+
+# 11-4b 재검증 — 11-4 Review 지적 고침(실패 배너 · `was` 이어받기 · 줄 올리기) (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-11-4b.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: 11-4 Review 절(11-4R-0–10), Build 지침 `medreader-build-11-4b-fix.md`·보고서(믿지 않고 다시 잼), spec 17-2-1 4-7 `[정정 2026-11-17 — 11-4b]`(과 11-4 Build 정정 ⑤ 바로잡음), 11-4b 몫 diff — 11-4 Review 때의 사본(`r11-4/bak/ask.js`·`controls.js`·`voice.js`)과 지금 파일을 맞대어 갈라 냄: `ask.js` +21 −3(`held`·`inherit`·`noteBanner` 한 줄) · `controls.js` +2(`liftLineAbove`) · `voice.js` 0 · `trband.js` `noteFailBanner`·`noteBanner`·`withdraw` 재사용 · 시험 X5·X9–X12. 스크래치 `r11-4b/`(`r11-4/`·`b11-4b/` 는 읽기만 — `common.mjs` 는 `mkcommon.mjs` 로 b11-4b 사본에 자리·가짜 키 이름·설명 흉내 꼴 `missing`·`safety`·`empty` 만 더함, `run-t/r.mjs` 는 사본을 새 프로필로, `rbody`·`rexplain`(r11-4)·`rvoice`(b11-4b)는 그 자리에서 읽기만 실행).
+
+## 11-4bR-0. 판정 — **고친 뒤 배포** (중간 1 · 낮음 2 · 정보 5)
+
+11-4R 중간-1 은 **닫혔다**: 낭독 중 단추 설명이 PARSE·DIGITS·MISSING·SAFETY·EMPTY 어느 것으로 실패해도 322–341ms 에 상태 바 배너(`explain.failed` + [다시 시도])가 뜨고 끝까지 남으며, `#banners` 는 `role=status`·`aria-live=polite`, [다시 시도]는 **1호출·같은 문장·말하는 동안 paused·끝나면 이어 읽기 한 번·배너 0**. 연속 실패는 배너 한 장·단추 하나, [다시 시도]는 마지막 실패 문장. 80% 경고·429·상한과 겹쳐도 맞다. `was` 이어받기·줄 올리기도 기대대로, 회귀 0.
+**새 중간 1건(11-4b 가 만든 것)**: 실패 배너가 **리더를 떠나도·쪽을 넘겨도·다른 문서를 열어도 남고**, 거기서 [다시 시도]를 누르면 옛 문장을 **지금 문서의 언어·docId 로** 보낸다(다른 문서: 문서 A 의 영어 문장이 문서 B 의 `fr` 지시문으로 1호출 · 캐시는 문서 B 키 · 문서 B 띠에 그 설명 + 소리). 판정 기준 "엉뚱한 곳을 다시 부름" → 11-4bR-6 #1.
+
+## 11-4bR-1. 중간-1 닫힘 (확인 1 — headless `run-v` A·B·C·G·H · 412×915 ko UI · 대상 ar · 응답 300ms 늦춤 · 20ms 표본)
+
+| 사유 | 요청 | 배너 뜬 때 | 2초 끝까지 | 배너 수 · 단추 | 멈춘 idx → 재개 idx | 재개 횟수 · 겹침 | [다시 시도] |
+|---|---|---|---|---|---|---|---|
+| PARSE | 1 | 340ms | 남음 | 1 · 1 | 1 → 1 | 1 · 0 | 1호출 · 같은 문장 · 말하는 동안 paused · 뒤 speaking · 재개 1 · 겹침 0 · 배너 0 |
+| DIGITS | 1 | 325ms | 남음 | 1 · 1 | 1 → 1 | 1 · 0 | 같음 |
+| MISSING(잘린 응답) | 1 | 323ms | 남음 | 1 · 1 | 1 → 1 | 1 · 0 | 같음 |
+| SAFETY | 1 | 340ms | 남음 | 1 · 1 | 1 → 1 | 1 · 0 | 같음 |
+| EMPTY | 1 | 322ms | 남음 | 1 · 1 | 1 → 1 | 1 · 0 | 같음 |
+
+- 배너 상자 `role="status"`·`aria-live="polite"`(다섯 모두) · 단추 `data-i18n="readalong.retry"` 가 [닫기] 앞.
+- **쌓이지 않음**(B·B2): 다른 문장 셋이 잇달아 실패(PARSE → SAFETY → DIGITS) — 매 단계 배너 1·실패 배너 1·[다시 시도] 단추 1. 그 뒤 실패 기억으로 0호출인 다시 누름도 배너 1·단추 1·낭독 speaking. [다시 시도] → 1호출, 보낸 문장 = **마지막 실패**(B2 셋 중 셋째 · B 는 마지막이 다시 누른 첫 문장 — 둘 다 맞음) · 누른 뒤 배너 0.
+- **다른 배너와 겹침**: C — 8c-2 80% 경고를 실제로 일으킴(cap 23 · 문턱 19 · 사용 18 → 설명 1호출로 넘음) → 배너 2(`ai.capWarn` [사용량 보기] · `explain.failed` [다시 시도]) — 단추가 제 배너에만(경고 배너 `retry` 0). H — 상한(cap 1) → 0호출 · `ai.state.capped` 배너만 · 실패 배너 0 · 낭독 speaking. G — 429 → `ai.state.exhausted` 배너만 · 실패 배너 0 · speaking.
+- **화면 떠남·쪽 넘김·다른 문서**: 배너가 남고 [다시 시도]가 동작한다 → 11-4bR-6 #1(아래 D·E·F 값).
+
+## 11-4bR-2. `was` 이어받기 (확인 2 — headless `run-v` I · node `rexplain` chain)
+
+| 갈래 | 뒤 상태 | 재개 횟수 | 겹침 | 요청 | 말하기(ar) |
+|---|---|---|---|---|---|
+| A 기다리는 중(1.5초 늦춤) → B | speaking | **1** | 0 | 2 | **1**(A 늦은 응답은 말하지 않음) |
+| A 말하는 중 → B | speaking | 1 | 0 | 2 | 2 |
+| A 를 [×]로 닫은 뒤 → B | paused(잇지 않음 — 설계대로) | 0 | 0 | 2 | 2 |
+| 음성 «اشرح» A 말하는 중 → 단추 B | speaking | 1(9b 되돌림 0 — 둘 겹침 없음) | 0 | 2 | 2 |
+| 단추 A 말하는 중 → 음성 «اشرح» B | **paused** | 0 | 0 | 2 | 2 — 낮음 #2 |
+
+node `rexplain` chain: `afterBState` speaking · `presses` 1 · `pendingThenB_State` speaking · idx 같음(Build 값과 같음). 소리 겹침 0 · 재개 두 번 0(모든 갈래).
+
+## 11-4bR-3. 줄 올리기 (확인 3 — `run-v` J)
+
+- 멈춘 상태: 화면 아래쪽 줄 [설명] → 줄 568–663 · 띠 윗변 667 → **덮임 0**(11-4R 669/667 의 2px 덮임이 풀림).
+- 낭독 중(자동 스크롤 켜짐): 같은 자리 줄 [설명] → 568–663 · 667 · 덮임 0. 멈춰 있는 동안 3.2초(표본 161) **스크롤 움직임 0 · 방향 뒤집힘 0** — 자동 스크롤과 다투지 않음. 설명 끝 → speaking(재개 1 · 겹침 0).
+
+## 11-4bR-4. 회귀 (확인 4)
+
+- **요청 본문**(`r11-4/rbody.mjs` 그 자리 실행): 6조합 **본문 40개 HEAD 와 바이트 같음**(sha 11-4R 과 같음).
+- `r11-4/rexplain.mjs`: req·ctx·digits·cut·calls·flow·voice 값 **11-4R 과 같음**(1,494 · −1 · 1,499 · 12꼴 빠짐 · PARSE/MISSING/SAFETY/EMPTY 캐시 0 · 연타 1 …) — chain 만 #2 대로 바뀜.
+- **9b 말뭉치**(`b11-4b/rvoice.mjs` 그 자리 실행 — 결과 객체 전체 깊은 비교): **692판 차이 0 · 이웃 셋 688판 0** · explain 행만 enabled false→true · 말뭉치 explain 맞음 0.
+- **8c-1 탭 띠**(`run-t` 사본 · pT2 26초): 설명 뒤 [문장 번역] 꼬리표·[▶] 숨음·[문단 전체]·"번역 닫기" · 탭 요청 1 · 닫기 다섯 · `inlineSeq on,null,null,null,on` — 11-4R 과 같음. (pT1 은 PDF 올린 뒤 리더로 안 넘어가 60초 대기 끝 — 11-4R pT1 과 같은 하네스 흔들림, 새 프로필로 그대로 통과.)
+- **18 · Esc 층 · 9a · 9b · 8e**(`run-r` 사본 · pR1 28초): 결과 JSON 이 `r11-4/r1.json` 과 **값 차이 0**(초·served 뺌).
+
+## 11-4bR-5. 시험 · 점검 · 변이 (확인 5·6)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,822/1,822 · 1,822/1,822**(fail 0 · 10.9초 · 10.5초 · `r11-4b/full1.tap`·`full2.tap`).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 86개 · CSS 4개)" · `git diff --check` 0 · 새 시험 `--no-index --check` 0.
+- 변이(`r11-4b/rmut.mjs` — Build M1·M1b·M1c·M2·M2b·M3·V2·V6 과 다른 곳 · 원본을 `r11-4b/bak/` 에 쓰고 한 곳만 → 전체 시험 1,822 → `bak/` 를 읽어 되씀 → 바이트 비교 · 끝에 `cmp` ask·trband 0 · 변이 뒤 전체 1,822/1,822). 판정은 **stamp 해시 시험(IM2·IM6·IM7b — 파일 바이트가 바뀌면 늘 빨강)을 뺀** 빨강으로 봄:
+
+| # | 변이 | 결과 |
+|---|---|---|
+| R2 | trband — [다시 시도]를 눌러도 배너를 거두지 않음 | **빨강** X10 |
+| R4 | ask — 음성 갈래 실패에도 실패 배너 | **빨강** X10 · X11 |
+| R1 | trband — 이미 [다시 시도] 단추가 있어도 또 붙임(연속 실패에 단추가 쌓임) | 살아남음 — **시험 틈**(낮음 #3) · 지금 코드는 맞음(headless B·B2 단추 1) |
+| R3 | trband — 다시 시도 함수가 첫 실패 것에 머묾 | 살아남음 — **시험 틈**(낮음 #3) · 지금 코드는 맞음(B2 마지막 문장) |
+| R5 | ask — 이어받기 판정을 `isNoteOpen(held.id)` → `isNoteOpen()` | 살아남음 — 같은 뜻 변이(설명 띠는 ask 만 열고 `held` 가 늘 마지막 번호라 열린 설명 띠 = 마지막 것) · 정보 |
+
+X11 은 가짜 띠로 배선만 보고, 진짜 `trband.noteBanner` 의 DOM 동작(단추 하나·마지막 함수·거둠)은 X10 정규식(거둠)만 지킨다.
+
+## 11-4bR-6. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | **중간**(11-4b 가 새로 만듦 — "엉뚱한 곳을 다시 부름") | 실패 배너와 그 [다시 시도]가 **리더를 떠나도·쪽을 넘겨도·다른 문서를 열어도 남는다**(`trband.leave()`·쪽 그리기 `closeTap` 어디서도 거두지 않음, `main.js` 배너는 화면과 무관). [다시 시도]는 옛 `plan`(문장·문맥)에 **누른 때의** `d.ctx()`(docId·src·domain)를 붙여 부른다. **F 다른 문서**: 문서 A(en) 낭독 중 실패 → 문서 B(언어 fr) 1쪽에서 배너 1 → [다시 시도] → **1호출 · 문서 A 의 문장 · 지시문 언어 French(실패 때 English)** · 캐시 키 문서 B 1(A 0) · 문서 B 띠에 그 설명 ready · 아랍어 말하기 1. **D 서재**: 배너 남음 → [다시 시도] → 1호출(문서 A 키 — 맞는 문서) · **서재 화면에서 설명을 소리로 읽음**(11-4R S4c "화면 떠나면 설명 말하기 멈춤"과 어긋남) · 숨은 리더 띠에 ready. **E 쪽 넘김**: 2쪽 실패 → 3쪽에서 배너 1 · 그 줄 DOM 에 없음 → 3쪽 낭독 중 [다시 시도] → 1호출 · 2쪽 문장 · 3쪽 낭독을 멈추고 화면에 없는 문장의 설명을 띠에 · 끝나면 3쪽 같은 줄로 재개(1 · 겹침 0) | `run-v` D·E·F(`v2.json`). 방향(작음 — trband 한 곳 + 시험 한 줄): 리더를 떠날 때(`leave`)와 쪽이 바뀔 때(controls `onPageRender` 의 `closeTap` 자리) `explain.failed` 배너를 `withdraw` 하고 `noteRetryFn = null`(8c-1 "다른 쪽 문장의 번역이 남지 않게"와 같은 결) — 또는 `retry` 가 실패 때의 `docId`·쪽을 들고 있다가 다르면 부르지 않고 배너만 거둠. 실패 배너가 다른 화면에 남는 것 자체를 원하면(운영자) 적어도 다른 문서에서는 부르지 않아야 함 |
+| 2 | 낮음(흐름 — #2 의 거울, 11-4 와 같음·회귀 아님) | 단추 설명 A 를 말하는 중 음성 «اشرح» B → B 가 끝나도 **이어 읽지 않음**(paused · 재개 0 · 겹침 0). 9b 가 마이크를 누른 때의 상태(A 가 만든 paused)를 `was` 로 넘겨서 — 음성 갈래는 `inherit` 를 거치지 않는다. [▶] 한 번이면 그 자리부터 | `run-v` I `buttonA_voiceB`. 방향: voice 주입(`onExplain`)이 열린 설명 띠의 `was` 를 이어받게 하거나 그대로 두고 설계 글에 적기 |
+| 3 | 낮음(시험 틈) | 진짜 `noteBanner` 의 "단추 하나"(R1)·"마지막 실패의 [다시 시도]"(R3)를 지키는 시험 없음 — 지금 코드는 맞음 | 11-4bR-5. 방향: 가짜 `document` 로 `noteBanner` 두 번 → 단추 1·두 번째 함수가 불림 한 시험 |
+| 4 | 정보(설계 — Build 남은 2) | 배너가 남아 있는 동안 다른 문장 설명이 성공해도 배너는 남는다(Build 남은 2 — 그 문장의 실패는 여전히 사실). #1 을 고치면 화면·쪽 단위로는 정리됨 | Build 보고 7-2 |
+| 5 | 정보 | Build 보고 다시 잼 — 1,822×2 · stamp 86·4 · `rbody` 40 · `rexplain` · 9b 692/688 · 탭 띠·18·Esc·9a·8e 값 · 줄 568–663/667 · 배너 320ms대 — 모두 맞음. 내 쪽에서 MISSING·SAFETY·EMPTY 를 headless 로 더 잼 | — |
+| 6 | 정보 | 콘솔 오류 1줄 = G 단계 **흉내 429 응답에 브라우저가 찍은 네트워크 줄**("Failed to load resource … 429") — 하네스가 일부러 낸 응답이고 앱 `console.error` 0 · pageerror 0. 나머지 실행 모두 0 | `v2.json` |
+| 7 | 정보 | spec `[정정 2026-11-17 — 11-4b]` 한 줄과 11-4 Build 정정 ⑤("보이지 않는다 … 11-4b 가 상태 바 배너로 알린다") 문구는 코드와 맞음. #1 을 고치면 ①에 "리더를 떠나거나 쪽·문서가 바뀌면 거둔다" 한 구절 | — |
+| 8 | 정보 | 하네스 메모: 파이프라인 **실패 기억은 캐시(`aiCache`)를 비워도 남는다**(메모리) — 같은 문장으로 실패를 되풀이 재려면 새로 부팅. 첫 실행 pV1 은 이 때문에 D 의 "같은 문장" 값이 틀렸고 I 에서 하네스가 멈춤 → 시나리오마다 부팅해 pV2 로 다시(앱 무관) | `v1.json` |
+
+**판정: 고친 뒤 배포** — 중간 1(#1, 11-4b 가 새로 만든 "엉뚱한 곳을 다시 부름" — trband 한 곳·작음). 11-4R 중간-1 자체는 닫힘. #2·#3 은 같은 다듬기에 한 줄씩 권함.
+
+## 11-4bR-7. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 첫 시험도 단독). **막힌(거절된) 명령 0.** 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0(가짜 `…review_r11_4b`) · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음(합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 — 결과에 글 0, 문서 B 의 언어 필드만 내 프로필 DB 에서 fr 로) · `r11-4/`·`b11-4b/` 쓰기 0 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음(`b11-4b/bak/trband.js` 와도 같음) · `git diff --stat` 27파일(review.md 이 절 더하기 전과 같은 앱 파일).
+headless: Edge · pipe · 새 프로필 `r11-4b/pV1`·`pV2`·`pV3`·`pT1`·`pT2`·`pR1` · 흉내 Gemini(OPTIONS 204 + CORS · 설명 갈래 `parse`·`digits`·`missing`·`safety`·`empty`·`429`) · 흉내 음성·9b 가짜 인식기 · `setCacheEnabled(false)` · 가로채기(서버 없음) · 한 번에 하나 · pV1 109초 · pV2 157초 · pV3 17초 · pT2 26초 · pR1 28초.
+
+스크래치 `r11-4b/`: `mkcommon.mjs` → `common.mjs` · `mkcopies.mjs` → `run-t.mjs`·`run-r.mjs` · `run-v.mjs` · `v1.json`·`v2.json`·`v3.json`·`t1.json`·`t2.json`·`r1.json` · `rmut.mjs`·`mut.json`·`bak/` · `full1.tap`·`full2.tap` · `section.md`(이 절)·`append.mjs` · 프로필 `pV1`·`pV2`·`pV3`·`pT1`·`pT2`·`pR1`.
+
+# 11-4c 재검증 — 실패 배너가 문맥을 벗어나 남음(11-4bR #1·#3) 고친 곳 (2026-11-17)
+
+> Review 서브에이전트(Build 와 분리) · 지침 `.claude/tasks/medreader-review-11-4c.md`. 앱 코드·시험·spec 무변, 커밋 0. 본 것: 위 "11-4b 재검증" 절(11-4bR-0–7), Build 지침 `medreader-build-11-4c-fix.md`·보고서 `medreader-build-11-4c-fix-report.md`(믿지 않고 다시 잼), 11-4c 몫 diff — `b11-4c/bak/pre/`(고치기 전)와 지금 파일을 맞대어 갈라 냄: `trband.js` `dropNoteBanner()`(`noteRetryFn = null` + `withdraw('explain.failed')`) · `leave()` 첫 줄 · api 한 칸 / `ask.js` `at = {docId, page}`(요청에 쓴 `c`) · `again` 이 누른 때 `d.ctx()` 와 비교 / `controls.js` `onPageRender` 구독 한 줄(탭 띠 `closeTap` 줄 바로 뒤) / 시험 X10 정규식 · X13. spec 17-2-1 4-7 `[정정 2026-11-17 — 11-4c]` 한 줄·crossstep 후보 한 줄 확인. 스크래치 `r11-4c/`(`r11-4b/`·`b11-4c/` 는 읽기만 — `common.mjs` 는 `mkcopies.mjs` 로 r11-4b 사본에 자리·가짜 키 이름만 바꿈, `run-t`·`run-r` 은 글 그대로 사본, `run-v.mjs` 는 r11-4b 것을 본떠 새로 씀, `rbody`(r11-4)·`rvoice`(b11-4b)는 그 자리에서 읽기만 실행).
+
+## 11-4cR-0. 판정 — **배포 가능** (중간 이상 0 · 낮음 3 · 정보 5)
+
+11-4bR 중간-1 은 **닫혔다**: 서재·쪽 넘김(멈춘 뒤·읽는 중)·다른 문서·뒤로 가기(서재로·앞 쪽으로) 여섯 갈래 모두 실패 배너가 그 자리에서 거둬지고(배너 0·단추 0) **엉뚱한 문맥 요청 0 · 말하기 0 · 캐시 키 0**. 같은 문맥 [다시 시도]는 다섯 사유 모두 **1호출 · 같은 문장 · 말하는 동안 paused · 끝나면 이어 읽기 1 · 겹침 0 · 배너 0**(11-4bR 과 같은 값). 80% 경고·429·상한 배너는 쪽 넘김·서재 뒤에도 남는다(거두는 것은 `explain.failed` 하나). 회귀 0, 콘솔 오류 0(하네스 흉내 429 네트워크 줄 1 뺌).
+
+## 11-4cR-1. 중간-1 닫힘 (확인 1 — headless `run-v` pV1·pV2 · 412×915 ko UI · 대상 ar · PARSE 실패 200ms 늦춤)
+
+| 갈래 | 실패 때 배너 | 옮긴 뒤 배너 | [다시 시도] 단추 | 요청 | 말하기(ar) | 캐시 키 | 낭독 |
+|---|---|---|---|---|---|---|---|
+| D 서재(`#/library`) | 1 | **0** | 없음 | **0** | 0 | A 0 · B 0 | idle(떠남) |
+| E 쪽 넘김(멈춘 뒤 3쪽 → 3쪽 낭독 중) | 1 | **0** | 없음 | **0** | 0 | — | speaking 그대로(재개 0 · 겹침 0) |
+| E2 쪽 넘김(읽는 채로 3쪽) | 1 | **0** | 없음 | **0** | 0 | — | speaking 그대로 |
+| F 다른 문서(문서 B · 언어 fr) | 1 | **0** | 없음 | **0** | 0 | A 0 · B 0 | 문서 B paused(멈춘 뒤 옮김) · 띠 설명 없음 |
+| K1 뒤로 가기 → 서재 | 1 | **0** | 없음 | **0** | 0 | — | idle |
+| K2 뒤로 가기 → 앞 쪽(3쪽 → 2쪽에서 실패 → 뒤로 3쪽) | 1 | **0** | 없음 | **0** | 0 | — | speaking |
+| **같은 문맥** A × 다섯 사유(PARSE·DIGITS·MISSING·SAFETY·EMPTY) | 1(321–342ms · 끝까지 남음) | — | 1 | **1** · 같은 문장 | 1 | — | 말하는 동안 paused → speaking · 재개 1 · 겹침 0 · 누른 뒤 배너 0 |
+
+- 11-4bR 기준선(D·E·F 에서 배너 1 → [다시 시도] 1호출 · F 는 문서 A 의 문장을 French 지시문·문서 B 키로)과 비교해 엉뚱한 문맥 요청이 모두 0 이 됐다. (나) 비교(`again`)는 (가)가 먼저 거두므로 브라우저에서는 닿는 길이 없다 — node X13 과 변이 RM1(아래)이 지킨다.
+- **검색 화면 갔다 옴**(보고서 남은 1 — 판단): `closeTapBand` 갈래라 배너가 남는다. S1 검색 화면에서 바로 누름 → **1호출 · 같은 문장 · 같은 문서·같은 쪽(2쪽 그대로)** · 숨은 리더 낭독 paused → 설명 말하기 1 → speaking 재개 1 · 겹침 0 · 배너 0. S2 돌아온 뒤(reshow — 다시 그리지 않음) 배너 1 그대로 → 누름 → 1호출 · 같은 문장 · 이어 읽기 1. **다시 시도가 맞다** — 같은 문서·같은 쪽의 바로 그 문장이고(엉뚱한 문맥 아님), 숨긴 리더의 낭독이 검색 화면에서 이어지는 8g-4a 설계와 같은 결. 숨은 동안 낭독이 쪽을 넘기면 숨은 그리기가 `onPageRender` 를 불러 거둔다(코드 — `renderPage` → `notifyPage`). 다만 S1 은 설명 글이 보이지 않은 채 소리만 나고(리더가 숨음), 돌아오면 설명 띠는 이미 닫혀 있다(재개 때 닫힘 — 리더 안에서도 같음) → 낮음 #1.
+
+## 11-4cR-2. 부작용 (확인 2 — `run-v` P·O)
+
+| 같은 쪽에서 | 배너 | 근거 |
+|---|---|---|
+| 글자 크기(Aa 슬라이더 `tsFontSize` +4 — 글자 크기 바뀜 확인) | **남음**(1) · 낭독 speaking | CSS 변수만(`applyTypeset`) — 쪽을 다시 그리지 않음 |
+| UI 언어 ko → en → ko | **남음**(1) · 단추 1 · 단추 글이 영어로 바뀜(`relabelBanners`) | `relabelReader` 는 `onPageRepaint` — `onPageRender` 아님 |
+| 뷰 전환(리플로우 → 원본 보기) | **거둠**(0) · 낭독 speaking | `setView` → `renderPage` → `onPageRender` |
+| 새 판 다시 그리기(8i-1 `refreshed`) · 문서 원문 언어 바꿈(`onDocLang` → `notifyPage`) | 거둠(코드 읽기 — headless 로 일으키지 않음) | 같은 `onPageRender` 길 |
+
+- 사용자에게 문제인가: 뷰 전환·새 판은 **같은 쪽**이라 그 [다시 시도]는 여전히 맞는 문맥이었다 — 거둬지면 배너의 지름길만 잃는다. 그 줄 [설명]을 다시 누르면(실패 기억 → 0호출) 띠 실패 줄에 [다시 시도]가 있어 길은 남는다. 새 판은 낭독 중이 아닐 때만 다시 그리고(8i-1 문지기) 원문 언어 바꿈은 문맥(지시문 언어)이 실제로 바뀌는 경우라 거두는 게 맞다. → 낮음 #2(탭 띠 `closeTap` 과 같은 때 — 지침 "쪽이 바뀌는 자리(`closeTap` 등)"대로).
+- **다른 배너는 거두지 않는다**(O1–O3 — 실패 때 → 3쪽으로 넘김 → 서재):
+
+| | 실패 때 | 쪽 넘김 뒤 | 서재 뒤 |
+|---|---|---|---|
+| O1 80% 경고 겹침(cap 47 · 문턱 38 · 사용 41) | `ai.capWarn` + `explain.failed` | `ai.capWarn` | `ai.capWarn` |
+| O2 429(1호출) | `ai.state.exhausted` | `ai.state.exhausted` | `ai.state.exhausted` |
+| O3 상한(cap 1 · 0호출) | `ai.state.capped` | `ai.state.capped` | `ai.state.capped` |
+
+`dropNoteBanner` → `withdraw('explain.failed')` 는 그 키의 배너 하나의 [닫기]만 누른다(`main.js` 닫기 = 지움 · 다음 실패 배너를 막는 기록 없음).
+
+## 11-4cR-3. 회귀 (확인 3)
+
+- **요청 본문**(`r11-4/rbody.mjs` 그 자리 실행): 6조합 **본문 40개 HEAD 와 바이트 같음**(sha 11-4R·11-4bR 과 같음).
+- **9b 말뭉치**(`b11-4b/rvoice.mjs` 그 자리 실행): **692판 차이 0 · 이웃 셋 688판 0** · enabledDiff 0 · explain 맞음 0.
+- **8c-1 탭 띠**(`run-t` 사본 · pT1 26초): 결과 `steps` 가 `r11-4b/t2.json` 과 **값 차이 0**(설명 뒤 [문장 번역] · 닫기 다섯 · 쪽 넘김 닫힘 · `inlineSeq on,null,null,null,on` · 탭 요청 1).
+- **18 · Esc 층 · 9a · 9b · 8e**(`run-r` 사본 · pR1 28초): 결과 `r` 이 `r11-4b/r1.json` 과 **값 차이 0**.
+- controls 새 구독은 `closeTap` 구독 바로 뒤·`speaker.reload` 구독 앞 — 검색이 `speaker.reload` **뒤**에 등록돼야 하는 순서(17-8-12 §4-5)는 그대로(검색 구독은 reader 쪽이 나중에 등록).
+
+## 11-4cR-4. 시험 · 점검 · 변이 (확인 4·5)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,823/1,823 · 1,823/1,823**(fail 0 · 12.7초 · 12.9초 · `r11-4c/full1.tap`·`full2.tap`).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 86개 · CSS 4개)" · `git diff --check` 0 · 새 시험 `--no-index --check` 0.
+- 변이(`r11-4c/rmut.mjs` — Build M1–M7·R1·R3 과 다른 곳 · 원본을 `r11-4c/bak/` 에 쓰고 한 곳만 → 전체 시험 1,823 → `bak/` 을 **읽어서 써** 되돌림 → 바이트 비교 · 끝에 별도 `cmp` trband·ask·controls 0 · 변이 뒤 전체 1,823/1,823 · 62초). 판정은 stamp 해시 시험(IM2·IM6·IM7b — 바이트가 바뀌면 늘 빨강, 매번 3개)을 뺀 빨강:
+
+| # | 변이 | 결과 |
+|---|---|---|
+| RM1 | ask (나) — 문서만 비교(쪽 무시) | **빨강** X13 |
+| RM2 | trband (가) — `leave` 의 거둠을 `if (!els) return;` 뒤로(띠가 없으면 남김) | **빨강** X10 · X13 |
+| RM3 | trband 부작용 — `dropNoteBanner` 가 80% 경고·429·상한 배너까지 거둠 | 살아남음 — **시험 틈**(낮음 #3) · 지금 코드는 맞음(headless O1–O3) |
+| RM4 | controls 과한 거둠 — `onPageRepaint`(검색에서 돌아옴·UI 언어)에도 거둠 | 살아남음 — **시험 틈**(낮음 #3) · 지금 코드는 맞음(headless S2·P 언어) |
+
+## 11-4cR-5. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(설계 선택 — Build 남은 1) | 검색 화면으로 리더를 숨기기만 할 때 실패 배너가 남고, 검색 화면에서 누르면 같은 문서·쪽·문장으로 1호출 → 설명을 **소리로만** 말한다(리더가 숨어 글은 안 보임) → 숨은 낭독 재개. 돌아오면 설명 띠는 이미 닫혀 있음. 문맥은 맞고(엉뚱한 요청 아님) 숨은 낭독이 이어지는 8g-4a 설계와 같은 결이라 **다시 시도가 맞다**고 판단 | `run-v` S1·S2. 방향: 그대로 두기(권함 — 돌아와서 누르는 S2 편의가 남음). 글 없이 소리만이 싫으면 `controls.closeTapBand` 에 `trband.dropNoteBanner()` 한 줄 |
+| 2 | 낮음(부작용) | 같은 쪽을 다시 그리는 뷰 전환(원본 보기)·새 판 다시 그리기·문서 원문 언어 바꿈에서도 배너를 거둔다. 글자 크기·UI 언어는 남는다. 같은 쪽이라 배너의 지름길만 잃고, 그 줄 [설명] → 띠 [다시 시도] 길은 남는다 | `run-v` P. 방향: 그대로(탭 띠 `closeTap` 과 같은 때 — 지침대로). 굳이 남기려면 구독에서 `p.refreshed` 와 뷰 전환을 걸러야 하는데 뷰 전환은 알림에 표시가 없어 득보다 일이 큼 |
+| 3 | 낮음(시험 틈) | "다른 배너는 거두지 않음"(RM3)·"같은 쪽 다시 보이기에는 거두지 않음"(RM4)을 지키는 시험 없음 — 지금 코드는 맞음 | 11-4cR-4. 방향: X13 가짜 document 에 `ai.capWarn` 배너 하나 두고 `dropNoteBanner`·`leave` 뒤 남는지 한 줄 · X10 에 `onPageRepaint` 구독에 `dropNoteBanner` 가 없음 한 줄 |
+| 4 | 정보 | 낭독이 쪽 끝을 넘어 다음 쪽을 그리면 그때 배너가 거둬진다(다른 쪽 — 맞음 · Build 남은 3). E2(읽는 채 쪽 넘김) 로 같은 길 확인 | `run-v` E2 |
+| 5 | 정보 | Build 보고 다시 잼 — 1,823×2 · stamp 86·4 · `rbody` 40 · 9b 692/688 · 탭 띠·Esc·18·9a·8e 값 · D·E·F 요청 0·배너 0 · 같은 문맥 1호출 · 변이 방향 — 모두 맞음. 내 쪽에서 E2·K1·K2·S1·S2·P·O1–O3 를 더 잼 | — |
+| 6 | 정보 | 콘솔 오류 1줄 = O2 단계 **흉내 429 응답에 브라우저가 찍은 네트워크 줄**("Failed to load resource … 429") — 하네스가 일부러 낸 응답 · 앱 `console.error` 0 · pageerror 0 · 외부 요청 0 · 빠진 파일 0. pV2·pT1·pR1 은 0 | `v1.json`·`v2.json` |
+| 7 | 정보 | spec `[정정 2026-11-17 — 11-4c]` 한 줄(4183행)은 코드와 맞음 — "쪽이 그려질 때"라 뷰 전환·새 판도 포함됨(#2)은 문구로 읽힘. crossstep 끝 낮음-2 후보 한 줄 있음 | — |
+| 8 | 정보 | 하네스 메모: pV1 에서 K1·K2 의 "뒤로 간 뒤" 값이 `pressRetry` 결과의 `after` 이름과 겹쳐 덮였다(내 하네스 실수 — 앱 무관) → K 만 새 프로필 pV2 로 다시(`backTo` 로 이름 바꿈, 24초). pV1 의 K 요청 0·배너 0 값은 pV2 와 같음 | `v1.json`·`v2.json` |
+
+**판정: 배포 가능** — 엉뚱한 문맥 요청 0, 다른 배너를 거두지 않음, 11-4c 가 만든 회귀 0, 앱 콘솔 오류 0. 낮음 셋(#1 그대로 권함 · #2 그대로 · #3 시험 두 줄)은 다음 다듬기에.
+
+## 11-4cR-6. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 시험 결과는 `--test-reporter-destination` 으로 파일에). **막힌(거절된) 명령 0.** 서버 띄움 0 · 프로세스 조회·디버깅 포트 0 · 진짜 키 0(가짜 `…review_r11_4c`) · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음(합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 — 결과에 글 0, 문서 B 의 언어 필드만 내 프로필 DB 에서 fr 로) · `r11-4b/`·`b11-4c/`·`r11-4/`·`b11-4b/` 쓰기 0 · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음(`b11-4c/bak/trband.js` 와도 같음) · `git diff --stat` 28파일(review.md 이 절 더하기 전과 같은 앱 파일 — Build 보고와 같음).
+headless: Edge · pipe · 새 프로필 `r11-4c/pV1`·`pV2`·`pT1`·`pR1` · 흉내 Gemini(OPTIONS 204 + CORS · 설명 갈래 `parse`·`digits`·`missing`·`safety`·`empty`·`429`) · 흉내 음성·9b 가짜 인식기 · `setCacheEnabled(false)` · 가로채기(서버 없음) · 한 번에 하나 · pV1 151초(A·D·E·E2·F·K·S·P·O) · pV2 24초(K 다시) · pT1 26초 · pR1 28초. 지침의 "headless 한 번"은 pV1 이고, pV2 는 하네스 실수 고침, pT1·pR1 은 확인 3 회귀(탭 띠·Esc 층) 사본이다.
+
+스크래치 `r11-4c/`: `mkcopies.mjs` → `common.mjs`·`run-t.mjs`·`run-r.mjs` · `run-v.mjs` · `v1.json`·`v2.json` · `rmut.mjs`·`mut.json`·`bak/` · `full1.tap`·`full2.tap` · `section.md`(이 절)·`append.mjs` · `shots/` · 프로필 `pV1`·`pV2`·`pT1`·`pR1`.

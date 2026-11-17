@@ -321,11 +321,17 @@ export function initControls() {
           provider: providerId(), model: String(settings.get('ai.model') || '') };
       },
       pressPlay: pressPlay,
-      beforeOpen: function () { if (wordsheet) wordsheet.close(false); if (selbar) selbar.clear(); }
+      beforeOpen: function () { if (wordsheet) wordsheet.close(false); if (selbar) selbar.clear(); },
+      // `[11-4 — spec 17-2-1 4-5·4-7]` 설명 갈래 — 띠(설명 모드)·같은 파이프라인·띠를 닫은 뒤 포커스(탭 띠와 같은 `focusLine`)
+      band: trband,
+      pipeline: pipeline,
+      focusBack: function (lineId, reveal) { focusLine(lineId, reveal); }
     });
   }
   // `[8c-1]` 쪽이 바뀌면(쪽 넘김·뷰 전환·새 판) 탭 띠를 닫는다 — 다른 쪽 문장의 번역이 남지 않게.
   onPageRender(() => { if (trband) trband.closeTap(); });
+  // `[11-4c]` 설명 실패 배너·[다시 시도]도 거둔다 — 다른 쪽·문서에서 옛 문장을 다시 부르지 않게.
+  onPageRender(() => { if (trband) trband.dropNoteBanner(); });
   // `[8c-1c]` 숨긴 리더를 다시 보이면(검색 화면에서 돌아옴 — 다시 그리지 않는다) 띠 자리를 다시 잡는다: 떠날 때 `closeTapBand` 가
   // 숨은 화면 기준으로 띠를 숨겼다(보이기 모드의 낭독 띠가 돌아와서도 숨은 채 남지 않게).
   onPageRepaint(() => { if (trband) trband.sync(); });
@@ -411,7 +417,9 @@ export function initControls() {
     view: mounted ? mounted.view : null,
     // `[11-2 — spec 17-2-1 4-5]` 음성 "요약" — 흐름(ask)을 주입(voice.js 는 파이프라인·시트를 모른다) · 요지 말하기(sayer)도 손이 이긴다
     onSummarize: function (o) { return ask ? ask.summarize(o) : Promise.resolve(null); },
-    sayer: sayer
+    sayer: sayer,
+    // `[11-4 — spec 17-2-1 4-7]` 음성 "설명" — 같은 흐름(ask)을 주입
+    onExplain: function (o) { return ask ? ask.explain(o) : Promise.resolve(null); }
   });
   if (mounted) mounted.button.addEventListener('click', () => voice.press());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') voice.onHidden(); });
@@ -639,6 +647,11 @@ function onSelAction(id, snap) {
   } else if (id === 'summary') {
     // `[11-2 — spec 17-2-1 4-3]` 요약 시트 — 선택 시작 줄의 문장이 속한 문단(호출 1, 캐시 적중이면 0). 낭독은 멈추지 않는다.
     if (ask) ask.summarize({ via: 'button', snap: snap }).catch(() => { /* 결과는 시트가 그린다 */ });
+  } else if (id === 'explain') {
+    // `[11-4 — spec 17-2-1 4-7 · 11-D15]` 설명 — 선택 시작 줄의 문장(호출 1, 캐시 적중이면 0). 읽는 중이면 멈추고 말한 뒤 이어 읽는다.
+    if (ask) ask.explain({ via: 'button', snap: snap }).catch(() => { /* 결과는 띠가 그린다 */ });
+    // `[11-4b — 11-4R #3]` [문장 번역]처럼 고른 줄을 띠 위로 — 띠는 ask 가 같은 틱에 열었다(선택 줄은 거둬져 띠 윗변이 가장자리).
+    if (trband) liftLineAbove(snap.lineId, liftEdge(selbar ? selbar.top() : null, trband.bandTop()));
   }
 }
 

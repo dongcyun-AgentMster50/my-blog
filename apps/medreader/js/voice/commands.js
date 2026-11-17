@@ -59,8 +59,9 @@ export const CMD_LANGS = Object.freeze(['auto', 'ar', 'en']);
 // `[9b-2]` 표 손질(9b-1 Review 9b1R-2 · `r9b1/alt` 시험 — 놓침 13 → 4): 관사 없는 구(«وقف ترجمة» …)·자연스러운 구("read it again" …)를
 //   더하고, 뜻이 둘인 낱말(«شغل» "일" · «بعده» "아직" · «قدام»·«ورا» 장소 · «تابع» "따라가다" · «ترجمة»·«ترجم»)은 `exact` 로 —
 //   혼자 말할 때만 명령이다. `[검토 — Nour·운영자]` 더한 낱말 전부.
-// `enabled:false` = 표에 자리만(explain — 11a 결정 뒤 켠다, 9b-D14). 꺼진 동안 이 말은 nomatch 가 아니라 `enabled:false` 로 돌아온다.
-// `[11-2]` `summarize`(문단 요약)를 explain 앞에 더했다 — 실행은 `ui/voice.js` 가 주입 함수(`deps.onSummarize`)로만.
+// `enabled:false` = 표에 자리만 — 꺼진 동안 그 말은 nomatch 가 아니라 `enabled:false` 로 돌아온다("아직 없는 기능" 안내 — 장치는 남긴다).
+//   `[11-4 — spec 17-2-1 4-5 · 9b-D14]` explain 을 켰다(지금 꺼진 명령 0). 낱말 칸은 9b 그대로 — 맞춤 결과(id)는 바뀌지 않는다.
+// `[11-2]` `summarize`(문단 요약)를 explain 앞에 더했다 — 실행은 `ui/voice.js` 가 주입 함수(`deps.onSummarize`·`[11-4]` `deps.onExplain`)로만.
 const RAW = [
   {
     id: 'play', enabled: true,
@@ -145,7 +146,8 @@ const RAW = [
     exact: []
   },
   {
-    id: 'explain', enabled: false,
+    // `[11-4 — spec 17-2-1 4-7]` 문장 설명 — 지금 문장. 낱말은 9b 그대로 `[검토 — Nour·운영자]`.
+    id: 'explain', enabled: true,
     ar: ['اشرح', 'شرح', 'فسر', 'وضح', 'اشرح هنا'],
     arLoan: [],
     en: ['explain', 'explain this'],
@@ -379,7 +381,7 @@ export function commandById(id) {
  * @param {'ar'|'en'} lang  명령 언어(`resolveCmdLang` 의 결과)
  * @returns {{
  *   id: string|null,          // 맞은 명령, 없으면 null(= nomatch)
- *   enabled: boolean,         // 표의 enabled(explain 은 false — "아직 없는 기능" 안내)
+ *   enabled: boolean,         // 표의 enabled(false 면 "아직 없는 기능" 안내 — `[11-4]` 뒤 지금은 모두 true)
  *   altIndex: number,         // 몇 번째 대안에서 맞았나(0부터). 못 맞추면 -1
  *   how: 'full'|'part'|null,  // 전체 일치 / 포함 일치
  *   table: 'ar'|'en'|null,    // 어느 표에서 맞았나

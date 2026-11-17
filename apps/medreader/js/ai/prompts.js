@@ -19,7 +19,7 @@
    만든다. 테스트(`tests/prompts-8a.test.mjs`)가 옛 문자열과 글자 단위로 대조한다.
    ============================================================ */
 
-import { PIPELINE, VOCAB, SUMMARY, OUTLINE } from '../config.js';
+import { PIPELINE, VOCAB, SUMMARY, OUTLINE, EXPLAIN } from '../config.js';
 import { estimateTokens } from './tokens.js';
 // `[11-1]` 요약·개요 응답 다듬기(트리 상한·숫자 거름)는 순수 `text/summary.js` 한 벌 — 같은 순수 계층(3-2 첫 행).
 import { clean, trimTree, pruneForeignNumbers, hasForeignNumber, outlineInput } from '../text/summary.js';
@@ -901,4 +901,205 @@ export function checkOutline(plain, value) {
     OUTLINE.MAX_POINTS, OUTLINE.POINT_MAX);
   if (!points.length) return fail('empty');
   return { chunkFailed: false, items: [{ i: 0, state: 'ok', value: { title: cut, points: points } }] };
+}
+
+/* ────────────────────────────────────────────────────────
+   `[11-4 — spec 17-2-1 4-7 · 11-D15 · 11-D20]` 문장 설명(11a)
+   번역·단어·요약·개요 요청과 **따로 선다** — 그 지시문·스키마·판본은 한 글자도 바꾸지 않는다.
+   system 은 10-1 골격 `commonSystem(true, domain)` **그대로**(규칙 1–6 — 11-Q2 운영자 위임 "아니다": DOC 밖 사전 뜻 예외 없음,
+   "맥락 안에서의 뜻"만, 모르면 "맥락에 없다"고 말한다). DOC = `{sentence, context}` 둘 다 `escapeDoc`.
+   ──────────────────────────────────────────────────────── */
+
+/** 설명 판본 — 캐시 **값**의 `promptVersion` 에만(키에는 넣지 않는다 — 7-5). 값은 `config.js` `EXPLAIN.PROMPT_VERSION`. */
+export const EXPLAIN_PROMPT_VERSION = EXPLAIN.PROMPT_VERSION;
+
+/** 4-7 스키마 `{t, terms:[{src, tr}], notes}` — 필수 `t`. */
+export const EXPLAIN_SCHEMA = Object.freeze({
+  type: 'OBJECT',
+  properties: Object.freeze({
+    t: STR,
+    terms: Object.freeze({ type: 'ARRAY', items: TERM_PAIR }),
+    notes: STR
+  }),
+  required: Object.freeze(['t']),
+  propertyOrdering: Object.freeze(['t', 'terms', 'notes'])
+});
+
+const EXPLAIN_SCHEMA_LINE = 'Schema: {"t": string, "terms": [{"src": string, "tr": string}], "notes": string}';
+
+const WS = /\s/u;
+
+/**
+ * 맥락 창(11-D15) — 문단 글에서 **문장을 가운데 두고** 앞뒤로 잘라 최대 `max` 글자(코드포인트). 문단이 짧으면 그대로.
+ * 문장을 문단에서 못 찾으면(공백만 다른 꼴은 `clean` 으로 맞춘다) 문단 앞에서. 잘린 가장자리가 낱말 가운데면 그 낱말을 뺀다
+ * (반쪽 낱말·반쪽 숫자를 보내지 않는다 — 문단 처음·끝은 그대로). 순수 함수.
+ * @param {string} sentence 대상 문장(`Unit.src`)
+ * @param {string} para 그 문단 글(`paraTextsOf`)
+ * @param {number} [max] 기본 `EXPLAIN.CONTEXT_CHARS`(1,500)
+ * @returns {string}
+ */
+export function explainContext(sentence, para, max) {
+  const lim = Number.isFinite(max) && max > 0 ? Math.floor(max) : EXPLAIN.CONTEXT_CHARS;
+  const p = clean(para);
+  const s = clean(sentence);
+  const a = Array.from(p);
+  if (a.length <= lim) return p;
+  const at = s ? p.indexOf(s) : -1;
+  const before = at >= 0 ? Array.from(p.slice(0, at)).length : 0;
+  const len = at >= 0 ? Array.from(s).length : 0;
+  let start = Math.round(before + len / 2 - lim / 2);
+  if (start < 0) start = 0;
+  if (start + lim > a.length) start = a.length - lim;
+  let end = start + lim;
+  if (start > 0 && !WS.test(a[start - 1])) { while (start < end && !WS.test(a[start])) start++; }
+  if (end < a.length && !WS.test(a[end])) { while (end > start && !WS.test(a[end - 1])) end--; }
+  return a.slice(start, end).join('').trim();
+}
+
+/**
+ * 4-7 TASK. 언어는 이름으로만(7-1 원칙 5). 의학이면 용어 문장에 `TERM_EXAMPLES[target]`(표에 없으면 빈 — 16-D2)·대상 언어 문체
+ * (`TARGET_STYLE` — 요약과 같은 `styleSentence`), 원문 = 대상이면 "원어를 괄호로" 대신 `Keep medical terms as written.`(요약과 같음).
+ * `general` 이면 의학 문장 대신 `GENERAL_STYLE_LINE` 결(`usual {Target} words` · `TARGET_STYLE_GENERAL`).
+ * @returns {string|null} 언어 이름을 모르면 null
+ */
+export function explainInstruction(srcLang, targetLang, domain) {
+  const src = langName(srcLang);
+  const tgt = langName(targetLang);
+  if (!src || !tgt) return null;
+  const withSrc = codeOf(srcLang) !== codeOf(targetLang);
+  const general = normalizeDomain(domain) === 'general';
+  const tc = codeOf(targetLang);
+  const N = EXPLAIN.MAX_SENTENCES;
+  const lines = [];
+  if (general) {
+    lines.push('TASK: Explain the SENTENCE to a reader who reads ' + src + ' as a second language. Write in ' + tgt + ', at most ' + N +
+      ' short sentences: say plainly what the sentence states, break long structure into simple statements, ' +
+      'and say what its abbreviations and words mean as used in the CONTEXT.');
+    lines.push('Use usual ' + tgt + ' words; keep proper nouns as written.' + styleSentence(tgt, TARGET_STYLE_GENERAL[tc]));
+  } else {
+    lines.push('TASK: Explain the SENTENCE to a medical trainee who reads ' + src + ' as a second language. Write in ' + tgt + ', at most ' + N +
+      ' short sentences: say plainly what the sentence states, break long structure into simple statements, ' +
+      'and say what its abbreviations and terms mean as used in the CONTEXT.');
+    const style = styleSentence(tgt, TARGET_STYLE[tc]);
+    const ex = TERM_EXAMPLES[tc] ? ' (e.g. ' + TERM_EXAMPLES[tc] + ')' : '';
+    lines.push(withSrc
+      ? 'Write terms as the standard ' + tgt + ' term with the original ' + src + ' term in parentheses' + ex + '.' + style
+      : 'Keep medical terms as written.' + style);
+  }
+  lines.push('- "t": the explanation.');
+  lines.push('- "terms": up to ' + EXPLAIN.MAX_TERMS + ' terms from the SENTENCE as {"src": the term exactly as written in the SENTENCE, "tr": ' +
+    (general ? 'the usual ' + tgt + ' word or expression' : 'the standard ' + tgt + ' medical term') + '}.');
+  lines.push('Use ONLY information in the SENTENCE and CONTEXT — do not add facts, causes, numbers, treatments or advice. ' +
+    'If the sentence cannot be understood without information that is not in the CONTEXT, say so in one short sentence.');
+  lines.push('Keep numbers, units and drug names exactly as written.');
+  return lines.join('\n');
+}
+
+/**
+ * 4-7 설명 요청(`CompletionRequest`, 8-1). DOC = `{"sentence": escapeDoc(문장), "context": escapeDoc(맥락 창)}`.
+ * ★ **보내는 것은 그 문장과 그 문단 글뿐** — 항목에서 `sentence`·`context` 만 읽는다(책 제목·쪽·메모는 있어도 읽지 않는다).
+ * @param {{sentence:string, context?:string}} item `context` = 그 문단 글(없으면 문장만)
+ * @param {{src:string, target:string, domain?:string}} langs
+ * @returns {{system:string, user:string, json:true, schema:Object, maxOutputTokens:number, temperature:number}|null}
+ */
+export function buildExplainRequest(item, langs) {
+  const it = item || {};
+  const l = langs || {};
+  const sentence = clean(it.sentence);
+  const task = explainInstruction(l.src, l.target, l.domain);
+  if (!task || !sentence) return null;
+  const ctx = explainContext(sentence, it.context || sentence, EXPLAIN.CONTEXT_CHARS);
+  const doc = { sentence: escapeDoc(sentence), context: escapeDoc(ctx) };
+  return {
+    system: commonSystem(true, l.domain),
+    user: task + '\n' + EXPLAIN_SCHEMA_LINE + '\n<<<DOC\n' + JSON.stringify(doc) + '\n>>>',
+    json: true,
+    schema: EXPLAIN_SCHEMA,
+    maxOutputTokens: EXPLAIN.OUT_TOKENS,
+    temperature: PIPELINE.TEMPERATURE
+  };
+}
+
+const END_MARK = /[.!?؟。！？…]/u;
+const CLOSE_MARK = /[)"'”’»\]]/u;
+const CJK_END = /[。！？]/u;
+
+/**
+ * 설명 글(모델 출력) → 문장들. 끝 부호(. ! ? ؟ 。 …) 뒤에 공백·글 끝이 올 때만 끊는다 — `7.5`·`e.g` 안의 점은 끊지 않는다
+ * (숫자를 쪼개지 않는다). 닫는 괄호·따옴표는 앞 문장에 붙인다. CJK 끝 부호는 공백 없이도 끊는다. 낭독 문장 분할(`buildUnits`)과
+ * 무관한 출력 다듬기 — 상한(3문장·400자)을 문장 경계에서 자르는 데만 쓴다. 순수 함수.
+ */
+export function explainSentences(text) {
+  const a = Array.from(String(text == null ? '' : text));
+  const out = [];
+  let start = 0;
+  for (let k = 0; k < a.length; k++) {
+    if (!END_MARK.test(a[k])) continue;
+    let j = k + 1;
+    while (j < a.length && (END_MARK.test(a[j]) || CLOSE_MARK.test(a[j]))) j++;
+    if (j >= a.length || WS.test(a[j]) || CJK_END.test(a[j - 1])) {
+      const s = a.slice(start, j).join('').trim();
+      if (s) out.push(s);
+      start = j;
+      k = j - 1;
+    }
+  }
+  const rest = a.slice(start).join('').trim();
+  if (rest) out.push(rest);
+  return out;
+}
+
+/** 한 문장이 상한보다 길 때 — 숫자를 쪼개지 않고(`cutWhole`) 자른 뒤 끝의 반쪽 낱말을 뗀다(공백이 있으면). */
+function cutWords(s, n) {
+  const cut = cutWhole(s, n);
+  const all = Array.from(String(s == null ? '' : s));
+  const a = Array.from(cut);
+  if (a.length >= all.length || WS.test(all[a.length] || ' ')) return cut;   // 다 들어갔거나 낱말 경계에서 끊겼다
+  let k = a.length;
+  while (k > 0 && !WS.test(a[k - 1])) k--;
+  return (k > 0 ? a.slice(0, k).join('') : cut).trim();
+}
+
+/**
+ * 4-7 검증 `checkExplain(item, value)` — `item` = 보낸 항목(`{sentence, context}` — 숫자 거름 기준은 **보낸 문장 + 맥락 창**).
+ *   - `t` 가 비면 `empty`.
+ *   - ★ **숫자 거름(11-D7)**: 출력 숫자 토큰(`numberTokens` — 10-2 와 같은 함수, 동방 숫자 = 서방 숫자)이 입력에 없으면 그 **문장만** 뺀다.
+ *     남은 문장이 없으면 `digits`(캐시하지 않음).
+ *   - 상한으로 **자른다**(실패 아님): 앞에서부터 문장을 `EXPLAIN.MAX_SENTENCES`(3)개·`EXPLAIN.MAX_CHARS`(400)자까지, 문장 경계에서.
+ *     첫 문장 혼자 400자를 넘으면 숫자·낱말을 쪼개지 않고 자른다. 용어 ≤ 3(각 ≤ 80자, 입력 밖 숫자 든 쌍은 뺀다).
+ * @returns {{chunkFailed:false, items:[{i:0, state:'ok'|'failed', value?:{t:string, terms:Array}, reason?:string}]}}
+ */
+export function checkExplain(item, value) {
+  const it = item || {};
+  const sentence = clean(it.sentence);
+  const ctx = explainContext(sentence, it.context || sentence, EXPLAIN.CONTEXT_CHARS);
+  const allowed = numberTokens(sentence + ' ' + ctx);
+  const foreign = (x) => hasForeignNumber(x, allowed, numberTokens);
+  const fail = (reason) => ({ chunkFailed: false, items: [{ i: 0, state: 'failed', reason: reason }] });
+  const full = clean(value && value.t);
+  if (!full) return fail('empty');
+  const kept = explainSentences(full).filter((s) => !foreign(s));
+  if (!kept.length) return fail('digits');
+  let t = '';
+  let n = 0;
+  for (const s of kept) {
+    if (n >= EXPLAIN.MAX_SENTENCES) break;
+    const next = t ? t + ' ' + s : s;
+    if (charLen(next) > EXPLAIN.MAX_CHARS) { if (!t) t = cutWords(s, EXPLAIN.MAX_CHARS); break; }
+    t = next;
+    n++;
+  }
+  if (!t || foreign(t)) return fail('digits');
+  const terms = [];
+  for (const x of Array.isArray(value && value.terms) ? value.terms : []) {
+    if (terms.length >= EXPLAIN.MAX_TERMS) break;
+    const a = clean(x && x.src);
+    const b = clean(x && x.tr);
+    if (!a || !b || foreign(a + ' ' + b)) continue;
+    const ca = cutWhole(a, EXPLAIN.TERM_MAX);
+    const cb = cutWhole(b, EXPLAIN.TERM_MAX);
+    if (!ca || !cb || foreign(ca + ' ' + cb)) continue;
+    terms.push({ src: ca, tr: cb });
+  }
+  return { chunkFailed: false, items: [{ i: 0, state: 'ok', value: { t: t, terms: terms } }] };
 }
