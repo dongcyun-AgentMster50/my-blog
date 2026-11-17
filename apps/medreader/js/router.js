@@ -11,7 +11,7 @@
 
 /** 화면 이름 — `index.html` 의 `data-screen` 값과 1:1 이다. */
 export const SCREENS = Object.freeze([
-  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab', 'summaries', 'cards', 'planner'
+  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab', 'summaries', 'cards', 'planner', 'notes'
 ]);
 
 /** 알 수 없는 해시가 떨어지는 곳(12-1). */
@@ -29,6 +29,8 @@ export const DEFAULT_ROUTE = 'library';
  *   `#/summaries` · `#/summaries/:docId` → {name:'summaries', params:{docId?}} ← `[11-3]` 저장한 요약(전체 · 그 책). 범위·펼침은 URL 에 없다
  *   `#/cards` · `#/cards/:docId`     → {name:'cards', params:{docId?}}      ← `[12-3]` 기억 카드 복습·목록(전체 · 그 책). 탭·거르기 칩은 URL 에 없다
  *   `#/planner`                      → {name:'planner', params:{}}          ← `[13-2]` 학습 계획(시험·진도). 편집 중인 시험은 URL 에 없다
+ *   `#/notes` · `#/notes/:docId` · `#/notes/:docId/:from-:to` → {name:'notes', params:{docId?, range?:{from, to}}}
+ *                                                                            ← `[20-3]` 필기(전체 · 그 책 · 그 책의 쪽 범위 — 15 묶음에서). 거르기 칩은 URL 에 없다
  *   `#/settings` `#/usage` `#/about` `#/onboarding`
  *   빈 해시                          → {name:'', params:{}}  ← 호출자가 온보딩 여부로 정한다
  *   그 밖                            → {name:'library', params:{}}
@@ -95,6 +97,13 @@ export function parseRoute(hash) {
       // `[13-2 — spec 17-12 5]` 학습 계획 — 시험 목록·결과 카드. 펼친 시험·편집 칸은 화면 메모리(해시에 넣지 않는다).
       return { name: 'planner', params: {}, raw: raw };
 
+    case 'notes': {
+      // `[20-3 — spec 17-16 6]` 필기 — 전체 · 그 책 · 그 책의 쪽 범위(`a-b` — 15 묶음 필기 줄). 범위 꼴이 이상하면 그 책 전체.
+      if (!parts[1]) return { name: 'notes', params: {}, raw: raw };
+      const range = toRange(parts[2]);
+      return { name: 'notes', params: range ? { docId: parts[1], range: range } : { docId: parts[1] }, raw: raw };
+    }
+
     case 'usage':
       return { name: 'usage', params: {}, raw: raw };
 
@@ -117,6 +126,16 @@ function toPage(v) {
   if (!Number.isFinite(n)) return 1;
   const i = Math.floor(n);
   return i >= 1 ? i : 1;
+}
+
+/** `[20-3]` 쪽 범위 `a-b`(1 이상 정수, 거꾸로면 바로잡음). 아니면 null. */
+function toRange(v) {
+  const m = /^(\d{1,6})-(\d{1,6})$/.exec(String(v == null ? '' : v));
+  if (!m) return null;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  if (a < 1 || b < 1) return null;
+  return { from: Math.min(a, b), to: Math.max(a, b) };
 }
 
 /* ── 해시 만들기 — 문자열을 흩뿌리지 않는다 ────────────── */
@@ -143,6 +162,15 @@ export function cardsHash(docId) {
 }
 /** `[13-2]` 학습 계획. */
 export function plannerHash() { return '#/planner'; }
+/** `[20-3]` 필기 — docId 가 있으면 그 책(쪽 범위 `range` 를 주면 그 범위), 없으면 전체. */
+export function notesHash(docId, range) {
+  if (docId == null || docId === '') return '#/notes';
+  const base = '#/notes/' + encodeURIComponent(docId);
+  const r = range || null;
+  const a = r ? Math.floor(Number(r.from)) : NaN;
+  const b = r ? Math.floor(Number(r.to)) : NaN;
+  return Number.isFinite(a) && Number.isFinite(b) && a >= 1 && b >= 1 ? base + '/' + Math.min(a, b) + '-' + Math.max(a, b) : base;
+}
 export function quizHash(docId, sectionId) {
   return '#/quiz/' + encodeURIComponent(docId) + '/' + encodeURIComponent(sectionId);
 }

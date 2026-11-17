@@ -73,7 +73,7 @@ import { createRemember } from './remember.js';
 import { readLogStore, bucketFor } from '../plan/readlog.js';
 // `[20-2 — spec 17-16 5]` 필기 만들기 — 선택 줄 `[⋯]` 필기 줄 · 메모 시트 · 쪽 필기 시트 · 음성 "표시"(호출 0 · 낭독을 멈추지 않는다).
 // 칠하기는 20-1 의 길(`annotate.paintNow`)만 — 지금 쪽의 찾은 결과(`placedNow`)로 겹침을 잰다.
-import { createAnnoFlow, initNoteSheet, inheritWas, docMeta } from './notesheet.js';
+import { createAnnoFlow, initNoteSheet, createExplainHold, docMeta } from './notesheet.js';
 import { placedNow, paintNow } from './annotate.js';
 import { currentScreen, refreshAnnoChip } from './reader.js';
 
@@ -110,7 +110,9 @@ const noteUnits = new Map();
 /** `[20-2]` 필기 — 흐름(`createAnnoFlow` — DOM 없음) · 시트(메모·쪽 필기·[되돌리기]) · 마지막 설명의 `was`(음성 "표시" 되돌림). */
 let annoFlow = null;
 let notesUi = null;
-let explainHeld = null;
+/** `[20-3 — 20-2R #1]` 단추 [설명]의 `was` 를 **그 띠 번호와 함께**(`createExplainHold` — 그 띠가 열려 있을 때만 이어받음) · ask 가 연 마지막 띠 번호. */
+let explainHold = null;
+let lastNoteId = 0;
 /** `[8d]` 마지막으로 보인 단위 — 현재 블록이 커지면 6-5 편안 영역을 다시 본다. */
 let lastShown = null;
 /** 키·모델·프로바이더 지문(원문 키를 들고 있지 않는다). 바뀌면 `pipeline.configChanged`. */
@@ -202,6 +204,11 @@ export function initControls() {
 
   // `[8b-2]` 띠가 같은 두 객체의 이벤트를 듣는다(띠는 speaker 를 조작하지 않는다).
   trband = initTrBand({ readalong: readalong, speaker: speaker });
+  // `[20-3 — 20-2R #1]` 연 설명 띠 번호만 엿본다(`openNote` 감쌈 — 띠 동작 무변). 단추 [설명]의 was 를 그 번호와 함께 든다(`explainHold`).
+  if (trband && typeof trband.openNote === 'function') {
+    const rawOpenNote = trband.openNote;
+    trband.openNote = function (o) { const id = rawOpenNote(o); lastNoteId = id || 0; return id; };
+  }
   // `[8c-1]` 탭 모드가 열린 동안 문장 아래 표시의 `data-tr-inline` 을 뗀다(8cf-D5 — 띠가 보이게). inlinetr 는 아래에서 만든다.
   trband.setInlineSuspend(function (on) { if (inlinetr) inlinetr.suspend(on); });
 
@@ -312,6 +319,8 @@ export function initControls() {
     units: function () { return speaker.sentenceUnits(); },
     current: function () { return { cur: speaker.getCurrent(), idx: speaker.getIndex(), unit: speaker.getUnit() }; }
   });
+  // `[20-3 — 20-2R #1]` 단추 [설명]의 was — 그 띠(번호)가 열려 있을 때만 음성 "표시"·다음 [설명]이 잇는다
+  explainHold = createExplainHold(function (id) { return !!trband && trband.isNoteOpen(id); });
   notesUi = initNoteSheet({
     flow: annoFlow,
     focusBack: function (lineId) { focusLine(lineId, false); },
@@ -488,7 +497,7 @@ export function initControls() {
       if (!annoFlow) return Promise.resolve(null);
       return annoFlow.markCurrent().then(function (r) {
         if (r && r.ok && !r.already) refreshAnnoChip();
-        return Object.assign({}, r, { was: inheritWas(o && o.was, explainHeld, !!trband && trband.isNoteOpen()) });
+        return Object.assign({}, r, { was: explainHold ? explainHold.was(o && o.was) : (o && o.was) });
       });
     }
   });
@@ -654,7 +663,7 @@ export function leaveControls() {
   if (sumsheet) sumsheet.close(false);   // `[11-2]` 요약 시트도
   if (sayer) sayer.stop();
   if (remember) remember.leave();        // `[12-2]` 뒷면 기다림(pendingBacks)은 리더 세션 동안만
-  explainHeld = null;                    // `[20-2]` (메모·쪽 필기 시트·[되돌리기] 줄은 notesheet 가 리더 떠남에서 거둔다)
+  if (explainHold) explainHold.clear();  // `[20-2]` (메모·쪽 필기 시트·[되돌리기] 줄은 notesheet 가 리더 떠남에서 거둔다)
   noteUnits.clear();
   lastShown = null;
   toggleRatePanel(false);
@@ -701,8 +710,10 @@ function openTapFor(lineId, segsWanted) {
 function onSelAction(id, snap) {
   cancelVoice();
   if (!snap || snap.lineId == null) return;
-  // `[20-2]` [설명] 누르기 전 상태·설명 띠(ask 가 같은 틱에 읽기를 멈추고 띠를 연다 — 그 전에 잰다)
-  const pre = id === 'explain' && speaker ? { st: speaker.getState(), band: !!trband && trband.isNoteOpen() } : null;
+  // `[20-2]` [설명] 누르기 전 상태(ask 가 같은 틱에 읽기를 멈추고 띠를 연다 — 그 전에 잰다). `[20-3 — 20-2R #1]` 앞 설명 띠가
+  // **그 번호로** 아직 열려 멈춰 둔 읽기면 그 was 를 잇는다 · 누른 뒤 이번에 연 띠 번호와 함께 든다(`explainHold`).
+  const pre = id === 'explain' && speaker && explainHold ? explainHold.before(speaker.getState()) : null;
+  const noteBefore = lastNoteId;
   // `[12-2]` [설명]이면 이 스냅숏이 설명 띠 [☆] 의 대상(ask 가 같은 틱에 띠를 연다 — `noteUnitFor`). 이 함수 끝에서 비운다.
   explainSnap = id === 'explain' ? snap : null;
   if (id === 'word' && sumsheet) sumsheet.close(false);    // `[11-2]` 시트는 한 번에 하나
@@ -730,7 +741,7 @@ function onSelAction(id, snap) {
     // `[11-4 — spec 17-2-1 4-7 · 11-D15]` 설명 — 선택 시작 줄의 문장(호출 1, 캐시 적중이면 0). 읽는 중이면 멈추고 말한 뒤 이어 읽는다.
     if (ask) ask.explain({ via: 'button', snap: snap }).catch(() => { /* 결과는 띠가 그린다 */ });
     // `[20-2]` 이 누름의 was(ask 의 `inherit` 와 같은 결 — 누르기 **전**에 잰 값) — 띠가 열린 채 음성 "표시"를 하면 끝난 뒤 이 was 로.
-    if (pre) explainHeld = { was: inheritWas(pre.st, explainHeld, pre.band) };
+    if (pre != null) explainHold.after(lastNoteId !== noteBefore ? lastNoteId : 0, pre);
     // `[11-4b — 11-4R #3]` [문장 번역]처럼 고른 줄을 띠 위로 — 띠는 ask 가 같은 틱에 열었다(선택 줄은 거둬져 띠 윗변이 가장자리).
     if (trband) liftLineAbove(snap.lineId, liftEdge(selbar ? selbar.top() : null, trband.bandTop()));
   } else if (id === 'remember') {

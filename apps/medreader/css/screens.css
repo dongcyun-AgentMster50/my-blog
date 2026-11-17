@@ -1919,3 +1919,124 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 #plAddRange { inline-size: 100%; margin-block-start: var(--sp-2); }
 .pl-form-actions button { flex: 1 1 7em; min-inline-size: 0; }
 .pl-disclaimer { margin-block: var(--sp-4) 0; }
+
+/* ── `[20-3 — spec 17-16 6]` 필기 화면 `#/notes` · 쪽 필기 시트 "이 책 필기 모두" ───────────────────
+   ★ 논리 속성만(16-H) — 줄 방향은 UI, 인용은 `dir=ltr`(원서 — 아랍어 UI 에서도 UI 쪽 가장자리에), 메모는 `dir=auto`(아랍어·영어 섞임).
+   ★ 줄·칩·단추 48px 이상(16-G). 360px 가로 스크롤 0 — 칸은 `min-inline-size: 0`, 긴 글은 `overflow-wrap: anywhere`.
+   ★ 색 점은 리플로우에 칠해질 색 그대로(테마 토큰 `--anno-*` — 20-1). 삭제 확인은 `.confirm-dialog`, 메모 고치기는 `.vocab-edit` 대화 식. */
+.page-notes .pn-all {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  margin-block: var(--sp-1) 0;
+  overflow-wrap: anywhere;
+}
+.page-notes .pn-all[hidden] { display: none; }
+.notes-range-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-block: 0 var(--sp-2); }
+.notes-range-row[hidden] { display: none; }
+.notes-range { flex: 1 1 12em; min-inline-size: 0; margin: 0; overflow-wrap: anywhere; }
+.notes-range-row button { flex: 0 1 auto; min-inline-size: 0; min-block-size: var(--tap); }
+.notes-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block: 0 var(--sp-3); }
+.notes-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-2);
+  overflow-wrap: anywhere;
+}
+.notes-chip[aria-pressed="true"] { background: var(--c-accent); color: var(--c-accent-text); border-color: var(--c-accent); }
+.notes-dot {
+  flex: 0 0 auto;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--c-text-dim);
+  box-sizing: border-box;
+}
+.nd-yellow { background: var(--anno-yellow); }
+.nd-green { background: var(--anno-green); }
+.nd-blue { background: var(--anno-blue); }
+.nd-pink { background: var(--anno-pink); }
+.nd-note { background: none; border-style: dotted; border-color: var(--anno-note); }
+.notes-status { margin-block: 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.notes-status:empty { display: none; }
+.notes-share[hidden] { display: none; }
+.notes-book { margin-block-end: var(--sp-4); }
+.notes-book-title { font-size: var(--fs-base); margin-block: var(--sp-3) var(--sp-1); text-align: start; overflow-wrap: anywhere; }
+.notes-gone { margin-block: 0 var(--sp-2); font-size: var(--fs-sm); color: var(--c-text-dim); overflow-wrap: anywhere; }
+.notes-head {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--c-text-dim);
+  margin-block: var(--sp-3) 0;
+  padding-block: var(--sp-1);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.notes-items { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--c-border); }
+.notes-item {
+  margin: 0;
+  min-block-size: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  border-block-end: 1px solid var(--c-border);
+}
+.notes-main { display: flex; align-items: flex-start; gap: var(--sp-2); min-inline-size: 0; }
+.notes-main .notes-dot { margin-block-start: 3px; }
+.notes-body { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-direction: column; gap: 2px; }
+.notes-quote { margin: 0; line-height: 1.45; unicode-bidi: isolate; overflow-wrap: anywhere; }
+/* 인용(ltr)은 UI 쪽 가장자리에 붙인다 — 아랍어 UI 에서는 ltr 글자의 끝(end)이 오른쪽(물리 속성 없이 — 11-3 과 같은 꼴) */
+:root[dir="rtl"] .notes-quote,
+:root[dir="rtl"] .notes-memo-quote { text-align: end; }
+.notes-memo { margin: 0; color: var(--c-text-dim); font-size: var(--fs-sm); line-height: 1.45; unicode-bidi: plaintext; white-space: pre-wrap; overflow-wrap: anywhere; }
+.notes-meta { margin: 0; font-size: var(--fs-sm); color: var(--c-text-dim); overflow-wrap: anywhere; }
+.notes-item[data-lost] .notes-meta { font-style: italic; }
+.notes-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block: var(--sp-2) 0; }
+.notes-btn { flex: 1 1 6em; min-inline-size: 0; min-block-size: var(--tap); }
+.notes-undo {
+  position: sticky;
+  inset-block-end: var(--sp-3);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+}
+.notes-undo[hidden] { display: none; }
+.notes-undo-text { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
+.notes-undo button { flex: 0 0 auto; min-block-size: var(--tap); }
+/* 메모 대화 — 위에 붙이고 단추 줄은 아래 sticky(낮은 가로 화면에서도 [저장]이 대화 안 굴림 밖에 보인다).
+   키보드가 올라오면(`data-kb` — notes.js `visualViewport`) 대화 높이를 보이는 뷰포트에 맞춘다. */
+.notes-memo-dlg { margin-block: var(--sp-3) auto; max-block-size: calc(100dvh - 2 * var(--sp-3)); padding-block-end: 0; }
+.notes-memo-dlg[data-kb="on"] { max-block-size: calc(var(--nm-vh, 100dvh) - 2 * var(--sp-3)); }
+.notes-memo-dlg .confirm-actions {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 1;
+  margin-block-start: var(--sp-2);
+  padding-block: var(--sp-2) var(--sp-4);
+  background: var(--c-surface);
+}
+.notes-memo-quote {
+  margin: 0 0 var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  max-block-size: 7.5em;
+  overflow: auto;
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.notes-memo-dlg textarea { unicode-bidi: plaintext; }
+.notes-memo-count { margin: 0; font-size: var(--fs-sm); color: var(--c-text-dim); }
+@media (max-height: 520px) {
+  .notes-memo-quote { max-block-size: 3em; }
+}

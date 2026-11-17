@@ -53,7 +53,7 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=c194e6cd68">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=303a0e9686">
+<link rel="stylesheet" href="css/screens.css?v=bd7e563675">
 <link rel="stylesheet" href="css/reader.css?v=2aea5d1039">
 <script type="importmap">
 {
@@ -72,13 +72,13 @@
     "./js/config.js": "./js/config.js?v=be5e88dac9",
     "./js/db.js": "./js/db.js?v=b085a26857",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=5ac68792c0",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=2b6d680483",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=786ccdd1e5",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=edac7ab806",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=92a4c2e017",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=01c8624902",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=de7338c37d",
-    "./js/main.js": "./js/main.js?v=aa606659e1",
-    "./js/notes/annotations.js": "./js/notes/annotations.js?v=c9c7b4fa96",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=daf45f537f",
+    "./js/main.js": "./js/main.js?v=8193762d1a",
+    "./js/notes/annotations.js": "./js/notes/annotations.js?v=ec906068a2",
     "./js/notes/summaries.js": "./js/notes/summaries.js?v=c928e7ff09",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
     "./js/pdf/loader.js": "./js/pdf/loader.js?v=611b17a276",
@@ -89,7 +89,7 @@
     "./js/privacy/redact.js": "./js/privacy/redact.js?v=10e447456b",
     "./js/quiz/engine.js": "./js/quiz/engine.js?v=8408641fcc",
     "./js/quiz/parser.js": "./js/quiz/parser.js?v=c2403f9857",
-    "./js/router.js": "./js/router.js?v=bd01afc8fa",
+    "./js/router.js": "./js/router.js?v=317ddea540",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
     "./js/settings.js": "./js/settings.js?v=fbce9584d8",
@@ -127,12 +127,13 @@
     "./js/ui/cards.js": "./js/ui/cards.js?v=50880939bc",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
     "./js/ui/chrome.js": "./js/ui/chrome.js?v=ebc3657eb9",
-    "./js/ui/controls.js": "./js/ui/controls.js?v=ddef90db81",
+    "./js/ui/controls.js": "./js/ui/controls.js?v=6d2b6497ec",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
     "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=0fe335b7ac",
-    "./js/ui/library.js": "./js/ui/library.js?v=ae575a2854",
+    "./js/ui/library.js": "./js/ui/library.js?v=80fa03cd47",
     "./js/ui/links.js": "./js/ui/links.js?v=af6adb9d8f",
-    "./js/ui/notesheet.js": "./js/ui/notesheet.js?v=b586e4dfaf",
+    "./js/ui/notes.js": "./js/ui/notes.js?v=635d954c45",
+    "./js/ui/notesheet.js": "./js/ui/notesheet.js?v=24b0859b63",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=e6b5ffa770",
@@ -141,7 +142,7 @@
     "./js/ui/reader.js": "./js/ui/reader.js?v=24f221bba7",
     "./js/ui/remember.js": "./js/ui/remember.js?v=568e7a280e",
     "./js/ui/search.js": "./js/ui/search.js?v=4a34bd0a53",
-    "./js/ui/selbar.js": "./js/ui/selbar.js?v=3d88fe2d79",
+    "./js/ui/selbar.js": "./js/ui/selbar.js?v=850b772aa4",
     "./js/ui/settings.js": "./js/ui/settings.js?v=fd4e8ceffc",
     "./js/ui/summaries.js": "./js/ui/summaries.js?v=6b7280a0fd",
     "./js/ui/sumsheet.js": "./js/ui/sumsheet.js?v=9ac7bbb36c",
@@ -153,7 +154,7 @@
     "./js/ui/voice.js": "./js/ui/voice.js?v=787364cd4a",
     "./js/ui/wordsheet.js": "./js/ui/wordsheet.js?v=e1bb841a16",
     "./js/vocab/store.js": "./js/vocab/store.js?v=928b6125e9",
-    "./js/voice/commands.js": "./js/voice/commands.js?v=acde17c22d",
+    "./js/voice/commands.js": "./js/voice/commands.js?v=06f413860a",
     "./js/voice/listen.js": "./js/voice/listen.js?v=194d4c7d9c"
   }
 }
@@ -672,6 +673,8 @@
       </div>
       <p class="pn-empty" id="pnEmpty" data-i18n="anno.page.empty" hidden></p>
       <ul class="pn-list" id="pnList"></ul>
+      <!-- `[20-3 — spec 17-16 6]` 이 책 필기 모두 → `#/notes/:docId`(href 는 `js/ui/notesheet.js` 가 그 책으로 채운다). -->
+      <a class="pn-all" id="pnAll" href="#/notes" data-i18n="anno.page.all" hidden></a>
     </div>
 
     <!-- `[20-2 — 20-D10]` 지웠다 + [되돌리기](3초) — 선택 줄 자리(컨트롤 바 위). -->
@@ -1366,6 +1369,80 @@
         <button type="button" data-dialog="cancel" data-i18n="common.cancel"></button>
         <button type="button" class="danger" data-dialog="ok" data-i18n="cards.edit.delete"></button>
       </div>
+    </dialog>
+  </section>
+
+  <!-- ════ 필기 (spec 17-16 6) — 20-3 ══════════════════
+       `#/notes`(전체) · `#/notes/:docId`(그 책) · `#/notes/:docId/:a-b`(그 책의 쪽 범위). 입구: 서재 카드 [⋯] "이 책의 필기" · 쪽 필기 시트 "이 책 필기 모두".
+       ★ 호출 0 — 목록·거르기·[원문으로]·[메모]·[삭제]·내보내기 모두 기기 안. 내보내기 = Markdown `.md`(UTF-8 BOM · CRLF) + 공유 주의 한 줄.
+       ★ 글자는 `js/ui/notes.js` 가 textContent 로만(`innerHTML` 0). 인용 `dir=ltr` · 메모 `dir=auto`. 줄·칩·단추 48px 이상.
+       ★ 메모 있는 것 지우기·메모 고치기는 페이지 안 `<dialog>`(`confirm()` 쓰지 않음). 메모 없는 것은 바로 지우고 3초 [되돌리기]. -->
+  <section class="screen notes-screen" data-screen="notes" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" id="notesTitle" data-i18n="notes.title"></h1>
+    </div>
+    <div class="sums-tools notes-tools">
+      <label class="sr-only" for="notesScope" data-i18n="notes.scope.label"></label>
+      <select id="notesScope" class="sums-select"></select>
+    </div>
+    <div class="notes-range-row" id="notesRangeRow" hidden>
+      <p class="notes-range" id="notesRangeText"></p>
+      <button type="button" data-na="all-pages" data-i18n="notes.range.all"></button>
+    </div>
+    <div class="notes-chips" id="notesChips" role="group" aria-labelledby="notesChipsLabel">
+      <span class="sr-only" id="notesChipsLabel" data-i18n="notes.filter.label"></span>
+      <button type="button" class="notes-chip" data-nf="color" data-color="yellow" aria-pressed="false"><span class="notes-dot nd-yellow" aria-hidden="true"></span><span data-i18n="notes.filter.yellow"></span></button>
+      <button type="button" class="notes-chip" data-nf="color" data-color="green" aria-pressed="false"><span class="notes-dot nd-green" aria-hidden="true"></span><span data-i18n="notes.filter.green"></span></button>
+      <button type="button" class="notes-chip" data-nf="color" data-color="blue" aria-pressed="false"><span class="notes-dot nd-blue" aria-hidden="true"></span><span data-i18n="notes.filter.blue"></span></button>
+      <button type="button" class="notes-chip" data-nf="color" data-color="pink" aria-pressed="false"><span class="notes-dot nd-pink" aria-hidden="true"></span><span data-i18n="notes.filter.pink"></span></button>
+      <button type="button" class="notes-chip" data-nf="color" data-color="note" aria-pressed="false"><span class="notes-dot nd-note" aria-hidden="true"></span><span data-i18n="notes.filter.note"></span></button>
+      <button type="button" class="notes-chip" data-nf="memo" aria-pressed="false" data-i18n="notes.filter.memo"></button>
+      <button type="button" class="notes-chip" data-nf="lost" aria-pressed="false" data-i18n="notes.filter.lost"></button>
+    </div>
+    <p class="notes-status" id="notesStatus" role="status" aria-live="polite"></p>
+
+    <!-- 내보내기(호출 0) — Markdown `.md`(책 `#` · 장 `##` · 줄마다 `> 인용` + 메모 + 쪽 라벨) + 공유 주의 한 줄. -->
+    <div class="sums-actions">
+      <button type="button" id="notesExport" data-na="export" data-i18n="notes.export" hidden></button>
+    </div>
+    <p class="warn-note notes-share" id="notesShare" data-i18n="notes.export.share" hidden></p>
+
+    <div class="notes-list" id="notesList"></div>
+    <div class="placeholder" id="notesEmpty" hidden>
+      <p id="notesEmptyText"></p>
+    </div>
+
+    <!-- 지웠다 + [되돌리기](3초) — 화면 아래 붙음. -->
+    <div class="notes-undo" id="notesUndo" role="status" aria-live="polite" hidden>
+      <span class="notes-undo-text" id="notesUndoText"></span>
+      <button type="button" data-na="undo" data-i18n="anno.undo"></button>
+    </div>
+
+    <!-- 메모 있는 필기 지우기 — 페이지 안 확인(`confirm()` 쓰지 않음). 첫 초점은 [취소]. -->
+    <dialog class="confirm-dialog" id="notesDelDialog" aria-labelledby="notesDelTitle">
+      <h2 id="notesDelTitle" data-i18n="anno.delete.title"></h2>
+      <div class="confirm-actions">
+        <button type="button" data-dialog="cancel" data-i18n="common.cancel"></button>
+        <button type="button" class="danger" data-dialog="ok" data-i18n="anno.delete"></button>
+      </div>
+    </dialog>
+
+    <!-- 메모 보기·고치기 — 인용(작게 `dir=ltr`) · 글 칸 `dir=auto` 2,000자 · [저장]·[닫기]. 대화는 위에 붙고 단추 줄은 아래 sticky,
+         키보드가 올라오면 `js/ui/notes.js` 가 `visualViewport` 높이로 대화를 줄인다(`data-kb`) — [저장]이 늘 보인다(20-2 메모 시트와 같은 장치). -->
+    <dialog class="vocab-edit notes-memo-dlg" id="notesMemoDialog" aria-labelledby="notesMemoTitle">
+      <h2 class="vocab-edit-head" id="notesMemoTitle" data-i18n="anno.note.title"></h2>
+      <p class="notes-memo-quote" id="notesMemoQuote" dir="ltr"></p>
+      <div class="field">
+        <label for="notesMemoText" data-i18n="anno.note.label"></label>
+        <textarea id="notesMemoText" dir="auto" rows="4" maxlength="2000" spellcheck="false"></textarea>
+      </div>
+      <p class="notes-memo-count" id="notesMemoCount" aria-live="off"></p>
+      <div class="confirm-actions">
+        <button type="button" class="primary" data-memo="save" data-i18n="anno.note.save"></button>
+        <button type="button" data-memo="close" data-i18n="common.close"></button>
+      </div>
+      <p class="vocab-status" id="notesMemoStatus" role="status" aria-live="polite"></p>
     </dialog>
   </section>
 

@@ -605,6 +605,56 @@ test('V2 ★ 되돌림 이어받기 — 음성 설명을 말하는 중 «علّ�
   assert.equal(h.sp.getState(), 'paused');
 });
 
+test('V2 ★ [20-2R #1] 묵은 설명 was — 읽는 중 단추 [설명] → 재개 → 손으로 멈춤 → 음성 «اشرح»(다른 띠) → «علّم» → 끝나면 paused', async () => {
+  // controls 와 같은 꼴: 단추 [설명]의 was 를 **그 띠 번호와 함께**(`createExplainHold`) · 띠는 가짜(열린 번호 하나)
+  const band = { open: 0, seq: 0, openNote() { this.open = ++this.seq; return this.open; }, close() { this.open = 0; }, isNoteOpen(id) { return id != null && this.open === id; } };
+  const hold = NS.createExplainHold((id) => band.isNoteOpen(id));
+  const h = voiceRig({ result: (a) => Promise.resolve({ ok: true, key: 'voice.mark.done', was: hold.was(a.was) }) });
+  h.sp.play(); h.synth.finish();
+  assert.equal(h.sp.getState(), 'speaking');
+  // ① 읽는 중 단추 [설명] — 누르기 전 was = speaking, ask 가 띠(1)를 열고 읽기를 멈춘다
+  const pre = hold.before(h.sp.getState());
+  const id1 = band.openNote();
+  hold.after(id1, pre);
+  h.sp.pause();
+  assert.deepEqual(hold.held(), { id: 1, was: 'speaking' });
+  // ② 말한 뒤 재개 — 띠 닫힘 · 읽기 다시
+  band.close();
+  h.sp.play();
+  // ③ 손으로 멈춤 → ④ 음성 «اشرح»(멈춤 중) — 음성 설명이 다른 띠(2)를 연다(열린 채 남음)
+  h.sp.pause();
+  h.voice.press();
+  h.rec().fire(['اشرح']);
+  await flush();
+  band.openNote();
+  assert.equal(band.open, 2);
+  h.env.sayerBusy = false;
+  if (h.env.doneResolve) h.env.doneResolve('end');
+  await flush(); h.synth.finish(); await flush();
+  assert.equal(h.sp.getState(), 'paused', '음성 설명은 멈춤 중 들어왔다 — 멈춤 그대로');
+  // ⑤ «علّم» — 옛 단추 설명 띠(1)는 닫혔다 → 이어받지 않는다
+  h.voice.press();
+  h.rec().fire(['علّم']);
+  await flush();
+  assert.equal(h.env.calls, 1);
+  h.synth.finish();
+  await flush();
+  assert.equal(h.sp.getState(), 'paused', '★ 들어오기 전 paused — 옛 설명의 was(speaking)로 읽기를 다시 시작하지 않는다');
+  // 옛 꼴(아무 띠든 열려 있나 — 불리언)이었으면 다시 읽었다(회귀 고정)
+  assert.equal(NS.inheritWas('paused', { id: 1, was: 'speaking' }, band.open > 0), 'speaking', '옛 꼴은 다른 띠를 옛 띠로 여겼다');
+  assert.equal(NS.inheritWas('paused', { id: 1, was: 'speaking' }, (id) => band.isNoteOpen(id)), 'paused');
+  // 그 띠가 아직 열려 있으면 잇는다(설계 ③ 그대로) · 번호 없는 held 는 잇지 않는다
+  assert.equal(NS.inheritWas('paused', { id: 2, was: 'speaking' }, (id) => band.isNoteOpen(id)), 'speaking');
+  assert.equal(NS.inheritWas('paused', { was: 'speaking' }, (id) => band.isNoteOpen(id)), 'paused');
+  hold.clear();
+  assert.equal(hold.held(), null);
+  // controls 배선 — 띠 번호로 본다(불리언 isNoteOpen() 0)
+  const c = strip(read('../js/ui/controls.js'));
+  assert.match(c, /explainHold = createExplainHold\(function \(id\) \{ return !!trband && trband\.isNoteOpen\(id\); \}\);/);
+  assert.match(c, /was: explainHold \? explainHold\.was\(o && o\.was\) : \(o && o\.was\)/);
+  assert.doesNotMatch(c, /trband\.isNoteOpen\(\)/, '★ 아무 띠나 열려 있나로 보지 않는다');
+});
+
 /* ══ V3 명령 표 ════════════════════════════════════════════ */
 
 test('V3 ★ 명령 표 — mark 꼴 · 다른 명령과 헷갈림 0(전수) · 3낱말 규칙 · 부정 · 남는 오탐 기록', () => {
@@ -612,6 +662,8 @@ test('V3 ★ 명령 표 — mark 꼴 · 다른 명령과 헷갈림 0(전수) · 
   assert.ok(c && c.enabled);
   assert.deepEqual(c.ar, ['علّم', 'علم', 'ظلل', 'ظلّل', 'تظليل', 'علّم الجملة'], '설계 표 그대로 [검토 — Nour·운영자]');
   assert.deepEqual(c.en, ['highlight', 'mark', 'mark this']);
+  // `[20-3 — 20-2R #7 권장안]` «علم»·"mark" 는 혼자 말할 때만(`exact`) `[검토 — Nour·운영자]`
+  assert.deepEqual(c.exact, ['علم', 'mark']);
   assert.equal(VOICE_COMMANDS[VOICE_COMMANDS.length - 1].id, 'mark', '표 끝(다른 명령 순서 그대로)');
   // 전수: mark 동의어 → mark, 다른 명령의 모든 동의어 → mark 아님(그 명령 그대로)
   for (const s of c.ar) assert.equal(matchCommand([s], 'ar').id, 'mark', s);
@@ -629,8 +681,12 @@ test('V3 ★ 명령 표 — mark 꼴 · 다른 명령과 헷갈림 0(전수) · 
     // 9b 결정 ①: 4낱말 이상 문장 속 한 낱말 동의어는 명령이 아니다
     ['highlight the key findings in this chapter', 'en', null], ['علم الأمراض عند الأطفال مهم', 'ar', null]
   ]) assert.equal(matchCommand([s], l).id, want, l + ' «' + s + '»');
-  // 남는 오탐(기록 — 3낱말 이하 의학 용어 «علم الأمراض» "병리학") `[검토 — Nour]` · 실기기 묶음
-  assert.equal(matchCommand(['علم الأمراض'], 'ar').id, 'mark');
+  // `[20-3 — 20-2R #7]` 오탐 닫힘 — 2–3낱말 의학 용어(«علم الأمراض» 병리학 등)·"question mark"·"mark twain" → null
+  for (const [s, l] of [['علم الأمراض', 'ar'], ['علم الأدوية', 'ar'], ['علم التشريح', 'ar'], ['علم وظائف الأعضاء', 'ar'],
+    ['question mark', 'en'], ['mark twain', 'en']]) assert.equal(matchCommand([s], l).id, null, l + ' «' + s + '»');
+  // 그대로 mark — 혼자 «علّم»·«علم» · «علّم الجملة» · 군말 «علّم من فضلك» · «ظلل»·«ظلّل الجملة»·«تظليل» · "mark" 혼자 · "mark this"
+  for (const [s, l] of [['علّم', 'ar'], ['علم', 'ar'], ['علّم الجملة', 'ar'], ['علّم من فضلك', 'ar'], ['ظلل', 'ar'], ['ظلّل الجملة', 'ar'],
+    ['تظليل', 'ar'], ['mark', 'en'], ['mark this', 'en'], ['Mark.', 'en']]) assert.equal(matchCommand([s], l).id, 'mark', l + ' «' + s + '»');
 });
 
 /* ══ S1 정적 ═══════════════════════════════════════════════ */
@@ -641,7 +697,8 @@ test('S1 정적 — innerHTML 0 · import 방향 · 마크업 · CSS 48px · com
   }
   const ns = strip(read('../js/ui/notesheet.js'));
   const imp = [...ns.matchAll(/^import [^;]* from '([^']+)';/gm)].map((m) => m[1]).sort();
-  assert.deepEqual(imp, ['../config.js', '../i18n/index.js', '../notes/annotations.js', '../text/anchor.js', './annotate.js', './reader.js', './remember.js']);
+  // `[20-3]` + `../router.js`(쪽 필기 시트 "이 책 필기 모두" → `notesHash`)
+  assert.deepEqual(imp, ['../config.js', '../i18n/index.js', '../notes/annotations.js', '../router.js', '../text/anchor.js', './annotate.js', './reader.js', './remember.js']);
   assert.ok(!/pipeline|\bfetch\b|speaker\.(pause|play|stop|cancel)|\.pause\(\)/.test(ns), '★ 호출 0 · 낭독을 건드리지 않는다');
   assert.doesNotMatch(ns, /charhl|paintCharRanges|CSS\.highlights/, '자체 칠하기 0 — 20-1 의 길(repaint)만');
   // controls — 필기 갈래는 낭독을 멈추지 않는다

@@ -40,6 +40,8 @@ function isMine(v) { return !!v && (v.kind === KIND.HIGHLIGHT || v.kind === KIND
 function str(v) { return typeof v === 'string' ? v : ''; }
 function clip(s, n) { const x = str(s); return x.length > n ? x.slice(0, n) : x; }
 function colorOf(c) { return ANNO.COLORS.indexOf(c) >= 0 ? c : ANNO.COLORS[0]; }
+/** `[20-3]` 묶음 열쇠 — 같은 `group` 은 한 줄(없으면 제 id). 시트·필기 화면·셈이 같은 규칙. */
+export function groupKey(v) { return String(v && v.group != null ? v.group : v && v.id); }
 
 /** 문단 글의 해시 — 11 요약과 같은 식(`hashHex(normalizeForHash(…))`). */
 export function textHashOf(text) {
@@ -126,10 +128,11 @@ export function createAnnotationStore(deps) {
     const recs = [];
     let group = null;
     for (const an of anchors) {
+      // `[20-3 — 20-2R #2]` 묶음의 메모는 **대표 레코드(첫 레코드 — id = group) 하나에만**(spec 17-16 5 `[정정 20-2]`) — 다른 조각은 빈 메모.
       const rec = {
         id: newId(), kind: kind, docId: String(i.docId), pageNo: pageNo,
         fileHash: str(i.fileHash), docTitle: str(i.docTitle), anchor: an,
-        note: clip(i.note, ANNO.NOTE_MAX), group: null, createdAt: at, updatedAt: at
+        note: group == null ? clip(i.note, ANNO.NOTE_MAX) : '', group: null, createdAt: at, updatedAt: at
       };
       if (kind === KIND.HIGHLIGHT) rec.color = colorOf(i.color);
       if (group == null) group = rec.id;
@@ -216,17 +219,20 @@ export function createAnnotationStore(deps) {
     });
   }
 
-  /** 수 — `pageNo` 를 주면 그 쪽만(쪽 칩 — 20-2), 아니면 그 문서 전체. 못 읽으면 0. */
+  /**
+   * 수 — `pageNo` 를 주면 그 쪽만(쪽 칩 — 20-2), 아니면 그 문서 전체. 못 읽으면 0.
+   * `[20-3 — 20-2R #3]` **묶음 수**(같은 `group` = 하나 — 쪽 필기 시트·필기 화면의 줄 수와 같다). 고아도 센다(시트에 줄이 있다).
+   */
   async function count(docId, pageNo) {
-    let n = 0;
+    const groups = new Set();
     const byPage = pageNo !== undefined && pageNo !== null;
     try {
       await db.iterate(STORE, byPage ? { index: 'docId_pageNo', query: [String(docId), Number(pageNo)] } : { index: 'docId', query: String(docId) }, (v) => {
-        if (isMine(v)) n++;
+        if (isMine(v)) groups.add(groupKey(v));
         return true;
       });
     } catch (e) { return 0; }
-    return n;
+    return groups.size;
   }
 
   /**

@@ -321,7 +321,11 @@ function render(s) {
 /** 칸 단추들 — `[20-2]` 메뉴 맨 위 필기 줄(`.sel-anno`)은 칸이 아니다(그대로 둔다). */
 function actionButtons(host) { return Array.from(host.children).filter((b) => b.hasAttribute('data-sel-action')); }
 
-function paintButtons(host, model, item) {
+/**
+ * 칸 단추 그리기 — 모델 i 번째는 **칸 단추** i 번째에(`actionButtons` — 메뉴 첫 자식인 필기 줄은 건너뛴다).
+ * `[20-3 — 20-2R #5]` 내보냄: `tests/notes-ui-20.test.mjs` 가 가짜 DOM(필기 줄이 첫 자식)으로 기존 칸의 숨김·흐림이 제 칸에 가는지 본다.
+ */
+export function paintButtons(host, model, item) {
   const had = actionButtons(host);
   if (had.length !== model.length || had.some((b, i) => b.getAttribute('data-sel-action') !== model[i].id)) {
     for (const b of had) host.removeChild(b);

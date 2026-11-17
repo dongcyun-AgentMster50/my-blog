@@ -38,7 +38,7 @@ import { fileIdentityHash } from '../hash.js';
 import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
-import { go, replace, readerHash, vocabHash, summariesHash, cardsHash, libraryHash } from '../router.js';
+import { go, replace, readerHash, vocabHash, summariesHash, cardsHash, notesHash, libraryHash } from '../router.js';
 import { fromStored } from '../text/store.js';
 import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
@@ -59,6 +59,8 @@ import { DOMAINS, domainOf, normalizeDomain } from '../ai/prompts.js';
 import { vocabStore } from '../vocab/store.js';
 // `[11-2]` 삭제 확인 "저장한 요약 n개는 남습니다"(셈만 — 읽기)
 import { summaryStore } from '../notes/summaries.js';
+// `[20-3 — spec 17-16 6 · 20-D11]` 삭제 확인 "필기 n" 셈(읽기만) · 같은 PDF 를 다시 가져오면 고아 필기·요약을 새 문서에 다시 붙인다(`reattach` — 한 트랜잭션)
+import { annotationStore } from '../notes/annotations.js';
 // `[12-2 — spec 17-11 4]` 삭제 확인 "기억 카드 m 는 남습니다" — 그 문서의 문장 카드 수(읽기만).
 // `[12-3 — spec 17-11 6]` 서재 맨 위 "오늘" 줄 — 오늘 복습 줄의 셈(`queue().counts` — 읽기만, 호출 0).
 import { cardStore, dayStartOf, dayKeyOf, clampNewPerDay } from '../srs/cards.js';
@@ -552,6 +554,11 @@ function langPanel(doc, panelId) {
   cb.type = 'button';
   cb.setAttribute('data-action', 'cards');
   panel.appendChild(cb);
+  // `[20-3 — spec 17-16 6]` "이 책의 필기" → `#/notes/:docId` — 같은 패널, 같은 위임. 호출 0.
+  const nb = el('button', 'doc-notes', t('library.card.notes'));
+  nb.type = 'button';
+  nb.setAttribute('data-action', 'notes');
+  panel.appendChild(nb);
 
   // `[배포 안전장치]` 9-4 [텍스트 다시 추출] — 같은 [⋯] 패널, 같은 위임(`data-action`).
   const rx = el('div', 'doc-reextract');
@@ -701,6 +708,12 @@ async function importFile(file) {
           : t('library.import.done', { title: doc.title }));
       }
     }
+
+    // `[20-3 — spec 17-16 6 · 20-D11]` 같은 PDF 를 지웠다가 다시 가져왔다 — 같은 `fileHash` 이고 문서가 없는 필기·요약·개요를 이 문서에
+    // 다시 붙인다(`reattach` — documents 를 읽고 annotations 를 고치는 한 트랜잭션). 다른 PDF(다른 `fileHash`)의 것은 건드리지 않는다.
+    let moved = 0;
+    try { moved = await annotationStore().reattach(doc.fileHash, doc.id); } catch (e) { moved = 0; }
+    if (moved > 0) setStatus(((els && els.status && els.status.textContent) || '') + ' ' + t('library.import.reattached', { n: formatNumber(moved) }));
 
     await attach(doc, pdfDoc);
     await renderList();
@@ -1379,6 +1392,11 @@ async function onListClick(ev) {
     return;
   }
 
+  if (btn.getAttribute('data-action') === 'notes') {
+    go(notesHash(docId));          // `[20-3]` 이 책의 필기
+    return;
+  }
+
   if (btn.getAttribute('data-action') === 'reextract') {
     if (reextracting.has(docId)) return;
     const doc = await db.get('documents', docId);
@@ -1440,10 +1458,10 @@ async function onListClick(ev) {
 /**
  * 남는 것들의 셈 → 확인 대화에 덧붙일 조각(i18n 키·자리표시자). 0개인 것은 조각을 만들지 않는다. 순수 함수.
  * `[11-2 — crossstep "8f-2·11-2"]` 저장한 요약(요약 + 범위 개요 — `annotations` 는 문서를 지워도 남는다, 11-1 `keepsOnDocDelete`).
- * 필기(20)를 같은 줄로 셀지는 20 몫 — 지금은 요약·개요만 센다.
+ * `[20-3]` 필기(20)는 따로 조각 "필기 n"(요약·개요 조각에는 필기를 세지 않는다 — 요약 셈은 `summaryStore().count`, 필기 셈은 묶음 수).
  * `[12-2 — spec 17-11 4]` 기억 카드(문장 카드 — 12-D8 로 남는다) 조각을 단어장 다음에. 조각들은 `deleteConfirmText` 가 **한 줄로 합친다**
  * ("단어장 n · 기억 카드 m · 저장한 요약 k 는 남습니다" — `library.card.deleteKeeps`).
- * @param {{vocab?:number, cards?:number, summaries?:number}} counts
+ * @param {{vocab?:number, cards?:number, summaries?:number, notes?:number}} counts
  * @returns {{key:string, params:Object}[]}
  */
 export function deleteKeepLines(counts) {
@@ -1455,6 +1473,9 @@ export function deleteKeepLines(counts) {
   if (Number.isFinite(cards) && cards > 0) out.push({ key: 'library.card.deleteConfirmCards', params: { n: cards } });
   const sums = Math.floor(Number(c.summaries));
   if (Number.isFinite(sums) && sums > 0) out.push({ key: 'library.card.deleteConfirmSummaries', params: { n: sums } });
+  // `[20-3 — spec 17-16 6 · 20-D11]` 필기(하이라이트·메모 — `annotations` 는 문서를 지워도 남는다). 수 = 필기 화면 줄 수(묶음 = 1).
+  const notes = Math.floor(Number(c.notes));
+  if (Number.isFinite(notes) && notes > 0) out.push({ key: 'library.card.deleteConfirmNotes', params: { n: notes } });
   return out;
 }
 
@@ -1462,8 +1483,8 @@ export function deleteKeepLines(counts) {
  * 그 문서를 지워도 남는 것을 센다 — 읽기만(호출 0). 못 읽으면 0(확인 대화를 막지 않는다).
  * `summaries`·`[12-2]` `cards`(그 문서의 기억 카드 — `cardStore.keptCount`)는 1개 이상일 때만 결과에 담는다(8f-2 의 `{vocab}` 꼴 — 0 이면 조각도 없다).
  * @param {string} docId
- * @param {{vocab?:{countByDoc:Function}, summaries?:{count:Function}, cards?:{keptCount:Function}}} [deps]  테스트가 가짜 저장소를 넣는다
- * @returns {Promise<{vocab:number, cards?:number, summaries?:number}>}
+ * @param {{vocab?:{countByDoc:Function}, summaries?:{count:Function}, cards?:{keptCount:Function}, notes?:{count:Function}}} [deps]  테스트가 가짜 저장소를 넣는다
+ * @returns {Promise<{vocab:number, cards?:number, summaries?:number, notes?:number}>}
  */
 export async function deleteKeepCounts(docId, deps) {
   const vs = (deps && deps.vocab) || vocabStore;
@@ -1476,6 +1497,10 @@ export async function deleteKeepCounts(docId, deps) {
   let sums = 0;
   try { sums = Number(await ((deps && deps.summaries) || summaryStore()).count(docId)) || 0; } catch (e) { sums = 0; }
   if (sums > 0) out.summaries = sums;
+  // `[20-3]` 필기 — 묶음 수(`annotationStore().count` — 쪽 칩·필기 화면과 같은 셈)
+  let notes = 0;
+  try { notes = Number(await ((deps && deps.notes) || annotationStore()).count(docId)) || 0; } catch (e) { notes = 0; }
+  if (notes > 0) out.notes = notes;
   return out;
 }
 

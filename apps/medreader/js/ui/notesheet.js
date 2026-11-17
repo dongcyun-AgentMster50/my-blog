@@ -26,6 +26,8 @@ import { indexOfDesc } from '../text/anchor.js';
 import { placedNow, paintNow } from './annotate.js';
 import { currentScreen, revealLine, refreshAnnoChip, onPageRender, onReaderLeave, docTitle, docFileHash } from './reader.js';
 import { voiceUnit } from './remember.js';
+// `[20-3 — spec 17-16 6]` 쪽 필기 시트 "이 책 필기 모두" → `#/notes/:docId`
+import { notesHash } from '../router.js';
 
 /** [되돌리기] 줄이 떠 있는 시간(20-D10 — "3초"). */
 export const UNDO_MS = 3000;
@@ -179,14 +181,35 @@ export function annoStateOf(placed, range) {
 /**
  * `[20-2 — 11-4bR 다듬기 후보를 되풀이하지 않는다]` 음성 "표시"가 끝난 뒤 되돌릴 상태. 마이크를 누른 순간이 "멈춤"이어도, 그 멈춤이
  * **열린 설명 띠**(단추·음성 설명)가 읽기를 멈춰 둔 것이면 그 설명의 `was`(11-4b `inherit` 와 같은 결 — 띠가 닫혔으면 잇지 않는다). 순수.
+ * `[20-3 — 20-2R #1]` `bandOpen` 이 함수면 `bandOpen(held.id)` — **그 설명의 띠**가 아직 열려 있을 때만 잇는다(ask `inherit` 와 같은 꼴).
+ *   "어떤 띠든 열려 있나"(불리언)로 보면 그 뒤 음성 설명이 연 다른 띠를 옛 단추 설명의 띠로 여긴다(멈춘 읽기를 다시 시작). 번호가 없으면 잇지 않는다.
  * @param {string} was  9b 가 넘긴 누른 순간의 상태
- * @param {?{was:string}} held  마지막 설명의 `was`
- * @param {boolean} bandOpen  설명 띠가 지금 열려 있나
+ * @param {?{id?:number, was:string}} held  마지막 단추 설명의 띠 번호·`was`
+ * @param {boolean|function(number):boolean} bandOpen  그 띠가 지금 열려 있나(함수 = `trband.isNoteOpen`)
  */
 export function inheritWas(was, held, bandOpen) {
   const reading = (s) => s === 'speaking' || s === 'waiting-page';
-  if (reading(was) || !bandOpen || !held || !reading(held.was)) return was;
-  return held.was;
+  if (reading(was) || !held || !reading(held.was)) return was;
+  let open = false;
+  if (typeof bandOpen === 'function') { try { open = !!held.id && !!bandOpen(held.id); } catch (e) { open = false; } } else open = !!bandOpen;
+  return open ? held.was : was;
+}
+
+/**
+ * `[20-3 — 20-2R #1]` 단추 [설명]의 `was` 를 **그 띠 번호와 함께** 든다(controls 한 벌). `isOpen(id)` = `trband.isNoteOpen`.
+ *   `before(st)` — 누르기 직전(앞 설명 띠가 아직 열려 멈춰 둔 읽기면 그 was) · `after(id, was)` — 이번에 연 띠 번호(0 이면 들지 않음) ·
+ *   `was(w)` — 음성 "표시"가 끝난 뒤 되돌릴 상태 · `clear()` — 리더를 떠남. 순수(주입만).
+ */
+export function createExplainHold(isOpen) {
+  let held = null;
+  const open = (id) => { try { return typeof isOpen === 'function' && !!isOpen(id); } catch (e) { return false; } };
+  return {
+    before: function (st) { return inheritWas(st, held, open); },
+    after: function (id, was) { held = id ? { id: id, was: was } : null; return held; },
+    was: function (w) { return inheritWas(w, held, open); },
+    clear: function () { held = null; },
+    held: function () { return held ? Object.assign({}, held) : null; }
+  };
 }
 
 /* ────────────────────────────────────────────────────────
@@ -374,6 +397,7 @@ export function initNoteSheet(d) {
     ns: ns, title: ns.querySelector('#nsTitle'), quote: ns.querySelector('#nsQuote'), text: ns.querySelector('#nsText'),
     count: ns.querySelector('#nsCount'), status: ns.querySelector('#nsStatus'), del: ns.querySelector('[data-ns-action="delete"]'),
     pn: pn, list: pn.querySelector('#pnList'), pnTitle: pn.querySelector('#pnTitle'), pnEmpty: pn.querySelector('#pnEmpty'),
+    pnAll: pn.querySelector('#pnAll'),
     toast: document.getElementById('annoToast'), toastText: document.getElementById('annoToastText'),
     dlg: document.getElementById('annoDelDialog'), chip: document.getElementById('annoChip')
   };
@@ -593,8 +617,21 @@ function showToast(key, undoable, ms) {
 
 function toastUndo(gone) {
   if (!Array.isArray(gone) || !gone.length) return;
-  toastGone = gone.slice();
+  // `[20-3 — 20-2R #4]` 3초 안에 또 지우면 [되돌리기]가 앞 것까지 함께 되살린다(한 단계 되돌리기가 앞 것을 잃지 않게).
+  toastGone = mergeGone(toastGone && els && els.toast && !els.toast.hidden ? toastGone : null, gone);
   showToast('anno.removed', true, UNDO_MS);
+}
+
+/** 되살릴 레코드 합치기 — 앞 것 + 새 것(같은 id 는 하나). 순수. */
+export function mergeGone(prev, gone) {
+  const out = [];
+  const seen = new Set();
+  for (const r of (Array.isArray(prev) ? prev : []).concat(Array.isArray(gone) ? gone : [])) {
+    if (!r || seen.has(String(r.id))) continue;
+    seen.add(String(r.id));
+    out.push(r);
+  }
+  return out;
 }
 
 function hideToast() {
@@ -641,6 +678,11 @@ function paintList() {
   const s = currentScreen();
   els.pnTitle.textContent = t('anno.page.title', { page: s ? formatNumber(s.page) : '' });
   els.pnEmpty.hidden = rows.length > 0;
+  // `[20-3]` "이 책 필기 모두" — 그 책의 필기 화면(해시 이동 — 리더 떠남이 시트를 거둔다)
+  if (els.pnAll) {
+    els.pnAll.hidden = !s || s.docId == null;
+    if (s && s.docId != null) els.pnAll.setAttribute('href', notesHash(s.docId));
+  }
   for (const r of rows) {
     const li = document.createElement('li');
     const b = document.createElement('button');
