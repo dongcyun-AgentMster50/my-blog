@@ -107,6 +107,13 @@ export const DEFAULTS = Object.freeze({
   'srs.newPerDay': 20,
   'srs.log': Object.freeze({}),
 
+  /* `[13-1 — spec 17-12 4 · 9-3 · 13-Q2]` 낭독 기록 — 기기 안에만, 9c 백업에 담는다. `reading.track` 끄면 기록 0(손으로 고친 읽은 쪽은 됨).
+     `reading.log` `{v:1, days:{'YYYY-MM-DD': {src|both|tr:{ms, chars, rateMs}, pages}}}`(60일) — **`plan/readlog.js` 가 DB 에 직접 쓴다**
+     (이 메모리 맵은 옛 값 — 읽을 때는 `readlog.readLog()`). `planner.exams` 시험 목록(최대 5 — 쓰는 화면은 13-2). DB 무관. */
+  'reading.track': true,
+  'reading.log': Object.freeze({}),
+  'planner.exams': [],
+
   /* AI (7·8단계) */
   'ai.provider': 'gemini',
   'ai.model': '',

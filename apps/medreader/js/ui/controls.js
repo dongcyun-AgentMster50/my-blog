@@ -69,6 +69,8 @@ import { initSumSheet } from './sumsheet.js';
 import { createAsk, explainPlan, sentenceIndexOf } from './ask.js';
 // `[12-2 — spec 17-11 5]` 기억 카드 만들기 — 띠 [☆](세 모드)·선택 줄 [기억 카드]·음성 "기억"이 같은 길(호출 0).
 import { createRemember } from './remember.js';
+// `[13-1 — spec 17-12 4]` 낭독 기록·읽은 쪽 — speaker 를 주입(서비스는 tts 를 모른다). 리더에 들어오면 붙이고 떠나면 뗀다.
+import { readLogStore, bucketFor } from '../plan/readlog.js';
 
 let els = null;
 let speaker = null;
@@ -369,6 +371,8 @@ export function initControls() {
   // `[8i-1]` `refreshed` — 같은 쪽을 새 판으로 다시 그렸다(멈춘 채). 위 구독자가 큐를 새 판으로 갈았다(줄 id 는
   // `view.remapLine` 으로 옮김) — 멈춘 자리(다음 재생 시작점)를 스크롤 없이 다시 칠한다. 구독 순서 = 부르는 순서.
   onPageRender((p) => { if (p && p.refreshed) speaker.reshow(); });
+  // `[13-1]` 낭독 기록 — 리더에 들어와 쪽이 처음 그려질 때 한 번 붙인다(`reading.track` 꺼짐이면 붙지 않음 — 13-Q2). 떼기는 `leaveControls()`.
+  onPageRender(() => { if (!readLogStore.isAttached()) readLogStore.attach(speaker, { docIdOf: () => currentPage().docId, bucketOf: readBucket, track: () => settings.get('reading.track') !== false }); });
 
   // `[8d]` 문장 아래 번역(7-7-1). 그리기는 `syncReadalong()` 끝의 `inlinetr.sync()`(문서·유효 모드를 맞춘 뒤)가 한다.
   inlinetr = initInlineTr({
@@ -413,6 +417,8 @@ export function initControls() {
     cancel: cancelVoice
   });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') handsfree.onHidden(); });
+  // `[13-1]` 숨겨지면 낭독 기록을 지금까지 쓴다(13-D15) — 위 6-4 멈춤이 먼저 한 번 썼으면 남은 것이 없어 쓰지 않는다.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') readLogStore.onHidden(); });
   onPageRender(() => { handsfree.arm(); });
   onLangChange(() => { handsfree.refreshMeta(); });
 
@@ -603,6 +609,7 @@ export function leaveControls() {
   if (!speaker) return;
   if (voice) voice.leave();              // `[9b]` 듣기·안내·고지 카드·상태 줄을 거둔다(멈추기 전 — 되돌림이 끼어들지 않게)
   speaker.stop();
+  readLogStore.detach();                 // `[13-1]` 멈춤(위 stop)까지 센 낭독 기록을 쓰고 뗀다
   if (handsfree) handsfree.disarm();     // `[9a]` 핸들러·알림·무음 오디오·멈춤 유지 잠금을 거둔다
   if (readalong) readalong.setActive(false);
   if (trband) trband.leave();
@@ -938,6 +945,12 @@ function syncReadalong() {
   if (trband) trband.sync();
   // `[8d]` 문장 아래 표시 — 띠 자리(`data-tr-inline`)와 블록. 문서·대상 언어·유효 모드를 위에서 맞춘 뒤라야 캐시 키가 맞다.
   if (inlinetr) inlinetr.sync();
+}
+
+/** `[13-1 — spec 17-12 2]` 낭독 기록의 모드 갈래 — 지금 유효 모드(readalong)·원문 읽기. 번역문 음성이 꺼졌으면 원문만 읽으니 `src`. */
+function readBucket() {
+  if (!readalong || !speaker || speaker.isTrDisabled()) return 'src';
+  return bucketFor(readalong.mode().mode, readalongState().speakSource);
 }
 
 /** 6-4 Wake Lock — 여기만이 기능 감지로 분기하는 곳이다. */

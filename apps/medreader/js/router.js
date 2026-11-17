@@ -11,7 +11,7 @@
 
 /** 화면 이름 — `index.html` 의 `data-screen` 값과 1:1 이다. */
 export const SCREENS = Object.freeze([
-  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab', 'summaries', 'cards'
+  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab', 'summaries', 'cards', 'planner'
 ]);
 
 /** 알 수 없는 해시가 떨어지는 곳(12-1). */
@@ -28,6 +28,7 @@ export const DEFAULT_ROUTE = 'library';
  *   `#/vocab` · `#/vocab/:docId`     → {name:'vocab', params:{docId?}}      ← `[8f-3]` 단어장(전체 · 그 책). 찾기·정렬은 URL 에 없다
  *   `#/summaries` · `#/summaries/:docId` → {name:'summaries', params:{docId?}} ← `[11-3]` 저장한 요약(전체 · 그 책). 범위·펼침은 URL 에 없다
  *   `#/cards` · `#/cards/:docId`     → {name:'cards', params:{docId?}}      ← `[12-3]` 기억 카드 복습·목록(전체 · 그 책). 탭·거르기 칩은 URL 에 없다
+ *   `#/planner`                      → {name:'planner', params:{}}          ← `[13-2]` 학습 계획(시험·진도). 편집 중인 시험은 URL 에 없다
  *   `#/settings` `#/usage` `#/about` `#/onboarding`
  *   빈 해시                          → {name:'', params:{}}  ← 호출자가 온보딩 여부로 정한다
  *   그 밖                            → {name:'library', params:{}}
@@ -90,6 +91,10 @@ export function parseRoute(hash) {
       // `[12-3 — spec 17-11 6]` 기억 카드 — 전체 또는 그 책("이 책 복습"). [복습]/[목록] 탭·거르기 칩은 화면 메모리(세션 동안만).
       return { name: 'cards', params: parts[1] ? { docId: parts[1] } : {}, raw: raw };
 
+    case 'planner':
+      // `[13-2 — spec 17-12 5]` 학습 계획 — 시험 목록·결과 카드. 펼친 시험·편집 칸은 화면 메모리(해시에 넣지 않는다).
+      return { name: 'planner', params: {}, raw: raw };
+
     case 'usage':
       return { name: 'usage', params: {}, raw: raw };
 
@@ -136,6 +141,8 @@ export function summariesHash(docId) {
 export function cardsHash(docId) {
   return docId == null || docId === '' ? '#/cards' : '#/cards/' + encodeURIComponent(docId);
 }
+/** `[13-2]` 학습 계획. */
+export function plannerHash() { return '#/planner'; }
 export function quizHash(docId, sectionId) {
   return '#/quiz/' + encodeURIComponent(docId) + '/' + encodeURIComponent(sectionId);
 }

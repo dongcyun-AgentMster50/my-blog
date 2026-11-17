@@ -771,6 +771,43 @@ export const SRS = Object.freeze({
 });
 
 /* ────────────────────────────────────────────────────────
+   `[13-1]` 17-12 2·3·4 — 학습 계획·낭독 기록 상수. **추가만** 했다. 호출 0. 점수를 예측하지 않는다(13-D11).
+   기본 낭독 속도·쪽 글자·1만 자당 호출은 `[가정]`/옛 실측 — 이 기기 실측(`reading.log`·사용량)이 있으면 그것이 이긴다.
+   ──────────────────────────────────────────────────────── */
+export const PLAN = Object.freeze({
+  /* 낭독 기록(`plan/readlog.js`) — `linechange` 사이가 이보다 길면 넘는 몫은 세지 않는다(멈춘 엔진·자리 비움) · 쓰기 간격 · 남기는 날 수 */
+  MAX_GAP_MS: 120000,
+  FLUSH_MS: 60000,
+  LOG_DAYS: 60,
+  LOG_V: 1,
+  /* 읽은 쪽 레코드 `progress {docId, sectionId:'@read', ranges, pages, updatedAt}` — 퀴즈 섹션 id(로마숫자·`sec-none`)와 겹치지 않는다 */
+  READ_SECTION: '@read',
+  /* 모드 갈래 — `src`(번역 끔·show) · `both`(speak + 원문도) · `tr`(speak, 원문 안 읽음) */
+  BUCKETS: Object.freeze(['src', 'both', 'tr']),
+  /* 속도 실측 — 최근 이 날 수(오늘 포함) 합이 이 시간 이상이면 실측. 아니면 기본 추정(원문 글자/분 × tts.rate) `[가정]` */
+  SPEED_DAYS: 14,
+  MEASURE_MIN_MS: 30 * 60 * 1000,
+  DEFAULT_CPM: Object.freeze({ src: 840, both: 370, tr: 660 }),
+  /* 쪽 글자를 모를 때(범위·readStats 모두 없음) `[가정]` */
+  DEFAULT_PAGE_CHARS: 3000,
+  /* 1만 자당 호출 — 내 사용량 최근 30일 `charsTranslated` 합이 이 글자 이상일 때만 실측(`ui/usage.js` `callsPer10k(rows, {minChars})`), 아니면 1.7 `[실측 2026-09-28]` */
+  CALLS_DAYS: 30,
+  CALLS_MIN_CHARS: 30000,
+  DEFAULT_CALLS_PER_10K: 1.7,
+  /* 하루 호출이 상한 × 이 비율을 넘으면 `overCap`(탭·단어·요약 몫을 남긴다 — 안내 한 줄만, 설정은 바꾸지 않는다 13-D10) */
+  CAP_SHARE: 0.8,
+  /* 여유가 이 날 수 미만이면 `tight` */
+  TIGHT_SLACK_DAYS: 2,
+  /* 오늘 복습 — 장당 시간을 모를 때(`srs.log` 최근 14일 n 0) `[가정]` */
+  REVIEW_SEC_DEFAULT: 8,
+  EXAMS_MAX: 5,
+  /* `[13-2 — spec 17-12 2]` 낭독 글자 ÷ 검색 글자(남은 글자는 검색 글자, 속도는 낭독 글자). `[실측 2026-11-17]` CMDT 2026 본문 표본 20쪽
+     (앱 추출 경로 — 문장 단위 `src`, 인용 뺌 ÷ `searchText.text`): 83,841 ÷ 86,759 = **0.966**(쪽 중앙 0.988 · 범위 0.819–0.995). 차 3.4% 가
+     설계 문턱 5% 안이라 계수를 두지 않는다(1 — 남은 시간이 조금 크게 = 안전 쪽). `planFor({textToSpoken})` 가 받는다. */
+  TEXT_TO_SPOKEN: 1
+});
+
+/* ────────────────────────────────────────────────────────
    `[8a]` 7-6 · 10-2 · 7-5 — 번역 파이프라인 상수. **추가만** 했다.
    ★ 무료 티어 한도 숫자는 여기에도 없다(15절). 상한은 사용자의 `ai.dailyCap` 이다.
    ──────────────────────────────────────────────────────── */
@@ -984,6 +1021,7 @@ export const LINKS = Object.freeze({
      `SETTINGS_KEYS`(담음)·`SETTINGS_SKIP`(안 담음) 둘 중 **하나에만** 있어야 한다(tests/backup-9c.test.mjs — 빠지면 빨강).
      12·13(SRS·계획)의 `srs.*`·`reading.*`·`planner.exams` 는 아직 키가 없다 — 12-1·13-1 이 더한다.
      `[12-1]` `srs.newPerDay`·`srs.log`(학습 기록) 담음 — `srs.log` 는 가져올 때 날짜별 큰 값으로 합친다(`backup/import.js` `unionSetting`).
+     `[13-1]` `reading.track`·`reading.log`(학습 기록 — `plan/readlog.js` 가 DB 에 직접 씀, 가져올 때 날짜·갈래별 큰 값)·`planner.exams` 담음.
    ──────────────────────────────────────────────────────── */
 export const BACKUP = Object.freeze({
   /* 파일 꼴의 판. 가져오기는 이보다 큰 판을 거절한다(17-4-1 3). */
@@ -1035,6 +1073,7 @@ export const BACKUP = Object.freeze({
     'readalong.mode', 'readalong.speakSource', 'readalong.display', 'readalong.lastOn',
     'search.recent', 'vocab.lastExportAt', 'links.medical',
     'srs.newPerDay', 'srs.log',
+    'reading.track', 'reading.log', 'planner.exams',
     'ai.provider', 'ai.model', 'ai.translationLang', 'ai.summaryLangs', 'ai.useOnDevice', 'ai.dailyCap', 'ai.warnAt',
     'ai.cacheLimitMB', 'ai.maxReqChars',
     'privacy.piiCheck'

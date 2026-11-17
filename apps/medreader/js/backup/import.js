@@ -12,7 +12,7 @@
    ══════════════════════════════════════════════════════════════════════ */
 
 import * as realDb from '../db.js';
-import { BACKUP, LINKS, SEARCH, SRS } from '../config.js';
+import { BACKUP, LINKS, SEARCH, SRS, PLAN } from '../config.js';
 import { hasSubtle } from '../hash.js';
 import { TERM_CONTENT_FIELDS } from '../text/vocab.js';
 import { lineSplitter, readHead, parseLine, remapRecord, mergeRecord, hasKeyShape } from '../text/backup.js';
@@ -137,6 +137,7 @@ export function settingTypeOk(key, value, defaults) {
  *   `cleanLinkIds` 의 결정적 새 id. 기기가 `null`(= 기본 목록 — 손대지 않음)이면 파일 값 그대로(새 휴대폰), 파일이 `null` 이면 기기 그대로.
  * - `search.recent`: 기기 먼저 + 파일의 새 글자 · `SEARCH.RECENT_MAX` 개까지.
  * - `[12-1]` `srs.log`: 날짜 합집합 · 같은 날 칸마다 큰 값(`unionLog`).
+ * - `[13-1]` `reading.log`: 날짜 합집합 · 같은 날 갈래·칸마다 큰 값(`unionReadingLog`).
  * 같은 파일을 두 번 넣어도 같다(이미 들어간 항목은 겹침으로 빠진다). 그 밖 키는 파일 값 그대로(덮기).
  * @returns {*} 쓸 값(기기와 깊게 같으면 병합이 `keep`)
  */
@@ -164,7 +165,37 @@ export function unionSetting(key, mine, theirs) {
     return out.slice(0, SEARCH.RECENT_MAX);
   }
   if (key === 'srs.log') return unionLog(mine, theirs);
+  if (key === 'reading.log') return unionReadingLog(mine, theirs);
   return theirs;
+}
+
+/**
+ * `[13-1]` 낭독 기록(`reading.log` — `{v, days:{'YYYY-MM-DD': {src|both|tr:{ms, chars, rateMs}, pages}}}`)도 학습 기록 — `srs.log` 와 같은 규칙:
+ * 날짜 합집합, 같은 날은 갈래·칸마다 큰 값(같은 파일 두 번 = 한 번), 최근 `PLAN.LOG_DAYS` 날만. 한쪽이 그 꼴이 아니면 다른 쪽 그대로.
+ * 갈래 한 칸 안의 `ms`·`chars`·`rateMs` 는 따로 큰 값을 고르므로, 두 기기가 같은 날 다른 시간을 읽었으면 큰 쪽 하나만 남는다(합하지 않는다 — 멱등이 먼저).
+ */
+function unionReadingLog(mine, theirs) {
+  const ok = (v) => v && typeof v === 'object' && !Array.isArray(v) && v.days && typeof v.days === 'object' && !Array.isArray(v.days);
+  if (!ok(mine)) return theirs;
+  if (!ok(theirs)) return mine;
+  const n = (x) => (Number.isFinite(Number(x)) ? Math.max(0, Number(x)) : 0);
+  const obj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
+  const days = {};
+  const keys = [...new Set(Object.keys(mine.days).concat(Object.keys(theirs.days)))].filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-PLAN.LOG_DAYS);
+  for (const k of keys) {
+    const a = obj(mine.days[k]) || {};
+    const b = obj(theirs.days[k]) || {};
+    const o = {};
+    for (const g of PLAN.BUCKETS) {
+      const x = obj(a[g]);
+      const y = obj(b[g]);
+      if (!x && !y) continue;
+      o[g] = { ms: Math.max(n(x && x.ms), n(y && y.ms)), chars: Math.max(n(x && x.chars), n(y && y.chars)), rateMs: Math.max(n(x && x.rateMs), n(y && y.rateMs)) };
+    }
+    if (a.pages !== undefined || b.pages !== undefined) o.pages = Math.max(n(a.pages), n(b.pages));
+    days[k] = o;
+  }
+  return { v: PLAN.LOG_V, days: days };
 }
 
 /**

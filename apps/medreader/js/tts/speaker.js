@@ -393,7 +393,7 @@ export function createSpeaker(deps) {
   }
 
   function speakAt(i, opts) {
-    if (i >= units.length) { advancePage(0); return; }
+    if (i >= units.length) { advancePage(0, true); return; }   // `[13-1]` 쪽 끝까지 읽었다 — 자동 넘김(pagedone)
     if (i < 0) i = 0;
     index = i;
     setPhase('src', i);
@@ -753,10 +753,15 @@ export function createSpeaker(deps) {
 
   /* ── 6-1 쪽 넘김 ──────────────────────────────────── */
 
-  /** 쪽 끝. 다음 쪽을 요청하고 **최대 5초** 기다린다. 그동안 `'waiting-page'`. */
-  async function advancePage(depth) {
+  /**
+   * 쪽 끝. 다음 쪽을 요청하고 **최대 5초** 기다린다. 그동안 `'waiting-page'`.
+   * `[13-1 — spec 17-12 4 · 13-D3]` `auto` = 쪽 끝까지 읽어 저절로 넘김(`speakAt` 끝) — 그때만, 빈 쪽 넘김이 아닐 때(`hop 0`)
+   * 다음 쪽을 부르기 전에(마지막 쪽이면 `finish()` 직전에) `pagedone{page}` 한 번. 사용자 [다음]·cue 로 끝을 지난 시작·인용만 있는 쪽은 없음.
+   */
+  async function advancePage(depth, auto) {
     const hop = Number(depth) || 0;
     const p = (view && view.page && view.page()) || null;
+    if (auto === true && hop === 0 && p) emit('pagedone', { page: p.page });
     if (!p || (p.pageCount > 0 && p.page >= p.pageCount)) { finish(); return; }
     if (hop >= MAX_EMPTY_PAGES) { finish(); return; }
 
@@ -777,7 +782,7 @@ export function createSpeaker(deps) {
     queueRebuilt();
     index = 0;
     emitQueue(0);
-    if (!units.length) { advancePage(hop + 1); return; }   // 표뿐인 쪽 — 계속 넘긴다
+    if (!units.length) { advancePage(hop + 1, auto); return; }   // 표뿐인 쪽 — 계속 넘긴다(빈 쪽은 pagedone 없음)
     setState('speaking');
     speakAt(0);
   }
@@ -852,7 +857,7 @@ export function createSpeaker(deps) {
 
     setState('speaking');
     if (pastEnd) {
-      restart(units.length);          // speakAt(끝) → advancePage — 지금까지의 쪽 끝 경로 그대로
+      restart(units.length, function () { advancePage(0); });   // 쪽 끝 경로 그대로 — 읽지 않고 지났으니 pagedone 없음(13-1)
     } else if (resumeTr) {
       const ph = phase;
       const k = trPart;

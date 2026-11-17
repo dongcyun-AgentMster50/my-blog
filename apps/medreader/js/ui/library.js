@@ -64,6 +64,8 @@ import { summaryStore } from '../notes/summaries.js';
 import { cardStore, dayStartOf, dayKeyOf, clampNewPerDay } from '../srs/cards.js';
 // `[18 — spec 17-9 · 결정 18-D2]` 저장 줄 위 "의료 사이트" 접는 카드(열기만) — 그리기는 `ui/links.js` 한 곳.
 import { renderLibraryLinks } from './links.js';
+// `[13-2 — spec 17-12 5 · 13-D14]` "오늘" 줄의 시험 줄(가까운 것 하나 — 날 수는 planFor) · 입구 [계획]/[시험 계획 세우기].
+import { libraryExamLine } from './planner.js';
 
 /* ────────────────────────────────────────────────────────
    1. 동일성 판단 — **순수 함수**. tests/library.test.mjs 가 고정한다.
@@ -157,7 +159,8 @@ export function initLibrary() {
     storage: root.querySelector('#storageLine'),
     today: root.querySelector('#libraryToday'),
     todayText: root.querySelector('#libraryTodayText'),
-    todayBtn: root.querySelector('#libraryTodayBtn')
+    todayBtn: root.querySelector('#libraryTodayBtn'),
+    todayExtra: root.querySelector('#libraryTodayExtra')   // `[13-2]` 시험 줄 자리
   };
 
   els.importBtn.addEventListener('click', openFilePicker);
@@ -212,7 +215,8 @@ export async function showLibrary() {
   await renderStorage();
 }
 
-/* ── `[12-3 — spec 17-11 6 · 12-D14]` "오늘" 줄 — 기억 카드가 1장 이상일 때만. 13-2 가 같은 줄(`#libraryTodayExtra`)에 시험 줄을 더한다 ── */
+/* ── `[12-3 — spec 17-11 6 · 12-D14]` "오늘" 줄 — 복습 글·[복습 시작]은 기억 카드가 1장 이상일 때만.
+   `[13-2 — 13-D14]` 같은 줄(`#libraryTodayExtra`)에 가까운 시험 줄 + [계획] — 카드도 시험도 없으면 [시험 계획 세우기] 링크만(줄은 늘 보인다) ── */
 
 /**
  * "오늘" 줄 모양 — 카드가 없으면 숨김. 셈은 복습 화면의 오늘 줄과 **같은** `queue().counts`(복습할 것 · 새 카드). 순수 함수.
@@ -243,12 +247,41 @@ async function renderToday() {
     }
   } catch (e) { line = todayLine(0, null); }
   todayKey = dayKeyOf(ds);
-  els.today.hidden = !line.show;
+  // `[13-2 — spec 17-12 5 · 13-D14]` 같은 줄에 가장 가까운 시험 한 줄 + [계획] — 카드도 시험도 없으면 [시험 계획 세우기] 링크만.
+  const ex = libraryExamLine(settings.get('planner.exams'), todayKey);
+  els.today.hidden = false;
+  els.today.setAttribute('data-cards', line.show ? '1' : '0');
   els.today.setAttribute('data-due', String(line.due));
   els.today.setAttribute('data-fresh', String(line.fresh));
-  els.todayText.textContent = t('library.today', { n: formatNumber(line.due), m: formatNumber(line.fresh) });
+  els.todayText.hidden = !line.show;
+  els.todayBtn.hidden = !line.show;
+  els.todayText.textContent = line.show ? t('library.today', { n: formatNumber(line.due), m: formatNumber(line.fresh) }) : '';
   els.todayBtn.textContent = t(line.start ? 'library.today.start' : 'library.today.open');
+  renderTodayExam(ex);
   armToday();
+}
+
+/** `[13-2]` "오늘" 줄의 시험 줄 — `#libraryTodayExtra` 에(글자는 textContent, 이동은 `data-nav` 전역 위임). */
+function renderTodayExam(ex) {
+  const box = els.todayExtra;
+  if (!box) return;
+  while (box.firstChild) box.removeChild(box.firstChild);
+  box.hidden = false;
+  box.setAttribute('data-exam', ex ? ex.exam.id : '');
+  if (ex) {
+    const p = document.createElement('p');
+    p.className = 'lib-today-exam';
+    p.setAttribute('data-days', ex.days == null ? '' : String(ex.days));
+    const name = '⁨' + ex.exam.name + '⁩';
+    p.textContent = ex.past ? t('library.todayExam.past', { name: name }) : t('library.todayExam', { name: name, n: formatNumber(ex.days) });
+    box.appendChild(p);
+  }
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = ex ? 'lib-today-plan' : 'link lib-today-setup';
+  b.setAttribute('data-nav', '#/planner');
+  b.textContent = t(ex ? 'planner.open' : 'planner.setup');
+  box.appendChild(b);
 }
 
 /** 자정을 넘기면 다시 센다 — 서재가 보이는 동안만. 자정 직후에 깨고, 늦어도 30초 안에 알아챈다(기기 잠듦). */

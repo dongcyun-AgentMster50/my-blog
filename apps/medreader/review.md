@@ -13504,3 +13504,225 @@ headless: Edge · pipe · 새 프로필 `r11-4c/pV1`·`pV2`·`pT1`·`pR1` · 흉
 명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 리다이렉트·`--test-reporter-destination` 로 파일에). **막힌(거절된) 명령 0.** `tar` 가 `C:` 를 호스트로 읽어 한 번 실패 → `--force-local`(12-2R 과 같음). headless 는 한 번에 하나 · Edge · pipe · 새 프로필(`pL1`·`pP1`·`pV1`·`pC1`·`pM1`·`pM2`) · 가짜 키(`…review_r12_3`) · 흉내 Gemini OPTIONS 204 + CORS · 흉내 음성 · `setCacheEnabled(false)`(변이 실행 포함) · 가짜 시계(`__setClock`) · **서버 0**(가로채기) · 합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 · 콘솔 오류 0(변이 pM1 의 의도한 이미지 404 제외) · pageerror 0 · 외부 요청 0 · 빠진 파일 0. 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음 · `b12-3/`·`r12-2/` 읽기만(사본만 만듦) · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
 
 스크래치 `r12-3/`: `full1.tap`·`full2.tap`·`mx1–6.tap` · `verify.mjs` · `router.head.mjs`·`bytecmp.mjs` · `head.tar`·`head/`·`rbody.mjs` · `bak/`·`restore.mjs` · `common.mjs`(b12-3 사본) · `run-l.mjs`·`l1.json` · `run-p.mjs`·`p1.json` · `run-v.mjs`·`v1.json`·`m5.json`·`m6.json` · `run-c.mjs`·`c1.json` · `shots/` · 프로필 `p*` · `section.md`(이 절)·`append.mjs`.
+
+# 13-1 Review — 학습 계획: 낭독 기록 · 읽은 쪽 · 계획 계산 (화면 없음) (2026-11-17)
+
+> 지침 `.claude/tasks/medreader-review-13-1.md` · Build 지침 `medreader-build-13-1-planner.md` · Build 보고 `medreader-build-13-1-planner-report.md`(믿지 않고 다시 잼) · spec 17-12(2·3·4·6·7 "13-1"·8·9 · `[정정 2026-11-17 — 13-1 Build]` ①–⑧) · 3-2·9-3 정정 줄 · 17-4-1(9c `@read`·설정) · `git diff`(7파일 109+/14−) + 새 파일 `js/plan/planner.js`·`js/plan/readlog.js`·`tests/planner-13.test.mjs`·`tests/readlog-13.test.mjs`. 앱 코드·시험·spec 무변(변이는 원래 바이트를 다시 써서 되돌리고 `cmp` 0), 커밋 0. 스크래치 `r13-1/`.
+
+## 13-1R-1. 낭독 회귀 (확인 1 — 가장 중요)
+
+**speaker diff 읽기**: 바뀐 곳은 셋 — `speakAt` 쪽 끝 `advancePage(0, true)` · `advancePage(depth, auto)` 첫머리 `pagedone` 한 줄(빈 쪽 넘김은 `auto` 를 물려받되 `hop > 0` 이라 없음) · 끝 지난 시작 `restart(units.length, () => advancePage(0))`. 셋째는 옛 `restart(units.length)` → `speakAt(끝)` → `advancePage(0)` 과 **같은 길**(`restart` 의 `fn` 은 원래 있던 인자 — 바쁨 검사·60ms 지연·세대 검사 그대로)이고 `auto` 만 빠진다. `step`(사용자 [다음])·인용만 있는 쪽 `play` 는 원래대로 `advancePage(0)`. `emit` 은 `EventTarget.dispatchEvent` 라 듣는 쪽이 던져도 낭독 사슬은 이어진다. 쪽 넘김·`finish`·`waiting-page`·세대·워치독 경로는 글자 그대로.
+
+**controls diff 읽기**: 붙이기는 `onPageRender` 에서 `isAttached()` 가 거짓일 때만(쪽마다 다시 붙지 않음) · 떼기는 `leaveControls` 의 `speaker.stop()` **뒤** · 숨김은 6-4 멈춤 핸들러·9a 핸들러 **뒤**에 등록된 별개 한 줄. speaker 쪽으로는 아무것도 부르지 않는다(듣기만).
+
+- 전체 시험 통과(speaker·6-4·9a·9b·11-2/11-4·12-2·search·cue 시험 전부 포함 — 아래 R-6).
+- headless 회귀 하네스 — `r12-2/run-r.mjs` 사본(`r13-1/mkcommon.mjs` — 출처만 인자로): 작업 트리 pR1 · HEAD pR2 **모든 칸 같음**(18 [찾아보기]·Esc 층 셋·손가락 줄 탭·**9a 미디어 키**(말하는 중 play → 말하기 멈춤 · 낭독 speaking)·**9b "다음"·"멈춤"**(index 0→1 · paused)·8e 가로 dock). 콘솔 0.
+- `r12-2/run-v.mjs` 사본 I(**11-4 설명 뒤 재개** — waiting·saying·closedA·voiceA_buttonB·buttonA_voiceB): 작업 트리 pV1·pV4 두 번 같은 값이고 **`r12-2/v1.json` 기록과 다섯 칸 모두 같음**(resumes 1·1·0·1·0 · overlap 0 · 요청 2). HEAD 쪽 실행(pV2·pV3)은 두 번 다 **하네스 `setup` 의 PDF 올리기 대기(60초)에서 멈춤** — 같은 `setup` 으로 HEAD 를 연 run-h·run-r 은 됐고 앱 쪽 오류·콘솔 0 이라 하네스 문제로 보고 따라가지 않음(그래서 기준은 r12-2 기록).
+- 내 headless 흐름(R-2 아래)에서 HEAD·작업 트리의 **낭독 동작이 칸마다 같음**: [다음] 누름 수 9 → 3쪽 · 멈춤/재개 상태 · 숨김 → `paused`(6-4) · 다시 보여도 `paused`(자동 재개 없음) · 가짜 시계 누적(78,571 · 157,500 · 227,357 ms).
+
+## 13-1R-2. 기록 정확성 (확인 2)
+
+**내 가짜 speaker·가짜 시계 흐름**(`r13-1/chk.mjs` — Build L1–L3 과 다른 흐름, fake-idb, fetch 0):
+
+| 흐름 | 기록 | 맞는 값 | |
+|---|---|---|---|
+| B1 같은 문장 멈춤·재개 다섯 번 | ms 24,000 · chars 100 · 쓰기 6 | 24,000 · 100 · 6(멈춤마다) | 맞음 |
+| B2 줄 탭으로 건너뛰기(0 → 7 → 8) | ms 10,000 · chars 150 | 10,000 · 50+70+30 | 맞음 |
+| B3 속도 1.0 10초 → 2.0 으로 바꿈(같은 문장 다시) → 10초 | rateMs **40,000** | 30,000 | #2 |
+| B4 쪽 넘김 대기 3초 | ms 20,000 · pages 1 · 대기 중 쓰기 0 → 멈춤 1 | 20,000 | 맞음 |
+| B5 자정 걸침(23:59:30 부터 20초 문장 셋) | 17일 20,000 · 18일 40,000 | 30,000 · 30,000 | #3 |
+| B6 한 문장에서 10분 멈춘 엔진(60초 타이머 돎) → 다음 문장 10초 | 130,000 · 멈춘 동안 쓰기 0 | 120,000 + 10,000 | 맞음 |
+| B7 `reading.track` false | 붙지 않음 · days {} · 쓰기 0 · `@read` 없음 | | 맞음 |
+| B8 숨김 → 계속 → 숨김 → 멈춤 | ms 60,000 · chars 200 · 쓰기 2 | 두 번 세지 않음 | 맞음 |
+| B9 3분 낭독(15초 문장) → 5초 → 멈춤 | 180초에 쓰기 3 · 멈춤 4 · ms 185,000 | 60초마다 | 맞음 |
+| B10 구간 반복 켬 → 끔 | ms 30,000 · chars 200 | 반복 동안 0 | 맞음 |
+
+**실제 `createSpeaker` 로 300자 넘는 문장**(A — Build 시험의 가짜 speaker 는 `seg = index` 라 못 보는 곳): 710자 문장이 `MAX_UTTER_CHARS` 300 으로 **조각 셋**이 되면 speaker 가 조각마다 `linechange{index: 0·1·2, src: 문장 전체 710자}` 를 내고 readlog 는 `docId|page|index` 로 "같은 단위"를 가려 **조각마다 710자를 다시 더한다** → 기록 2,146자 / 실제 726자(**×2.96**). 아래 #1(중간).
+- 줄 모드는 줄마다 `src` 가 그 줄이라 겹침 없음(`r13-1/chk-line.mjs` — 줄 합 97 · 문장 합 98).
+
+**`@read` 구간**(C): 1–3 → +4–6(이웃) `[[1,6]]` → +10–8(거꾸로) `[[1,6],[8,10]]` → −5–9 `[[1,4],[10,10]]` → −1–50 `[]`(레코드 `pages 0` 로 남음) · 퀴즈 `sec-none` 레코드 바이트 그대로 · `deleteDocument` 뒤 `@read` 없음 · 지운 문서에 `markRead` → `null`(되살리지 않음).
+
+**headless**(`r13-1/run-h.mjs` · pH1 작업 트리 / pH2·pH3 HEAD · speak 모드 = `both` 갈래 — Build 는 show = `src`): 1쪽 끝까지(자동 넘김) → 2쪽 멈춤/재개 → **[다음] 단추로 2쪽 끝을 건너뜀** → 3쪽 끝까지 → 4쪽에서 숨김 → 서재로 떠남 → `reading.track` 끔 → 다시 1쪽 끝까지:
+- `@read` **`[[1,1],[3,3]]`**(건너뛴 2쪽 없음) · `pagesDone 2` · `markWrites 2` · progress 레코드는 `@read` 하나.
+- `reading.log` 오늘 `both` ms 159,604 · chars 2,639 · pages 2 — 흉내 음성 가짜 경과 157,500 과 **+2.1초**([다음] 9번 사이 실제 250ms 들 — ±1분 안). 쓰기 2(멈춤 1 · 숨김 1) · 떠남 0(남은 것 없음) · 떠난 뒤 `attached false`.
+- 트랙 끔 뒤 한 쪽 낭독: `reading.log`·`@read` **바이트 그대로**.
+- 콘솔 0 · pageerror 0 · 외부 요청 0. (HEAD 쪽 콘솔 404 여섯은 내 점검 코드가 HEAD 에 없는 `plan/readlog.js` 를 import 한 것 — 앱 아님.)
+
+## 13-1R-3. 계획 계산 (확인 3 — 손 계산과 대조)
+
+2026-11-17 은 화요일(`weekdayOf` 2). 기본 입력 = 월–금 · reserve 2 · 하루 60분 · 오늘 복습 10분 · 370자/분 · 1만 자당 1.7 · 상한 100 · 시험 11-30.
+- 남은 150,000 → 공부 날 9 − 2 = **7** · 필요 분 ⌈150000÷370÷7 = 57.9⌉ = **58** · 읽기 분 50 · 하루 글자 18,500 · 필요 날 ⌈8.11⌉ = **9** · 끝나는 날 공부 요일 9번째 = **11-27** · 여유 −2 → **short** · 호출 ⌈25.5⌉ = 26 · 하루 ⌈3.145⌉ = 4 · overCap 거짓 — **11칸 모두 같음**.
+- 100,000 → 필요 6 · 여유 1 → **tight** · 90,000 → 5 · 11-23 → **ok**.
+- 시험일 오늘·지난날 → `past` · 내일(매일) → days 1 · 토요일→일요일 시험(월–금) → 0 · 쉬는 요일 모두(`[]`) → days 0 · `short` · 필요 분 null · 끝나는 날 null · 남은 0 → `done` · reserve 9 > 날 3 → 0 · 복습 80분 > 하루 60분 → 읽기 0 · `short`.
+- 속도: 29분 → 추정 462.5(370 × 1.25) · 31분(평균 1.0, 지금 1.25) → 실측 **500** · 15일 전 기록은 창 밖 · 다른 갈래(`src`) → 840. `callsPer10k` 29,999자 → null(→ 기본 1.7) · 30,000자 → 실측 · `src` 갈래 → 0.
+- 복습 분: 20장 × 8초 → 3 · 실측 15초/장 → 5. overCap 경계: 하루 8.0회 / 상한 10 × 0.8 → 거짓 · 8.1 → 참. 찌꺼기: 100000 × 1.7 ÷ 10000 → **17** · 윤년 2028-02-27~03-02 → 4.
+- 순수: `plan/planner.js` 에 `Date`·`document`·`window` **0** · import 는 `config` 하나.
+
+## 13-1R-4. 9c (확인 4)
+
+- `reading.log` 합치기: 날짜 합집합 · 갈래·칸마다 큰 값 · 60일 · 두 번 = 한 번(L8) · 변이 I1(ms 를 합으로) → L8 빨강. `reading.track`·`planner.exams` 는 파일 값으로 덮음 · `settingTypeOk` 꼴 검사. `@read` 는 9c-1 `mergeProgress` 의 `unionRanges`(planner `rangesUnion` 과 같은 규칙 — N2 가 같은 결과를 봄).
+- 설정 저장이 키마다 `db.put` 이라 다른 키를 바꿔도 readlog 가 DB 에 직접 쓴 `reading.log` 를 덮지 않음(`srs.log` 와 같은 꼴).
+- **보고서 남은 2(`planner.exams` 의 `docId` 를 9c 가 옮기지 않음)** — 지금은 시험을 만드는 화면이 없어 쓰는 사람 0 → **낮음 · 13-2 몫**. 단 13-2 는 범위에 `fileHash` 를 함께 두고 가져온 뒤 다시 찾는 것을 **수용 기준에 넣어야** 한다(아니면 다른 기기에서 범위가 빈 책을 가리킴).
+- **보고서 남은 3(`[안 읽음으로]` 가 합집합에 되살아남)** — 설계 4 의 합집합 결과 · 손으로 고치는 화면도 13-2 → **낮음**. 13-2 에서 고지 한 줄 또는 지움 표시(안 읽음 구간 + 시각) 중 고르기.
+
+## 13-1R-5. 요청 · 호출 (확인 5)
+
+- headless 같은 흐름 HEAD/작업 트리: POST 둘 다 `translate`(speak 모드 낭독 동반 번역) · **본문 해시 `bfa9c1da…`·`ebebc395…` 같음**. 기록·읽은 쪽·계획 쪽 요청 0. `readlog.js`·`planner.js` 에 `fetch`/XHR 0 · node 점검 fetch 0. `ai/*`·`db.js` diff 0.
+
+## 13-1R-6. 시험 · 점검 · 변이 (확인 6·7)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,896/1,896 · 1,896/1,896**(12.9초 · 13.1초 — `r13-1/full1.txt`·`full2.txt`) + 변이 복원 뒤 한 번 더 1,896/1,896(`full3.txt`).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 92개 · CSS 4개)" · `git diff --check` 0 · 새 파일 넷 줄 끝 공백 0.
+- 변이(Build M1–M9 와 다른 곳 · `r13-1/mut.mjs` — 원래 바이트를 `r13-1/bak/` 에 두고 한 곳 고침 → 관련 시험 → 원래 바이트를 다시 씀 → 파일마다 `cmp` 0):
+
+| # | 변이 | 빨강 |
+|---|---|---|
+| S1 | speaker — `pagedone` 을 마지막 쪽 `finish` 검사 뒤로(마지막 쪽 끝에서 없음) | L4 · L7 |
+| S2 | speaker — 끝 지난 시작을 옛 꼴 `restart(units.length)` 로(→ `auto`) | L4 |
+| C1 | controls — 숨김 때 `readLogStore.onHidden()` 배선 지움 | L9(정적만 — #5) |
+| R1 | readlog — `markRead` 의 문서 검사 지움(지운 문서 되살림) | L5 |
+| P1 | planner — 붙은 쪽 구간을 합치지 않음 | N2 · L5 · L7 |
+| P2 | planner — 속도 창 15일 | N5 |
+| I1 | import — `reading.log` 같은 날 ms 를 합으로(멱등 깨짐) | L8 |
+
+## 13-1R-7. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | **중간** | **300자 넘는 문장의 글자를 조각마다 다시 셈.** speaker 는 긴 문장을 `MAX_UTTER_CHARS`(300)로 쪼개 조각마다 `linechange` 를 내는데, 조각 모두 `src` = 문장 전체이고 `index` 만 다르다. readlog 의 "같은 단위" 키가 `docId\|page\|index` 라 조각 n 개면 글자가 n 배. 710자·3조각 → 2,146 / 726(×2.96). `src`·`both` 갈래, `tr` 갈래의 "번역 없는 문장 소리 내기" 길 모두. 실측 속도(`speedOf`)가 부풀어 `planFor` 의 하루 필요 분·필요 날이 **작게** 나온다 — 설계가 지키려던 "안전 쪽"의 반대. 의학책은 목록·괄호로 긴 문장이 흔하다. Build 시험의 가짜 speaker 는 `seg = index` 로 쏴서 못 봄 | `r13-1/chk.mjs` A. 방향: 문장의 첫 조각만 셈 — speaker `linechange` 에 `part` 한 칸 더해 readlog 가 `part > 0` 이면 글자 0, 또는 키를 `docId\|page\|lineId\|src` 로(조각은 같은 lineIds·src). 시험: 실제 `createSpeaker` + 300자 넘는 문장(L1·L7 꼴) + 변이 |
+| 2 | 낮음 | 속도를 바꾸면 바꾸기 전 구간의 `rateMs` 를 새 속도로 셈 — `setRate` 의 `statechange` 에서 settle 하지 않고, 이어지는 `restart` → `linechange` 에서 `rateNow()`(새 값)로 settle. 오차는 한 구간(한 문장 · 길어야 60초)이라 평균 속도 보정 영향 작음 | B3 40,000 / 30,000. 방향: `statechange.detail.rate` 가 오면 옛 속도로 settle 먼저 |
+| 3 | 낮음 | 자정을 걸친 구간 전체가 끝 시각의 날로 감 — 오차 한 구간 | B5. 방향: settle 이 `dayKeyOf(counted) ≠ dayKeyOf(end)` 면 자정에서 나눠 더함 |
+| 4 | 낮음(읽기로 봄) | 쪽 넘김 실패(`PAGE_TIMEOUT` → paused) 뒤 [▶] 는 그 쪽 마지막 단위를 다시 읽고 끝에서 `pagedone` 을 한 번 더 — `@read` 는 같아 안 씀, `reading.log` 그날 `pages` 만 +1 | `advancePage` 실패 뒤 `index` 그대로. 방향: 무시해도 됨, 또는 readlog 가 같은 문서·쪽 연속 `pagedone` 은 pages 한 번 |
+| 5 | 낮음(시험 틈) | controls 배선(붙이기·떼기·숨김)을 node 는 정규식 정적 시험(L9)만 지킴 — C1 이 L9 만 빨강. 동작은 내 headless 가 확인(숨김 쓰기 1 · 떠난 뒤 떼어짐) | 방향: 13-2 headless 수용 기준에 숨김·떠남 쓰기 횟수 한 줄 |
+| 6 | 낮음(13-2 몫) | 보고서 남은 2 — `planner.exams` 범위 `docId` 를 9c 가 옮기지 않음 | R-4. 13-2 수용 기준으로 |
+| 7 | 낮음(설계 한계) | 보고서 남은 3 — `[안 읽음으로]` 가 9c 합집합에 되살아남 | R-4. 13-2 에서 고지 또는 지움 표시 |
+| 8 | 낮음(측정 대기) | 보고서 남은 1 — `TEXT_TO_SPOKEN` 표본 비 안 잼(안전 쪽). 단 #1 이 남아 있으면 반대쪽 오차가 더 큼 | 다음 측정 단계 |
+| 9 | 정보 | Build 보고 다시 잼 — 1,896×2 · stamp 92·4 · 순수 grep 0 · 예시(49분·31회·tight·하루 4회 · 17) · L·N 시험 · 9c 멱등 · 본문 같음 — 모두 맞음. 내 쪽에서 더 잰 것: 가짜 흐름 열 · 실제 speaker 긴 문장 · `@read` 다섯 단계 · 계획 손 계산 스무 칸 · speak 모드(both) headless + [다음] 건너뜀 + 숨김 + 트랙 끔 · 회귀 하네스 HEAD 대조 · 변이 일곱 | — |
+
+**판정: 고친 뒤 배포** — 중간 1(#1: 긴 문장 글자 두 번 이상 셈 → 실측 속도 부풂 → 계획이 덜 잡힘). 낭독 동작 회귀 0(쪽 넘김·재개·멈춤·반복·9a·9b·11-4 재개 — HEAD·앞 Review 값과 같음), 계획 숫자 손 계산과 같음, 9c 기록·진도 손실·멱등 깨짐 0, AI 요청 0(본문 HEAD 와 같음), 콘솔 오류 0. #1 은 readlog 한 줄(또는 speaker `linechange` 한 칸)과 시험 하나로 고칠 수 있고 고친 곳만 재검증하면 된다. 낮음 #2–#5 는 다음 다듬기, #6·#7 은 13-2 수용 기준으로.
+
+## 13-1R-8. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 리다이렉트로 파일에). **막힌(거절된) 명령 0.** headless 는 한 번에 하나 · Edge · pipe · 새 프로필(`pH1`–`pH3`·`pR1`·`pR2`·`pV1`–`pV4`) · 가짜 키(`…review_r13_1`) · 흉내 Gemini OPTIONS 204 + CORS · 흉내 음성(끝마다 가짜 시계 = 글자 ÷ 14자/초) · `setCacheEnabled(false)` · **서버 0**(가로채기 — 127.0.0.1 작업 트리 · 127.0.0.2 HEAD `git show`) · 합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 · 작업 트리 콘솔 오류 0 · pageerror 0 · 외부 요청 0. 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · 원서 열지 않음 · `b13-1/`·`r12-2/` 읽기만(사본만 만듦) · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음.
+
+스크래치 `r13-1/`: `full1.txt`·`full2.txt`·`full3.txt` · `chk.mjs`·`chk-line.mjs` · `mut.mjs`·`bak/` · `mkcommon.mjs`·`common.mjs`(b13-1 사본) · `run-h.mjs` · `run-r.mjs`(r12-2 사본) · `mkv.mjs`·`run-v.mjs`(r12-2 사본) · 프로필 `p*` · `section.md`(이 절)·`append.mjs`.
+
+# 13-2 Review — 학습 계획 화면 `#/planner` · 서재 "오늘" 줄 시험 줄 (+ 13-1R 고침, 13-1 과 함께 배포 전) (2026-11-17)
+
+> 지침 `.claude/tasks/medreader-review-13-2.md` · Build 지침 `medreader-build-13-2-planner-ui.md`("먼저 고칠 것" 포함) · Build 보고 `medreader-build-13-2-planner-ui-report.md`(믿지 않고 다시 잼) · spec 17-12 전부 + `[정정 2026-11-17 — 13-1 Build]` ①–⑧ · `[정정 2026-11-17 — 13-2 Build]` ①–⑩ · review.md "13-1 Review"(중간-1 · 낮음 2–7) · `git diff`(13-1 + 13-2 함께 미커밋, 17파일) + 새 파일 `js/plan/*`·`js/ui/planner.js`·시험 셋. 앱 코드·시험·spec 무변(변이는 백업을 읽어 되쓰고 `cmp` 0), 커밋 0. 스크래치 `r13-2/`.
+
+## 13-2R-1. 13-1R 닫힘 (확인 1)
+
+**13-1 Review 점검 `r13-1/chk.mjs` 를 그대로 다시**(읽기만 — 출력 `r13-2/chk13-1.json`):
+
+| 항목 | 13-1 Review 때 | 지금 | |
+|---|---|---|---|
+| A 실제 `createSpeaker` · 710자 문장 3조각 + 16자 | 기록 2,146 / 실제 726(×2.96) | **726 / 726(×1.00)** | 중간-1 닫힘 |
+| B3 속도 1.0 10초 → 2.0 10초 | rateMs 40,000 | **30,000** | 낮음-2 닫힘 |
+| B5 자정 걸침 | 17일 20,000 · 18일 40,000 | **30,000 · 30,000** | 낮음-3 닫힘 |
+| B1·B2·B4·B6–B10 · C(`@read` 다섯 단계) · fetch | 맞음 | 같은 값(쓰기 6·2·185,000 · `[[1,4],[10,10]]` 등) · fetch 0 | 회귀 없음 |
+
+낮음-4(같은 쪽 `pagedone` 두 번 → pages 한 번)는 Build L13 + 아래 headless(`pagesDone 2`·`pages 2`). 낮음-5(controls 배선 동작)는 아래 R-2 headless 에서 숨김 쓰기·떠난 뒤 `attached false` 로 확인.
+
+**`unitKey`(문서·쪽·첫 줄·`src`) 새 부작용 — 실제 `createSpeaker` + readlog**(`r13-2/chk-unit.mjs`, 지어낸 글자, 출력 `chk-unit.json`):
+- 조각들의 첫 줄: `buildUnits` 가 조각 모두에 **문장이 걸친 줄 전부(`ids`)** 를 주므로 첫 줄이 같다 — 6줄에 걸친 961자 4조각 + 둘째 조각에서 멈춤/재개 → **961 / 961**(U6).
+- 같은 줄 두 문장(글자 다름) → 17 + 23 + 17 = **57 / 57**(U1).
+- [이전]으로 되돌아가 다시 읽기 → 다시 셈, 음성 "다시"(`again`) → 0, 그 뒤 다음 문장은 다시 셈 → **108**(A·B·A·A(0)·B·C — 손 계산과 같음, U3). 멈춘 뒤 지금 문장 줄 탭 → 0 · 앞 줄 탭 → 셈 → **108 / 108**(U4). 줄 모드 → 줄마다(U7).
+- 반복(`unit`) 켬 → 그동안 글자·시간 0. **반복 중에 시작한 문장에서 반복을 끄면 그 문장 글자는 0**(새 `linechange` 가 없음 — U5, 13-1 설계 "반복 동안 0" 그대로) → 적게 셈 = 속도가 낮게 = 계획이 넉넉히(안전 쪽).
+- **보고서 남은 4 판단**: 같은 첫 줄·같은 글자 두 문장이 잇달아("See above. See above.") → 뒤 것 0 — **31 / 41**(U2). 의학책에서 같은 줄에 똑같은 문장이 연달아 오는 일은 드물고, 틀리는 쪽이 "적게 셈 → 속도 낮게 → 하루 필요 분 크게"라 **받아들임**(정보).
+
+## 13-2R-2. 낭독 회귀 (확인 2)
+
+- `speaker.js`·`controls.js` 는 13-2 Build 시작 사본(`b13-2/bak/orig`)과 `cmp` 0 — 13-2 는 손대지 않았다(바뀐 것은 13-1 판 그대로, 13-1 Review 가 diff 를 읽음).
+- **13-1 Review 회귀 하네스 다시**(`r13-1/run-r.mjs`·`run-h.mjs` 사본 — `r13-2/mkcommon.mjs`, 경로·가짜 키 꼬리만): `run-r` 작업 트리 pR1 · HEAD pR2 **8칸 모두 같음**(18 [찾아보기] · Esc 층 셋 · 손가락 줄 탭 · 9a 미디어 키 · 9b "다음"·"멈춤" · 8e 가로 dock) · 콘솔 0.
+- `run-h`(speak 모드 = `both` · 1쪽 끝까지 → 2쪽 멈춤/재개 → [다음]으로 2쪽 끝 건너뜀 → 3쪽 끝까지 → 숨김 → 떠남 → `reading.track` 끔): 작업 트리 pH1 — `@read [[1,1],[3,3]]` · `pagesDone 2` · `markWrites 2` · 쓰기 2 · `both` chars **2,639**(13-1 Review 와 같음) · ms 159,257 / 가짜 경과 156,857(+2.4초) · 떠난 뒤 `attached false` · 트랙 끔 뒤 기록·읽은 쪽 바이트 그대로. HEAD pH2 — 멈춤 `paused` · 재개 `speaking` · 3쪽 · 숨김 뒤 `paused`(자동 재개 없음) 모두 같음. [다음] 누름 수 10(작업 트리) 대 9(HEAD)와 가짜 경과 156,857 대 157,500 은 실제 250ms 간격 타이밍 차(13-1 Review 의 작업 트리 값 9 · 157,500 이 이번 HEAD 와 같음).
+- **POST 본문**: 둘 다 `translate` 2개 · 해시 `bfa9c1da…`·`ebebc395…` — HEAD 와 같음(13-1 Review·Build 값과도 같음).
+
+## 13-2R-3. 계획 화면 (확인 3)
+
+**내 새 시험(`r13-2/run-p.mjs` pP3)** — 화면의 `planInputOf` 를 쓰지 않고 **DB 에서 따로 모은 입력**(검색 글자 길이·`@read`·`reading.log`·`srs.log`·사용량 30일 행·카드 `queue`·설정)으로 `planFor` → 앱 `t()`·`formatNumber` 로 기대 글자를 만들어 **결과 카드의 `data-k` 줄 글자 전체와 문자열로 맞댐**. 합성 PDF 두 권(4쪽·5쪽):
+- 시험 e1: 월–금 · 복습만 할 날 2 · 하루 90분 · 범위 넷 = 책1 1–3 + 책1 2–4(**겹침**) + `docId:'otherDeviceId'`·책2 `fileHash`(**다른 id 기기**) + 없는 책. 실측 속도(`both` 47분 · `tts.rate 1.25` → 499.12자/분) · 사용량 1만 자당 2.0(실측 — 30일 밖 행은 빠짐) · 카드 6장(장당 30초 → 복습 3분) · 오늘 낭독 10분. 시험 e2: 매일 · 3일 뒤.
+- **4언어(ko·ar·fr·en) × 시험 둘: 13줄 종류(days·status·progress·range·counted·need·finish·speed·calls·rate·where·todayRead·review) 모두 글자 같음**. 겹침은 합쳐 6쪽(7 아님) · 없는 책은 계산에서 빠지고 "이 기기에 없는 책" · fileHash 로 책2 를 찾음 · 시험 순서 가까운 것 먼저(e2, e1). 내 입력과 화면 입력(속도 499.12 · 1만 자당 2 · 복습 3 · 상한 100 · 범위)도 같음.
+- **상태 갈래**(매번 글자 같음 · **설정 저장소 전체 덤프가 열기 전후 바이트 그대로** — `planner.exams` 는 내가 바꾼 것): `tight`(여유 1) · `overCap`(상한 3 · 하루 600분 → 줄 보임, `ai.dailyCap 3`·`readalong.mode` 무변) · `show` 모드면 호출 줄 없음·overCap 거짓 · 요일 0 → `short`·필요 줄 "공부할 날이 없습니다" · `past` · 시험일 당일 → `past`(#1). 다 읽음 → `done` 은 Build h1·P 시험 근거(내 흐름에서는 다시 재지 않음 — 이 Review 의 근거에서 뺌). 네 언어로 계획 화면을 열기만 해서는 `ui.lang` 말고 설정 쓰기 0.
+- **장 범위(`tocOf` 깊이)**: 개요 Ch1(1) · Sec 1.1(2쪽, 깊이 2) · Sec 1.1.1(깊이 3) · Ch2(4) → 목록 **Ch1 1–3 · "— Sec 1.1" 2–3 · Ch2 4–4**, 셋째 깊이 빠짐 — 정정 ④ 그대로. 쪽 0 으로 더하기 → 오류 글·범위 0.
+- **진도**: [여기서 읽기] → `#/reader/책1/2`(1쪽 읽음 → 둘째 쪽) · 고치기 칸에서 **책 고르기(두 권이면 보임)** 로 책2 2쪽 [읽음으로] → `[[2,2]]`·카드 글자 다시 같음·고치기 칸 펼친 채 · [안 읽음으로] → `[]` · 거꾸로 4–3 → `[[1,1],[3,4]]` · [정확히 세기](책2 검색 글자 지운 뒤 센 쪽 4/6 · 단추 보임) → **6/6 · 단추 사라짐** · 그동안 **POST 0 · 외부 0**.
+- **고지 문구·금지 낱말**(`r13-2/grep-words.mjs` — 4언어 `planner.*`·`library.todayExam*`·`settings.reading.*` 80키씩, 키 집합 4언어 같음): 점수·합격·score·pass·grade·réussite·note·درجة·نجاح 류 **0**. "예측·predict·prédit·تتنبأ" 는 **고지 한 줄의 부정형("예측하지 않습니다")에만** — 금지 문구 아님. `ui/planner.js` `innerHTML` 0(주석 한 줄뿐) · `fetch`/XHR 0 · ai import 0 · `settings.set` 키는 `planner.exams` 뿐.
+
+## 13-2R-4. 서재 "오늘" 줄 (확인 4)
+
+- **판단: 13-D14 가 맞다.** 12-3 수용 기준 "카드 0장이면 줄 없음"(12-D14)은 13-2 입구가 생기기 전 기준이고, 같은 Plan(12·13)의 17-12 5·13-D14 가 "카드도 시험도 없으면 [시험 계획 세우기] 작은 링크 하나"를 명시 — 13-2 정정 ⑧ 에도 적힘. 12-3 의 순수 `todayLine`(카드 0 → `show:false`)은 그대로라 12-3 시험 K 들은 통과하고, 줄 안의 복습 글·[복습 시작]만 카드가 있을 때 보인다. 17-11 의 12-3 수용 기준 줄에 "13-D14 로 바뀜" 한 줄 교차 표시를 권함(낮음 #7).
+- 카드 6장: `data-due 0`·`data-fresh 6` = `queue().counts` · 복습 글·단추 보임 · 시험 줄 가까운 것. 카드 0 · 시험 있음 → 줄 보임 · 복습 글 숨김 · [계획] 하나.
+- **aria 이름(보고서 남은 6)**: `role=region aria-labelledby="libraryTodayText"` 인데 카드가 없으면 그 글이 빈 채·`hidden` → **영역 이름 없음**(글 길이 0). 낮음 #5.
+
+## 13-2R-5. 데이터 · 9c (확인 5)
+
+- **페이지 안 편집·삭제**(run-p): [고치기] → 이름 바꿔 저장 → 같은 id · `createdAt` 그대로 · `updatedAt` 바뀜 · 범위 그대로. [시험 지우기] → `<dialog>` 열림·초점 [취소] → 취소 → 시험 둘 그대로·폼 열린 채 → 다시 → 확인 → 하나 남음 · `window.confirm` 0 · 읽은 쪽 `@read` 남음. 지운 뒤 초점은 `BODY`(낮음 #6).
+- **9c 두 기기**(`r13-2/chk-9c.mjs` — fake-idb, 실제 `exportBackup`/`importBackup`): 기기 A(문서 dA·dX · `@read [[1,3],[10,12]]` · `reading.log` · `reading.track false` · 시험 exA) → 기기 B(같은 PDF 가 **다른 id dB** · `@read [[2,5]]` · 다른 기록 · 시험 exB):
+  - 가져오기 **두 번 = 한 번**(덤프 같음) · `@read` 는 dB 로 옮겨져 **합집합 `[[1,5],[10,12]]`·pages 8** · 퀴즈 `sec-none` 그대로 · `reading.log` 날짜 합집합·칸마다 큰 값 · `reading.track` 파일 값(false) · B 에 없던 dX 는 "PDF 필요" 문서로 같은 id.
+  - 화면 쪽: exA 범위 `dA` → **fileHash 로 dB**, `dX` → id 그대로 · `planInputOf` + `planFor` 가 B 의 합집합으로 읽은 쪽 8/14.
+  - 거꾸로 B → A 두 번도 멱등. 파일에 `planner.exams`·`reading.log`·`reading.track`·`@read` 모두 들어감.
+  - **B 에서 만든 시험 exB 는 가져오기에서 파일 값으로 덮여 사라짐** — 13-1 정정 ⑧("`planner.exams` 는 파일 값으로 덮음")·다른 설정과 같은 규칙이라 결함이 아니라 설계. 다만 시험은 사용자가 만든 내용이라 두 기기를 오가면 잃는다 → 낮음 #3.
+
+## 13-2R-6. 성능 (확인 6)
+
+`r13-2/run-perf.mjs`(pF2): 큰 합성 — 책 1,967쪽 × 약 5,100자 = **검색 글자 10,040,428자**(CMDT 2026 꼴의 쪽 수·크기, 지어낸 반복 낱말) + 다른 책 둘(600쪽씩 — 훑기에 안 낌), 시험 둘(책 전체 · 40쪽 장). 옛 카드에 표시를 달아 **새로 그려질 때까지**를 잼:
+
+| | 서재 → `#/planner` 그려짐 | `reload()` | 그 책 `searchText` 훑기만 | 40쪽 키 범위 세기 | 서재 "오늘" 줄 |
+|---|---|---|---|---|---|
+| CPU 1× | 131 · 91 · 95 ms | 89 · 77 · 75 | 76–84 | 0–1 | 1 |
+| CPU 4×(폰 흉내) | 291 · 337 · 276 ms | 180 · 192 · 208 | 213–222 | 1 | 3 |
+
+**1초 넘는 것 0.** 원서(CMDT) 파일은 열지 않음(합성으로 충분 — 쪽 수·글자 수 같은 꼴). 다만 CPU 흉내는 IndexedDB 읽기(디스크)를 늦추지 않으므로 실기기 체감은 실기기 묶음 그대로(보고서 남은 3). 키 범위(`[docId, from]`–`[docId, to]`)로 좁히면 0–1ms — 다듬기 후보(낮음 #8).
+
+## 13-2R-7. 화면 (확인 7)
+
+`r13-2/run-l.mjs`(pL1) — 360×740 · 412×915 · 915×412 × ar·fr·en·ko **12칸**, 카드(고치기 펼침 · 긴 이름·긴 장 제목·없는 책 줄) · 폼(편집 · 범위 셋) · **삭제 대화 열림** · 서재 "오늘" 줄:
+- 가로 넘침 **0** · 48px 미만 **0**(누를 것 516개 — button·input·select·summary) · ar 요일 칩 `rtl`·첫 칩이 오른쪽(거울), 다른 언어 `ltr` · 칩 글자·`aria-label` 7/7 · 날짜 칸은 네 언어 모두 `direction:ltr`·`text-align:start`, 칸과 이름표가 시작 쪽에 함께(ar 오른쪽) — 글자 방향 LTR 은 정정 ⑩ 대로, 실기기 날짜 고르개 항목 그대로 · 고지 12/12 · overCap 줄 12/12 · 대화 12/12 열림.
+- **XSS**: 시험 이름 `<img onerror>` · 범위 라벨 `<svg onload>` · 책 제목 `<img onerror>`(run-p 에서 책2 제목을 바꿈) → 목록·폼(책 고르기·범위 목록)·삭제 대화·서재 줄에서 `window.__xss*` 0 · `img`/`svg` 요소 0 · `<option>` 자식 0. 글자로 그대로 보임.
+- 스크린샷 `r13-2/shots/`: `ar-360-card.png` · `ar-412-form.png` · `fr-915-dialog.png` · `ko-360-lib.png`. 눈으로 본 것: **ar 폼 요일 칩이 낱말 가운데서 꺾임**(«الجمع/ة»·«الخمي/س»·«الأربعا/ء» — `Intl` 의 ar `weekday:'short'` 가 긴 이름이라 412 에서도 두 줄) → 낮음 #2. ar «1 طلبًا»·«38 يوميًا» 꼴 수 일치는 보고서 남은 7 과 같은 숙제.
+
+## 13-2R-8. 회귀 (확인 8)
+
+- 12-3: 서재 "오늘" 줄 카드 셈 = `queue().counts` · `#/cards` 열림 · 전체 시험 K1–K13. 11-3 `#/summaries` 열림. 8c-2 `#/usage` 열림. 설정 `reading.track` 스위치는 낭독 카드 안 · 기본 켬 → 끔이 **DB 에 false** → 다시 켬 true.
+- 라우터: `#/planner` 에서 새로고침 → 계획 화면 · 서재로 갔다 뒤로 → 계획 화면 · `parseRoute('#/planner/x')` → planner · `plannerHash()`.
+- 요청: 계획·서재·설정·회귀 전 구간 **POST 0 · 외부 0**(run-p · run-l · run-perf). 낭독 흐름의 POST 본문은 HEAD 와 같음(R-2). `ai/*`·`db.js` diff 0.
+
+## 13-2R-9. 시험 · 점검 · 변이 (확인 9·10)
+
+- 전체 `node --test --test-timeout=60000 apps/medreader/tests/*.test.mjs` **2회: 1,908/1,908 · 1,908/1,908**(13.1초 · 13.0초 — `r13-2/full1.tap`·`full2.tap`, 2회째는 변이 복원 뒤).
+- `dev/stamp-importmap.mjs --check` "그대로다(모듈 93개 · CSS 4개)" · `git diff --check` 0 · 새 파일 다섯(`js/plan/*`·`js/ui/planner.js`·시험 셋) 줄 끝 공백 0.
+- `tests/router.test.mjs`(NUL 포함) 바이트 비교(`r13-2/bytecmp.mjs` — HEAD 는 `git show`): 6,437 → 6,611 바이트 · 바뀐 곳 **한 덩어리(38행 뒤 3줄 더함 — 주석 · `parseRoute('#/planner')` 단정 · `reached.add('planner')`)** · 지운 줄 0 · **NUL 1개는 같은 줄 글자 그대로**(94 → 97행) · UTF-8 유효 · LF · BOM 없음 — 손상 0.
+- 변이(Build M1–M11 과 다른 곳 · `r13-2/mut.mjs` — 원래 바이트 `r13-2/bak/` → 한 곳(정확히 1회 일치) → 전체 시험 → 원래 바이트를 다시 씀 → `cmp` 0, 세 파일). 모든 변이에서 stamp 시험(IM 류 3개)도 빨강 — 표에선 뺌:
+
+| # | 변이 | 빨강 |
+|---|---|---|
+| X1 | 화면 속도가 `tts.rate` 를 무시(`speedOf(…, rate:1)`) | **node 없음**(stamp 만) → headless(`r13-2/mut-h.mjs` → run-p pMX1, 캐시 끔) 4언어 × 시험 둘 need·speed·calls 다름 — 시험 틈 #4 |
+| X2 | "오늘 낭독 x분 / 목표 y분" 의 목표를 복습 몫을 빼지 않은 하루 시간으로 | P3 |
+| X3 | `unitKey` 에서 `src` 를 뺌(같은 줄 두 문장의 뒤 것 0) | L10 |
+| X4 | 장 목록에 셋째 깊이까지 | P2 |
+| X5 | 화면이 읽은 쪽을 읽지 않음(`gather` 의 `readRanges` 빈 값) | **node 없음**(stamp 만) → headless pMX5 4언어 e1 progress·range·need·where 다름 — 시험 틈 #4 |
+| X6 | `reading.log` 가져오기에서 `pages` 를 합으로(멱등 깨짐) | L8 |
+
+## 13-2R-10. 발견 사항
+
+| # | 등급 | 내용 | 근거 · 방향 |
+|---|---|---|---|
+| 1 | 낮음(문안) | **시험일 당일**에 카드가 "시험일이 지났습니다 — 날짜를 고치세요", 서재 줄(그 시험만 있으면) "{이름} 시험일이 지났습니다". `sortExams` 는 오늘 시험을 지난 쪽 무리에 넣어 다른 시험이 있으면 서재 줄에서 밀림(주석은 "오늘 포함"). 계산(`past` — 시험일 당일은 공부 날이 아님)은 spec 3 대로, 틀린 것은 문구 | run-p `examToday`(카드 글자 · 서재 줄 e2). 방향: 당일은 "오늘 시험입니다" 한 줄(새 키) — `calendarDays === 0` 갈래 |
+| 2 | 낮음(배치 — ar) | ar 폼 요일 칩이 낱말 가운데서 꺾임(412 에서도 — `Intl` ar `short` = 긴 이름) | `shots/ar-412-form.png`. 방향: `weekday:'narrow'`/글자 줄임 또는 칩 `white-space:nowrap` + 줄 바꿈은 칩 단위 · Nour 확인 묶음 |
+| 3 | 낮음(설계 대가) | 9c 가져오기에서 `planner.exams` 를 파일 값으로 덮어 **이 기기에서만 만든 시험이 사라짐**(13-1 정정 ⑧ · 다른 설정과 같은 규칙 — 멱등은 지킴) | chk-9c exB. 방향: 시험 id 합집합 + 같은 id 는 `updatedAt` 새 쪽(최대 5) — 다음 다듬기, 또는 spec 에 "덮음" 고지 한 줄 |
+| 4 | 낮음(시험 틈) | 화면 입력 모으기(`gather`·`planInputOf` 의 `rate`)를 node 가 지키지 않음 — X1(`tts.rate` 무시)·X5(읽은 쪽 안 읽음)가 stamp 만 빨강. 코드는 맞고 headless 는 잡음 | 위 변이 표. 방향: P3 에 `planInputOf(…, {rate:1.25})` 속도 단정 한 줄 · `gather` 를 순수 꼴로 떼거나 fake-idb 로 `@read` 를 심어 `examView` 진도 단정 |
+| 5 | 낮음(접근성 — 보고서 남은 6) | 서재 "오늘" 줄 `aria-labelledby` 가 카드 없을 때 빈·숨은 글 → 영역 이름 없음 | run-p `libNoCards`. 방향: 시험 줄 id 를 함께 가리키거나 고정 이름표 |
+| 6 | 낮음(접근성) | 시험 지운 뒤 초점이 `BODY`(폼·카드가 사라짐) — 12-3 #6 과 같은 꼴 | run-p `del.focusAfter`. 방향: [시험 추가] 또는 목록 머리로 |
+| 7 | 낮음(spec 문안) | 17-11 12-3 수용 기준 "카드 0장이면 줄 없음"이 13-D14 로 바뀐 것이 17-11 쪽엔 없음(17-12 정정 ⑧ 에만) | 위 R-4. 방향: 17-11 그 줄에 교차 표시 한 줄 |
+| 8 | 낮음(성능 — 보고서 남은 3) | 계획 화면을 열 때 범위 책 `searchText` 전체 훑기 — 10MB 합성에서 91–131ms(1×)·276–337ms(4× CPU), 1초 안. 디스크 쪽은 실기기 | R-6. 방향: 범위 쪽만 키 범위로(0–1ms) |
+| 9 | 낮음(읽기로 봄) | 고치기 칸의 쪽 칸에 문서 끝 상한이 없어 `[읽음으로]` 999 → `@read` 에 문서 밖 쪽이 들어가고 `pages` 가 부풂(계획 숫자는 범위 쪽만 세므로 화면 영향 없음) · 범위 줄별 막대 %는 화면이 `Math.floor(읽은/전체×100)` 로 셈(입력은 순수 `remainingOf` — 정정 "화면이 계산하지 않는다"에서 조금 벗어남) | `markFromCard`·`rangeRow`. 방향: `pageCount` 로 자르기 · %는 planner 순수 함수로 |
+| 10 | 정보 | `unitKey` — 같은 첫 줄·같은 글자 두 문장 잇달아면 뒤 것 0(31/41) · 반복 중 시작한 문장에서 반복을 끄면 그 문장 0 — 둘 다 적게 셈 = 안전 쪽, 받아들임 | R-1 U2·U5 |
+| 11 | 정보 | Build 보고 다시 잼 — 1,908×2 · stamp 93·4 · 13-1R #1–#4 숫자 · 수용 기준 · 12칸 배치 · 호출 0 · 본문 해시 · router 바이트 — 모두 맞음. 내 쪽에서 더 잰 것: 실제 speaker `unitKey` 일곱 흐름 · 독립 입력으로 화면 글자 통째 대조(4언어 × 시험 둘 × 13줄 · 상태 여덟 갈래 · 설정 덤프) · 겹침·fileHash·없는 책 · 장 깊이 셋 · 두 권 고치기 · 9c 두 기기 양방향 멱등 · 10MB 성능 · 삭제 대화·XSS 세 자리 · 변이 여섯 | — |
+
+**판정: 배포 가능**(13-1 + 13-2 함께) — 중간 이상 0. 13-1R 중간-1 닫힘(726/726)·낮음 2–4 닫힘, 새로 세기 틀림 0, 낭독 회귀 0(HEAD 와 칸마다 같음·본문 해시 같음), 화면 숫자 = `planFor`(독립 입력·4언어 글자 통째), 설정 무변(저장소 덤프 같음), 금지 문구 0(고지의 부정형뿐), 데이터 손실·멱등 깨짐 0(#3 은 설계 규칙), AI 요청 0, 화면 열기 1초 안, XSS 0, 콘솔 오류 0, 시험 파일 손상 0. 낮음 #1·#4·#5·#6 은 다음 다듬기, #2 는 Nour 묶음, #8 은 실기기 묶음.
+
+## 13-2R-11. 실행 · 정리
+
+명령은 한 호출에 한 가지(`cd … &&`·파이프·`; echo` 0 — 결과는 리다이렉트·`--test-reporter-destination` 로 파일에). **막힌(거절된) 명령 0.** headless 는 한 번에 하나 · Edge · pipe · 새 프로필(`pH1`·`pH2`·`pR1`·`pR2`·`pP1`–`pP3`·`pD1`·`pD2`·`pF1`·`pF2`·`pL1`·`pMX1`·`pMX5`) · 가짜 키(`…review_r13_2`) · 흉내 Gemini OPTIONS 204 + CORS · 흉내 음성(14자/초 + 가짜 시계) · `setCacheEnabled(false)`(변이 실행 포함) · **서버 0**(가로채기 — 127.0.0.1 작업 트리 · 127.0.0.2 HEAD `git show`) · 합성 PDF `b11-2/syn.pdf`·`b9c2/syn.pdf` 읽기만 · 작업 트리 콘솔 오류 0 · pageerror 0 · 외부 요청 0 · 빠진 파일 0(HEAD 쪽 404 여섯은 내 점검 코드가 HEAD 에 없는 `plan/readlog.js` 를 import 한 것 — 13-1 Review 와 같음). pP1·pP2 는 하네스의 둘째 PDF 올리기가 `change` 를 놓쳐 60초 대기에서 멈춤(앞 Review 들이 본 꼴 — 앱 오류·콘솔 0, pD1/pD2 진단에서 한 번은 놓치고 한 번은 됨) → 올리기를 세 번까지 다시 하도록 고쳐 pP3 통과(1번에 됨). 원서 CMDT 는 열지 않음(성능은 같은 꼴 합성) · Downloads 목록 보지 않음. 프로세스 조회·디버깅 포트 0 · 진짜 키 0 · npm·다운로드 0 · 커밋 0 · `git checkout/restore/stash` 0 · `rm` 0 · 프로필 복사 0 · `.nojekyll` 그대로 · `G:`·`D:/OCR` 무관 · `b13-2/`·`b13-1/`·`r13-1/` 읽기만(사본만 만듦) · 앱 파일은 변이 뒤 `cmp` 로 원본과 같음(Build 끝 사본 `b13-2/bak/cur` 과도 같음).
+
+스크래치 `r13-2/`: `full1.tap`·`full2.tap` · `chk13-1.json` · `chk-unit.mjs`·`.json` · `mkcommon.mjs`·`common.mjs`·`run-r.mjs`·`run-h.mjs`(r13-1 사본) · `h-cur.json`·`h-head.json`·`r-cur.json`·`r-head.json` · `grep-words.mjs` · `run-p.mjs`·`p1–p3.json` · `run-dbg.mjs` · `chk-9c.mjs`·`.json` · `run-perf.mjs`·`perf.json` · `run-l.mjs`·`l1.json` · `shots/` · `bytecmp.mjs` · `mut.mjs`·`mut.json`·`mut/`·`mut-h.mjs`·`bak/` · 프로필 `p*` · `section.md`(이 절)·`append.mjs`.

@@ -756,6 +756,13 @@ export function initSettingsScreen() {
       settings.set('tts.readCitations', !!els.readCitations.checked).catch(() => { });
     });
   }
+  // `[13-2 — spec 17-12 4 · 13-Q2]` 낭독 기록 스위치(기본 켬) — 리더에 들어올 때 읽는다(controls → readlog attach 의 track).
+  els.readingTrack = buildTrackRow(root.querySelector('#settingsReadalong'));
+  if (els.readingTrack) {
+    els.readingTrack.addEventListener('change', () => {
+      settings.set('reading.track', !!els.readingTrack.checked).catch(() => { });
+    });
+  }
   // `[8m — spec 19-1-2 2-5]` 다음에 큐를 만들 때부터(speaker·readalong 이 큐를 만들 때마다 읽는다 — 재생을 건드리지 않는다).
   if (els.scriptSwitch) {
     els.scriptSwitch.addEventListener('change', () => {
@@ -810,6 +817,34 @@ function buildCitationsRow(card) {
   const help = document.createElement('p');
   help.className = 'muted';
   help.setAttribute('data-i18n', 'settings.tts.readCitations.help');
+  card.appendChild(row);
+  card.appendChild(help);
+  applyTranslations(card);
+  return box;
+}
+
+/**
+ * `[13-2 — spec 17-12 4 · 13-Q2]` 낭독 묶음 끝에 "이 기기에 낭독 기록 남기기" 한 줄(기본 켬) + 설명(기기 안에만·백업에 담김·끄면 추정 속도).
+ * 카드가 없으면(반쪽 캐시) 만들지 않는다.
+ * @returns {HTMLInputElement|null}
+ */
+function buildTrackRow(card) {
+  if (!card) return null;
+  const old = card.querySelector('#readingTrack');
+  if (old) return old;
+  const row = document.createElement('div');
+  row.className = 'consent-row';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.id = 'readingTrack';
+  const label = document.createElement('label');
+  label.setAttribute('for', 'readingTrack');
+  label.setAttribute('data-i18n', 'settings.reading.track');
+  row.appendChild(box);
+  row.appendChild(label);
+  const help = document.createElement('p');
+  help.className = 'muted';
+  help.setAttribute('data-i18n', 'settings.reading.track.help');
   card.appendChild(row);
   card.appendChild(help);
   applyTranslations(card);
@@ -936,6 +971,7 @@ function paintAll() {
   els.dailyCap.value = String(settings.get('ai.dailyCap'));
   els.onDevice.checked = settings.get('ai.useOnDevice') !== false;
   if (els.readCitations) els.readCitations.checked = settings.get('tts.readCitations') === true;
+  if (els.readingTrack) els.readingTrack.checked = settings.get('reading.track') !== false;   // `[13-2]`
   if (els.scriptSwitch) els.scriptSwitch.checked = settings.get('tts.scriptSwitch') !== false;
   if (els.mediaKeys) els.mediaKeys.checked = settings.get('tts.mediaKeys') !== false;
   renderReadalongRow(els.readalongHost);

@@ -1848,3 +1848,74 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 .cards-edit-row button { flex: 1 1 8em; min-inline-size: 0; }
 .cards-edit-row button[hidden],
 .cards-edit [hidden] { display: none; }
+
+/* ── `[13-2 — spec 17-12 5]` 학습 계획 화면 `#/planner` · 서재 "오늘" 줄 시험 줄 ───────────────────
+   ★ 논리 속성만(16-H) — 칩·칸·단추 줄은 UI 방향을 따른다(아랍어에서 저절로 거울). 날짜 칸은 브라우저 고르개(방향은 UI).
+   ★ 단추·칩·칸 48px 이상(16-G). 360px 가로 넘침 0 — 칸은 `min-inline-size: 0`, 긴 이름·책 제목은 `overflow-wrap: anywhere`.
+   ★ 숫자는 화면이 계산하지 않는다(js/ui/planner.js) — 여기는 모양만. */
+.lib-today-extra { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.lib-today-exam { flex: 1 1 12em; min-inline-size: 0; margin: 0; overflow-wrap: anywhere; }
+.lib-today-extra button { flex: 0 1 auto; min-inline-size: var(--tap); min-block-size: var(--tap); }
+.lib-today-setup { text-align: start; overflow-wrap: anywhere; }
+.lib-today-text[hidden],
+.lib-today > button[hidden] { display: none; }
+
+.pl-status { margin-block: var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.pl-status:empty { display: none; }
+.pl-tools { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block: var(--sp-3); }
+.pl-tools button { flex: 1 1 12em; min-inline-size: 0; }
+.pl-tools button[hidden],
+.pl-list[hidden],
+.pl-form[hidden],
+.planner-screen [hidden] { display: none; }
+.pl-exam h2 { margin-block-end: var(--sp-1); overflow-wrap: anywhere; }
+.pl-line { margin: 0 0 var(--sp-2); overflow-wrap: anywhere; }
+.pl-big { font-size: var(--fs-lg); font-weight: 600; }
+.pl-st { font-weight: 600; }
+.pl-st-past, .pl-st-short { color: var(--c-danger); }
+.pl-sec { margin-block-start: var(--sp-3); padding-block-start: var(--sp-3); border-block-start: 1px solid var(--c-border); }
+.pl-meter { margin-block: var(--sp-1) var(--sp-2); }
+.pl-meter-sm { block-size: 8px; }
+.pl-range { margin-block: var(--sp-2); }
+.pl-range-name { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.pl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-block: var(--sp-2); }
+.pl-row > .pl-line { flex: 1 1 12em; min-inline-size: 0; margin: 0; }
+.pl-row > button { flex: 0 1 auto; min-inline-size: var(--tap); }
+.pl-actions { justify-content: flex-end; }
+.pl-fix { margin-block-start: var(--sp-3); }
+.pl-fix summary { min-block-size: var(--tap); display: list-item; cursor: pointer; padding-block: var(--sp-2); }
+.pl-fix-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-2); }
+.pl-fix-grid .pl-fix-book { grid-column: 1 / -1; }
+.pl-fix-note { margin-block: var(--sp-2) 0; }
+.pl-form h2 { font-size: var(--fs-lg); }
+.pl-field { margin-block-end: var(--sp-3); min-inline-size: 0; }
+.pl-label { display: block; font-size: var(--fs-sm); color: var(--c-text-dim); margin-block: var(--sp-2) var(--sp-1); }
+.pl-label > span { display: block; }
+.pl-input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  min-block-size: var(--tap);
+  padding-inline: var(--sp-3);
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.pl-input-sm { inline-size: 8em; }
+.pl-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--sp-2); }
+.pl-grid > .pl-printed { grid-column: 1 / -1; margin: 0; }
+.pl-printed:empty { display: none; }
+.pl-help { margin-block: var(--sp-1) 0; }
+.pl-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.pl-chip { flex: 1 1 3.2em; min-inline-size: var(--tap); padding-inline: var(--sp-1); }
+.pl-chip[aria-pressed="true"] { background: var(--c-accent); color: var(--c-accent-text); border-color: var(--c-accent); }
+.pl-ranges { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
+.pl-range-item { display: flex; align-items: center; gap: var(--sp-2); padding-block: var(--sp-1); border-block-end: 1px solid var(--c-border); }
+.pl-range-text { flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
+.pl-range-rm { flex: 0 0 auto; }
+#plAddRange { inline-size: 100%; margin-block-start: var(--sp-2); }
+.pl-form-actions button { flex: 1 1 7em; min-inline-size: 0; }
+.pl-disclaimer { margin-block: var(--sp-4) 0; }
