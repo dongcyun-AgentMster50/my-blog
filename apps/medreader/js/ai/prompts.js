@@ -19,7 +19,7 @@
    만든다. 테스트(`tests/prompts-8a.test.mjs`)가 옛 문자열과 글자 단위로 대조한다.
    ============================================================ */
 
-import { PIPELINE, VOCAB, SUMMARY, OUTLINE, EXPLAIN } from '../config.js';
+import { PIPELINE, VOCAB, SUMMARY, OUTLINE, EXPLAIN, REVIEW } from '../config.js';
 import { estimateTokens } from './tokens.js';
 // `[11-1]` 요약·개요 응답 다듬기(트리 상한·숫자 거름)는 순수 `text/summary.js` 한 벌 — 같은 순수 계층(3-2 첫 행).
 import { clean, trimTree, pruneForeignNumbers, hasForeignNumber, outlineInput } from '../text/summary.js';
@@ -1102,4 +1102,140 @@ export function checkExplain(item, value) {
     terms.push({ src: ca, tr: cb });
   }
   return { chunkFailed: false, items: [{ i: 0, state: 'ok', value: { t: t, terms: terms } }] };
+}
+
+/* ────────────────────────────────────────────────────────
+   `[15-1 — spec 10-4 · 17-13 3-2 · 15-D5 · 15-D8]` AI 출제(`kind:'quiz'`) — 섹션 복습 묶음의 [문제 만들기 5개]
+   번역·단어·요약·개요·설명 요청과 **따로 선다** — 그 지시문·스키마·판본은 한 글자도 바꾸지 않는다.
+   system 은 10-1 골격 `commonSystem(true, domain)` **그대로**(규칙 1–6). 지시 핵심 넷은 10-4 문장 그대로, 해설 언어만 값으로
+   ("Explanation in {Target} AND {Src}" — 같으면 하나, 7-1 원칙 5 · 11-D4). 응답 검증은 `ai/grounding.js`(10-4 1–5 + 숫자 거름).
+   ──────────────────────────────────────────────────────── */
+
+/** 출제 판본 — 캐시 **값**·저장 레코드의 `promptVersion` 에만(키에는 넣지 않는다 — 7-5). 값은 `config.js` `REVIEW.PROMPT_VERSION`. */
+export const QUIZ_PROMPT_VERSION = REVIEW.PROMPT_VERSION;
+
+const QUIZ_OPTION = Object.freeze({
+  type: 'OBJECT',
+  properties: Object.freeze({ letter: STR, text: STR }),
+  required: Object.freeze(['letter', 'text']),
+  propertyOrdering: Object.freeze(['letter', 'text'])
+});
+
+/**
+ * 출제 스키마 — `withSrc` 면 해설 `{tr, src}`, 아니면 `{tr}`(10-4 의 `{ar, en}` 를 언어를 박지 않는 꼴로).
+ * `strict` 가 아니면(응답 해석용) 문항·보기의 필수를 두지 않는다 — 빠진 필드가 있는 문항도 `grounding` 까지 와서 **폐기로 세어지게**
+ * (미니 검증기는 필수가 빠진 항목을 소리 없이 지운다 — 그러면 폐기율이 낮게 보인다).
+ */
+function quizSchema(withSrc, strict) {
+  const exNames = withSrc ? ['tr', 'src'] : ['tr'];
+  const exProps = {};
+  for (const k of exNames) exProps[k] = STR;
+  const explanation = { type: 'OBJECT', properties: Object.freeze(exProps), propertyOrdering: Object.freeze(exNames) };
+  if (strict) explanation.required = Object.freeze(['tr']);
+  const names = ['stem', 'options', 'answer', 'evidence', 'evidenceParaId', 'explanation'];
+  const item = {
+    type: 'OBJECT',
+    properties: Object.freeze({
+      stem: STR,
+      options: Object.freeze({ type: 'ARRAY', items: strict ? QUIZ_OPTION : Object.freeze({ type: 'OBJECT', properties: QUIZ_OPTION.properties }) }),
+      answer: STR,
+      evidence: STR,
+      evidenceParaId: STR,
+      explanation: Object.freeze(explanation)
+    }),
+    propertyOrdering: Object.freeze(names)
+  };
+  if (strict) item.required = Object.freeze(names.slice());
+  return Object.freeze({
+    type: 'OBJECT',
+    properties: Object.freeze({
+      questions: Object.freeze({ type: 'ARRAY', items: Object.freeze(item) }),
+      notes: STR
+    }),
+    required: Object.freeze(['questions']),
+    propertyOrdering: Object.freeze(['questions', 'notes'])
+  });
+}
+
+/** 요청에 싣는 스키마(gemini `responseSchema`) — 원문 ≠ 대상 · 원문 = 대상. */
+export const QUIZ_SCHEMA = quizSchema(true, true);
+export const QUIZ_SCHEMA_SAME = quizSchema(false, true);
+/** 응답 해석(`parseAIJson`)용 — 필수는 루트 `questions` 하나(위 `quizSchema` 주석). */
+export const QUIZ_PARSE_SCHEMA = quizSchema(true, false);
+
+function quizSchemaLine(withSrc) {
+  return 'Schema: {"questions": [{"stem": string, "options": [{"letter": string, "text": string}], "answer": string, ' +
+    '"evidence": string, "evidenceParaId": string, "explanation": {"tr": string' + (withSrc ? ', "src": string' : '') + '}}], "notes": string}';
+}
+
+/**
+ * 10-4 지시. 첫 네 줄은 10-4 문장 그대로(해설 언어만 이름으로). 언어는 이름으로만(7-1 원칙 5). 줄기·보기는 **원문 언어**
+ * (근거 인용이 원문 그대로라야 한다). 의학이면 대상 언어 해설에 용어 + 괄호 원어(`TERM_EXAMPLES` — 표에 없으면 빈 문자열, 16-D2)·
+ * 대상 언어 문체(`TARGET_STYLE`), 일반이면 `TARGET_STYLE_GENERAL` 결.
+ * @returns {string|null} 언어 이름을 모르면 null
+ */
+export function quizInstruction(srcLang, targetLang, domain, n) {
+  const src = langName(srcLang);
+  const tgt = langName(targetLang);
+  if (!src || !tgt) return null;
+  const count = Number.isInteger(n) && n > 0 ? n : REVIEW.QUIZ_N;
+  const withSrc = codeOf(srcLang) !== codeOf(targetLang);
+  const general = normalizeDomain(domain) === 'general';
+  const tc = codeOf(targetLang);
+  const lines = [
+    'Write ' + count + ' single-best-answer multiple-choice questions (A–E) STRICTLY grounded in the DOC.',
+    'For each question: "evidence" must be an EXACT, VERBATIM quote (20–200 characters) copied from the DOC that justifies the correct answer.',
+    'Do not use any knowledge outside the DOC. If the DOC does not support a good question, produce fewer questions.',
+    'Explanation in ' + (withSrc ? tgt + ' AND ' + src : tgt) + '. No treatment recommendations beyond DOC text.',
+    'The DOC is a list of paragraphs {"paraId", "pageNo", "text"}. Write each "stem" and its "options" in ' + src +
+      ': exactly 5 options with the letters "A", "B", "C", "D", "E" and exactly one correct option; "answer" = the letter of the correct option.',
+    '"evidenceParaId" = the "paraId" of the paragraph the evidence is copied from.',
+    withSrc
+      ? '"explanation": {"tr": why the answer is correct, in ' + tgt + ', "src": the same explanation in simple ' + src + '}.'
+      : '"explanation": {"tr": why the answer is correct, in ' + tgt + '}.'
+  ];
+  if (general) {
+    lines.push('Use usual ' + tgt + ' words; keep proper nouns as written.' + styleSentence(tgt, TARGET_STYLE_GENERAL[tc]));
+  } else {
+    const style = styleSentence(tgt, TARGET_STYLE[tc]);
+    const ex = TERM_EXAMPLES[tc] ? ' (e.g. ' + TERM_EXAMPLES[tc] + ')' : '';
+    lines.push(withSrc
+      ? 'In the ' + tgt + ' explanation write medical terms as the standard ' + tgt + ' term with the original ' + src +
+        ' term in parentheses on first use' + ex + '.' + style
+      : 'Keep medical terms as written.' + style);
+  }
+  lines.push('Keep numbers, units and drug names exactly as written.');
+  return lines.join('\n');
+}
+
+/**
+ * 10-4 출제 요청(`CompletionRequest`, 8-1). DOC = `[{paraId, pageNo, text}]`(`text`·`paraId` 는 `escapeDoc`).
+ * ★ **보내는 것은 교과서 문단 글뿐**(3-2 "보내는 것") — 항목에서 `paraId`·`pageNo`·`text` 만 읽는다(책 제목·메모·요약은 있어도 읽지 않는다).
+ * @param {{paraId:string, pageNo:number, text:string}[]} items `text/review.js` `passageFor` 의 `items`
+ * @param {{src:string, target:string, domain?:string, n?:number}} opts
+ * @returns {{system:string, user:string, json:true, schema:Object, maxOutputTokens:number, temperature:number}|null}
+ */
+export function buildQuizRequest(items, opts) {
+  const list = Array.isArray(items) ? items : [];
+  const o = opts || {};
+  const n = Number.isInteger(o.n) && o.n > 0 ? o.n : REVIEW.QUIZ_N;
+  const task = quizInstruction(o.src, o.target, o.domain, n);
+  const doc = [];
+  for (const it of list) {
+    const x = it || {};
+    const text = typeof x.text === 'string' ? x.text : '';
+    if (!text.trim()) continue;
+    const pg = Number(x.pageNo);
+    doc.push({ paraId: escapeDoc(String(x.paraId == null ? '' : x.paraId)), pageNo: Number.isFinite(pg) ? pg : null, text: escapeDoc(text) });
+  }
+  if (!task || !doc.length) return null;
+  const withSrc = codeOf(o.src) !== codeOf(o.target);
+  return {
+    system: commonSystem(true, o.domain),
+    user: task + '\n' + quizSchemaLine(withSrc) + '\n<<<DOC\n' + JSON.stringify(doc) + '\n>>>',
+    json: true,
+    schema: withSrc ? QUIZ_SCHEMA : QUIZ_SCHEMA_SAME,
+    maxOutputTokens: n * REVIEW.OUT_TOKENS_PER_Q + REVIEW.OUT_TOKENS_PAD,
+    temperature: PIPELINE.TEMPERATURE
+  };
 }

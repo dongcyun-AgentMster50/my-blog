@@ -11,7 +11,8 @@
 
 /** 화면 이름 — `index.html` 의 `data-screen` 값과 1:1 이다. */
 export const SCREENS = Object.freeze([
-  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab', 'summaries', 'cards', 'planner', 'notes'
+  'onboarding', 'library', 'reader', 'quiz', 'settings', 'usage', 'about', 'search', 'vocab', 'summaries', 'cards', 'planner', 'notes',
+  'review'
 ]);
 
 /** 알 수 없는 해시가 떨어지는 곳(12-1). */
@@ -27,7 +28,10 @@ export const DEFAULT_ROUTE = 'library';
  *   `#/search/:docId`                → {name:'search', params:{docId}}     ← 이 책 범위. **검색어는 URL 에 없다**(S28)
  *   `#/vocab` · `#/vocab/:docId`     → {name:'vocab', params:{docId?}}      ← `[8f-3]` 단어장(전체 · 그 책). 찾기·정렬은 URL 에 없다
  *   `#/summaries` · `#/summaries/:docId` → {name:'summaries', params:{docId?}} ← `[11-3]` 저장한 요약(전체 · 그 책). 범위·펼침은 URL 에 없다
- *   `#/cards` · `#/cards/:docId`     → {name:'cards', params:{docId?}}      ← `[12-3]` 기억 카드 복습·목록(전체 · 그 책). 탭·거르기 칩은 URL 에 없다
+ *   `#/cards` · `#/cards/:docId` · `#/cards/:docId/:a-b` → {name:'cards', params:{docId?, range?:{from, to}}}
+ *                                                                            ← `[12-3]` 기억 카드 복습·목록(전체 · 그 책 · `[15-2]` 그 책의 쪽 범위). 탭·거르기 칩은 URL 에 없다
+ *   `#/review/:docId` · `#/review/:docId/:a-b` → {name:'review', params:{docId, range?:{from, to}}}
+ *                                                                            ← `[15-2]` 복습 묶음(범위 없으면 읽던 장). docId 없으면 서재
  *   `#/planner`                      → {name:'planner', params:{}}          ← `[13-2]` 학습 계획(시험·진도). 편집 중인 시험은 URL 에 없다
  *   `#/notes` · `#/notes/:docId` · `#/notes/:docId/:from-:to` → {name:'notes', params:{docId?, range?:{from, to}}}
  *                                                                            ← `[20-3]` 필기(전체 · 그 책 · 그 책의 쪽 범위 — 15 묶음에서). 거르기 칩은 URL 에 없다
@@ -89,9 +93,20 @@ export function parseRoute(hash) {
       // `[11-3 — spec 17-2-1 4-6]` 저장한 요약 — 전체 또는 그 책. 고른 범위·펼친 줄은 화면 메모리(해시에 넣지 않는다).
       return { name: 'summaries', params: parts[1] ? { docId: parts[1] } : {}, raw: raw };
 
-    case 'cards':
+    case 'cards': {
       // `[12-3 — spec 17-11 6]` 기억 카드 — 전체 또는 그 책("이 책 복습"). [복습]/[목록] 탭·거르기 칩은 화면 메모리(세션 동안만).
-      return { name: 'cards', params: parts[1] ? { docId: parts[1] } : {}, raw: raw };
+      // `[15-2 — spec 17-13 2 칸 6]` 그 책의 쪽 범위(`a-b` — 복습 묶음 [복습]). 범위 꼴이 이상하면 그 책 전체.
+      if (!parts[1]) return { name: 'cards', params: {}, raw: raw };
+      const cr = toRange(parts[2]);
+      return { name: 'cards', params: cr ? { docId: parts[1], range: cr } : { docId: parts[1] }, raw: raw };
+    }
+
+    case 'review': {
+      // `[15-2 — spec 17-13 2]` 복습 묶음 — 그 책 · 쪽 범위(`a-b`, 없으면 화면이 읽던 장을 고른다). docId 가 없으면 갈 곳이 없다 → 서재.
+      if (!parts[1]) return { name: DEFAULT_ROUTE, params: {}, raw: raw };
+      const rr = toRange(parts[2]);
+      return { name: 'review', params: rr ? { docId: parts[1], range: rr } : { docId: parts[1] }, raw: raw };
+    }
 
     case 'planner':
       // `[13-2 — spec 17-12 5]` 학습 계획 — 시험 목록·결과 카드. 펼친 시험·편집 칸은 화면 메모리(해시에 넣지 않는다).
@@ -156,9 +171,22 @@ export function vocabHash(docId) {
 export function summariesHash(docId) {
   return docId == null || docId === '' ? '#/summaries' : '#/summaries/' + encodeURIComponent(docId);
 }
-/** `[12-3]` 기억 카드 — docId 가 있으면 그 책("이 책 복습"), 없으면 전체. */
-export function cardsHash(docId) {
-  return docId == null || docId === '' ? '#/cards' : '#/cards/' + encodeURIComponent(docId);
+/** `[12-3]` 기억 카드 — docId 가 있으면 그 책("이 책 복습"), 없으면 전체. `[15-2]` 쪽 범위 `range` 를 주면 그 범위. */
+export function cardsHash(docId, range) {
+  if (docId == null || docId === '') return '#/cards';
+  return '#/cards/' + encodeURIComponent(docId) + rangeTail(range);
+}
+/** `[15-2]` 복습 묶음 — 그 책(쪽 범위 `range` 를 주면 그 범위, 없으면 화면이 읽던 장). docId 가 없으면 서재. */
+export function reviewHash(docId, range) {
+  if (docId == null || docId === '') return '#/library';
+  return '#/review/' + encodeURIComponent(docId) + rangeTail(range);
+}
+/** `/a-b` 꼬리(1 이상 정수 · 거꾸로면 바로잡음) — 꼴이 틀리면 빈 문자열. */
+function rangeTail(range) {
+  const r = range || null;
+  const a = r ? Math.floor(Number(r.from)) : NaN;
+  const b = r ? Math.floor(Number(r.to)) : NaN;
+  return Number.isFinite(a) && Number.isFinite(b) && a >= 1 && b >= 1 ? '/' + Math.min(a, b) + '-' + Math.max(a, b) : '';
 }
 /** `[13-2]` 학습 계획. */
 export function plannerHash() { return '#/planner'; }

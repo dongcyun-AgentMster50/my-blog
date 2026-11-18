@@ -758,6 +758,26 @@ export const EXPLAIN = Object.freeze({
   PROMPT_VERSION: 1
 });
 
+/* `[15-1]` spec 17-13 3 — AI 출제(섹션 복습 묶음의 AI 문제) 상수. **추가만** 했다. 무료 티어 숫자 없음(15절).
+   사용량·캐시 `kind` 는 9-2 고정 키 `'quiz'`(`AI.USAGE_KINDS` — 7a 빈 행 무변). 입력 글자 상한은 `ai.maxReqChars`(PIPELINE.MAX_REQ_CHARS). */
+export const REVIEW = Object.freeze({
+  /* 한 번 누름 = 1호출 · 5문항(15-D5) */
+  QUIZ_N: 5,
+  /* `maxOutputTokens = 문항 수 × PER_Q + PAD`(아랍어 해설 팽창 — 실기기 확인 거리) */
+  OUT_TOKENS_PER_Q: 900,
+  OUT_TOKENS_PAD: 200,
+  /* 출제 입력 문단 — kind `body`·`list`, 60자 이상(요약 대상 규칙과 같은 값) */
+  PARA_KINDS: Object.freeze(['body', 'list']),
+  PARA_MIN_CHARS: 60,
+  /* 근거 인용 최소 글자(지시문 "20–200 characters" — 짧은 인용은 아무 문단에나 맞아 근거가 못 된다) */
+  EVIDENCE_MIN: 20,
+  /* AI 문항 sectionId 머리(`ai-p{a}-{b}` — 원서 파서 id 와 겹치지 않는다) · id 줄기 해시 글자 수 */
+  SECTION_PREFIX: 'ai-p',
+  ID_HASH_CHARS: 8,
+  /* 캐시 값·저장 레코드의 `promptVersion`(키에는 넣지 않는다 — 7-5). 번역·요약·설명 판본과 따로 센다. */
+  PROMPT_VERSION: 1
+});
+
 /* ────────────────────────────────────────────────────────
    `[12-1]` 17-11 3·4 — 기억 카드(SRS) 상수. **추가만** 했다. 호출 0(카드·복습·뒷면 채우기 전부 기기 안).
    SM-2 + Anki 식 4단추 변형(12-D4): 다시 10분 · 어려움 ×1.2 · 쉬움 ×1.3 · ease 바닥 1.3 · 최대 365일.

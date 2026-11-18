@@ -18,12 +18,13 @@ import { t, applyTranslations, onLangChange, formatNumber, getLang } from '../i1
 import * as db from '../db.js';
 import * as settings from '../settings.js';
 import { PLAN, SRS } from '../config.js';
-import { go, readerHash } from '../router.js';
+import { go, readerHash, reviewHash } from '../router.js';
 import {
   planFor, remainingOf, todayRange, speedOf, callsRateOf, reviewMinutes, bucketFor, dayRead, dayNum
 } from '../plan/planner.js';
 import { readLogStore, dayKeyOf } from '../plan/readlog.js';
-import { tocOf, printedLabel } from '../search/outline.js';
+import { tocOf } from '../search/outline.js';
+import { chapterRanges, chapterOptionText, printedRange } from './rangepick.js';   // `[15-2 — 15-D11]` 범위 고르기 한 벌
 import { prepareDoc } from '../search/engine.js';
 import { callsPer10k, usageView, dayShift } from './usage.js';
 import { cardStore, dayStartOf, clampNewPerDay } from '../srs/cards.js';
@@ -118,28 +119,10 @@ export function resolveTargets(targets, docs) {
 }
 
 /**
- * 장 고르기 목록 — `tocOf` 의 위 두 깊이(쪽 있는 항목). 장 `to` = 다음 항목(같거나 얕은 깊이) 쪽 − 1, 마지막은 문서 끝.
- * @returns {{title:string, from:number, to:number, d:number}[]}
+ * 장 고르기 목록 — `[15-2 — 15-D11]` `ui/rangepick.js` 로 옮김(같은 함수 — 여기서는 다시 내보내기만).
+ * `tocOf` 의 위 두 깊이(쪽 있는 항목). 장 `to` = 다음 항목(같거나 얕은 깊이) 쪽 − 1, 마지막은 문서 끝.
  */
-export function chapterRanges(toc, pageCount) {
-  const items = (toc && Array.isArray(toc.items) ? toc.items : []).filter((x) => x && Number.isInteger(x.p) && x.p >= 1 && cut(x.t, 1));
-  if (!items.length) return [];
-  let top = Infinity;
-  for (const x of items) top = Math.min(top, Number(x.d) || 1);
-  const end = Number(pageCount) > 0 ? Math.floor(Number(pageCount)) : 0;
-  const out = [];
-  for (let i = 0; i < items.length; i++) {
-    const d = Number(items[i].d) || 1;
-    if (d > top + 1) continue;
-    const from = items[i].p;
-    let to = Math.max(from, end);
-    for (let j = i + 1; j < items.length; j++) {
-      if ((Number(items[j].d) || 1) <= d && items[j].p > from) { to = items[j].p - 1; break; }
-    }
-    out.push({ title: cut(items[i].t, LABEL_MAX), from: from, to: Math.max(from, to), d: d - top });
-  }
-  return out;
-}
+export { chapterRanges };
 
 /**
  * 한 시험의 `planFor` 입력 — 순수(읽어 둔 것만 받는다).
@@ -508,6 +491,8 @@ function rangeRow(r) {
     m.classList.add('pl-meter-sm');
     row.appendChild(m);
     row.appendChild(line('pl-range-n muted', t('planner.range.read', { x: fmt(r.readPages), y: fmt(r.pages) }), 'range', [r.readPages, r.pages]));
+    // `[15-2 — 15-D9]` 복습 묶음 입구 — 이 범위 그대로(호출 0)
+    row.appendChild(btn('pl-review', 'planner.review', 'review', { 'data-nav': reviewHash(r.docId, { from: r.from, to: r.to }) }));
   }
   return row;
 }
@@ -637,7 +622,7 @@ async function pickBook(id) {
   }
   while (els.chapter.firstChild) els.chapter.removeChild(els.chapter.firstChild);
   f.chapters.forEach((c, i) => {
-    const o = el('option', '', (c.d > 0 ? '— ' : '') + c.title + ' (' + t('planner.range.pages', { a: fmt(c.from), b: fmt(c.to) }) + ')');
+    const o = el('option', '', chapterOptionText(c));
     o.value = String(i);
     els.chapter.appendChild(o);
   });
@@ -661,11 +646,8 @@ function renderRangeMode() {
 function renderPrinted() {
   const f = S.form;
   if (!f) return;
-  const a = Math.floor(Number(els.from.value));
-  const b = Math.floor(Number(els.to.value));
-  const la = printedLabel(f.labels, a);
-  const lb = printedLabel(f.labels, b);
-  els.printed.textContent = la || lb ? t('planner.range.printed', { a: la || String(a), b: lb || String(b) }) : '';
+  const pr = printedRange(f.labels, Math.floor(Number(els.from.value)), Math.floor(Number(els.to.value)));
+  els.printed.textContent = pr ? t('planner.range.printed', { a: pr.a, b: pr.b }) : '';
 }
 
 function addRange() {
@@ -761,6 +743,7 @@ async function onClick(ev) {
   if (act === 'go') { go(readerHash(b.getAttribute('data-doc'), Number(b.getAttribute('data-page')))); return; }
   if (act === 'mark') { await markFromCard(b); return; }
   if (act === 'count') { await countExam(b.getAttribute('data-id')); return; }
+  // 'review' — `data-nav` 전역 위임이 연다(여기서 할 일 없음)
 }
 
 async function markFromCard(b) {

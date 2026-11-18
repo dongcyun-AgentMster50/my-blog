@@ -29,11 +29,12 @@ import { t, applyTranslations, onLangChange, dirOf, formatNumber } from '../i18n
 import * as db from '../db.js';
 import * as settings from '../settings.js';
 import { AI, OUTLINE } from '../config.js';
-import { go, replace, summariesHash, readerHash } from '../router.js';
+import { go, replace, summariesHash, readerHash, reviewHash } from '../router.js';
 import { exportText, compareAnchor, clean } from '../text/summary.js';
 import { buildUnits } from '../tts/text.js';
 import { summaryStore, withHashes, relocate } from '../notes/summaries.js';
-import { printedLabel, isOutlineCurrent, isJunkOutline } from '../search/outline.js';
+import { printedLabel } from '../search/outline.js';
+import { chaptersOf, chapterAt } from './rangepick.js';   // `[15-2 — 15-D11]` 범위 고르기 한 벌
 import { domainOf } from '../ai/prompts.js';
 import { appendBidiText } from './bididom.js';
 import { renderTree } from './tree.js';
@@ -108,36 +109,10 @@ export function relocateLine(rec, paras) {
 }
 
 /**
- * 문서의 장 — `documents.outline`(8g) 의 **맨 위 깊이** 항목(쪽이 있는 것)을 쪽 순서로. 개요를 아직 못 읽었거나·없거나·
- * 파일 이름뿐인 쓰레기 개요면 빈 배열(그러면 쪽 라벨로 묶는다). 장 `to` = 다음 장 앞 쪽(마지막은 문서 끝).
- * @returns {{title:string, from:number, to:number}[]}
+ * 문서의 장(`chaptersOf` — 맨 위 깊이) · 그 쪽이 든 장(`chapterAt`) — `[15-2 — 15-D11]` `ui/rangepick.js` 로 옮김(같은 함수 —
+ * 여기서는 다시 내보내기만). 장 `to` = 다음 장 앞 쪽(마지막은 문서 끝).
  */
-export function chaptersOf(doc) {
-  if (!doc || !isOutlineCurrent(doc) || !doc.outline.length || isJunkOutline(doc.outline)) return [];
-  const items = doc.outline.filter((x) => x && Number.isInteger(x.p) && x.p >= 1 && clean(x.t));
-  if (!items.length) return [];
-  let top = Infinity;
-  for (const x of items) top = Math.min(top, Number(x.d) || 1);
-  const heads = items.filter((x) => (Number(x.d) || 1) === top).sort((a, b) => a.p - b.p);
-  const out = [];
-  for (const h of heads) {
-    if (out.length && out[out.length - 1].from === h.p) continue;      // 같은 쪽에서 시작하는 장 — 앞 것
-    out.push({ title: clean(h.t), from: h.p, to: h.p });
-  }
-  const end = Number(doc.pageCount) > 0 ? Math.floor(Number(doc.pageCount)) : 0;
-  for (let i = 0; i < out.length; i++) {
-    out[i].to = i + 1 < out.length ? Math.max(out[i].from, out[i + 1].from - 1) : Math.max(out[i].from, end);
-  }
-  return out;
-}
-
-/** 그 쪽이 든 장 번호(없으면 -1 — 첫 장 앞 쪽 등). */
-export function chapterAt(chapters, page) {
-  const p = Number(page);
-  const list = Array.isArray(chapters) ? chapters : [];
-  for (let i = 0; i < list.length; i++) if (p >= list[i].from && p <= list[i].to) return i;
-  return -1;
-}
+export { chaptersOf, chapterAt };
 
 /** 레코드의 첫 쪽(요약 = `pageNo`, 개요 = `range.from`). */
 export function startPage(rec) {
@@ -469,12 +444,30 @@ export function initSummaries() {
   attachDebugHook();
 }
 
+/**
+ * `[15-2]` 복습 묶음 [모아 보기] — 다음에 그 책을 열 때 범위 고르기를 이 범위로(한 번). 같은 장(맨 위 깊이)이 있으면 그 장, 아니면 쪽 a–b.
+ */
+let presetRangeOnce = null;
+export function presetSummariesRange(docId, from, to) {
+  presetRangeOnce = docId == null ? null : { docId: String(docId), from: Math.floor(Number(from)), to: Math.floor(Number(to)) };
+}
+
 /** 라우터 — `#/summaries` · `#/summaries/:docId`. */
 export async function showSummaries(params) {
   if (!root) return;
   const docId = params && params.docId != null && params.docId !== '' ? String(params.docId) : null;
   if (docId !== S.docId) { S.range = null; S.rangeFor = null; if (flow) flow.reset(); }
   S.docId = docId;
+  const pre = presetRangeOnce;
+  presetRangeOnce = null;
+  if (pre && pre.docId === docId && pre.from >= 1 && pre.to >= pre.from) {
+    if (flow) flow.reset();
+    S.rangeFor = docId;
+    S.from = pre.from;
+    S.to = pre.to;
+    S.range = 'p';
+    S.presetChapter = pre;                 // 장 목록은 문서를 읽은 뒤에 맞춘다(`renderRange`)
+  }
   applyTranslations(root);
   attachDebugHook();          // main.js 가 부팅 끝에 `window.__medreader` 를 새로 만든다 — 화면에 들어올 때 다시 단다
   await load();
@@ -582,6 +575,13 @@ function renderRange() {
   const target = targetNow();
   const chapters = chaptersOf(doc);
   const ro = rangeOptions(chapters, S.all, S.docId, target);
+  if (S.presetChapter) {
+    // `[15-2]` [모아 보기] 로 들어옴 — 같은 범위의 장이 있으면 그 장으로(없으면 쪽 a–b 그대로)
+    const pc = S.presetChapter;
+    S.presetChapter = null;
+    const i = chapters.findIndex((c) => c.from === pc.from && c.to === pc.to);
+    if (i >= 0 && S.rangeFor === S.docId) S.range = 'c' + i;
+  }
   if (S.rangeFor !== S.docId || S.range === null || !ro.options.some((o) => o.value === S.range)) {
     S.range = ro.pick;
     S.rangeFor = S.docId;
@@ -816,6 +816,8 @@ function onClick(ev) {
   if (a === 'outline-retry') { flow.retry(); return; }
   if (a === 'outline-save') { saveOutline(); return; }
   if (a === 'export') { doExport(); return; }
+  // `[15-2 — 15-D9]` [이 범위 복습] — 지금 고른 범위 그대로 복습 묶음으로(호출 0)
+  if (a === 'review') { if (S.docId) { const r = currentRange(); go(reviewHash(S.docId, { from: r.from, to: r.to })); } return; }
   if (a === 'goto') { gotoSource(b.getAttribute('data-id')); return; }
   if (a === 'delete') askDelete(b.getAttribute('data-id'));
 }

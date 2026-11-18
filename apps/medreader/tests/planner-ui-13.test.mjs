@@ -280,7 +280,7 @@ test('P7 정적 — 호출 길 0 · 쓰는 설정은 planner.exams 하나 · inn
   assert.ok(!/db\.(put|patch|del)\(/.test(s), 'DB 에 직접 쓰지 않는다(markRead·백필은 서비스)');
   const imports = [...src('../js/ui/planner.js').matchAll(/^import [^;]*? from '([^']+)';/gm)].map((m) => m[1]).sort();
   assert.deepEqual(imports, ['../config.js', '../db.js', '../i18n/index.js', '../plan/planner.js', '../plan/readlog.js', '../router.js',
-    '../search/engine.js', '../search/outline.js', '../settings.js', '../srs/cards.js', './usage.js']);
+    '../search/engine.js', '../search/outline.js', '../settings.js', '../srs/cards.js', './rangepick.js', './usage.js']);   // `[15-2]` 범위 고르기 옮김
   // 4언어 키 — 쓰는 키가 다 있고, 결과 예측 문구 없음
   const used = new Set([...src('../js/ui/planner.js').matchAll(/'((?:planner|library\.todayExam|settings\.reading)[a-zA-Z.]*)'/g)].map((m) => m[1]));
   for (const m of src('../index.html').matchAll(/data-i18n="(planner\.[a-zA-Z.]+)"/g)) used.add(m[1]);

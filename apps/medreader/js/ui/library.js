@@ -38,7 +38,7 @@ import { fileIdentityHash } from '../hash.js';
 import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
-import { go, replace, readerHash, vocabHash, summariesHash, cardsHash, notesHash, libraryHash } from '../router.js';
+import { go, replace, readerHash, vocabHash, summariesHash, cardsHash, notesHash, libraryHash, reviewHash } from '../router.js';
 import { fromStored } from '../text/store.js';
 import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
@@ -61,6 +61,7 @@ import { vocabStore } from '../vocab/store.js';
 import { summaryStore } from '../notes/summaries.js';
 // `[20-3 — spec 17-16 6 · 20-D11]` 삭제 확인 "필기 n" 셈(읽기만) · 같은 PDF 를 다시 가져오면 고아 필기·요약을 새 문서에 다시 붙인다(`reattach` — 한 트랜잭션)
 import { annotationStore } from '../notes/annotations.js';
+import { aiQuiz } from '../review/aiquiz.js';   // `[15-2]` 삭제 확인 "AI 문제 n개도 지워집니다"(셈만 — 호출 0)
 // `[12-2 — spec 17-11 4]` 삭제 확인 "기억 카드 m 는 남습니다" — 그 문서의 문장 카드 수(읽기만).
 // `[12-3 — spec 17-11 6]` 서재 맨 위 "오늘" 줄 — 오늘 복습 줄의 셈(`queue().counts` — 읽기만, 호출 0).
 import { cardStore, dayStartOf, dayKeyOf, clampNewPerDay } from '../srs/cards.js';
@@ -559,6 +560,11 @@ function langPanel(doc, panelId) {
   nb.type = 'button';
   nb.setAttribute('data-action', 'notes');
   panel.appendChild(nb);
+  // `[15-2 — spec 17-13 2 · 15-D9]` "복습 묶음" → `#/review/:docId`(범위 = 읽던 장) — 같은 패널, 같은 위임. 호출 0.
+  const rvb = el('button', 'doc-review', t('library.card.review'));
+  rvb.type = 'button';
+  rvb.setAttribute('data-action', 'review');
+  panel.appendChild(rvb);
 
   // `[배포 안전장치]` 9-4 [텍스트 다시 추출] — 같은 [⋯] 패널, 같은 위임(`data-action`).
   const rx = el('div', 'doc-reextract');
@@ -1397,6 +1403,11 @@ async function onListClick(ev) {
     return;
   }
 
+  if (btn.getAttribute('data-action') === 'review') {
+    go(reviewHash(docId));         // `[15-2]` 복습 묶음(읽던 장)
+    return;
+  }
+
   if (btn.getAttribute('data-action') === 'reextract') {
     if (reextracting.has(docId)) return;
     const doc = await db.get('documents', docId);
@@ -1476,6 +1487,10 @@ export function deleteKeepLines(counts) {
   // `[20-3 — spec 17-16 6 · 20-D11]` 필기(하이라이트·메모 — `annotations` 는 문서를 지워도 남는다). 수 = 필기 화면 줄 수(묶음 = 1).
   const notes = Math.floor(Number(c.notes));
   if (Number.isFinite(notes) && notes > 0) out.push({ key: 'library.card.deleteConfirmNotes', params: { n: notes } });
+  // `[15-2 — spec 17-13 3-3 · 15-D7]` AI 문제 — 남지 않고 **함께 지워진다**: `gone` 조각(`deleteConfirmText` 가 머리 다음 따로 한 줄 —
+  // "AI 문제 n개도 지워집니다", 남는 것 줄에 섞지 않는다)
+  const ai = Math.floor(Number(c.ai));
+  if (Number.isFinite(ai) && ai > 0) out.push({ key: 'library.card.deleteConfirmAi', params: { n: ai }, gone: true });
   return out;
 }
 
@@ -1501,6 +1516,10 @@ export async function deleteKeepCounts(docId, deps) {
   let notes = 0;
   try { notes = Number(await ((deps && deps.notes) || annotationStore()).count(docId)) || 0; } catch (e) { notes = 0; }
   if (notes > 0) out.notes = notes;
+  // `[15-2 — spec 17-13 3-3 · 15-D7]` AI 문제 — 남지 않고 **함께 지워진다**(셈만 — 줄은 `deleteKeepLines` 의 `gone` 조각)
+  let ai = 0;
+  try { ai = Number(await ((deps && deps.ai) || aiQuiz).countForDoc(docId)) || 0; } catch (e) { ai = 0; }
+  if (ai > 0) out.ai = ai;
   return out;
 }
 
@@ -1519,6 +1538,7 @@ export function deleteConfirmText(title, lines, tr) {
   for (const l of Array.isArray(lines) ? lines : []) {
     const p = Object.assign({}, l.params || {});
     if (typeof p.n === 'number') p.n = formatNumber(p.n);
+    if (l.gone) { out.push(tt(l.key, p)); continue; }          // `[15-2]` 함께 지워지는 것 — 머리 다음 따로 한 줄
     parts.push(tt(l.key, p));
   }
   if (parts.length) out.push(tt('library.card.deleteKeeps', { list: parts.join(' · ') }));

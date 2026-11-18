@@ -53,31 +53,32 @@
 <!-- stamp-importmap:begin — dev/stamp-importmap.mjs 가 다시 쓰는 구간. 손으로 고치지 않는다. -->
 <link rel="stylesheet" href="css/tokens.css?v=c194e6cd68">
 <link rel="stylesheet" href="css/base.css?v=0f1962cb47">
-<link rel="stylesheet" href="css/screens.css?v=bd7e563675">
+<link rel="stylesheet" href="css/screens.css?v=791c1615d1">
 <link rel="stylesheet" href="css/reader.css?v=2aea5d1039">
 <script type="importmap">
 {
   "imports": {
     "./js/ai/adapters/gemini.js": "./js/ai/adapters/gemini.js?v=66c1388a70",
     "./js/ai/cache.js": "./js/ai/cache.js?v=eefc9a73ba",
+    "./js/ai/grounding.js": "./js/ai/grounding.js?v=de372d4107",
     "./js/ai/jsonrepair.js": "./js/ai/jsonrepair.js?v=1b8d7ede4d",
     "./js/ai/ondevice.js": "./js/ai/ondevice.js?v=febf2b47a8",
-    "./js/ai/pipeline.js": "./js/ai/pipeline.js?v=7e09bd0f23",
-    "./js/ai/prompts.js": "./js/ai/prompts.js?v=b36732f87b",
+    "./js/ai/pipeline.js": "./js/ai/pipeline.js?v=f605408913",
+    "./js/ai/prompts.js": "./js/ai/prompts.js?v=56e3e449c3",
     "./js/ai/provider.js": "./js/ai/provider.js?v=4f3c501c1f",
     "./js/ai/readalong.js": "./js/ai/readalong.js?v=6472c5f7cc",
     "./js/ai/tokens.js": "./js/ai/tokens.js?v=8316ed5509",
     "./js/backup/export.js": "./js/backup/export.js?v=c85ea9bc8b",
     "./js/backup/import.js": "./js/backup/import.js?v=feec014a6f",
-    "./js/config.js": "./js/config.js?v=be5e88dac9",
-    "./js/db.js": "./js/db.js?v=b085a26857",
+    "./js/config.js": "./js/config.js?v=862558c5dc",
+    "./js/db.js": "./js/db.js?v=8d1aa2be13",
     "./js/hash.js": "./js/hash.js?v=70f43f39b8",
-    "./js/i18n/ar.js": "./js/i18n/ar.js?v=edac7ab806",
-    "./js/i18n/en.js": "./js/i18n/en.js?v=92a4c2e017",
-    "./js/i18n/fr.js": "./js/i18n/fr.js?v=01c8624902",
+    "./js/i18n/ar.js": "./js/i18n/ar.js?v=5c6a6ededd",
+    "./js/i18n/en.js": "./js/i18n/en.js?v=562f2dd70a",
+    "./js/i18n/fr.js": "./js/i18n/fr.js?v=8a019cc6ca",
     "./js/i18n/index.js": "./js/i18n/index.js?v=2b166c50b8",
-    "./js/i18n/ko.js": "./js/i18n/ko.js?v=daf45f537f",
-    "./js/main.js": "./js/main.js?v=8193762d1a",
+    "./js/i18n/ko.js": "./js/i18n/ko.js?v=fac8587a50",
+    "./js/main.js": "./js/main.js?v=016cd681f4",
     "./js/notes/annotations.js": "./js/notes/annotations.js?v=ec906068a2",
     "./js/notes/summaries.js": "./js/notes/summaries.js?v=c928e7ff09",
     "./js/pdf/extract.js": "./js/pdf/extract.js?v=864fd44498",
@@ -89,11 +90,12 @@
     "./js/privacy/redact.js": "./js/privacy/redact.js?v=10e447456b",
     "./js/quiz/engine.js": "./js/quiz/engine.js?v=8408641fcc",
     "./js/quiz/parser.js": "./js/quiz/parser.js?v=c2403f9857",
-    "./js/router.js": "./js/router.js?v=317ddea540",
+    "./js/review/aiquiz.js": "./js/review/aiquiz.js?v=bdd27ee806",
+    "./js/router.js": "./js/router.js?v=0d7e90814a",
     "./js/search/engine.js": "./js/search/engine.js?v=aa92ddb05d",
     "./js/search/outline.js": "./js/search/outline.js?v=2953e0d304",
     "./js/settings.js": "./js/settings.js?v=fbce9584d8",
-    "./js/srs/cards.js": "./js/srs/cards.js?v=0467a252df",
+    "./js/srs/cards.js": "./js/srs/cards.js?v=4aaee32d25",
     "./js/srs/sm2.js": "./js/srs/sm2.js?v=8cbfbaeae0",
     "./js/text/anchor.js": "./js/text/anchor.js?v=fe34268f06",
     "./js/text/backup.js": "./js/text/backup.js?v=f88dbe0761",
@@ -106,6 +108,7 @@
     "./js/text/layout.js": "./js/text/layout.js?v=57cb527faa",
     "./js/text/lines.js": "./js/text/lines.js?v=8a5f9e1f9b",
     "./js/text/links.js": "./js/text/links.js?v=3ab404d6df",
+    "./js/text/review.js": "./js/text/review.js?v=2b46c15cf8",
     "./js/text/rowtable.js": "./js/text/rowtable.js?v=76a7ee780f",
     "./js/text/scan.js": "./js/text/scan.js?v=4b8d4ca314",
     "./js/text/screen.js": "./js/text/screen.js?v=6b6362d8b4",
@@ -124,27 +127,29 @@
     "./js/ui/ask.js": "./js/ui/ask.js?v=023d4ae378",
     "./js/ui/backup.js": "./js/ui/backup.js?v=45ff6aabb1",
     "./js/ui/bididom.js": "./js/ui/bididom.js?v=4aaa2d0306",
-    "./js/ui/cards.js": "./js/ui/cards.js?v=50880939bc",
+    "./js/ui/cards.js": "./js/ui/cards.js?v=3a380d9afb",
     "./js/ui/charhl.js": "./js/ui/charhl.js?v=6b25746d4f",
     "./js/ui/chrome.js": "./js/ui/chrome.js?v=ebc3657eb9",
     "./js/ui/controls.js": "./js/ui/controls.js?v=6d2b6497ec",
     "./js/ui/handsfree.js": "./js/ui/handsfree.js?v=659c659f88",
     "./js/ui/inlinetr.js": "./js/ui/inlinetr.js?v=0fe335b7ac",
-    "./js/ui/library.js": "./js/ui/library.js?v=80fa03cd47",
+    "./js/ui/library.js": "./js/ui/library.js?v=1d5001f279",
     "./js/ui/links.js": "./js/ui/links.js?v=af6adb9d8f",
     "./js/ui/notes.js": "./js/ui/notes.js?v=635d954c45",
     "./js/ui/notesheet.js": "./js/ui/notesheet.js?v=24b0859b63",
     "./js/ui/notice.js": "./js/ui/notice.js?v=0e878560ea",
     "./js/ui/onboarding.js": "./js/ui/onboarding.js?v=741af2a6b5",
     "./js/ui/original.js": "./js/ui/original.js?v=e6b5ffa770",
-    "./js/ui/planner.js": "./js/ui/planner.js?v=520d2837bc",
-    "./js/ui/quiz.js": "./js/ui/quiz.js?v=6e3917dcaa",
+    "./js/ui/planner.js": "./js/ui/planner.js?v=ca4f9cf0b9",
+    "./js/ui/quiz.js": "./js/ui/quiz.js?v=a6fd545465",
+    "./js/ui/rangepick.js": "./js/ui/rangepick.js?v=45a7c8ad09",
     "./js/ui/reader.js": "./js/ui/reader.js?v=24f221bba7",
     "./js/ui/remember.js": "./js/ui/remember.js?v=568e7a280e",
+    "./js/ui/review.js": "./js/ui/review.js?v=7ef33636b5",
     "./js/ui/search.js": "./js/ui/search.js?v=4a34bd0a53",
     "./js/ui/selbar.js": "./js/ui/selbar.js?v=850b772aa4",
     "./js/ui/settings.js": "./js/ui/settings.js?v=fd4e8ceffc",
-    "./js/ui/summaries.js": "./js/ui/summaries.js?v=6b7280a0fd",
+    "./js/ui/summaries.js": "./js/ui/summaries.js?v=7fe62b8307",
     "./js/ui/sumsheet.js": "./js/ui/sumsheet.js?v=9ac7bbb36c",
     "./js/ui/trband.js": "./js/ui/trband.js?v=43e769218d",
     "./js/ui/tree.js": "./js/ui/tree.js?v=08e765cecb",
@@ -1206,6 +1211,8 @@
       <div class="sums-row">
         <button type="button" class="primary" id="sumsMake" data-sa="outline" data-i18n="summaries.outline.make" hidden></button>
         <button type="button" id="sumsRetry" data-sa="outline-retry" data-i18n="readalong.retry" hidden></button>
+        <!-- `[15-2 — 15-D9]` 이 범위 그대로 복습 묶음으로(호출 0) -->
+        <button type="button" id="sumsReview" data-sa="review" data-i18n="summaries.review"></button>
       </div>
       <p class="sums-status" id="sumsOutStatus" role="status" aria-live="polite"></p>
       <div class="sums-outline" id="sumsOutline" hidden>
@@ -1444,6 +1451,20 @@
       </div>
       <p class="vocab-status" id="notesMemoStatus" role="status" aria-live="polite"></p>
     </dialog>
+  </section>
+
+  <!-- ════ 복습 묶음 (spec 17-13 2) — 15-2 ══════════════════
+       `#/review/:docId` · `#/review/:docId/:a-b`(PDF 쪽 범위 — 없으면 읽던 장). 입구: 서재 카드 [⋯] "복습 묶음" · 요약 모아 보기 [이 범위 복습] ·
+       학습 계획 범위 줄 [복습](15-D9 — 리더 상단바·서재 상단은 늘리지 않는다).
+       ★ 칸(머리·진도·요약·원서 문제·AI 문제·카드·필기)은 `js/ui/review.js` 가 `#rvBody` 에 textContent 로만 그린다. 비어 있는 칸은 숨긴다.
+       ★ 호출: 열기·범위 바꾸기·풀기·복습·보기 0 — [문제 만들기 5개]·[개요 만들기]를 누를 때만 1. 자동 0. -->
+  <section class="screen review-screen" data-screen="review" hidden>
+    <div class="topbar">
+      <button type="button" data-nav="#/library" data-i18n-aria="nav.back" data-i18n="nav.back"></button>
+      <h1 class="title" id="rvTitle" data-i18n="review.title"></h1>
+    </div>
+    <div class="rv-body" id="rvBody"></div>
+    <p class="muted rv-disclaimer" id="rvDisclaimer" data-i18n="review.disclaimer"></p>
   </section>
 
   <!-- ════ 학습 계획 (spec 17-12 5) — 13-2 ══════════════════

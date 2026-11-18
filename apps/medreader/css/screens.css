@@ -2040,3 +2040,33 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
 @media (max-height: 520px) {
   .notes-memo-quote { max-block-size: 3em; }
 }
+
+/* ════ `[15-2 — spec 17-13 2 · 4]` 복습 묶음 `#/review` · 퀴즈 AI 갈래 · 입구 ════════════
+   논리 속성만(RTL 거울) · 누를 것 48px(`--tap`) · 좁은 폭에서 줄 바꿈(가로 넘침 0). */
+.review-screen [hidden] { display: none; }
+.rv-body { display: flex; flex-direction: column; gap: var(--sp-3); }
+.rv-cell { margin: 0; min-inline-size: 0; }
+.rv-h { font-size: var(--fs-base); margin: 0 0 var(--sp-2); overflow-wrap: anywhere; }
+.rv-chapter { font-size: var(--fs-lg); margin: 0 0 var(--sp-1); overflow-wrap: anywhere; }
+.rv-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-block: var(--sp-2); }
+.rv-row > .rv-line, .rv-row > .rv-range { flex: 1 1 12em; min-inline-size: 0; margin: 0; }
+.rv-row > button { flex: 0 1 auto; min-inline-size: var(--tap); min-block-size: var(--tap); }
+.rv-line, .rv-range { margin: 0 0 var(--sp-2); overflow-wrap: anywhere; }
+.rv-status { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.rv-make > button.primary { flex: 1 1 14em; }
+.rv-make > button:disabled { opacity: .55; cursor: not-allowed; }
+.rv-outline { margin-block-start: var(--sp-2); }
+.rv-outline > summary { min-block-size: var(--tap); display: list-item; cursor: pointer; padding-block: var(--sp-2); font-weight: 600; overflow-wrap: anywhere; }
+.rv-pick { margin-block-start: var(--sp-2); padding-block-start: var(--sp-2); border-block-start: 1px solid var(--c-border); }
+.rp-err { margin: 0; font-size: var(--fs-sm); color: var(--c-danger); }
+.rp-err:empty, .rp-notoc[hidden] { display: none; }
+.rv-disclaimer { margin-block: var(--sp-3); font-size: var(--fs-sm); }
+.pl-review { margin-block-start: var(--sp-1); }
+/* 퀴즈 — 🤖 배지는 📕(`--c-surface-2`)와 다른 색 토큰 · 고정 한 줄 · 근거 블록(인용 + [원문에서 보기]) · 해설 원문 언어(작게) */
+.quiz-badge-ai { background: var(--c-notice-bg); color: var(--c-notice-text); }
+.quiz-ai-note { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--c-text-dim); overflow-wrap: anywhere; }
+.quiz-evidence { margin-block: var(--sp-3) 0; padding: var(--sp-2) var(--sp-3); border-inline-start: 4px solid var(--c-notice-text); background: var(--c-surface-2); border-radius: var(--radius-sm); }
+.quiz-evidence-head { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); font-weight: 600; color: var(--c-text-dim); }
+.quiz-evidence-quote { margin: 0; line-height: 1.55; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+.quiz-evidence .quiz-actions { margin-block-start: var(--sp-2); }
+.quiz-explanation-src { margin-block: var(--sp-2) 0; font-size: var(--fs-sm); color: var(--c-text-dim); line-height: 1.55; overflow-wrap: anywhere; }

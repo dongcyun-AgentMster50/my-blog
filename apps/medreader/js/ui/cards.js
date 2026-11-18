@@ -166,17 +166,33 @@ export function createReviewFlow(deps) {
   const store = d.store || cardStore;
   const now = typeof d.now === 'function' ? d.now : () => Date.now();
   const st = { chip: 'all', docId: null, line: [], byId: new Map(), face: 'front', shownAt: 0, reviewed: 0, again: 0,
-    dayKey: '', noTr: 0, done: null, busy: false, last: null, started: false };
+    dayKey: '', noTr: 0, done: null, busy: false, last: null, started: false, pages: null };
 
   function npd() { return clampNewPerDay(typeof d.newPerDay === 'function' ? d.newPerDay() : undefined); }
   function day() { return dayOf(now()); }
   function begin() { st.face = 'front'; st.shownAt = now(); }
+  /** `[15-2]` 쪽 범위(`#/cards/:docId/:a-b`) 안 카드인가 — 범위가 없으면 모두. 쪽을 모르는 카드(단어 카드 등)는 범위 밖. */
+  function inPages(c) { const p = st.pages; if (!p) return true; const n = Number(c && c.pageNo); return n >= p[0] && n <= p[1]; }
+  /**
+   * `[15-2 — spec 17-13 2 칸 6]` 범위 거름 — 복습할 것은 `queue` 결과를 거르고, 새 카드는 오늘 몫(`newPerDay` − 오늘 새로 본 수)을
+   * **범위 안에서** 다시 채운다(책 전체 몫에서 거르면 범위 안 새 카드가 몫 밖으로 밀린다). 범위가 없으면 `queue` 그대로.
+   */
+  async function ranged(q, x) {
+    if (!st.pages) return q;
+    let room = npd();
+    try { const lg = await store.readLog(); const td = lg && lg[x.key]; room = Math.max(0, room - Math.max(0, Number(td && td.new) || 0)); } catch (e) { /* 몫 그대로 */ }
+    const ks = kindsOf(st.chip);
+    const fresh = (await store.list({ docId: st.docId || undefined })).filter((c) => ks.indexOf(c.kind) >= 0 && !c.suspended && isNew(c) && inPages(c) &&
+      !(c.kind === 'term' && !clean(typeof c.translation === 'string' ? c.translation : ''))).slice(0, room);
+    const due = q.due.filter(inPages);
+    return { due: due, fresh: fresh, counts: Object.assign({}, q.counts, { due: due.length, fresh: fresh.length }) };
+  }
 
   /** 오늘 줄을 새로 — 복습할 것(dueAt 순) → 새 카드(createdAt 순). `keep` 이면 보이던 카드가 새 줄에도 있을 때 맨 앞에 둔다. */
   async function load(keep) {
     const x = day();
-    const q = await store.queue({ nowMs: x.nowMs, dayStartMs: x.dayStartMs, dayEndMs: x.dayEndMs, newPerDay: npd(),
-      kinds: kindsOf(st.chip), docId: st.docId || undefined });
+    const q = await ranged(await store.queue({ nowMs: x.nowMs, dayStartMs: x.dayStartMs, dayEndMs: x.dayEndMs, newPerDay: npd(),
+      kinds: kindsOf(st.chip), docId: st.docId || undefined }), x);
     const cur = keep && st.line.length ? st.line[0] : null;
     const all = q.due.concat(q.fresh);
     st.byId = new Map(all.map((c) => [c.id, c]));
@@ -198,15 +214,15 @@ export function createReviewFlow(deps) {
     const today = log && log[x.key];
     let tomorrow = 0;
     try {
-      const tq = await store.queue({ nowMs: x.dayEndMs, dayStartMs: x.dayEndMs, dayEndMs: x.dayEndMs + SRS.DAY_MS, newPerDay: npd(),
-        kinds: kindsOf(st.chip), docId: st.docId || undefined });
+      const tq = await ranged(await store.queue({ nowMs: x.dayEndMs, dayStartMs: x.dayEndMs, dayEndMs: x.dayEndMs + SRS.DAY_MS, newPerDay: npd(),
+        kinds: kindsOf(st.chip), docId: st.docId || undefined }), dayOf(x.dayEndMs));
       tomorrow = tq.counts.due + tq.counts.fresh;
     } catch (e) { tomorrow = 0; }
     let total = null;
     if (!st.reviewed) {
       try {
         const ks = kindsOf(st.chip);
-        total = (await store.list({ docId: st.docId || undefined })).filter((c) => ks.indexOf(c.kind) >= 0).length;
+        total = (await store.list({ docId: st.docId || undefined })).filter((c) => ks.indexOf(c.kind) >= 0 && inPages(c)).length;
       } catch (e) { total = null; }
     }
     st.done = { today: today ? Math.max(0, Number(today.n) || 0) : 0, tomorrow: tomorrow, total: total };
@@ -219,6 +235,7 @@ export function createReviewFlow(deps) {
     const x = o || {};
     st.chip = CHIPS.indexOf(x.chip) >= 0 ? x.chip : 'all';
     st.docId = x.docId == null || x.docId === '' ? null : String(x.docId);
+    st.pages = st.docId && Array.isArray(x.pages) && x.pages.length === 2 ? [Number(x.pages[0]), Number(x.pages[1])] : null;   // `[15-2]`
     st.reviewed = 0;
     st.again = 0;
     st.last = null;
@@ -240,7 +257,7 @@ export function createReviewFlow(deps) {
 
   /** 다시 읽기(목록에서 고친 뒤·화면에 돌아옴·설정 바꿈) — 보이던 카드가 아직 줄에 있으면 그대로(면·시각 유지). */
   async function reload() {
-    if (!st.started) return start({ chip: st.chip, docId: st.docId });
+    if (!st.started) return start({ chip: st.chip, docId: st.docId, pages: st.pages });
     const kept = await load(true);
     if (!kept) begin();
     await settle();
@@ -344,7 +361,7 @@ export function cacheLookup(dbx, extraDocId) {
 
 let root = null;
 let els = null;
-const S = { docId: null, tab: 'review', listSort: 'created', listShown: LIST_PAGE, all: [], scoped: [], docs: [], editId: null,
+const S = { docId: null, pages: null, tab: 'review', listSort: 'created', listShown: LIST_PAGE, all: [], scoped: [], docs: [], editId: null,
   seq: 0, dayTimer: null, sayer: null, busy: false, perf: null };
 let flow = null;
 /** 단어장 [복습 (n)] 이 열 때 고르는 칩(한 번). */
@@ -406,9 +423,13 @@ export async function showCards(params) {
   if (!root) return;
   const t0 = nowPerf();
   const docId = params && params.docId != null && params.docId !== '' ? String(params.docId) : null;
-  const scopeChanged = docId !== S.docId || !flow.started();
+  // `[15-2]` 쪽 범위(`#/cards/:docId/:a-b`) — 복습 줄만 거른다(목록 탭은 그 책 전체 그대로)
+  const pages = docId && params.range ? [Number(params.range.from), Number(params.range.to)] : null;
+  const pk = pages ? pages.join('-') : '';
+  const scopeChanged = docId !== S.docId || pk !== (S.pages ? S.pages.join('-') : '') || !flow.started();
   if (scopeChanged) S.listShown = LIST_PAGE;
   S.docId = docId;
+  S.pages = pages;
   applyTranslations(root);
   attachDebugHook();
   await loadDocs();
@@ -416,9 +437,9 @@ export async function showCards(params) {
     const chip = presetChip;
     presetChip = null;
     S.tab = 'review';
-    await flow.start({ chip: chip, docId: docId });
+    await flow.start({ chip: chip, docId: docId, pages: pages });
   } else if (scopeChanged) {
-    await flow.start({ chip: flow.view().chip, docId: docId });
+    await flow.start({ chip: flow.view().chip, docId: docId, pages: pages });
   } else {
     await flow.reload();
   }
@@ -466,7 +487,8 @@ function renderAll() {
 function renderTitle() {
   const doc = S.docId ? docById(S.docId) : null;
   const gone = S.docId && !doc ? ((S.scoped[0] || S.all.find((c) => String(c.docId) === S.docId) || {}).docTitle || '') : '';
-  els.title.textContent = S.docId ? t('cards.titleDoc', { title: doc ? (doc.title || doc.fileName || '') : gone }) : t('cards.title');
+  els.title.textContent = (S.docId ? t('cards.titleDoc', { title: doc ? (doc.title || doc.fileName || '') : gone }) : t('cards.title')) +
+    (S.docId && S.pages ? ' · ' + t('planner.range.pages', { a: formatNumber(S.pages[0]), b: formatNumber(S.pages[1]) }) : '');   // `[15-2]`
 }
 
 function renderTabs() {

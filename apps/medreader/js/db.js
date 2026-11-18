@@ -476,7 +476,8 @@ export function keepsOnDocDelete(rec, store) {
 
    지운다(쪽 텍스트가 바뀌면 함께 틀려진다)
    · `pages`                  — 추출 결과 그 자체(`extract.js` `_buildAndStore`)
-   · `questions`              — 5절 파서가 `pages` 에서 만든 문항(`quiz/engine.js` `buildSectionIndex`)
+   · `questions`              — 5절 파서가 `pages` 에서 만든 문항(`quiz/engine.js` `buildSectionIndex`).
+                                `[15-1]` AI 문항(`source:'ai'`)은 남긴다(`keepsOnReset` — 15-D6)
    · `sections`               — 같은 파서 몫의 스토어(P2, 지금은 쓰는 곳 없음 — 비어 있다)
    · `searchText`             — `[8g-1]` 쪽 화면 글자에서 만든 검색 글자(`extract.js` 가 `pages` 와 한 트랜잭션)
    · documents.`extraction`   — 커서·실패 목록·algoVersion. 새 문서의 값으로 되돌린다
@@ -493,6 +494,14 @@ export function keepsOnDocDelete(rec, store) {
 
 /** 문서별 파생 스토어 — 모두 `docId` 인덱스를 가진다. */
 export const DERIVED_STORES = Object.freeze(['pages', 'questions', 'sections', 'searchText']);
+
+/**
+ * `[15-1 — spec 17-13 3-3 · 15-D6]` 다시 추출해도 남기는 레코드인가. `questions` 의 AI 문항(`source:'ai'`)은 쪽 파서의 파생이
+ * 아니라 **한도를 쓴 결과**다(근거 인용·쪽이 있어 문단 id 가 바뀌어도 근거로 갈 수 있다). 원서 문항(`book`)은 지금처럼 지운다.
+ */
+export function keepsOnReset(rec, store) {
+  return store === 'questions' && !!rec && rec.source === 'ai';
+}
 
 /** documents 의 파생 필드를 되돌릴 값(새 문서의 값과 같다 — `ui/library.js` `newDocument`). */
 export function derivedDocReset() {
@@ -536,6 +545,7 @@ export function resetDerived(docId) {
         req.onsuccess = () => {
           const c = req.result;
           if (!c) { done(); return; }
+          if (keepsOnReset(c.value, name)) { c.continue(); return; }   // `[15-1 — 15-D6]` AI 문항은 남긴다
           c.delete();
           counts[name]++;
           c.continue();

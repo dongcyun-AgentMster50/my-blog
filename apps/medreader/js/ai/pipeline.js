@@ -41,7 +41,7 @@
    진행 중인 캐시 키의 요청이 또 오면 **진행 중인 Promise 를 공유한다**(호출 1건).
    ============================================================ */
 
-import { PIPELINE, AI, VOCAB, OUTLINE, EXPLAIN } from '../config.js';
+import { PIPELINE, AI, VOCAB, OUTLINE, EXPLAIN, REVIEW } from '../config.js';
 import * as realProvider from './provider.js';
 import { CODES, localDay, bumpUsage } from './provider.js';
 import { parseAIJson } from './jsonrepair.js';
@@ -50,8 +50,11 @@ import {
   buildTermRequest, checkTerms, TERM_SCHEMA, TERM_PROMPT_VERSION,
   buildSummaryRequest, checkSummary, SUMMARY_SCHEMA, SUMMARY_PROMPT_VERSION,
   buildOutlineRequest, checkOutline, OUTLINE_SCHEMA, OUTLINE_PROMPT_VERSION, outlinePayload,
-  buildExplainRequest, checkExplain, EXPLAIN_SCHEMA, EXPLAIN_PROMPT_VERSION
+  buildExplainRequest, checkExplain, EXPLAIN_SCHEMA, EXPLAIN_PROMPT_VERSION,
+  buildQuizRequest, QUIZ_PARSE_SCHEMA, QUIZ_PROMPT_VERSION
 } from './prompts.js';
+// `[15-1 — spec 10-4 · 17-13 3-2]` 출제 응답 자체 검증(순수 — 3-2 표 `ai/prompts,jsonrepair,grounding` 열).
+import { groundQuiz } from './grounding.js';
 import { keyFor, defaultCache } from './cache.js';
 // `[11-4 — 11-D20]` 설명 캐시 키의 `ctx=` 문단 해시 — 요약 저장 `textHash` 와 같은 함수(순수 `hash.js` — `cache.js` 가 이미 쓰는 것).
 import { hashHex, normalizeForHash } from '../hash.js';
@@ -381,8 +384,44 @@ export const EXPLAIN_JOB = Object.freeze({
   maxChunks: 1
 });
 
+/** `[15-1 — spec 17-13 3-2]` 출제의 사용량(`usage.byKind`)·캐시 `kind` — 9-2 고정 키(`AI.USAGE_KINDS` 의 `'quiz'` — 7a 빈 행 무변). */
+export const QUIZ_KIND = 'quiz';
+
 /**
- * `[11-4 — 11-D20]` 설명 캐시 키 — `keyFor(docId, 문장, target, 'explain', 'ctx=' + 문단 해시 앞 12자)`. 문단 해시는 요약 저장
+ * `[15-1 — spec 10-4 · 17-13 3-2 · 15-D5]` 출제 job(`kind:'quiz'`). 항목은 늘 하나(`{items:[{paraId, pageNo, text}], n, size}` — 고른 문단 묶음),
+ * **한 번 부름 = 최대 1호출**. 상태 기계·`gate`·5xx 1회·429·cooldown·상한·사용량·캐시·진행 중 공유·실패 기억은 번역과 한 벌(`runJob`).
+ * 검증은 `groundQuiz`(10-4 자체 검증 1–5 + 숫자 거름) — 문항마다 verified/rejected 를 **값에 담아** 캐시한다(같은 입력이면 0회에
+ * 같은 판정). 문항이 하나도 없으면 `failed(EMPTY)`(캐시 0 · 실패 기억 → [다시 시도]). 결과 `{value:{questions, total, verified, rejected, weak, fixed}}`.
+ */
+export const QUIZ_JOB = Object.freeze({
+  name: QUIZ_KIND,
+  build: (chunk, ctx) => {
+    const it = chunk[0] || {};
+    return buildQuizRequest(it.items, { src: ctx.src, target: ctx.target, domain: ctx.domain, n: it.n });
+  },
+  schema: QUIZ_PARSE_SCHEMA,
+  check: (chunk, value, ctx) => {
+    const it = chunk[0] || {};
+    const g = groundQuiz(it.items, value, { withSrc: ctx.src !== ctx.target, n: it.n });
+    return {
+      chunkFailed: false,
+      items: [g.total > 0 ? { state: 'ok', value: g } : { state: 'failed', code: FAIL.EMPTY }]
+    };
+  },
+  accepts: (v) => !!v && typeof v === 'object' && Array.isArray(v.questions) && v.questions.length > 0,
+  toResult: (v) => ({ value: deepCopy(v) }),
+  /** `[11-4]` 개요·설명과 같은 꼴 — 잘린 응답(JSON 이 루트까지 닫히지 않음)이면 마지막 문항이 반쪽일 수 있다 → `failed(MISSING)`(캐시 0 · [다시 시도]). */
+  tailOf: (chunk, value, text) => (scanCut(text).depth <= 0 ? -1 : 0),
+  promptVersion: QUIZ_PROMPT_VERSION,
+  size: (it) => it.size,
+  usageChars: () => 0,
+  ondevice: false,
+  maxItems: 1,
+  maxChunks: 1
+});
+
+/**
+ * `[11-4 — 11-D20]` 설명 캐시 키 —`keyFor(docId, 문장, target, 'explain', 'ctx=' + 문단 해시 앞 12자)`. 문단 해시는 요약 저장
  * `textHash` 와 같은 `hashHex(normalizeForHash(문단 글))` 의 `s256:`·`fnv:` 머리를 뗀 16진 앞 `EXPLAIN.CTX_HASH_CHARS` 자.
  * 같은 문장·같은 문단이면 같은 키(0회), 같은 문장이라도 문단이 다르면 다른 키("See Table 1" 같은 반복 문장).
  * `domain`·판본은 키에 없다(7-5).
@@ -1102,6 +1141,54 @@ export function createPipeline(deps) {
     });
   }
 
+  /**
+   * `[15-1 — spec 17-13 3-2 · 6 · 15-D5]` AI 출제 `pipeline.makeQuiz(items, {src, target, docId, domain, n, force, retry, signal})`.
+   * **사용자가 [문제 만들기]를 누를 때만** 부른다(자동 0). `items` = `passageFor` 의 고른 문단 `[{paraId, pageNo, text}]` —
+   * ★ 보내는 것은 그 셋뿐(교과서 문단 글). 같은 언어도 만든다(해설 하나). 언어 이름이 없으면 `unsupported-lang`, 문단이 없으면 `empty`(호출 0).
+   * 요청이 글자 상한(`ai.maxReqChars`)·토큰 상한(`AI.MAX_REQ_TOKENS`)을 넘으면 **뒤 문단부터 뺀다**(문단은 자르지 않는다) — 하나만 남아도
+   * 넘치면 `too-big`(호출 0). 키 `keyFor(docId, 보내는 문단 JSON, target, 'quiz', 'n=5|l=' + 언어)` — 같은 입력이면 0회(실패 뒤 [다시 시도]),
+   * 새로 누르면 `usedParaIds` 때문에 다른 입력. `domain`·판본은 키에 없다(7-5). 상태 기계·사용량(`byKind.quiz`)은 번역과 한 벌.
+   * @returns {Promise<{status:string, calls:number, results:[{state:string, value?:Object, code?:string, cached?:boolean}],
+   *           sent:string[], langs:string[], n:number, provider:string, model:string}>} `sent` = 실제로 실은 문단 id. 던지지 않는다
+   */
+  async function makeQuiz(items, opts) {
+    const o = opts || {};
+    const src = typeof o.src === 'string' ? o.src.trim() : '';
+    const target = typeof o.target === 'string' ? o.target.trim() : '';
+    const n = Number.isInteger(o.n) && o.n > 0 && o.n <= REVIEW.QUIZ_N ? o.n : REVIEW.QUIZ_N;
+    // ★ 항목에서 문단 id·쪽·글만 읽는다 — 다른 필드(요약·메모·책 제목)는 옮겨 담지 않는다.
+    const list = (Array.isArray(items) ? items : []).map((it) => {
+      const x = it || {};
+      const pg = Number(x.pageNo);
+      return { paraId: String(x.paraId == null ? '' : x.paraId), pageNo: Number.isFinite(pg) ? pg : null, text: textOf(x).trim() };
+    }).filter((x) => x.text);
+    const providerName = String(getSetting('ai.provider') || AI.DEFAULT_PROVIDER);
+    const modelName = String(getSetting('ai.model') || '').trim() || (AI.DEFAULT_MODEL[providerName] || '');
+    const meta = (extra) => Object.assign({ sent: [], langs: [], n: n, provider: providerName, model: modelName }, extra || {});
+    const skip = (status, extra) => Object.assign({ status: status, calls: 0, results: [{ state: SEG.SKIPPED, code: status }] }, meta(extra));
+    if (!list.length) return skip(STATUS.EMPTY);
+    if (!langName(src) || !langName(target)) return skip(STATUS.UNSUPPORTED_LANG);
+    const langs = src === target ? [target] : [target, src];
+    const ctx = { src: src, target: target, domain: normalizeDomain(o.domain) };
+    let use = list;
+    let item = null;
+    for (;;) {
+      const size = use.reduce((a, x) => a + charCount(x.text), 0);
+      const cand = { items: use, n: n, size: size };
+      const req = QUIZ_JOB.build([cand], ctx);
+      if (req && size <= maxChars() && !exceedsRequestBudget(req)) { item = cand; break; }
+      if (use.length <= 1) return skip(STATUS.TOO_BIG, { langs: langs, chars: size });
+      use = use.slice(0, -1);
+    }
+    const docId = String(o.docId == null ? '' : o.docId);
+    const key = await keyFor(docId, JSON.stringify(use), target, QUIZ_KIND, 'n=' + n + '|l=' + langs.join('+'));
+    const out = await runJob(QUIZ_JOB, [item], [key], {
+      src: src, target: target, kind: QUIZ_KIND, docId: docId, signal: o.signal,
+      retry: !!o.retry, force: !!o.force, domain: o.domain
+    });
+    return Object.assign(out, meta({ sent: use.map((x) => x.paraId), langs: langs, key: key }));
+  }
+
   /* ── 사용자·환경이 상태를 바꾸는 길 ───────────────── */
 
   /**
@@ -1165,6 +1252,8 @@ export function createPipeline(deps) {
     outline: outline,
     /** `[11-4]` 문장 설명(11a — 17-2-1 4-7) — 번역과 같은 상태 기계, 최대 1호출. */
     explain: explain,
+    /** `[15-1]` AI 출제(10-4 · 17-13 3-2) — 번역과 같은 상태 기계, 최대 1호출(5문항). */
+    makeQuiz: makeQuiz,
     retry: retry,
     configChanged: configChanged,
     setOnline: setOnline,

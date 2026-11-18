@@ -80,6 +80,14 @@ export function trimLog(log, dayStartMs) {
   return out;
 }
 
+/**
+ * 번역이 빈 단어 카드인가 — 복습 줄에서 빼는 카드(12-D15 · `queue` 의 `counts.noTr`). 순수.
+ * `[15-2b]` 15 묶음 "복습할 n"(`ui/review.js` `cardsInRange`)이 같은 판정을 쓴다 — 12-3 범위 화면과 같은 수(15-2R #2).
+ */
+export function isNoTrTerm(c) {
+  return !!c && c.kind === 'term' && !textOf(c.translation);
+}
+
 /** 하루 새 카드 수(설정 값) → 0–100 정수, 못 읽으면 기본(`[12-1b]` null·빈 글자도 — `Number(null)` 은 0 이라 따로 본다). */
 export function clampNewPerDay(v) {
   if (v == null || (typeof v === 'string' && !v.trim())) return SRS.NEW_PER_DAY;
@@ -339,7 +347,7 @@ export function createCardStore(deps) {
     let noTr = 0;
     for (const c of all) {
       if (kinds.indexOf(c.kind) < 0 || c.suspended) continue;
-      if (c.kind === 'term' && !textOf(c.translation)) { noTr++; continue; }
+      if (isNoTrTerm(c)) { noTr++; continue; }
       if (isNew(c)) freshAll.push(c);
       else if (isDue(Object.assign({}, c, { dueAt: dueMsOf(c) }), dayEndMs)) due.push(c);
     }

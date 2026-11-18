@@ -20,10 +20,12 @@
 
 import * as db from '../db.js';
 import * as settings from '../settings.js';
-import { t, formatNumber, onLangChange } from '../i18n/index.js';
+import { t, formatNumber, onLangChange, dirOf } from '../i18n/index.js';
 import { QUIZ, TTS } from '../config.js';
 import { fromStored } from '../text/store.js';
-import { parseRoute, go, quizHash, readerHash, libraryHash } from '../router.js';
+import { parseRoute, go, quizHash, readerHash, libraryHash, reviewHash } from '../router.js';
+import { aiRangeOf } from '../text/review.js';          // `[15-2]` AI 섹션(`ai-p{a}-{b}`) 갈래
+import { printedRange } from './rangepick.js';
 import * as engine from '../quiz/engine.js';
 import { parserVersion } from '../quiz/parser.js';
 import * as render from '../pdf/render.js';
@@ -105,7 +107,7 @@ export function initQuizScreen() {
  * 시점의 값이 곧 "직전에 읽던 곳"이다. db 를 기다리지 않도록 먼저 서재를
  * 걸어 두고, 읽어 오면 그때 쪽으로 바꾼다 — 버튼이 잠깐도 죽지 않는다.
  */
-function paintBack(docId) {
+function paintBack(docId, sectionId) {
   if (!els || !els.back) return;
   // `[수정 2026-09-26]` **`data-nav` 하나로 통일한다.** 목적지만 데이터로 바꾼다.
   //
@@ -116,6 +118,9 @@ function paintBack(docId) {
   // 안 눌러진다"). `data-nav` 는 `main.js` 의 **전역 위임**이 처리하므로 이 함수가
   // 한 번도 안 돌아도 최소한 서재로는 간다. 죽은 버튼보다 낫다.
   els.back.setAttribute('data-nav', libraryHash());
+  // `[15-2 — spec 17-13 4]` AI 문제(`ai-p{a}-{b}`)의 뒤로가기는 복습 묶음(그 범위)
+  const ar = aiRangeOf(sectionId);
+  if (ar) { els.back.setAttribute('data-nav', reviewHash(docId, { from: ar[0], to: ar[1] })); return; }
   db.get('documents', docId).then((doc) => {
     if (!els || !els.back) return;
     const page = num(doc && doc.lastPage) || 0;
@@ -137,7 +142,7 @@ export async function showQuiz(params) {
   // `[수정 2026-09-25]` 뒤로가기는 **읽던 쪽**으로. 서재로 보내면 사용자가
   // 다시 문서를 찾아 들어가야 한다 — `[실기기]` "뒤로 가기 back 하면 읽던 본문이
   // 아니라 최초 import a PDF 화면이거든.. 읽던 곳으로 가게 하는게 나을듯".
-  paintBack(docId);
+  paintBack(docId, sectionId);
 
   state.docId = docId;
   state.sectionId = sectionId;
@@ -174,8 +179,8 @@ export async function showQuiz(params) {
   let questions = await loadQuestions(docId, sectionId);
   if (token !== state.token) return;
 
-  if (!questions.length) {
-    // 아직 인덱스가 없을 수 있다 — 한 번 만들어 보고 다시 읽는다.
+  if (!questions.length && !aiRangeOf(sectionId)) {
+    // 아직 인덱스가 없을 수 있다 — 한 번 만들어 보고 다시 읽는다. (`[15-2]` AI 섹션은 원서 색인과 무관 — 만들지 않는다)
     await ensureSectionIndex(docId, doc);
     if (token !== state.token) return;
     questions = await loadQuestions(docId, sectionId);
@@ -236,7 +241,7 @@ async function loadQuestions(docId, sectionId) {
     await db.iterate('questions', {
       index: 'docId_sectionId',
       query: IDBKeyRange.only([docId, sectionId])
-    }, (row) => { if (row) out.push(row); });
+    }, (row) => { if (row && row.status !== 'rejected') out.push(row); });   // `[15-2]` 근거 검증에서 버린 AI 문항은 내지 않는다(10-4 5)
   } catch (e) {
     return [];
   }
@@ -342,8 +347,12 @@ export function ensureSectionIndex(docId, doc, opts) {
 function paintTitle() {
   if (!els) return;
   const entry = state.entry;
+  const ar = !entry ? aiRangeOf(state.sectionId) : null;
+  // `[15-2 — spec 17-13 4]` 색인에 없는 `ai-…` → "AI 문제 · 쪽 {a}–{b}"(인쇄 라벨이 있으면 그것)
+  const pr = ar ? printedRange(state.doc && state.doc.pageLabels, ar[0], ar[1]) : null;
   const label = (entry && entry.title) ||
-    t('quiz.section.fallback', { id: shortSectionId(state.sectionId) });
+    (ar ? t('quiz.ai.title', { a: pr ? pr.a : formatNumber(ar[0]), b: pr ? pr.b : formatNumber(ar[1]) })
+      : t('quiz.section.fallback', { id: shortSectionId(state.sectionId) }));
   els.title.textContent = label;
   paintProgress();
 }
@@ -385,10 +394,93 @@ function paintEmpty() {
   box.appendChild(h);
   box.appendChild(p);
   const row = el('div', 'row quiz-actions');
-  row.appendChild(button('quiz.result.backToReader', 'primary', () => backToReader()));
+  row.appendChild(button(backKey(), 'primary', () => backToReader()));
   box.appendChild(row);
   els.mount.appendChild(box);
   paintProgress();
+}
+
+/** `[15-2]` 결과·빈 화면의 돌아가기 단추 이름 — AI 문제는 "복습 묶음으로". */
+function backKey() { return !state.entry && aiRangeOf(state.sectionId) ? 'quiz.ai.back' : 'quiz.result.backToReader'; }
+
+/** `[15-2]` AI 문항 — 원문 언어(줄기·보기·근거) 속성. 원서 문항은 지금처럼 en·ltr. */
+function srcAttrs(q) {
+  // 원문 언어 = langs.src(같은 언어면 해설 하나라 langs.tr 이 곧 원문 언어). 원서 문항은 en(5절 — 영어 문제집).
+  const lg = isAi(q) && q.langs ? q.langs : null;
+  const l = lg ? String(lg.src || lg.tr || 'en') : 'en';
+  return { lang: l, dir: dirOf(l) };
+}
+function isAi(q) { return !!q && q.source === 'ai'; }
+
+/** `[15-2]` [원문에서 보기] — 묶음 화면(`ui/review.js`)이 그 쪽을 열고 20 `findQuote` 로 인용 줄을 찾는다(못 찾으면 쪽 처음). */
+let evidenceHandler = null;
+export function setEvidenceHandler(fn) { evidenceHandler = typeof fn === 'function' ? fn : null; }
+
+/**
+ * `[15-2 — spec 17-13 4]` 근거 블록(AI 만, 늘 보임) — 인용(원문 언어 `lang`·`dir`) + [원문에서 보기].
+ * 인용은 저장 때 보낸 문단 글의 그 자리 글자(15-1) — 글자 그대로 textContent.
+ */
+function evidenceBlock(q) {
+  const box = el('div', 'quiz-evidence');
+  const h = el('p', 'quiz-evidence-head');
+  h.textContent = t('quiz.ai.evidence');
+  box.appendChild(h);
+  const g = Array.isArray(q.grounding) && q.grounding[0] ? q.grounding[0] : null;
+  const quote = String((g && g.quote) || q.evidence || '');
+  const bq = el('blockquote', 'quiz-evidence-quote');
+  const a = srcAttrs(q);
+  bq.setAttribute('lang', a.lang);
+  bq.setAttribute('dir', a.dir);
+  bq.textContent = quote;
+  box.appendChild(bq);
+  const page = num((g && g.pageNo) || q.pageNo);
+  if (page > 0) {
+    const row = el('div', 'row quiz-actions');
+    const b = el('button', 'quiz-evidence-go');
+    b.type = 'button';
+    b.textContent = t('quiz.ai.gotoSource', { page: formatNumber(page) });
+    b.addEventListener('click', () => {
+      stopSpeaking();
+      const x = { docId: state.docId, pageNo: page, quote: quote };
+      if (evidenceHandler) { try { evidenceHandler(x); return; } catch (e) { /* 쪽만 연다 */ } }
+      go(readerHash(state.docId, page));
+    });
+    row.appendChild(b);
+    box.appendChild(row);
+  }
+  return box;
+}
+
+/** `[15-2]` AI 해설 — 대상 언어(`tr`, 번역 블록과 같은 `lang`·`dir`) + 있으면 원문 언어(`src`, 작게). 낭독 단추 없음(해설 낭독은 원서 영어 해설용). */
+function aiExplanationBlock(q) {
+  const det = el('details', 'quiz-explanation quiz-explanation-ai');
+  det.open = true;
+  const sum = el('summary');
+  sum.textContent = t('quiz.explanation.title');
+  det.appendChild(sum);
+  const ex = q.explanation || {};
+  const langs = q.langs || {};
+  const tr = String(ex.tr || '');
+  if (!tr) {
+    const p = el('p', 'muted');
+    p.textContent = t('quiz.explanation.none');
+    det.appendChild(p);
+    return det;
+  }
+  const tl = String(langs.tr || '');
+  const p = el('p', 'quiz-explanation-text quiz-explanation-tr');
+  if (tl) { p.setAttribute('lang', tl); p.setAttribute('dir', dirOf(tl)); }
+  p.textContent = tr;
+  det.appendChild(p);
+  const src = String(ex.src || '');
+  if (src) {
+    const sl = String(langs.src || '');
+    const s = el('p', 'quiz-explanation-src');
+    if (sl) { s.setAttribute('lang', sl); s.setAttribute('dir', dirOf(sl)); }
+    s.textContent = src;
+    det.appendChild(s);
+  }
+  return det;
 }
 
 function button(key, cls, onClick) {
@@ -419,15 +511,23 @@ function paintQuestion() {
   head.appendChild(no);
 
   const gradable = engine.isGradable(q);
-  const badge = el('span', gradable ? 'quiz-badge' : 'quiz-badge quiz-badge-unverified');
-  badge.textContent = gradable ? ('📕 ' + t('quiz.badge.verified')) : t('quiz.badge.unverified');
+  const ai = isAi(q);
+  const badge = el('span', ai ? 'quiz-badge quiz-badge-ai' : gradable ? 'quiz-badge' : 'quiz-badge quiz-badge-unverified');
+  // `[15-2 — spec 17-13 4]` AI 문항은 🤖(원서 📕 와 다른 색 토큰)
+  badge.textContent = ai ? ('🤖 ' + t('quiz.badge.ai')) : gradable ? ('📕 ' + t('quiz.badge.verified')) : t('quiz.badge.unverified');
   head.appendChild(badge);
   card.appendChild(head);
+  if (ai) {
+    const note = el('p', 'quiz-ai-note');
+    note.textContent = t('quiz.ai.note');
+    card.appendChild(note);
+  }
 
-  /* 본문 — 원서 텍스트는 LTR·en 이다(11-3). */
+  /* 본문 — 원서 텍스트는 LTR·en 이다(11-3). `[15-2]` AI 문항은 원문 언어(`langs.src`). */
+  const sa = srcAttrs(q);
   const stem = el('p', 'quiz-stem');
-  stem.setAttribute('dir', 'ltr');
-  stem.setAttribute('lang', 'en');
+  stem.setAttribute('dir', sa.dir);
+  stem.setAttribute('lang', sa.lang);
   stem.textContent = String(q.stem || '');
   card.appendChild(stem);
 
@@ -446,6 +546,9 @@ function paintQuestion() {
     list.appendChild(optionButton(q, opts[i]));
   }
   card.appendChild(list);
+
+  // `[15-2]` 근거 블록 — AI 만, 늘 보임(답하기 전에도 — 근거를 보고 풀 수 있다)
+  if (ai) card.appendChild(evidenceBlock(q));
 
   const feedback = el('div', 'quiz-feedback');
   feedback.id = 'quizFeedback';
@@ -526,8 +629,9 @@ function optionButton(q, opt) {
   const letter = el('span', 'quiz-letter');
   letter.textContent = String(opt.letter || '');
   const text = el('span', 'quiz-option-text');
-  text.setAttribute('dir', 'ltr');
-  text.setAttribute('lang', 'en');
+  const sa = srcAttrs(q);
+  text.setAttribute('dir', sa.dir);
+  text.setAttribute('lang', sa.lang);
   text.textContent = String(opt.text || '');
   b.appendChild(letter);
   b.appendChild(text);
@@ -583,12 +687,16 @@ function paintFeedback(q, result, letter) {
     p.textContent = result.correct ? t('quiz.answer.correct') : t('quiz.answer.wrong');
     box.appendChild(p);
     const ans = el('p', 'quiz-expected');
-    ans.textContent = t('quiz.answer.expected', { letters: expected.join(', ') });
+    // `[15-2]` AI 문항의 정답은 "책의 정답"이 아니다 — 근거 문장에 기댄 정답
+    ans.textContent = t(isAi(q) ? 'quiz.ai.expected' : 'quiz.answer.expected', { letters: expected.join(', ') });
     box.appendChild(ans);
   }
 
-  const explanation = q.explanation && q.explanation.en ? String(q.explanation.en) : '';
-  box.appendChild(explanationBlock(explanation));
+  if (isAi(q)) box.appendChild(aiExplanationBlock(q));        // `[15-2]` tr + src
+  else {
+    const explanation = q.explanation && q.explanation.en ? String(q.explanation.en) : '';
+    box.appendChild(explanationBlock(explanation));
+  }
 
   const row = el('div', 'row quiz-actions');
   const last = state.session.position() >= state.session.total();
@@ -691,7 +799,7 @@ function paintResult() {
   if (r.wrong.length) {
     row.appendChild(button('quiz.result.retryWrong', 'primary', () => retryWrong()));
   }
-  row.appendChild(button('quiz.result.backToReader', '', () => backToReader()));
+  row.appendChild(button(backKey(), '', () => backToReader()));
   card.appendChild(row);
   els.mount.appendChild(card);
 
@@ -717,6 +825,9 @@ function retryWrong() {
 }
 
 function backToReader() {
+  // `[15-2]` AI 문제는 복습 묶음(그 범위)으로
+  const ar = !state.entry ? aiRangeOf(state.sectionId) : null;
+  if (ar) { go(reviewHash(state.docId, { from: ar[0], to: ar[1] })); return; }
   const page = (state.entry && num(state.entry.startPage)) || 1;
   go(readerHash(state.docId, page || 1));
 }
