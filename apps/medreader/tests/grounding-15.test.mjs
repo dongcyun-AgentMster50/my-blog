@@ -285,7 +285,7 @@ test('Q8 정밀도 표 — 정확·공백·지어냄·바꿔 씀·숫자 지어�
 test('Q9 ★ 순수(16-A) — grounding·review 브라우저 전역·시계 0 · import 는 같은 순수 계층만 · numberTokens 한 벌', () => {
   const banned = /\b(Date|document|window|globalThis|navigator|indexedDB|IDBKeyRange|fetch|localStorage|sessionStorage|performance|setTimeout|crypto)\b/;
   for (const [rel, allow] of [
-    ['../js/ai/grounding.js', ["'../config.js'", "'./prompts.js'", "'../text/summary.js'"]],
+    ['../js/ai/grounding.js', ["'../config.js'", "'./prompts.js'", "'../text/summary.js'", "'../text/numexpr.js'"]],
     ['../js/text/review.js', ["'../config.js'", "'../plan/planner.js'"]]
   ]) {
     const src = read(rel);

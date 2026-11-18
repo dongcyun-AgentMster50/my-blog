@@ -19,10 +19,12 @@
    만든다. 테스트(`tests/prompts-8a.test.mjs`)가 옛 문자열과 글자 단위로 대조한다.
    ============================================================ */
 
-import { PIPELINE, VOCAB, SUMMARY, OUTLINE, EXPLAIN, REVIEW } from '../config.js';
+import { PIPELINE, VOCAB, SUMMARY, OUTLINE, EXPLAIN, REVIEW, DIAGRAM } from '../config.js';
 import { estimateTokens } from './tokens.js';
 // `[11-1]` 요약·개요 응답 다듬기(트리 상한·숫자 거름)는 순수 `text/summary.js` 한 벌 — 같은 순수 계층(3-2 첫 행).
 import { clean, trimTree, pruneForeignNumbers, hasForeignNumber, outlineInput } from '../text/summary.js';
+// `[16-1]` 개념도 입력 줄·응답 검증은 순수 `text/diagram.js` 한 벌(숫자 토큰은 여기 `numberTokens` 를 넘긴다).
+import { outlineText, checkDiagram } from '../text/diagram.js';
 
 /**
  * 10-1 — 프롬프트 판본. 캐시 값(`aiCache.promptVersion`)에 기록한다(키에는 넣지 않는다 — 7-5).
@@ -1238,4 +1240,129 @@ export function buildQuizRequest(items, opts) {
     maxOutputTokens: n * REVIEW.OUT_TOKENS_PER_Q + REVIEW.OUT_TOKENS_PAD,
     temperature: PIPELINE.TEMPERATURE
   };
+}
+
+/* ────────────────────────────────────────────────────────
+   `[16-1 — spec 17-14 2 · 16-D2 · 16-D3 · 16-D5]` 그림 개념도(`kind:'diagram'`) — 저장한 개요(11c) → 노드·관계 JSON
+   번역·단어·요약·개요·설명·출제 요청과 **따로 선다** — 그 지시문·스키마·판본은 한 글자도 바꾸지 않는다.
+   system 은 10-1 골격 `commonSystem(true, domain)` **그대로**(규칙 1–6). DOC = 경로 꼬리표 줄(`text/diagram.js` `outlineText`) —
+   **범위 이름(PDF 장 제목)·개요 제목은 TASK 에도 DOC 에도 넣지 않는다**(11-1R #5). 응답 검증은 `text/diagram.js` `checkDiagram`
+   (숫자 토큰은 이 파일의 `numberTokens` 를 넘긴다 — 10-2 · 11-D7 과 한 벌).
+   ──────────────────────────────────────────────────────── */
+
+/** 개념도 판본 — 캐시 **값**의 `promptVersion` 에만(키에는 넣지 않는다 — 7-5). 값은 `config.js` `DIAGRAM.PROMPT_VERSION`. */
+export const DIAGRAM_PROMPT_VERSION = DIAGRAM.PROMPT_VERSION;
+/** 16-D5 관계 목록(고정 8개 — '치료' 없음). */
+export const DIAGRAM_RELS = DIAGRAM.RELS;
+
+const DG_REL = Object.freeze({ type: 'STRING', format: 'enum', enum: DIAGRAM.RELS });
+
+function diagramSchema(withSrc, strict) {
+  const nodeNames = withSrc ? ['id', 't', 'src', 'p'] : ['id', 't', 'p'];
+  const any = Object.freeze({});
+  const nodeAll = { id: strict ? STR : any, t: STR, src: STR, p: strict ? STR : any };
+  const nodeProps = {};
+  for (const k of nodeNames) nodeProps[k] = nodeAll[k];
+  const node = { type: 'OBJECT', properties: Object.freeze(nodeProps), propertyOrdering: Object.freeze(nodeNames) };
+  const edgeNames = ['a', 'b', 'r', 'p'];
+  const edge = {
+    type: 'OBJECT',
+    properties: Object.freeze({ a: strict ? STR : any, b: strict ? STR : any, r: strict ? DG_REL : STR, p: strict ? STR : any }),
+    propertyOrdering: Object.freeze(edgeNames)
+  };
+  if (strict) { node.required = Object.freeze(['id', 't', 'p']); edge.required = Object.freeze(edgeNames.slice()); }
+  return Object.freeze({
+    type: 'OBJECT',
+    properties: Object.freeze({
+      title: STR,
+      nodes: Object.freeze({ type: 'ARRAY', items: Object.freeze(node) }),
+      edges: Object.freeze({ type: 'ARRAY', items: Object.freeze(edge) }),
+      notes: STR
+    }),
+    required: Object.freeze(strict ? ['title', 'nodes', 'edges'] : ['nodes', 'edges']),
+    propertyOrdering: Object.freeze(['title', 'nodes', 'edges', 'notes'])
+  });
+}
+
+/** 요청에 싣는 스키마(gemini `responseSchema` — 관계 `enum` 강제) — 원문 ≠ 대상 · 원문 = 대상(`src` 없음). */
+export const DIAGRAM_SCHEMA = diagramSchema(true, true);
+export const DIAGRAM_SCHEMA_SAME = diagramSchema(false, true);
+/**
+ * 응답 해석(`parseAIJson`)용 — 노드·엣지 필수·`enum` 없음, id·경로는 수도 받는다. 목록 밖 관계(`treat`)·빠진 필드 항목도 `checkDiagram` 까지 와서
+ * **버림으로 세어지게**(미니 검증기는 `enum` 밖 값을 소리 없이 지운다 — 출제 `QUIZ_PARSE_SCHEMA` 와 같은 까닭).
+ */
+export const DIAGRAM_PARSE_SCHEMA = diagramSchema(true, false);
+
+function diagramSchemaLine(withSrc) {
+  return 'Schema: {"title": string, "nodes": [{"id": string, "t": string, ' + (withSrc ? '"src": string, ' : '') +
+    '"p": string}], "edges": [{"a": string, "b": string, "r": string, "p": string}], "notes": string}';
+}
+
+/**
+ * 17-14 2 TASK. 언어는 이름으로만(7-1 원칙 5). 원문 언어 이름이 없거나 대상과 같으면 `src` 문장이 없다.
+ * 관계 방향은 "a → b 를 위 → 아래로 읽는다"(원인·전체·종류·병 쪽이 a). `general` 이면 "a medical textbook" → "a book".
+ * @returns {string|null} 대상 언어 이름을 모르면 null
+ */
+export function diagramInstruction(targetLang, srcLang, domain) {
+  const tgt = langName(targetLang);
+  if (!tgt) return null;
+  const src = langName(srcLang);
+  const withSrc = !!src && codeOf(srcLang) !== codeOf(targetLang);
+  const book = normalizeDomain(domain) === 'general' ? 'a book' : 'a medical textbook';
+  return [
+    'TASK: The DOC is an outline (in ' + tgt + ') of part of ' + book + '; each line starts with its path. ' +
+      'Draw a concept map using ONLY what the outline says: at most ' + DIAGRAM.MAX_NODES + ' nodes and ' + DIAGRAM.MAX_EDGES + ' relations. ' +
+      'Each node is a short label (≤ 6 words, ' + tgt + ') taken from the outline, with `p` = the path of the line it comes from' +
+      (withSrc ? ', and `src` = the original ' + src + ' term if the line gives one in parentheses' : '') + '. ' +
+      'Each relation goes from node `a` to node `b`, has `r` from the fixed list, and `p` = the path of the outline line that states it. ' +
+      'Do not add relations the outline does not state. No treatment or dosing advice.',
+    'Fixed list for `r`: "cause" (a causes b), "leads" (a leads to b), "part" (b is a part of a), "type" (b is a type of a), ' +
+      '"sign" (b is a sign or finding of a), "test" (b is a test that confirms a), "assoc" (a is associated with b), "contrast" (a contrasts with b).',
+    'Give each node a short id such as "n1"; `title` = a short title for the map in ' + tgt + '. Keep numbers and terms as written.'
+  ].join('\n');
+}
+
+/**
+ * 개념도 입력 묶음 — `buildDiagramRequest` 가 DOC 에 싣는 것과 **같은 함수**(`outlineText`)로 만든다.
+ * 파이프라인은 `text/*` 를 직접 import 하지 않는다(3-2) — 그래서 여기서 건넨다(`outlinePayload` 와 같은 꼴).
+ * @param {{points?:Array}} outline 저장한 개요 레코드
+ * @param {{depth?:2|3}} [opts]
+ * @returns {{text:string, plain:string, lines:Array, paths:string[], depth:number, chars:number, size:number}} `size` = DOC 글자 수
+ */
+export function diagramPayload(outline, opts) {
+  const input = outlineText(outline, opts);
+  return Object.assign(input, { size: input.chars });
+}
+
+/**
+ * 17-14 2 개념도 요청(`CompletionRequest`, 8-1). DOC = `escapeDoc(경로 꼬리표 줄)`. ★ 보내는 것은 개요 요점 글뿐(원문 문단 0).
+ * @param {{text:string}|string} input `diagramPayload` 결과(또는 그 `text`)
+ * @param {{target:string, src?:string, domain?:string}} opts `src` = 문서 원문 언어(원어 `src` 필드를 받을지)
+ * @returns {{system:string, user:string, json:true, schema:Object, maxOutputTokens:number, temperature:number}|null}
+ */
+export function buildDiagramRequest(input, opts) {
+  const o = opts || {};
+  const task = diagramInstruction(o.target, o.src, o.domain);
+  const text = typeof input === 'string' ? input : input && typeof input.text === 'string' ? input.text : '';
+  if (!task || !clean(text)) return null;
+  const withSrc = !!langName(o.src) && codeOf(o.src) !== codeOf(o.target);
+  return {
+    system: commonSystem(true, o.domain),
+    user: task + '\n' + diagramSchemaLine(withSrc) + '\n<<<DOC\n' + escapeDoc(text) + '\n>>>',
+    json: true,
+    schema: withSrc ? DIAGRAM_SCHEMA : DIAGRAM_SCHEMA_SAME,
+    maxOutputTokens: DIAGRAM.OUT_TOKENS,
+    temperature: PIPELINE.TEMPERATURE
+  };
+}
+
+/**
+ * 17-14 2 검증 — `text/diagram.js` `checkDiagram` 에 10-2 `numberTokens` 를 넘긴다(숫자 거름 "보낸 개요 숫자 ⊆").
+ * @param {Object} input `diagramPayload` 결과(보낸 줄)
+ * @param {*} value `jsonrepair` 가 돌려준 값
+ * @param {{withSrc?:boolean}} [opts]
+ */
+export function checkDiagramReply(input, value, opts) {
+  const o = opts || {};
+  return checkDiagram(input, value, { tokensOf: numberTokens, withSrc: o.withSrc !== false });
 }

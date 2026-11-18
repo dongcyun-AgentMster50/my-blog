@@ -18,6 +18,7 @@
      controls 에서 받은 **같은** 파이프라인 — `sumsheet.sumServices()`: 상태 기계·상한·사용량 한 벌). 넘치면 요지만 → 그래도 넘치면
      보내지 않고 "범위를 줄이세요"(파이프라인이 거른다). 같은 범위·같은 요약이면 캐시 — 0.
    ★ 범위 이름(PDF 장 제목)은 **요청에 싣지 않는다**(11-1R #5 — `prompts.outlineInstruction`). 화면 머리·저장 레코드 `range.label` 에만.
+   ★ `[16-2]` 저장한 개요 줄의 개념도 조각은 `ui/diagram.js` 가 낸다 — [개념도 그리기]·[다시 그리기]만 1호출, 작은 그림·시트 열기 0.
    ★ 내보내기는 저장소의 요약·개요 레코드만 읽는다 — 캐시(`aiCache`)·키·원문 문단 글을 읽지 않는다.
    ★ 모든 글자 `textContent`/`appendBidiText` — `innerHTML` 0(13절). 줄은 `<details>`(JS 없이 펼침 — 키보드·화면 읽기 기본 동작).
      요지는 그 레코드의 대상 언어 방향(`dirOf(target)`), 원문 언어 요지는 원문 언어 방향(아랍어 UI 에서도 `dir=ltr`).
@@ -43,6 +44,8 @@ import { sumServices, itemNote } from './sumsheet.js';
 import { pageParasOf } from './ask.js';
 import { normalizeTranslationLang } from './settings.js';
 import { onPageRender, revealLine, revealTop, flowParas, sourceLang } from './reader.js';
+import { diagramControl } from './diagram.js';                // `[16-2]` 개념도 — 저장한 개요 머리의 작은 그림·[개념도 그리기]
+import { docLangOf } from '../text/lang.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분
@@ -775,7 +778,7 @@ function summaryRow(r, doc, gone) {
   return li;
 }
 
-/** 저장한 개요 한 줄 — 접힌 채: [개요] 범위 · 제목. 펼치면 3단 트리 · [삭제]. */
+/** 저장한 개요 한 줄 — 접힌 채: [개요] 범위 · 제목. 펼치면 개념도 조각(16-2) · 3단 트리 · [삭제]. */
 function outlineRow(r, doc, gone) {
   const li = document.createElement('li');
   const det = document.createElement('details');
@@ -793,6 +796,10 @@ function outlineRow(r, doc, gone) {
   det.appendChild(sm);
   const body = document.createElement('div');
   body.className = 'sums-body';
+  // `[16-2 — spec 17-14 4]` 개요 머리 — 그림이 있으면 작은 그림(누르면 시트 · 호출 0), 없으면 [개념도 그리기 (호출 1)]
+  // 저장 뒤 목록을 다시 그려도 그 개요 줄은 펼친 채(16-2R 낮음-5 — 시트를 닫으면 포커스가 그 줄 작은 그림으로 돌아온다)
+  const dg = diagramControl(r, { src: !gone && doc ? docLangOf(doc) : '', onSaved: () => { load().then(() => reopenRow(r.id)); } });
+  if (dg) body.appendChild(dg);
   const tree = renderTree(r.points, { dir: dirOf(r.target || ''), lang: r.target, open: true });
   if (tree) body.appendChild(tree);
   const row = document.createElement('div');
@@ -802,6 +809,13 @@ function outlineRow(r, doc, gone) {
   det.appendChild(body);
   li.appendChild(det);
   return li;
+}
+
+/** 그 레코드의 줄(`<details>`)을 펼친다 — 다시 그린 목록에서(호출 0). */
+function reopenRow(id) {
+  if (!els) return;
+  const d = Array.from(els.list.querySelectorAll('.sums-item')).find((x) => x.getAttribute('data-id') === String(id));
+  if (d) d.open = true;
 }
 
 function setStatus(key, params) { els.status.textContent = key ? t(key, params || undefined) : ''; }

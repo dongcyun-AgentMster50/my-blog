@@ -45,7 +45,8 @@ test('U1 ★ usageView 오늘 — 호출(검증 포함) · 상한 셈은 검증 
   assert.equal(v.today.ratio, 0.5);
   const kinds = Object.fromEntries(v.today.kinds.map((k) => [k.kind, k.n]));
   // `[11-4 — spec 17-2-1 2-11 · 11 "8c-2"]` 설명(`explain`)도 늘 보이는 종류(요약과 같은 자리 — 0 이어도 한 줄).
-  assert.deepEqual(kinds, { translate: 3, readalong: 6, term: 1, summarize: 0, explain: 0, verify: 2 }, '번역·낭독 번역·단어가 따로, 0 인 그 밖 종류는 숨김');
+  // `[16-2 — spec 17-14 5]` 개념도(`diagram`)도 설명과 같은 꼴 — 늘 보이는 종류(0 이어도 한 줄).
+  assert.deepEqual(kinds, { translate: 3, readalong: 6, term: 1, summarize: 0, explain: 0, diagram: 0, verify: 2 }, '번역·낭독 번역·단어가 따로, 0 인 그 밖 종류는 숨김');
   assert.deepEqual(v.today.kinds.map((k) => k.kind).slice(0, SHOW_KINDS.length), SHOW_KINDS.slice());
   assert.equal(v.today.blocked429, 1);
   assert.equal(v.today.model, 'm1');
@@ -59,7 +60,7 @@ test('U1 ★ usageView 오늘 — 호출(검증 포함) · 상한 셈은 검증 
   const e = usageView([], { today: DAY, cap: 100 });
   assert.equal(e.today.calls, 0);
   assert.equal(e.today.left, 100);
-  assert.deepEqual(e.today.kinds.map((k) => k.n), [0, 0, 0, 0, 0, 0], '|| 0(`[11-4]` 설명 한 줄 더)');
+  assert.deepEqual(e.today.kinds.map((k) => k.n), [0, 0, 0, 0, 0, 0, 0], '|| 0(`[11-4]` 설명 · `[16-2]` 개념도 한 줄씩 더)');
   // 종류 목록 밖이라도 0 보다 크면 보인다(11 의 요약·표 …)
   const x = usageView([Object.assign({}, ROW, { byKind: { table: 2 } })], { today: DAY, cap: 9 });
   assert.ok(x.today.kinds.some((k) => k.kind === 'table' && k.n === 2));

@@ -41,7 +41,7 @@
    진행 중인 캐시 키의 요청이 또 오면 **진행 중인 Promise 를 공유한다**(호출 1건).
    ============================================================ */
 
-import { PIPELINE, AI, VOCAB, OUTLINE, EXPLAIN, REVIEW } from '../config.js';
+import { PIPELINE, AI, VOCAB, OUTLINE, EXPLAIN, REVIEW, DIAGRAM } from '../config.js';
 import * as realProvider from './provider.js';
 import { CODES, localDay, bumpUsage } from './provider.js';
 import { parseAIJson } from './jsonrepair.js';
@@ -51,7 +51,8 @@ import {
   buildSummaryRequest, checkSummary, SUMMARY_SCHEMA, SUMMARY_PROMPT_VERSION,
   buildOutlineRequest, checkOutline, OUTLINE_SCHEMA, OUTLINE_PROMPT_VERSION, outlinePayload,
   buildExplainRequest, checkExplain, EXPLAIN_SCHEMA, EXPLAIN_PROMPT_VERSION,
-  buildQuizRequest, QUIZ_PARSE_SCHEMA, QUIZ_PROMPT_VERSION
+  buildQuizRequest, QUIZ_PARSE_SCHEMA, QUIZ_PROMPT_VERSION,
+  buildDiagramRequest, checkDiagramReply, diagramPayload, DIAGRAM_PARSE_SCHEMA, DIAGRAM_PROMPT_VERSION
 } from './prompts.js';
 // `[15-1 — spec 10-4 · 17-13 3-2]` 출제 응답 자체 검증(순수 — 3-2 표 `ai/prompts,jsonrepair,grounding` 열).
 import { groundQuiz } from './grounding.js';
@@ -94,7 +95,9 @@ export const FAIL = Object.freeze({
   // `[8f-1]` 단어 요청 검증(`checkTerms` — 그 항목만 실패)
   EMPTY: 'EMPTY',         // 번역이 비었다
   LONG: 'LONG',           // 번역이 200자를 넘는다
-  LANG: 'LANG'            // 번역에 대상 언어 글자가 하나도 없다(다른 언어로 답함)
+  LANG: 'LANG',           // 번역에 대상 언어 글자가 하나도 없다(다른 언어로 답함)
+  // `[16-1]` 개념도 검증(`checkDiagram`) — 남은 관계가 2개 미만(캐시 0 · 실패 기억 → [다시 시도]·[다시 그리기]만)
+  FEW_RELATIONS: 'FEW_RELATIONS'
 });
 
 /** 결과 전체의 상태(원격 상태 말고). `[11-1]` `too-big` — 범위 개요의 입력이 요지만으로도 요청 상한을 넘어 **보내지 않았다**(4-6). */
@@ -413,6 +416,36 @@ export const QUIZ_JOB = Object.freeze({
   /** `[11-4]` 개요·설명과 같은 꼴 — 잘린 응답(JSON 이 루트까지 닫히지 않음)이면 마지막 문항이 반쪽일 수 있다 → `failed(MISSING)`(캐시 0 · [다시 시도]). */
   tailOf: (chunk, value, text) => (scanCut(text).depth <= 0 ? -1 : 0),
   promptVersion: QUIZ_PROMPT_VERSION,
+  size: (it) => it.size,
+  usageChars: () => 0,
+  ondevice: false,
+  maxItems: 1,
+  maxChunks: 1
+});
+
+/**
+ * `[16-1 — spec 17-14 2 · 16-D2 · 16-D3]` 그림 개념도 job(`kind:'diagram'`). 항목은 늘 하나(`diagramPayload` — 저장한 개요의 경로 꼬리표 줄 +
+ * `src`), **한 번 부름 = 최대 1호출**. 상태 기계·`gate`·5xx 1회·429·cooldown·상한·사용량·캐시·진행 중 공유·실패 기억은 번역과 한 벌(`runJob`).
+ * 검증은 `checkDiagramReply`(경로·관계 목록·숫자 거름·상한 12·16) — 남은 관계 < 2 → `failed(FEW_RELATIONS)`(캐시 0).
+ * 결과 `{value:{title, nodes, edges}}`(배치는 저장하지 않는다 — 화면 폭·RTL 이 바뀌면 다시 계산, 호출 0).
+ */
+export const DIAGRAM_JOB = Object.freeze({
+  name: AI.DIAGRAM_KIND,
+  build: (chunk, ctx) => buildDiagramRequest(chunk[0], { target: ctx.target, src: (chunk[0] || {}).src, domain: ctx.domain }),
+  schema: DIAGRAM_PARSE_SCHEMA,
+  check: (chunk, value) => {
+    const it = chunk[0] || {};
+    const chk = checkDiagramReply(it, value, { withSrc: !!it.src && it.src !== it.target });
+    return {
+      chunkFailed: false,
+      items: [chk.state === 'ok' ? { state: 'ok', value: chk.value } : { state: 'failed', code: FAIL.FEW_RELATIONS }]
+    };
+  },
+  accepts: (v) => !!v && typeof v === 'object' && Array.isArray(v.nodes) && Array.isArray(v.edges) && v.edges.length >= DIAGRAM.MIN_EDGES,
+  toResult: (v) => ({ value: deepCopy(v) }),
+  /** 개요·설명·출제와 같은 꼴 — 잘린 응답(JSON 이 루트까지 닫히지 않음)이면 반쪽 그림 → `failed(MISSING)`(캐시 0 · [다시 시도]). */
+  tailOf: (chunk, value, text) => (scanCut(text).depth <= 0 ? -1 : 0),
+  promptVersion: DIAGRAM_PROMPT_VERSION,
   size: (it) => it.size,
   usageChars: () => 0,
   ondevice: false,
@@ -1189,6 +1222,56 @@ export function createPipeline(deps) {
     return Object.assign(out, meta({ sent: use.map((x) => x.paraId), langs: langs, key: key }));
   }
 
+  /**
+   * `[16-1 — spec 17-14 2 · 6 · 16-D2]` 그림 개념도 `pipeline.diagram(outline, {target, src, docId, domain, force, retry, signal})`.
+   * **사용자가 [개념도 그리기]를 누를 때만** 부른다(자동 0). 입력 = **저장한 개요**(11c 레코드의 `points` 만 — 원문을 다시 보내지 않는다,
+   * 범위 이름·개요 제목도 보내지 않는다). `target` 을 주지 않으면 개요의 `target`. 원어 칸은 `src`(문서 원문 언어)가 대상과 다를 때만.
+   * DOC 가 `DIAGRAM.INPUT_MAX`(4,000자)·`ai.maxReqChars`·요청 토큰 상한을 넘으면 3단을 빼고 2단까지 → 그래도 넘으면 **보내지 않고**
+   * `too-big`(호출 0). 개요에 요점이 없으면 `empty`, 언어 이름이 없으면 `unsupported-lang`(호출 0).
+   * 키 `keyFor(docId, DOC 글, target, 'diagram', 'l=' + 언어)` — 같은 개요·같은 깊이·같은 언어면 0회. `domain`·판본은 키에 없다(7-5).
+   * 사용량 `byKind.diagram`.
+   * @returns {Promise<{status:string, calls:number, results:[{state:string, value?:{title:string, nodes:Array, edges:Array}, code?:string,
+   *           cached?:boolean}], depth:number, chars:number, basis:string, target:string, provider:string, model:string, promptVersion:number}>}
+   *   `depth` = 보낸 깊이(3 · 2 — 0 = 보내지 않음), `basis` = 개요의 `cacheKey`(16-2 "개요가 바뀌었습니다"의 재료). 던지지 않는다
+   */
+  async function diagram(outline, opts) {
+    const o = opts || {};
+    const rec = outline && typeof outline === 'object' ? outline : {};
+    const target = typeof o.target === 'string' && o.target.trim() ? o.target.trim() : (typeof rec.target === 'string' ? rec.target.trim() : '');
+    const srcIn = typeof o.src === 'string' ? o.src.trim() : '';
+    const src = srcIn && langName(srcIn) && srcIn !== target ? srcIn : '';
+    const providerName = String(getSetting('ai.provider') || AI.DEFAULT_PROVIDER);
+    const modelName = String(getSetting('ai.model') || '').trim() || (AI.DEFAULT_MODEL[providerName] || '');
+    const meta = (extra) => Object.assign({
+      depth: 0, chars: 0, basis: typeof rec.cacheKey === 'string' ? rec.cacheKey : '', target: target,
+      provider: providerName, model: modelName, promptVersion: DIAGRAM_PROMPT_VERSION
+    }, extra || {});
+    const skip = (status, extra) => Object.assign({ status: status, calls: 0, results: [{ state: SEG.SKIPPED, code: status }] }, meta(extra));
+    // ★ `points` 만 넘긴다 — 레코드의 다른 필드(범위 이름·책 제목·개요 제목·메모)는 `diagramPayload` 에 닿지 않는다.
+    const only = { points: Array.isArray(rec.points) ? rec.points : [] };
+    if (!diagramPayload(only).lines.length) return skip(STATUS.EMPTY);
+    if (!langName(target)) return skip(STATUS.UNSUPPORTED_LANG);
+    const ctx = { src: target, target: target, domain: normalizeDomain(o.domain) };
+    let pick = null;
+    let last = null;
+    for (const depth of [3, 2]) {
+      const input = diagramPayload(only, { depth: depth });
+      const item = Object.assign(input, { src: src, target: target });
+      last = item;
+      const req = DIAGRAM_JOB.build([item], ctx);
+      if (req && item.size <= DIAGRAM.INPUT_MAX && item.size <= maxChars() && !exceedsRequestBudget(req)) { pick = item; break; }
+    }
+    if (!pick) return skip(STATUS.TOO_BIG, { chars: last ? last.size : 0 });
+    const docId = String(o.docId == null ? '' : o.docId);
+    // 원어 칸을 받는지(원문 언어)가 다르면 다른 값이다 — 요약·출제처럼 `l=` 로 가른다(15-1R 낮음-3 과 같은 까닭).
+    const key = await keyFor(docId, pick.text, target, AI.DIAGRAM_KIND, 'l=' + (src ? target + '+' + src : target));
+    const out = await runJob(DIAGRAM_JOB, [pick], [key], {
+      src: target, target: target, kind: AI.DIAGRAM_KIND, docId: docId, signal: o.signal,
+      retry: !!o.retry, force: !!o.force, domain: o.domain
+    });
+    return Object.assign(out, meta({ depth: pick.depth, chars: pick.size, key: key }));
+  }
+
   /* ── 사용자·환경이 상태를 바꾸는 길 ───────────────── */
 
   /**
@@ -1254,6 +1337,8 @@ export function createPipeline(deps) {
     explain: explain,
     /** `[15-1]` AI 출제(10-4 · 17-13 3-2) — 번역과 같은 상태 기계, 최대 1호출(5문항). */
     makeQuiz: makeQuiz,
+    /** `[16-1]` 그림 개념도(17-14 — 저장한 개요에서만) — 번역과 같은 상태 기계, 최대 1호출. */
+    diagram: diagram,
     retry: retry,
     configChanged: configChanged,
     setOnline: setOnline,

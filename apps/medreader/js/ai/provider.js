@@ -270,8 +270,9 @@ export function bumpUsage(delta, deps) {
       // 9-2 의 고정 키가 아니면 새로 만들지 않는다(오타가 스토어에 눌러앉는다).
       // `[8a]` `readalong`(15절)은 빈 행에 없고 **처음 쓰일 때** 생긴다(config 의 `READALONG_KIND` 주석).
       // `[8f-1]` `term`(단어 요청)도 같다(`AI.TERM_KIND`). `[11-4]` `explain`(문장 설명)도(`AI.EXPLAIN_KIND`).
+      // `[16-1]` `diagram`(그림 개념도)도(`AI.DIAGRAM_KIND`).
       if (d.kind && (AI.USAGE_KINDS.indexOf(d.kind) >= 0 || d.kind === AI.READALONG_KIND || d.kind === AI.TERM_KIND ||
-          d.kind === AI.EXPLAIN_KIND)) {
+          d.kind === AI.EXPLAIN_KIND || d.kind === AI.DIAGRAM_KIND)) {
         row.byKind[d.kind] = (row.byKind[d.kind] || 0) + (d.calls || 1);
       }
       if (d.provider) {

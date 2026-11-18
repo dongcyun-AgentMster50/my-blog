@@ -113,8 +113,12 @@ export function createSummaryStore(deps) {
     });
   }
 
-  /** 대체 저장 — 같은 것이 있으면 그 `id`·`createdAt` 을 지키고 나머지를 바꾼다. 없으면 새 id(`base`, 쓰였으면 `:시각`). */
-  function upsert(rec, base, match) {
+  /**
+   * 대체 저장 — 같은 것이 있으면 그 `id`·`createdAt` 을 지키고 나머지를 바꾼다. 없으면 새 id(`base`, 쓰였으면 `:시각`).
+   * `carry` 에 든 필드는 새 레코드에 없으면 옛 레코드 것을 그대로 잇는다(`[16-2]` 개요를 다시 만들어도 `diagram` 은 남는다 —
+   * `basis` ≠ 새 `cacheKey` 라 화면이 "개요가 바뀌었습니다").
+   */
+  function upsert(rec, base, match, carry) {
     const at = now();
     return db.withTx([STORE], 'readwrite', async (tx, s) => {
       const store = s[STORE];
@@ -123,6 +127,7 @@ export function createSummaryStore(deps) {
       if (same) {
         rec.id = same.id;
         rec.createdAt = Number.isFinite(Number(same.createdAt)) ? Number(same.createdAt) : at;
+        for (const k of carry || []) if (rec[k] === undefined && same[k] !== undefined) rec[k] = same[k];
       } else {
         const taken = await rq(store.get(base));
         rec.id = taken ? base + ':' + at : base;
@@ -183,7 +188,32 @@ export function createSummaryStore(deps) {
     if (str(i.fileHash)) rec.fileHash = i.fileHash;
     const base = 'out:' + (await hashHex(rec.docId + '\u0001' + from + '-' + to + '\u0001' + rec.target));
     return upsert(rec, base, (x) => !!x && x.kind === KIND.OUTLINE && x.target === rec.target &&
-      !!x.range && Number(x.range.from) === from && Number(x.range.to) === to);
+      !!x.range && Number(x.range.from) === from && Number(x.range.to) === to, ['diagram']);
+  }
+
+  /**
+   * `[16-2 — spec 17-14 4 · 16-D6]` 개념도를 그 개요 레코드의 `diagram` 필드로 붙인다(DB 3 그대로 — 새 kind 없음, 9c 는 레코드째 옮긴다).
+   * `updatedAt` 을 새로 해 9c 병합이 그림이 붙은 쪽을 고른다. 배치(좌표)는 담지 않는다(화면 폭·RTL 이 바뀌면 다시 계산 — 호출 0).
+   * @param {string} id 개요 레코드 id
+   * @param {{nodes:Array, edges:Array, title?:string, basis?:string, target?:string, promptVersion?:number, model?:string, createdAt?:number}} dg
+   * @returns {Promise<?{rec:Object}>} 개요가 아니거나 없으면 null
+   */
+  function saveDiagram(id, dg) {
+    const d = dg || {};
+    if (id == null || !Array.isArray(d.nodes) || !Array.isArray(d.edges)) return Promise.resolve(null);
+    const at = now();
+    const field = {
+      nodes: arr(d.nodes), edges: arr(d.edges), title: str(d.title), basis: str(d.basis), target: str(d.target),
+      promptVersion: num(d.promptVersion), model: str(d.model) || null, createdAt: num(d.createdAt) === null ? at : num(d.createdAt)
+    };
+    return db.withTx([STORE], 'readwrite', async (tx, s) => {
+      const store = s[STORE];
+      const cur = await rq(store.get(String(id)));
+      if (!cur || cur.kind !== KIND.OUTLINE) return null;
+      const rec = Object.assign({}, cur, { diagram: field, updatedAt: at });
+      await rq(store.put(rec));
+      return { rec: rec };
+    });
   }
 
   /** 같은 문단(해시)·같은 대상 언어의 저장 요약. 없으면 null. 호출 0. */
@@ -238,7 +268,7 @@ export function createSummaryStore(deps) {
     });
   }
 
-  return { save: save, saveOutline: saveOutline, findFor: findFor, list: list, count: count, remove: remove, relocate: relocatePure };
+  return { save: save, saveOutline: saveOutline, saveDiagram: saveDiagram, findFor: findFor, list: list, count: count, remove: remove, relocate: relocatePure };
 }
 
 let shared = null;

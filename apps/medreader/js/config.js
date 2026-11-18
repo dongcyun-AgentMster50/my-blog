@@ -668,7 +668,11 @@ export const AI = Object.freeze({
   /* `[11-4 — spec 17-2-1 4-7]` 문장 설명(11a — 선택 줄 [설명]·음성 "설명")의 `usage.byKind` 키이자 캐시 `kind`.
      `READALONG_KIND`·`TERM_KIND` 와 같은 까닭으로 `USAGE_KINDS` 밖(7a 빈 행 키 여섯 그대로) — 처음 쓰일 때 행에 생긴다.
      상한(`ai.dailyCap`)·80% 경고에는 들어간다. */
-  EXPLAIN_KIND: 'explain'
+  EXPLAIN_KIND: 'explain',
+
+  /* `[16-1 — spec 17-14 2]` 그림 개념도(저장한 개요 → 노드·관계)의 `usage.byKind` 키이자 캐시 `kind`.
+     `EXPLAIN_KIND` 와 같은 까닭으로 `USAGE_KINDS` 밖(7a 빈 행 키 여섯 그대로) — 처음 쓰일 때 행에 생긴다. 상한·80% 경고에는 들어간다. */
+  DIAGRAM_KIND: 'diagram'
 });
 
 /* ────────────────────────────────────────────────────────
@@ -776,6 +780,36 @@ export const REVIEW = Object.freeze({
   ID_HASH_CHARS: 8,
   /* 캐시 값·저장 레코드의 `promptVersion`(키에는 넣지 않는다 — 7-5). 번역·요약·설명 판본과 따로 센다. */
   PROMPT_VERSION: 1
+});
+
+/* `[16-1]` spec 17-14 2·3 — 그림 개념도(요청·검증·배치) 상수. **추가만** 했다. 무료 티어 숫자 없음(15절).
+   사용량·캐시 `kind` 는 `AI.DIAGRAM_KIND`. 입력 = 저장한 개요(11c)뿐 — 원문을 다시 보내지 않는다(16-D2). */
+export const DIAGRAM = Object.freeze({
+  /* 16-D3 — 360px 폰에서 읽을 수 있는 크기. 남은 관계가 이보다 적으면 `few-relations`(캐시 0) */
+  MAX_NODES: 12,
+  MAX_EDGES: 16,
+  MIN_EDGES: 2,
+  /* 16-D5 — 관계 종류 고정 8개, '치료' 없음(a → b 를 위 → 아래로 읽는다) */
+  RELS: Object.freeze(['cause', 'leads', 'part', 'type', 'sign', 'test', 'assoc', 'contrast']),
+  /* `checkDiagram` — 라벨·원어 ≤ 60자, 제목 ≤ 120자(넘으면 숫자를 쪼개지 않고 자른다) */
+  LABEL_MAX: 60,
+  TITLE_MAX: 120,
+  /* DOC(경로 꼬리표 줄들) 글자 상한 — 넘으면 3단을 빼고 2단까지, 그래도 넘으면 보내지 않는다 */
+  INPUT_MAX: 4000,
+  OUT_TOKENS: 1500,
+  /* 캐시 값의 `promptVersion`(키에는 넣지 않는다 — 7-5). 다른 판본과 따로 센다. */
+  PROMPT_VERSION: 1,
+  /* 3 배치(`text/diagram.js` `layoutDiagram` 의 `P` 기본값 — px). 노드 상자 폭 ≤ NODE_MAX_W(글 폭은 양옆 PAD_X 를 뺀 것). */
+  LAYOUT: Object.freeze({
+    NODE_MAX_W: 140, MAX_LINES: 3, ELLIPSIS: '…',
+    PAD_X: 8, PAD_Y: 6, LINE_H: 16, SRC_LINE_H: 13, MIN_NODE_W: 40,
+    GAP_X: 24, DUMMY_GAP: 12, GAP_Y: 44, FOLD_GAP_Y: 14, FOLD_INDENT: 20, MARGIN: 8,
+    LABEL_PAD_X: 4, LABEL_H: 14, LABEL_NUDGE: 10,
+    /* 무게중심 훑기 횟수(아래 → 위 번갈아) */
+    SWEEPS: 4,
+    /* `measure` 를 주지 않았을 때의 글자 폭(글자 수 × 이 값 — 시험·대비용) */
+    CHAR_W: 7
+  })
 });
 
 /* ────────────────────────────────────────────────────────

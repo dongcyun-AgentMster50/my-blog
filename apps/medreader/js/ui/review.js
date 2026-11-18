@@ -6,7 +6,8 @@
      1. 머리 — 장 제목(개요) · "쪽 a–b"(인쇄 라벨) · [범위 바꾸기](`ui/rangepick.js`)
      2. 진도(호출 0) — "읽음 x/y쪽"(13 `@read`) · [여기서 읽기](첫 읽지 않은 쪽)
      3. 요약·개요 — 저장한 요약 n개 → [모아 보기](11-3 의 그 범위) · 저장한 개요가 있으면 접힌 트리 · 없으면 [개요 만들기 (호출 1)]
-        (11-3 의 같은 함수 `createOutlineFlow`) · 요약이 없으면 "아직 저장한 요약이 없습니다" 한 줄. (16 개념도 — 아직 없음: 칸·단추를 만들지 않는다)
+        (11-3 의 같은 함수 `createOutlineFlow`) · 요약이 없으면 "아직 저장한 요약이 없습니다" 한 줄. `[16-2]` 저장한 개요 아래 개념도 조각
+        (`ui/diagram.js` — 작은 그림 · 없으면 [개념도 그리기 (호출 1)])
      4. 원서 문제 📕(호출 0) — `doc.sectionIndex` 중 문항 쪽이 범위와 겹치는 섹션 · 지난 점수 · [풀기]. 원서 문제가 없는 책은 칸이 없다
      5. AI 문제 🤖 — 저장 수 · 지난 점수 · [풀기](`#/quiz/:docId/ai-p{a}-{b}`) · [문제 만들기 5개 (호출 1)] + "읽은 쪽 문단에서 — 약 n자 · 남은 문단 m".
         읽은 쪽이 없으면 단추 흐림 + 한 줄(15-D4). 실패 → 막힘 한 줄, **자동 재시도 0**. 폐기 > 50% → "충분히 만들지 못했습니다"(10-4)
@@ -52,6 +53,7 @@ import { normalizeTranslationLang } from './settings.js';
 import { RETRYABLE_REMOTE, TAP_BANNER_NOW, noticeBanner } from './trband.js';
 import { onPageRender, revealLine, revealTop } from './reader.js';
 import { setEvidenceHandler } from './quiz.js';
+import { diagramControl } from './diagram.js';                // `[16-2]` 개요 칸의 작은 그림·[개념도 그리기]
 
 /* ────────────────────────────────────────────────────────
    1. 순수 — 결과 한 줄 · 칸 보이기 · 셈 (tests/review-ui-15.test.mjs)
@@ -453,6 +455,9 @@ function sumCell(m) {
   };
   if (m.outline) {
     showTree(m.outline.title, m.outline.points, String(m.outline.target || target), false);
+    // `[16-2 — spec 17-14 4]` 저장한 개요의 개념도 — 작은 그림(누르면 시트 · 호출 0) 또는 [개념도 그리기 (호출 1)]
+    const dg = diagramControl(m.outline, { src: S.doc ? docLangOf(S.doc) : '', onSaved: onDiagramSaved });
+    if (dg) s.appendChild(dg);
   } else if (v.state === 'ready' && v.value && S.outFor === S.docId + ':' + S.a + '-' + S.b) {
     showTree(v.value.title, v.value.points, (v.req && v.req.target) || target, true);
     const r = row();
@@ -473,8 +478,15 @@ function sumCell(m) {
     n.setAttribute('role', 'status');
     s.appendChild(n);
   }
-  // (16 개념도 — 아직 없다: `[개념도 (호출 1)]`·작은 그림 자리는 16 이 더한다)
   return s;
+}
+
+/** 개념도를 그려 저장했다 — 다시 모아(호출 0) 작은 그림을 그린다. */
+async function onDiagramSaved() {
+  if (!root || root.hidden) return;
+  const my = ++S.seq;
+  await gather(my);
+  if (my === S.seq) render();
 }
 
 function aiCell(m) {

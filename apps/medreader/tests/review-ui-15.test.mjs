@@ -330,8 +330,11 @@ test('V9 입구 셋 같은 범위 · 계층 · i18n 4언어 · CSS 48px·논리 
   assert.ok(!/from '\.\.\/ai\/pipeline\.js'/.test(rv));
   assert.ok(/pipeline: sv\.pipeline/.test(rv));
   assert.ok(!/makeQuiz\(/.test(strip(rv)), '파이프라인 makeQuiz 를 직접 부르지 않는다');
-  // 16 개념도 — 칸 만들지 않음(자리만 주석)
-  assert.ok(!/diagram|개념도'/.test(strip(rv).replace(/\/\/.*$/gm, '')));
+  // 16 개념도 — `[16-2]` 칸은 `ui/diagram.js` 의 조각 하나(`diagramControl`)뿐 · 묶음 화면이 파이프라인 `diagram(` 을 직접 부르지 않는다
+  const rvCode = strip(rv).replace(/\/\/.*$/gm, '');
+  assert.ok(/import \{ diagramControl \} from '\.\/diagram\.js'/.test(rv));
+  assert.ok(!/\.diagram\(/.test(rvCode), '개념도 요청은 시트(ui/diagram.js)의 [개념도 그리기]·[다시 그리기]만');
+  assert.equal((rvCode.match(/diagramControl\(/g) || []).length, 1, '개요 칸 한 곳');
   // i18n — 쓰는 키 4언어 · ar/fr 검토 표시
   const used = new Set();
   for (const f of ['../js/ui/review.js', '../js/ui/rangepick.js', '../js/ui/quiz.js']) for (const m of read(f).matchAll(/'((?:review|quiz\.ai|quiz\.badge\.ai|planner\.(?:form|range|err)|summaries\.review|library\.card\.(?:review|deleteConfirmAi))[a-zA-Z.]*)'/g)) used.add(m[1]);

@@ -3,7 +3,8 @@
 
    ── 순수 계층이다(3-1 · 3-2 · 16-A grep 대상) ──────────────
    `config` 와 같은 순수 계층(`ai/prompts.js` 의 `numberTokens` — 10-2 번역 검사·11-D7 숫자 거름과 **같은 함수**,
-   `text/summary.js` 의 `hasForeignNumber`)만 import 한다. 브라우저 전역·시계를 모른다. 로컬·무료(호출 0).
+   `text/summary.js` 의 `hasForeignNumber`, `text/numexpr.js` 의 숫자 표현 덩어리 `numberSpans` — 16 개념도와 한 벌)만 import 한다.
+   브라우저 전역·시계를 모른다. 로컬·무료(호출 0).
 
    ── 문항마다 (10-4 1–4 + 숫자 거름) ─────────────────────
      1. 근거 인용(`evidence`)을 정규화해 **보낸 문단 글**의 부분 문자열인가 → 아니면 관대한 2차(구두점 제거 · 공백은 한 칸 —
@@ -22,6 +23,7 @@
 import { REVIEW } from '../config.js';
 import { numberTokens } from './prompts.js';
 import { hasForeignNumber } from '../text/summary.js';
+import { numberSpans } from '../text/numexpr.js';
 
 export const LETTERS = Object.freeze(['A', 'B', 'C', 'D', 'E']);
 export const REDACTED = '[REDACTED]';
@@ -149,20 +151,10 @@ function cpLen(s) { let n = 0; for (const ch of String(s)) { if (ch) n++; } retu
    문단 처음·끝·공백·구두점(`'`·`(`·`:` 등)·대시 경계는 그대로 통과한다(문장 가운데서 시작하되 낱말 처음에서 — 정당). */
 
 const WORD = /[\p{L}\p{N}\p{M}]/u;
-const ND = /\p{Nd}/u;
 const FMT = /\p{Cf}/u;
 const MARK = /\p{M}/u;
-const NUM_SEP = /^[.,٫٬]$/u;
 const HYPHEN = /^[-‐‑]$/u;
-const LETTER = /\p{L}/u;
 const RATIO = /^[:/]$/u;                                                  // 15-2c — 글자·숫자 사이 `mg/kg`·`1:1000`(붙음)
-const NUM_JOIN = /^[-:/^x~\u00D7\u2013\u2014\u2212\uFF5E\u301C]$/u;      // 15-2d — 수 사이 이음(양옆 공백 한 칸까지) `3–5`·`10 – 20`·`1:1000`·`1.5 × 10^9` · 15-2e `3~5`·전각 물결
-const THIN_SEP = /^[\u00A0\u2009\u202F]$/u;                                // 15-2e — 프랑스어 천 단위 사이(NBSP·얇은 공백·좁은 NBSP — 보통 공백은 아님)
-const EXP_SIGN = /^[-+\u2212]$/u;                                           // 15-2e — `^` 바로 뒤 지수 부호 `10^-6`
-const SUP_MINUS = /^\u207B$/u;                                              // 15-2e — 위첨자 빼기 `10⁻⁹`
-const SUP = /^[\u00B2\u00B3\u00B9\u2070\u2074-\u2079]$/u;                // 15-2d — 수에 붙은 위첨자 숫자 `10⁹`
-const SIGN = /^[-+<>~\u2212\u2013\u2014\u00B1\u2264\u2265\u2248\uFF5E\u301C]$/u;   // 수 앞 부호·비교(공백 한 칸까지) `−2.5`·`–2.5`·`< 3.0`·`≥ 75`·`≈5`
-const UNIT = /^[%\u2030\u00B0\u066A]$/u;                                  // 수 뒤 단위 기호(공백 한 칸까지) `%`·`‰`·`°`·`٪`
 
 /** 원래 글자의 오프셋 `i` 앞(`dir` −1)·뒤(+1) 글자 최대 `n` 개(가까운 것부터) — 서식 글자(`marks` 면 결합 부호도)는 건너뛴다. */
 function around(text, i, dir, n, marks) {
@@ -192,65 +184,7 @@ function joins(x, j, y) {
   return (HYPHEN.test(j) || RATIO.test(j)) && WORD.test(x) && WORD.test(y);
 }
 
-/**
- * 숫자 표현 덩어리(15-2d — 15-2bR #1 · 15-2cR #1–#3 을 한 규칙으로)의 원래 [시작, 끝) 목록. 덩어리 =
- *   수(`\p{Nd}` + 붙은 위첨자 숫자)들이 이음 기호로 이어진 것 —
- *     · `.`·`,`·`٫`·`٬` 는 **붙어서만**(`7.5`·`1,500` — 띄우면 문장 끝·나열 `…was 5. 10 patients`·`5, 10 and 20` 이라 잇지 않는다)
- *     · `:`·`/`·`^`·`×`·`x`·대시(`-`·`–`·`—`·`−`)는 양옆 공백 **한 칸까지**(`10 – 20`·`1 : 500`·`1.5 × 10^9`·`4 x 10^9`)
- *   + 앞쪽 부호·비교 기호(`SIGN`, 공백 한 칸까지, 그 기호 바로 앞이 글자가 아닐 때 — `pH<7.1`·`ward—5` 는 붙이지 않음)
- *   + 뒤쪽 단위 기호(`UNIT`, 공백 한 칸까지 — `30%`·`30 %`·`39.2°`). 단위 낱말(`mg`·`L`·`C`)은 넣지 않는다(낱말 경계 규칙이 맡음).
- * 서식 글자(`\p{Cf}`)는 건너뛰고 본다. 한 문단을 여러 번 보므로 마지막 문단 하나를 기억한다.
- */
-let spanMemo = { text: null, spans: [] };
-function numberSpans(text) {
-  if (spanMemo.text === text) return spanMemo.spans;
-  const cs = [];
-  for (let k = 0; k < text.length;) {
-    const ch = String.fromCodePoint(text.codePointAt(k));
-    if (!FMT.test(ch)) cs.push({ ch: ch, s: k, e: k + ch.length });
-    k += ch.length;
-  }
-  const n = cs.length;
-  const dig = (j) => j >= 0 && j < n && (ND.test(cs[j].ch) || SUP.test(cs[j].ch));
-  const sp = (j) => j >= 0 && j < n && WS.test(cs[j].ch);
-  const nd = (j) => j >= 0 && j < n && ND.test(cs[j].ch);
-  const three = (j) => nd(j) && nd(j + 1) && nd(j + 2) && !dig(j + 3);
-  const spans = [];
-  let j = 0;
-  while (j < n) {
-    if (!dig(j)) { j++; continue; }
-    const first = j;
-    let k = j;
-    for (;;) {
-      while (dig(k)) k++;
-      if (k < n && NUM_SEP.test(cs[k].ch) && dig(k + 1)) { k++; continue; }   // 붙은 소수점·천 단위
-      if (k < n && THIN_SEP.test(cs[k].ch) && three(k + 1)) { k++; continue; } // 15-2e 프랑스어 천 단위(NBSP류 + 정확히 세 자리)
-      if (k < n && SUP_MINUS.test(cs[k].ch) && dig(k + 1)) { k++; continue; }  // 15-2e 위첨자 빼기 지수
-      if (k + 1 < n && cs[k].ch === '^' && EXP_SIGN.test(cs[k + 1].ch) && dig(k + 2)) { k += 2; continue; }   // 15-2e `^-6`
-      let p = k;
-      if (sp(p)) p++;
-      if (p < n && NUM_JOIN.test(cs[p].ch)) {
-        let q = p + 1;
-        if (sp(q)) q++;
-        if (dig(q)) { k = q; continue; }
-      }
-      break;
-    }
-    const last = k - 1;
-    let a = first;
-    let p = first - 1;
-    if (sp(p)) p--;
-    if (p >= 0 && SIGN.test(cs[p].ch) && !(p > 0 && LETTER.test(cs[p - 1].ch))) a = p;
-    let z = last;
-    let q = last + 1;
-    if (sp(q)) q++;
-    if (q < n && UNIT.test(cs[q].ch)) z = q;
-    spans.push([cs[a].s, cs[z].e]);
-    j = last + 1;
-  }
-  spanMemo = { text: text, spans: spans };
-  return spans;
-}
+/* 숫자 표현 덩어리 `numberSpans`(15-2d · 15-2e)는 `text/numexpr.js` 로 옮겼다 — 16 개념도 라벨 판정과 한 벌(16-1R 중간-1). 기본 갈래 결과는 같다. */
 
 /** 오프셋 `i` 가 숫자 표현 덩어리 **안**(덩어리의 처음·끝이 아닌 곳)인가 — 시작·끝 대칭. */
 function inNumber(text, i) {
