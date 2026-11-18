@@ -285,7 +285,7 @@ test('V7 서재 — [⋯] "복습 묶음" · 삭제 확인 "AI 문제 n개도 �
   const lib = read('../js/ui/library.js');
   assert.ok(/el\('button', 'doc-review', t\('library\.card\.review'\)\)/.test(lib) && /go\(reviewHash\(docId\)\);/.test(lib));
   assert.ok(/import \{ aiQuiz \} from '\.\.\/review\/aiquiz\.js';/.test(lib));
-  assert.ok(/if \(!confirm\(deleteConfirmText\(name, deleteKeepLines\(await deleteKeepCounts\(docId\)\)\)\)\) return;/.test(lib), 'confirm() 그대로(다듬기 몫) · 한 함수');
+  assert.ok(/if \(!\(await askDelete\(name, deleteKeepLines\(await deleteKeepCounts\(docId\)\)\)\)\) \{ focusCardAction\(docId, 'delete'\); return; \}/.test(lib), '`[다듬기 4]` 페이지 안 대화 · 한 함수');
 });
 
 /* ══ V8 12-3 범위 칸 ═════════════════════════════════════ */

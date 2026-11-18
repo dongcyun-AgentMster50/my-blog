@@ -22,7 +22,7 @@ import {
   checkLink, effectiveLinks, queryLinks, lookupPlan, homeUrl, hostOf, hasQuery,
   newLinkId, moveLink, removeLink, upsertLink
 } from '../text/links.js';
-import { t, applyTranslations, onLangChange, errorKey } from '../i18n/index.js';
+import { t, applyTranslations, onLangChange, errorKey, formatNumber } from '../i18n/index.js';
 
 /** 설정 키(9-3 · 9c 백업 허용 목록에 들어갈 이름). */
 export const LINKS_KEY = 'links.medical';
@@ -250,6 +250,9 @@ export function initLinksSettings() {
 export function showLinksSettings(tab) {
   if (!ed) return;
   hook();
+  // `[다듬기 4c — P4bR 중간-1]` 라우터만 부른다(설정 화면 안 이동 포함 — `#/settings/links` → `#/settings` 뒤로가기는 같은 화면이라
+  // `leaveLinksSettings` 가 불리지 않는다). 열린 확인 대화는 그 자리에서 연 것이 아니다 — 취소 길로 닫는다(기다리던 물음 false).
+  cancelOpenDialog();
   paintList();
   if (tab === 'links') {
     try { ed.card.scrollIntoView({ block: 'start' }); } catch (e) { /* 그대로 */ }
@@ -264,7 +267,17 @@ export function leaveLinksSettings() {
   closeForm();
   ed.suggest.hidden = true;
   say('');
-  if (ed.dlg && ed.dlg.open && typeof ed.dlg.close === 'function') ed.dlg.close();
+  cancelOpenDialog();
+}
+
+/**
+ * `[다듬기 4b·4c]` 열린 확인 대화를 **취소 길**(`cancel` 이벤트 → `confirmIn` 의 `finish(false)`)로 닫는다. 그냥 `close()` 하면 기다리던
+ * 물음의 리스너가 남아, 다음에 연 대화의 [확인] 이 옛 대상(지우려던 링크·되돌리기)까지 실행했다. 화면을 떠날 때·설정 화면 안에서 옮길 때.
+ */
+function cancelOpenDialog() {
+  if (!ed || !ed.dlg || !ed.dlg.open) return;
+  try { ed.dlg.dispatchEvent(new Event('cancel', { cancelable: true })); } catch (e) { /* 아래 */ }
+  if (ed.dlg.open && typeof ed.dlg.close === 'function') ed.dlg.close();
 }
 
 function paintList() {
@@ -439,10 +452,15 @@ async function askDelete(id) {
   focusAct('add');
 }
 
-/** 페이지 안 확인 — 첫 초점 [취소], Esc = 취소(서재 `askReextract` 와 같은 장치). */
-function confirmIn(title) {
+/**
+ * 페이지 안 확인 — 첫 초점 [취소], Esc = 취소(서재 `askReextract` 와 같은 장치).
+ * `[다듬기 4 — 18R 1순위]` `okKey` — 확인 단추 문구(기본 `links.delete` · 되돌리기는 `links.reset`). 같은 `<dialog>` 하나를 쓴다.
+ */
+function confirmIn(title, okKey) {
   const dlg = ed.dlg;
   if (!dlg) return Promise.resolve(false);
+  const okBtn = dlg.querySelector('button[data-dialog="ok"]');
+  if (okBtn) okBtn.setAttribute('data-i18n', okKey || 'links.delete');
   applyTranslations(dlg);
   if (ed.dlgTitle) ed.dlgTitle.textContent = title;
   return new Promise((resolve) => {
@@ -540,12 +558,22 @@ async function addSuggested() {
   focusAct('suggest');
 }
 
+/**
+ * `[기본 목록으로 되돌리기]` — 값을 `null` 로(기본 목록). `[다듬기 4 — 18R 1순위]` 사용자 목록(배열)이 있으면 **지우기 전에** 페이지 안
+ * 확인(삭제와 같은 `<dialog>` — `confirm()` 금지). 이미 기본 목록(`null`)이면 지울 것이 없어 묻지 않는다. 취소면 [되돌리기]로 초점.
+ */
 async function resetDefaults() {
   closeForm(false);
   ed.suggest.hidden = true;
+  const stored = settings.get(LINKS_KEY);
+  if (Array.isArray(stored)) {
+    const ok = await confirmIn(t('links.reset.confirm', { n: formatNumber(stored.length) }), 'links.reset');
+    if (!ok) { focusAct('reset'); return; }
+  }
   try { await settings.set(LINKS_KEY, null); } catch (e) { say(t(errorKey(e && e.code))); return; }
   paintList();
   say(t('links.saved'));
+  focusAct('reset');
 }
 
 function focusAct(act) {
@@ -561,9 +589,15 @@ function say(text) {
 
 function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
 
-/** id 는 우리가 만든 것(영숫자·`-`·`_`)이지만 가져온 값일 수도 있다 — 선택자에 넣기 전에 가린다. */
-function cssId(s) {
-  return String(s).replace(/["\\]/g, '\\$&');
+/**
+ * id 는 우리가 만든 것(영숫자·`-`·`_`)이지만 가져온 값일 수도 있다 — 선택자에 넣기 전에 가린다.
+ * `[다듬기 4 — 18R-8]` `CSS.escape` 가 있으면 그것(줄바꿈·제어 문자까지 — 옛 방식은 `"`·`\` 만 가려 `querySelector` 가 던질 수 있었다).
+ * 없으면(node 시험·아주 옛 브라우저) 지금 방식. 가져올 때도 `id` 꼴을 검사한다(`text/backup.js`).
+ */
+export function cssId(s) {
+  const v = String(s);
+  if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') return CSS.escape(v);
+  return v.replace(/["\\]/g, '\\$&');
 }
 
 /* ── `[D]` 측정 훅 — 링크 이름·주소·검색어는 담지 않는다(수·상태만). `main.js` 가 부팅 끝에 전역 객체를 새로 만들므로

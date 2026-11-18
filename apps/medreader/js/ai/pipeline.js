@@ -13,6 +13,11 @@
    ── 원격 상태 (7-6) ─────────────────────────────────────
      ready | inflight | cooldown | exhausted | no-key | offline | capped | region | model
      - 429                 → exhausted(until = Retry-After 또는 다음 날 00:00). 자동 재시도 0.
+                             `[다듬기 4 — 8c1R · 8c-2]` 본문(`error.details`)이 **분 한도**(`QuotaFailure` `quotaId` 에 `PerMinute`)면
+                             cooldown(코드 `RATE_MINUTE`, until = `RetryInfo.retryDelay` · 없으면 Retry-After · 그것도 없으면 60초).
+                             ★ 이 cooldown 은 시간이 지나도 **ready 로 돌아가지 않는다**(until 만 0 — "기다림 끝") — 돌아가면 낭독 창이
+                             막힌 문장을 저절로 다시 보낸다(자동 재시도). 사용자 [다시 시도](`retry()`)만 푼다.
+                             일 한도(`PerDay`)·꼴을 못 읽음 → 지금처럼 exhausted(보수). 판정은 어댑터 `rateLimitInfo`(본문 꼴은 실기기 확인 전).
      - 5xx                 → **즉시 1회만** 다시 보낸 뒤에도 5xx 면 cooldown(30s → 60s → 120s).
      - 네트워크 오류       → cooldown(즉시 재시도 없음). 기기가 오프라인이면 offline.
                              `[수정 2026-10-10 — 운영자 결정]` 응답 없이 실패한 문장은 **blocked**(`NETWORK`) —
@@ -129,6 +134,34 @@ export function capUsedOf(row) {
 export function warnThreshold(cap, warnAt) {
   if (typeof warnAt !== 'number' || !(warnAt > 0) || !(warnAt < 1)) return null;
   return Math.max(1, Math.ceil(dailyCapOf(cap) * warnAt - 1e-9));
+}
+
+/**
+ * `[다듬기 4]` 분 한도 cooldown 의 코드(원격 상태 `cooldown` 의 `code`). 이 코드의 cooldown 은 until 이 지나도 ready 로 돌아가지 않고
+ * until 만 0 이 된다("기다림 끝 — [다시 시도]") — 화면이 띠·상태 바 문구를 고르는 데 쓴다(상태 이름은 그대로 `cooldown`).
+ */
+export const RATE_MINUTE = 'RATE_MINUTE';
+/** 분 한도인데 다시 보낼 때를 못 읽었을 때의 기다림(초). */
+export const RATE_MINUTE_DEFAULT_SEC = 60;
+
+/**
+ * `[다듬기 4]` 429 응답 본문을 들여다보는 `fetch` 감싸개 — 요청(주소·머리·본문)은 **그대로** 넘기고, 429 면 응답 사본(`clone()`)의 JSON 을
+ * `box.json`(Promise)에 둔다. provider 가 원본 본문을 읽는다(사본이라 서로 막지 않는다). `clone` 이 없는 스텁 응답은 들여다보지 않는다
+ * (그때 판정은 "못 읽음" → exhausted). 던지지 않는다 — 원래 fetch 의 거부는 그대로 거부.
+ * @param {Function} base  원래 fetch
+ * @param {{json?:Promise<*>}} box
+ */
+export function peekingFetch(base, box) {
+  return function (url, init) {
+    return Promise.resolve(base(url, init)).then((res) => {
+      try {
+        if (res && Number(res.status) === 429 && typeof res.clone === 'function') {
+          box.json = res.clone().json().catch(() => null);
+        }
+      } catch (e) { /* 들여다보기 실패는 판정만 보수로 */ }
+      return res;
+    });
+  };
 }
 
 /** 다음 날 로컬 00:00(ms). 7-6 — 429 에 `Retry-After` 가 없을 때. */
@@ -526,7 +559,10 @@ export function createPipeline(deps) {
   /** 시간이 지나 풀린 상태를 풀어 둔다(타이머가 늦거나 없어도 맞게 — 읽을 때마다 본다). */
   function refresh() {
     if ((base.name === STATES.COOLDOWN || base.name === STATES.EXHAUSTED) && base.until && now() >= base.until) {
-      base = { name: STATES.READY, until: 0, code: null, day: null };
+      // `[다듬기 4]` 분 한도 cooldown 은 기다림만 끝난다(until 0) — 상태는 그대로, 사용자 [다시 시도]만 ready 로(자동 재시도 0).
+      base = base.name === STATES.COOLDOWN && base.code === RATE_MINUTE
+        ? { name: STATES.COOLDOWN, until: 0, code: RATE_MINUTE, day: null }
+        : { name: STATES.READY, until: 0, code: null, day: null };
     }
     if (base.name === STATES.CAPPED && base.day !== localDay(now())) {
       base = { name: STATES.READY, until: 0, code: null, day: null };
@@ -562,6 +598,29 @@ export function createPipeline(deps) {
       ? now() + retryAfterSec * 1000
       : nextLocalMidnight(now());
     setBase(STATES.EXHAUSTED, until, CODES.RATE_LIMIT);
+  }
+
+  /**
+   * `[다듬기 4 — 8c1R · 8c-2]` 429 → 분 한도면 cooldown(`RATE_MINUTE`), 아니면(일 한도·못 읽음) exhausted. 어느 쪽이든 그 묶음은 blocked.
+   * 본문은 `peekingFetch` 가 둔 사본(`box.json`), 해석은 어댑터 `rateLimitInfo`(없으면 못 읽음). **다시 보내지 않는다.**
+   * @returns {Promise<string>} 막힌 문장의 사유(상태 이름)
+   */
+  async function enterRateLimited(err, box) {
+    let info = null;
+    try {
+      const json = box && box.json ? await box.json : null;
+      const id = getSetting('ai.provider') || undefined;
+      const adapter = json && typeof provider.getAdapter === 'function' ? provider.getAdapter(id) : null;
+      info = adapter && typeof adapter.rateLimitInfo === 'function' ? adapter.rateLimitInfo(json) : null;
+    } catch (e) { info = null; }
+    if (info && info.scope === 'minute') {
+      const fromHeader = Number.isFinite(err && err.retryAfter) && err.retryAfter > 0 ? err.retryAfter : 0;
+      const sec = Number(info.retrySec) > 0 ? Number(info.retrySec) : (fromHeader || RATE_MINUTE_DEFAULT_SEC);
+      setBase(STATES.COOLDOWN, now() + sec * 1000, RATE_MINUTE);
+      return STATES.COOLDOWN;
+    }
+    enterExhausted(err && err.retryAfter);
+    return STATES.EXHAUSTED;
   }
 
   /** 15절 — 오늘 쓴 호출(검증 제외)이 사용자의 상한에 닿았는가. 못 읽으면 막지 않는다. */
@@ -676,14 +735,18 @@ export function createPipeline(deps) {
       notify();
       let r = null;
       let err = null;
+      // `[다듬기 4]` 429 본문 사본 자리(이 시도 하나 몫 — 동시 요청끼리 섞이지 않는다). 요청 바이트는 그대로(감싸개는 넘기기만).
+      const peek = {};
       try {
         const model = String(getSetting('ai.model') || '').trim();
+        const baseFetch = typeof d.fetch === 'function' ? d.fetch
+          : (typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : undefined);
         r = await provider.complete(req, {
           key: String(getKey() || '').trim(),
           provider: getSetting('ai.provider') || undefined,
           model: model || undefined,
           signal: ac ? ac.signal : undefined,
-          fetch: d.fetch,
+          fetch: baseFetch ? peekingFetch(baseFetch, peek) : undefined,
           db: db,
           now: now(),
           kind: ctx.kind,
@@ -713,8 +776,8 @@ export function createPipeline(deps) {
           enterCooldown(CODES.SERVER);
           return all(SEG.FAILED, FAIL.SERVER);
         case CODES.RATE_LIMIT:
-          enterExhausted(err.retryAfter);
-          return all(SEG.BLOCKED, STATES.EXHAUSTED);
+          // `[다듬기 4]` 분 한도 → cooldown(RATE_MINUTE) · 일 한도·못 읽음 → exhausted. 자동 재시도 0.
+          return all(SEG.BLOCKED, await enterRateLimited(err, peek));
         case CODES.AUTH:
         case CODES.NO_KEY:
           setBase(STATES.NO_KEY, 0, code);

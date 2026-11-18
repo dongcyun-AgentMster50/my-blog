@@ -1142,7 +1142,8 @@ html:has(.screen[data-screen="reader"]:not([hidden])) {
 }
 .sum-sheet .sum-goto:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .sum-sheet .sum-item-note { margin: var(--sp-1) 0; font-size: var(--fs-sm); color: var(--c-text-dim); text-align: start; }
-.sum-sheet .sum-link {
+/* `[다듬기 4]` `:not([hidden])` — 문서가 없으면 링크를 숨긴다(`hidden`). 11-3 이 screens.css 한 줄로 막아 두던 것을 여기서 바로. */
+.sum-sheet .sum-link:not([hidden]) {
   display: flex;
   align-items: center;
   min-block-size: var(--tap);
@@ -1815,8 +1816,10 @@ body[data-reader-view="original"] > main {
   min-block-size: 0;
 }
 
-body:has(.original) .screen[data-screen="reader"],
-body[data-reader-view="original"] .screen[data-screen="reader"] {
+/* `[다듬기 4 — 8c1cR]` `:not([hidden])` — 원본 보기에서 검색 화면으로 가면 리더는 `hidden` 이다. 이 규칙의 `display: flex` 가
+   `.screen[hidden]{display:none}`(base.css — 특이성이 더 낮다)를 이겨 숨은 리더가 검색 화면을 가리던 것. */
+body:has(.original) .screen[data-screen="reader"]:not([hidden]),
+body[data-reader-view="original"] .screen[data-screen="reader"]:not([hidden]) {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;

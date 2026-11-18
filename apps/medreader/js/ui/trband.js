@@ -42,7 +42,7 @@
    ============================================================ */
 
 import * as settings from '../settings.js';
-import { t, applyTranslations, getDir, onLangChange } from '../i18n/index.js';
+import { t, applyTranslations, getDir, onLangChange, formatNumber } from '../i18n/index.js';
 import { TTS, READALONG, AI } from '../config.js';
 import { trSpeechText } from '../tts/text.js';
 import * as provider from '../ai/provider.js';
@@ -71,6 +71,67 @@ export const BLOCKED_KEYS = Object.freeze({
 const BLOCKING_REMOTE = Object.freeze(Object.keys(BLOCKED_KEYS));
 
 /**
+ * `[다듬기 4 — 8c1R · 8c-2]` 분 한도 cooldown(파이프라인 `RATE_MINUTE` — 원격 상태 이름은 `cooldown`)의 띠 한 줄.
+ * `wait` — 기다리는 중([다시 시도] 없음 — 곧 다시 걸린다) · `ready` — 기다림 끝([다시 시도]). 자동으로 다시 보내지 않는다.
+ */
+export const RATE_KEYS = Object.freeze({ wait: 'readalong.blocked.rateWait', ready: 'readalong.blocked.rateReady' });
+/** 파이프라인 `RATE_MINUTE` 와 같은 값(화면은 파이프라인 상수를 import 하지 않고 이벤트의 `code` 로 본다). */
+export const RATE_CODE = 'RATE_MINUTE';
+
+/** 지금 분 한도 cooldown 이면 `{until}`(ms — 0 이면 이미 끝) — 원격 이벤트(`onRemote`)가 고친다. */
+let rate = null;
+let rateTimer = null;
+const rateFns = new Set();
+
+/**
+ * 원격 상태 이벤트 → 분 한도 기록. 분 한도 cooldown 이면 `{until}`, 그 밖(다른 cooldown·ready·다른 막힘)이면 null. 순수에 가깝다(모듈 값만).
+ * @param {{state?:string, code?:string, until?:number}} d
+ */
+export function noteRemoteRate(d) {
+  const x = d || {};
+  if (x.state === 'cooldown' && x.code === RATE_CODE) rate = { until: Number(x.until) || 0 };
+  // 풀린 뒤(ready) — 지나간 문장 아래 남은 막힘 줄(사유 `cooldown`)이 "응답 없음"으로 바뀌지 않게 "기다림 끝"으로 둔다(다음 막힘이 오면 바뀐다)
+  else if (x.state === 'ready' && rate) rate = { until: 0 };
+  else rate = null;
+  return rate;
+}
+
+/**
+ * 분 한도의 지금 국면 — `null`(분 한도 아님) · `'wait'` · `'ready'`.
+ * @param {number} [nowMs]
+ */
+export function rateView(nowMs) {
+  if (!rate) return null;
+  const n = Number.isFinite(nowMs) ? nowMs : Date.now();
+  return rate.until > n ? 'wait' : 'ready';
+}
+
+/** 분 한도 국면이 바뀔 때(기다림 끝 · 풀림) — 문장 아래 표시(`inlinetr`)가 막힘 줄을 다시 그린다. 되돌림 함수. */
+export function onRateChange(fn) {
+  if (typeof fn !== 'function') return () => {};
+  rateFns.add(fn);
+  return () => rateFns.delete(fn);
+}
+
+function fireRate() {
+  Array.from(rateFns).forEach((fn) => { try { fn(rateView()); } catch (e) { /* 구독자 오류 */ } });
+}
+
+/** `bandView` 등이 쓰는 분 한도 국면 — 문맥에 `rate` 가 있으면 그것(시험), 없으면 모듈 값. */
+function rateOf(c) {
+  return c && c.rate !== undefined ? c.rate : rateView();
+}
+
+/** 막힘 사유 → 띠 한 줄·[다시 시도]. `cooldown` 이 분 한도면 `RATE_KEYS`(기다리는 중엔 [다시 시도] 없음). */
+function blockedNote(code, c) {
+  if (code === 'cooldown') {
+    const rv = rateOf(c);
+    if (rv === 'wait' || rv === 'ready') return { noteKey: RATE_KEYS[rv], retry: rv === 'ready' };
+  }
+  return { noteKey: BLOCKED_KEYS[code] || GATE_KEYS[code], retry: RETRYABLE_REMOTE.indexOf(code) >= 0 };
+}
+
+/**
  * 띠 한 장에 무엇을 그리는가. 순수 함수.
  *
  * @param {{state:string, text?:string, code?:string}|null} rec   `readalong.get(src)` 결과
@@ -89,7 +150,8 @@ export function bandView(rec, ctx) {
   const blockedBy = r.state === 'blocked' ? (r.code || c.remote)
     : (r.state === 'none' && BLOCKING_REMOTE.indexOf(c.remote) >= 0 ? c.remote : null);
   if (blockedBy && BLOCKED_KEYS[blockedBy]) {
-    return { state: 'blocked', text: '', noteKey: BLOCKED_KEYS[blockedBy], retry: RETRYABLE_REMOTE.indexOf(blockedBy) >= 0, code: blockedBy };
+    const n = blockedNote(blockedBy, c);      // `[다듬기 4]` cooldown 이 분 한도면 그 문구(`ctx.rate` — 없으면 모듈 값)
+    return { state: 'blocked', text: '', noteKey: n.noteKey, retry: n.retry, code: blockedBy };
   }
   // pending · 아직 묻지 않았음(none — refill 이 곧 pending 으로 바꾼다) · 그 밖
   return { state: 'pending', text: '', noteKey: 'readalong.pending', retry: false, code: null };
@@ -169,7 +231,7 @@ export function tapView(recs, ctx) {
   const texts = [];
   let worst = null;
   for (const r of list) {
-    const v = bandView(r, { hasSentence: true, remote: c.remote });
+    const v = bandView(r, { hasSentence: true, remote: c.remote, rate: c.rate });
     if (v.state === 'ready') { if (v.text) texts.push(v.text); continue; }
     if (!worst || (rank[v.state] || 0) > (rank[worst.state] || 0)) worst = v;
   }
@@ -195,7 +257,8 @@ export function noteView(rec, ctx) {
   if (r.state === 'blocked') {
     const code = BLOCKED_KEYS[r.code] || GATE_KEYS[r.code] ? r.code : (BLOCKED_KEYS[c.remote] ? c.remote : null);
     if (code) {
-      return { state: 'blocked', text: '', noteKey: BLOCKED_KEYS[code] || GATE_KEYS[code], retry: RETRYABLE_REMOTE.indexOf(code) >= 0, code: code };
+      const n = blockedNote(code, c);         // `[다듬기 4]` 분 한도 문구
+      return { state: 'blocked', text: '', noteKey: n.noteKey, retry: n.retry, code: code };
     }
     return { state: 'failed', text: '', noteKey: 'explain.failed', retry: true, code: r.code || null };
   }
@@ -306,7 +369,11 @@ export function remoteBanner(state, o) {
     // `[8c-2 — 17-7-6 4-7]` 상한 도달 배너에 [사용량 보기] 하나 더(`#/usage` — 오늘 쓴 것·종류별을 본다)
     case 'capped': return { key: 'ai.state.capped', params: { cap: String(x.cap == null ? '' : x.cap) },
       actions: [{ key: 'reader.readalong.settings', nav: SETTINGS_AI_HASH }, { key: 'usage.open', nav: '#/usage' }] };
-    case 'cooldown': return { key: 'ai.state.cooldown', params: null, actions: [] };
+    // `[다듬기 4]` 분 한도 — 기다리는 중(약 {s}초)·기다림 끝([다시 시도]). 다른 cooldown(응답 없음)은 그대로.
+    case 'cooldown':
+      if (x.rate === 'wait') return { key: 'ai.state.rateWait', params: { s: String(x.waitSec == null ? '' : x.waitSec) }, actions: [] };
+      if (x.rate === 'ready') return { key: 'ai.state.rateReady', params: null, actions: [] };
+      return { key: 'ai.state.cooldown', params: null, actions: [] };
     case 'region': return stateNotice(provider.CODES.REGION, x.providerLabel || '');
     case 'model': return { key: 'ai.state.model', params: null, actions: [{ key: 'reader.readalong.settings', nav: SETTINGS_AI_HASH }] };
     case 'no-key': return stateNotice(provider.CODES.NO_KEY, '');
@@ -1137,6 +1204,11 @@ function onNoticeClear(d) {
 function onRemote(d) {
   const state = d.state;
   const prevKey = banners.remote;
+  // `[다듬기 4]` 분 한도 기록 — 기다림이 끝나는 때에 띠·상태 바·문장 아래 줄을 "[다시 시도]" 로 바꾼다(보내지는 않는다 — 자동 재시도 0)
+  const was = rateView();
+  noteRemoteRate(d);
+  armRateTimer();
+  if (was !== rateView()) fireRate();
   if (state === 'ready') {
     banners.remote = null;
     if (prevKey) withdraw(prevKey);
@@ -1144,12 +1216,33 @@ function onRemote(d) {
     resendTapOnline(d.prev);
     return;
   }
-  const b = remoteBanner(state, { providerLabel: providerLabel(), cap: settings.get('ai.dailyCap') });
+  showRemoteBanner(state);
+}
+
+/** 원격 상태 배너를 띄운다(같은 키면 `banner` 가 알아서 하나만). 분 한도면 국면·남은 초를 함께. */
+function showRemoteBanner(state) {
+  const prevKey = banners.remote;
+  const rv = state === 'cooldown' ? rateView() : null;
+  const waitSec = rv === 'wait' ? formatNumber(Math.max(1, Math.ceil((rate.until - Date.now()) / 1000))) : null;
+  const b = remoteBanner(state, { providerLabel: providerLabel(), cap: settings.get('ai.dailyCap'), rate: rv, waitSec: waitSec });
   if (!b) return;
   if (prevKey && prevKey !== b.key) withdraw(prevKey);
   banners.remote = b.key;
   banner(b);
   lastPaint = ''; paint();
+}
+
+/** `[다듬기 4]` 분 한도 기다림이 끝나는 때 — 띠를 다시 그리고 배너를 "기다림 끝"으로 바꾸고 구독자(문장 아래)에 알린다. 요청은 보내지 않는다. */
+function armRateTimer() {
+  if (rateTimer) { clearTimeout(rateTimer); rateTimer = null; }
+  if (!rate || !(rate.until > Date.now())) return;
+  rateTimer = setTimeout(() => {
+    rateTimer = null;
+    if (!rate) return;
+    if (safeRemote() === 'cooldown') showRemoteBanner('cooldown');
+    else { lastPaint = ''; paint(); }
+    fireRate();
+  }, rate.until - Date.now() + 50);
 }
 
 /** `[8c-1b]` 연결 회복 — 탭 띠가 offline 막힘이면 그 문단을 한 번 다시 보낸다(`tapResendOnline`). 결과는 `onChange` 로 그려진다. */

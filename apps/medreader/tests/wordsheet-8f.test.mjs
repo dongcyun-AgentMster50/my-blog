@@ -436,8 +436,10 @@ test('W13 ★ deleteKeepLines — 단어장 n>0 이면 한 줄(0 이면 없음) 
   assert.equal(deleteConfirmText('T', deleteKeepLines({ vocab: 2 }), tr), 'library.card.deleteConfirm{"title":"T"}\nlibrary.card.deleteKeeps{"list":"library.card.deleteConfirmVocab{\\"n\\":\\"2\\"}"}');
   assert.equal(deleteConfirmText('T', [], tr), 'library.card.deleteConfirm{"title":"T"}');
   const lib = strip(src('../js/ui/library.js'));
-  assert.match(lib, /if \(!confirm\(deleteConfirmText\(name, deleteKeepLines\(await deleteKeepCounts\(docId\)\)\)\)\) return;/, '★ 삭제 확인이 한 함수를 거친다');
-  assert.equal((lib.match(/confirm\(/g) || []).length, 1, '확인 대화는 한 곳');
+  // `[다듬기 4]` confirm() → 페이지 안 `<dialog>`(`askDelete` — 조각은 `deleteConfirmParts`, `deleteConfirmText` 와 한 벌)
+  assert.match(lib, /if \(!\(await askDelete\(name, deleteKeepLines\(await deleteKeepCounts\(docId\)\)\)\)\) \{ focusCardAction\(docId, 'delete'\); return; \}/, '★ 삭제 확인이 한 함수를 거친다');
+  assert.equal((lib.match(/\bconfirm\(/g) || []).length, 0, 'confirm() 0 — 페이지 안 대화');
+  assert.equal((lib.match(/askDelete\(/g) || []).length, 2, '확인 대화는 한 곳(정의 + 부름)');
   // 실제 저장소 — 단어장 2 + 문장 카드 1 → 문서 삭제 → term 2 남음
   await store.save({ surface: 'gout', srcLang: 'en', targetLang: 'ar', docId: 'docDel' });
   await store.save({ surface: 'tophus', srcLang: 'en', targetLang: 'ar', docId: 'docDel' });

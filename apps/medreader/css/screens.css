@@ -247,6 +247,13 @@
 
 .confirm-actions button { flex: 1 1 8em; }
 
+/* `[다듬기 4]` 서재 문서 삭제 확인(`ui/library.js` `askDelete` — `confirm()` 대신). 제목에 책 이름이 들어가 길 수 있다(360px 가로 넘침 0).
+   "지워집니다" 줄은 굵게(남는 것과 섞이지 않게), "남습니다" 줄은 흐리게. */
+#docDelDialog h2,
+#docDelDialog p { overflow-wrap: anywhere; }
+#docDelDialog .doc-del-gone { white-space: pre-line; font-weight: 600; }
+#docDelDialog p[hidden] { display: none; }
+
 .storage-line {
   color: var(--c-text-dim);
   font-size: var(--fs-sm);
@@ -1391,8 +1398,6 @@ html:has(.search-screen:not([hidden]) .search-tabs:not([hidden])) {
    ★ 논리 속성만(16-H) — 줄 방향은 UI, 요지는 그 레코드의 대상 언어 방향(`dir` 속성), 원문 언어 요지는 원문 방향(아랍어 UI 에서도 ltr).
    ★ 줄(`<summary>`)·단추·칸 48px 이상(16-G). 360px 가로 스크롤 0 — 칸은 `min-inline-size: 0`, 긴 글은 `overflow-wrap: anywhere`.
    ★ 펼침은 `<details>` 기본 동작(JS 없음 — 11-D17). 삭제 확인은 `.confirm-dialog` 그대로. */
-/* 요약 시트 링크 "이 책의 저장한 요약 (n)" — reader.css 의 `display:flex` 가 [hidden] 을 이기지 않게(문서가 없으면 숨김) */
-.sum-sheet .sum-link[hidden] { display: none; }
 .sums-tools { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block: var(--sp-3); }
 .sums-select,
 .sums-num {

@@ -467,7 +467,8 @@ test('D8 ★ grep — inlinetr 는 pipeline 을 (간접으로도) import 하지 
   assert.equal(clo.filter((f) => /\/ai\/(pipeline|readalong|cache)\.js$/.test(f)).length, 0, clo.join('\n'));
   assert.match(src, /import \{ appendBidiText \} from '\.\/bididom\.js'/);
   // `[다듬기 2 — M1]` 막힘 사유 이름(코드)까지 보려고 같은 규칙의 `bandView` 를 함께 — 문구 규칙은 여전히 한 벌(trband)
-  assert.match(src, /import \{ noteKeyFor, bandView \} from '\.\/trband\.js'/);
+  // `[다듬기 4]` + `onRateChange`(분 한도 기다림 끝에 막힘 줄만 다시 그림 — 요청 0)
+  assert.match(src, /import \{ noteKeyFor, bandView, onRateChange \} from '\.\/trband\.js'/);
   assert.match(src, /appendBidiText\(tx, text, a\.dir\)/);
   // 요청 없는 서비스 메서드만 쓴다
   const used = new Set((src.match(/\bra\.([a-zA-Z]+)\(/g) || []).map((x) => x.slice(3, -1)));

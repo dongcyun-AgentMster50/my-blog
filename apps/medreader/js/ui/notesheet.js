@@ -417,7 +417,8 @@ export function initNoteSheet(d) {
   // 쪽이 바뀌면 시트를 닫는다(다른 쪽 필기 글이 남지 않게) — [되돌리기] 줄은 3초 그대로(지운 레코드는 쪽과 무관하게 되살린다).
   // `main.js` 가 부팅 끝에 전역 객체를 새로 만든다 — 쪽이 그려질 때 측정 훅을 다시 붙인다(있으면 그대로 — controls·selbar 와 같은 까닭).
   onPageRender(() => { close(false); closePage(false); attachDebugHook(); });
-  onReaderLeave(() => { close(false); closePage(false); hideToast(); });
+  // `[다듬기 4b — P4R 중간-1]` 메모 있는 필기 지우기 확인(`#annoDelDialog`)도 거둔다 — 리더가 숨은 채 `:modal` 로 남아 앱을 막지 않게(대상 지움 = 취소)
+  onReaderLeave(() => { closeDel(); close(false); closePage(false); hideToast(); });
   attachDebugHook();
   return api();
 }

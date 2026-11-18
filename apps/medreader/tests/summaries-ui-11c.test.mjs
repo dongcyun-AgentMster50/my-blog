@@ -141,7 +141,9 @@ test('N1 라우트 `#/summaries`·`#/summaries/:docId` · summariesHash 왕복 �
   const ss = strip(src('../js/ui/sumsheet.js'));
   assert.match(ss, /els\.link\.setAttribute\('href', summariesHash\(c\.docId\)\);/);
   assert.match(ss, /els\.link\.textContent = t\('sum\.savedLink', \{ n: formatNumber\(k\) \}\);/);
-  assert.match(src('../css/screens.css'), /\.sum-sheet \.sum-link\[hidden\] \{ display: none; \}/, 'reader.css 의 display:flex 가 [hidden] 을 이기지 않게');
+  // `[다듬기 4]` screens.css 임시 줄 대신 reader.css 규칙 자체가 `:not([hidden])` — display:flex 가 [hidden] 을 이기지 않게
+  assert.match(src('../css/reader.css'), /\.sum-sheet \.sum-link:not\(\[hidden\]\) \{\s*display: flex;/, 'reader.css 의 display:flex 가 [hidden] 을 이기지 않게');
+  assert.doesNotMatch(src('../css/reader.css'), /\.sum-sheet \.sum-link \{/, '[hidden] 을 이기는 옛 규칙 없음');
 });
 
 /* ══ N2 내보내기 ═══════════════════════════════════ */

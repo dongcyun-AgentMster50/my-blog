@@ -38,7 +38,7 @@ import { fileIdentityHash } from '../hash.js';
 import { openDocument, loadPdfjs } from '../pdf/loader.js';
 import { Extractor, STATUS } from '../pdf/extract.js';
 import { t, applyTranslations, formatBytes, formatNumber } from '../i18n/index.js';
-import { go, replace, readerHash, vocabHash, summariesHash, cardsHash, notesHash, libraryHash, reviewHash } from '../router.js';
+import { go, replace, parseRoute, readerHash, vocabHash, summariesHash, cardsHash, notesHash, libraryHash, reviewHash } from '../router.js';
 import { fromStored } from '../text/store.js';
 import {
   SUPPORTED_SRC, GUESS, guessLang, applyGuess, applyUserLang, shouldGuess,
@@ -175,6 +175,10 @@ export function initLibrary() {
   });
 
   els.list.addEventListener('click', onListClick);
+
+  // `[다듬기 4b — P4R 중간-1]` 확인 대화(삭제·다시 추출)가 열린 채 서재를 떠나면(주소 바뀜·뒤로가기) 숨은 화면 안의 `:modal` 이 앱을 막는다 →
+  // 떠날 때 **취소로** 닫는다(데이터 무변 — 각 대화의 `cancel` 갈래가 `finish(false)`). 링크 설정의 `leaveLinksSettings` 와 같은 자리.
+  window.addEventListener('hashchange', () => { if (parseRoute(location.hash).name !== 'library') cancelLibraryDialogs(); });
 
   // `[9c-3]` "PDF 필요" 카드의 `[PDF 가져오기]` — 서재 [가져오기]와 따로 감춘 input(고른 파일은 그 문서에만 붙인다). `index.html` 은 무변.
   els.needFile = document.createElement('input');
@@ -1442,7 +1446,8 @@ async function onListClick(ev) {
     const name = (doc && (doc.title || doc.fileName)) || docId;
     // 12-6 — 연쇄 삭제 확인. confirm 은 브라우저 문자열이 아니라 우리 문장을 쓴다.
     // `[8f-2]` 문서를 지워도 남는 것("단어장 n개는 남습니다")은 `deleteKeepLines` 한 함수가 줄을 만든다(11·12 가 같은 함수에 더한다).
-    if (!confirm(deleteConfirmText(name, deleteKeepLines(await deleteKeepCounts(docId))))) return;
+    // `[다듬기 4 — 20-3 남은 8 · 15-2 남은 3]` `confirm()` 대신 페이지 안 `<dialog>`(`askDelete` — 다시 추출과 같은 장치). 취소면 [삭제]로 초점.
+    if (!(await askDelete(name, deleteKeepLines(await deleteKeepCounts(docId))))) { focusCardAction(docId, 'delete'); return; }
     const ex = extractors.get(docId);
     if (ex) { ex.stop(); extractors.delete(docId); }
     unwatchLangGuess(docId);
@@ -1457,7 +1462,22 @@ async function onListClick(ev) {
     }
     await renderList();
     await renderStorage();
+    // 지운 카드는 없다 — 초점은 목록 위 [PDF 가져오기]로(body 로 떨어지지 않게)
+    focusAfterDelete();
   }
+}
+
+/** 카드 안 단추에 초점(취소 뒤 — 그 문서의 [삭제]). 단추가 접힌 패널 안이어도 패널은 열려 있다(그 단추를 눌렀다). */
+function focusCardAction(docId, action) {
+  if (!els || !els.list) return;
+  const card = els.list.querySelector('[data-doc-id="' + cssEscape(docId) + '"]');
+  const b = card && card.querySelector('button[data-action="' + action + '"]');
+  if (b) { try { b.focus(); } catch (e) { /* 그대로 */ } }
+}
+
+function focusAfterDelete() {
+  const b = els && els.importBtn;
+  if (b) { try { b.focus(); } catch (e) { /* 그대로 */ } }
 }
 
 /* ────────────────────────────────────────────────────────
@@ -1532,17 +1552,124 @@ export async function deleteKeepCounts(docId, deps) {
  * @param {Function} [tr]  번역 함수(기본 `t`)
  */
 export function deleteConfirmText(title, lines, tr) {
+  const p = deleteConfirmParts(title, lines, tr);
+  return [p.head].concat(p.gone, p.keeps ? [p.keeps] : []).join('\n');
+}
+
+/**
+ * `[다듬기 4]` 확인 대화의 조각 — 머리(`head`) · 함께 지워지는 줄들(`gone` — "AI 문제 n개도 지워집니다") · 남는 것 한 줄(`keeps` — 없으면 '').
+ * `deleteConfirmText` 는 이것을 줄바꿈으로 잇는다(규칙 한 벌). 페이지 안 대화(`askDelete`)는 조각마다 제 줄에 담는다. 순수 함수.
+ * @returns {{head:string, gone:string[], keeps:string}}
+ */
+export function deleteConfirmParts(title, lines, tr) {
   const tt = typeof tr === 'function' ? tr : t;
-  const out = [tt('library.card.deleteConfirm', { title: title })];
+  const head = tt('library.card.deleteConfirm', { title: title });
+  const gone = [];
   const parts = [];
   for (const l of Array.isArray(lines) ? lines : []) {
     const p = Object.assign({}, l.params || {});
     if (typeof p.n === 'number') p.n = formatNumber(p.n);
-    if (l.gone) { out.push(tt(l.key, p)); continue; }          // `[15-2]` 함께 지워지는 것 — 머리 다음 따로 한 줄
+    if (l.gone) { gone.push(tt(l.key, p)); continue; }         // `[15-2]` 함께 지워지는 것 — 머리 다음 따로 한 줄
     parts.push(tt(l.key, p));
   }
-  if (parts.length) out.push(tt('library.card.deleteKeeps', { list: parts.join(' · ') }));
-  return out.join('\n');
+  return { head: head, gone: gone, keeps: parts.length ? tt('library.card.deleteKeeps', { list: parts.join(' · ') }) : '' };
+}
+
+/**
+ * `[다듬기 4b — P4R 중간-1]` 열린 확인 대화를 **취소로** 닫는다 — `cancel` 이벤트(Esc 와 같은 길)를 보내 기다리던 물음이 `false` 로 끝나게 하고
+ * (리스너도 그 길에서 떼어진다), 그래도 열려 있으면(듣는 이 없음) 그냥 닫는다. 닫았으면 true. DOM 요소를 받는다.
+ */
+export function cancelDialog(dlg) {
+  if (!dlg || !(dlg.open || (dlg.hasAttribute && dlg.hasAttribute('open')))) return false;
+  try { dlg.dispatchEvent(new Event('cancel', { cancelable: true })); } catch (e) { /* 아래에서 닫는다 */ }
+  if (dlg.open || (dlg.hasAttribute && dlg.hasAttribute('open'))) {
+    if (typeof dlg.close === 'function') { try { dlg.close(); } catch (e) { dlg.removeAttribute('open'); } } else dlg.removeAttribute('open');
+  }
+  return true;
+}
+
+/** 서재를 떠날 때 — 삭제(`#docDelDialog`)·다시 추출(`#reextractDialog`) 확인을 취소로. 지우기·다시 추출은 일어나지 않는다. */
+function cancelLibraryDialogs() {
+  cancelDialog(document.getElementById(DEL_DIALOG_ID));
+  cancelDialog(document.getElementById('reextractDialog'));
+}
+
+/** `[다듬기 4]` 삭제 확인 `<dialog>` — 처음 물을 때 서재 화면 안에 한 번 만든다(마크업은 `createElement`·`textContent` 로만). */
+const DEL_DIALOG_ID = 'docDelDialog';
+function deleteDialog() {
+  let dlg = document.getElementById(DEL_DIALOG_ID);
+  if (dlg) return dlg;
+  dlg = el('dialog', 'confirm-dialog');
+  dlg.id = DEL_DIALOG_ID;
+  dlg.setAttribute('aria-labelledby', 'docDelTitle');
+  dlg.setAttribute('aria-describedby', 'docDelGone docDelKeeps');
+  const h = el('h2');
+  h.id = 'docDelTitle';
+  const gone = el('p', 'doc-del-gone');
+  gone.id = 'docDelGone';
+  const keeps = el('p', 'muted doc-del-keeps');
+  keeps.id = 'docDelKeeps';
+  const row = el('div', 'confirm-actions');
+  const cancel = el('button');
+  cancel.type = 'button';
+  cancel.setAttribute('data-dialog', 'cancel');
+  cancel.setAttribute('data-i18n', 'common.cancel');
+  const ok = el('button', 'danger');
+  ok.type = 'button';
+  ok.setAttribute('data-dialog', 'ok');
+  ok.setAttribute('data-i18n', 'library.card.delete');
+  row.appendChild(cancel);
+  row.appendChild(ok);
+  dlg.appendChild(h);
+  dlg.appendChild(gone);
+  dlg.appendChild(keeps);
+  dlg.appendChild(row);
+  (root || document.body).appendChild(dlg);
+  return dlg;
+}
+
+/**
+ * `[다듬기 4b — P4R 낮음-3]` 대화 세 칸을 조각으로 채운다 — 머리 · "지워집니다"(없으면 숨김) · "남습니다"(없으면 숨김). `textContent`·`hidden` 만 쓴다
+ * (node 시험이 빈 객체로 잰다). 연속 삭제에서 앞 문서의 줄이 남지 않게 매번 둘 다 다시 쓴다.
+ * @param {{title:Object, gone:Object, keeps:Object}} n  칸들
+ * @param {{head:string, gone:string[], keeps:string}} p  `deleteConfirmParts` 결과
+ */
+export function fillDeleteDialog(n, p) {
+  n.title.textContent = p.head;
+  n.gone.textContent = p.gone.join('\n');
+  n.gone.hidden = !p.gone.length;
+  n.keeps.textContent = p.keeps;
+  n.keeps.hidden = !p.keeps;
+}
+
+/**
+ * `[다듬기 4 — 20-3 남은 8 · 15-2 남은 3]` 서재 문서 삭제 확인 — 페이지 안 `<dialog>`(`confirm()` 은 브라우저 문자열·모양이고 RTL 을 따르지 않는다).
+ * 머리 · "지워집니다" 줄(AI 문제 n) · "남습니다" 줄(단어장·기억 카드·요약·필기) — `deleteConfirmParts` 그대로. 첫 초점 [취소], Esc = 취소.
+ * @returns {Promise<boolean>}
+ */
+function askDelete(name, lines) {
+  const dlg = deleteDialog();
+  const p = deleteConfirmParts(name, lines);
+  applyTranslations(dlg);
+  fillDeleteDialog({ title: dlg.querySelector('#docDelTitle'), gone: dlg.querySelector('#docDelGone'), keeps: dlg.querySelector('#docDelKeeps') }, p);
+  return new Promise((resolve) => {
+    const finish = (ok) => {
+      dlg.removeEventListener('click', onClick);
+      dlg.removeEventListener('cancel', onCancel);
+      if (typeof dlg.close === 'function' && dlg.open) dlg.close(); else dlg.removeAttribute('open');
+      resolve(ok);
+    };
+    const onClick = (ev) => {
+      const b = ev.target.closest('button[data-dialog]');
+      if (b) finish(b.getAttribute('data-dialog') === 'ok');
+    };
+    const onCancel = (ev) => { ev.preventDefault(); finish(false); };
+    dlg.addEventListener('click', onClick);
+    dlg.addEventListener('cancel', onCancel);
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    const cancel = dlg.querySelector('button[data-dialog="cancel"]');
+    if (cancel) cancel.focus();
+  });
 }
 
 /* ────────────────────────────────────────────────────────

@@ -213,7 +213,8 @@ test('BUD4 ★ B3·B4 — 소비처가 모두 --reader-chrome-bottom 하나를 �
   // 리플로우: body 가 고지 높이만큼 비워 두므로 화면 여백 + 고지 = 아래 크롬 전체
   assert.equal(r2(evalCss(reflow.get('padding-block-end'), ctx) + tok('--notice-total', ctx)), r2(tok('--reader-chrome-bottom', ctx)));
   // 원본 뷰 flex 상자 — canvas 아래변이 띠 윗변을 넘지 않는 근거(B3)
-  const orig = declsOf(ruleBody(READER, 'body[data-reader-view="original"] .screen[data-screen="reader"]'));
+  // `[다듬기 4 — 8c1cR]` 선택자에 `:not([hidden])` — 숨은 리더가 검색 화면을 가리지 않게
+  const orig = declsOf(ruleBody(READER, 'body[data-reader-view="original"] .screen[data-screen="reader"]:not([hidden])'));
   assert.equal(r2(evalCss(orig.get('padding-block-end'), ctx)), r2(tok('--reader-chrome-bottom', ctx)));
   // 편안 영역 아래 경계 탐침(reader.js bodyArea)
   const probe = declsOf(ruleBody(READER, '.chrome-probe'));

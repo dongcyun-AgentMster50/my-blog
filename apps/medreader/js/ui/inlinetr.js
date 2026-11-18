@@ -27,7 +27,7 @@ import * as settings from '../settings.js';
 import { t, getDir, getLang, onLangChange } from '../i18n/index.js';
 import { normalizeTranslationLang, translationBlockAttrs, normalizeReadalongDisplay } from './settings.js';
 import { appendBidiText } from './bididom.js';
-import { noteKeyFor, bandView } from './trband.js';
+import { noteKeyFor, bandView, onRateChange } from './trband.js';
 
 /* ────────────────────────────────────────────────────────
    1. 순수 부분 — `tests/inlinetr-8d.test.mjs` 가 고정한다
@@ -250,6 +250,8 @@ export function initInlineTr(deps) {
   // 언어 바꿈·검색 화면에서 돌아옴 — DOM 을 새로 붙였다(쪽 알림 없이). 그린 것이 없어졌으면 다시(I4 (i)).
   if (typeof d.onPageRepaint === 'function') d.onPageRepaint(() => sync());
   onLangChange(() => relabel());
+  // `[다듬기 4]` 분 한도 기다림이 끝났다(또는 풀렸다) — 막힘 줄을 다시 그린다("[다시 시도]"). 보내지 않는다(자동 재시도 0).
+  onRateChange(() => relabel());
   els.mount.addEventListener('click', onClick);
   attachDebugHook();
   return api();

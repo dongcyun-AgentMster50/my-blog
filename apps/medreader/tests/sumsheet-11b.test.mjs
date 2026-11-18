@@ -751,7 +751,7 @@ test('K13 서재 삭제 확인 — "저장한 요약 n개는 남습니다" · �
   await db.deleteDocument('docDel2');
   assert.equal(await store.count('docDel2'), 2, '★ 지운 뒤 annotations 에 남는다');
   const lib = strip(read('../js/ui/library.js'));
-  assert.match(lib, /if \(!confirm\(deleteConfirmText\(name, deleteKeepLines\(await deleteKeepCounts\(docId\)\)\)\)\) return;/, '한 함수(crossstep 8f-2·11-2)');
+  assert.match(lib, /if \(!\(await askDelete\(name, deleteKeepLines\(await deleteKeepCounts\(docId\)\)\)\)\) \{ focusCardAction\(docId, 'delete'\); return; \}/, '한 함수(crossstep 8f-2·11-2) — `[다듬기 4]` 페이지 안 대화');
 });
 
 /* ══ K14 배선·계층·마크업·CSS·i18n ═════════════════ */

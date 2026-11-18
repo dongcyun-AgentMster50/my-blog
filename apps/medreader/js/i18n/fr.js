@@ -553,6 +553,7 @@ export default {
   'links.err.urlLong': "Adresse trop longue (2 000 caractères au plus).",
   'links.err.tooMany': "30 liens au plus.",
   'links.delete.confirm': "Supprimer le lien « {name} » ?",
+  'links.reset.confirm': "Rétablir la liste par défaut ? Votre propre liste ({n} liens) sera supprimée.", // `[다듬기 4]` [검토 — Nour·운영자]
   'links.suggested.add': "Ajouter les liens cochés",
   'links.suggested.none': "Tous les liens suggérés sont déjà dans la liste.",
   'links.suggested.paid': "Abonnement requis",
@@ -670,6 +671,8 @@ export default {
   'readalong.blocked.exhausted': "La limite gratuite du jour est atteinte",
   'readalong.blocked.capped': "Votre limite quotidienne est atteinte",
   'readalong.blocked.cooldown': "Le service ne répond pas",
+  'readalong.blocked.rateWait': "Limite de requêtes par minute — patientez un instant", // `[다듬기 4]` [검토 — Nour·운영자]
+  'readalong.blocked.rateReady': "Limite de requêtes par minute — vous pouvez réessayer", // `[다듬기 4]` [검토 — Nour·운영자]
   'readalong.blocked.region': "Non disponible dans cette région",
   'readalong.blocked.model': "Ce modèle ne peut pas être utilisé",
   'readalong.blocked.noKey': "La traduction nécessite une clé API",
@@ -683,6 +686,8 @@ export default {
   'ai.state.exhausted': "La limite gratuite du jour est atteinte. La lecture, la lecture à voix haute et la révision fonctionnent toujours ; la traduction sera de nouveau possible demain. Vous pouvez aussi appuyer sur Réessayer.",
   'ai.state.capped': "Vous avez atteint la limite quotidienne fixée ({cap} appels). Augmentez-la dans les réglages ou réessayez demain.",
   'ai.state.cooldown': "Le service ne répond pas. Patientez un instant, puis appuyez sur Réessayer.",
+  'ai.state.rateWait': "La limite gratuite de requêtes par minute est atteinte (ce n’est pas la limite du jour). Rien n’est renvoyé automatiquement — appuyez sur Réessayer dans environ {s} s.", // `[다듬기 4]` [검토 — Nour·운영자]
+  'ai.state.rateReady': "L’attente de la limite par minute est terminée. Appuyez sur Réessayer pour renvoyer.", // `[다듬기 4]` [검토 — Nour·운영자]
   'ai.state.model': "Le modèle choisi ne peut pas être utilisé. Ce n’est pas un problème de clé. Choisissez un autre modèle dans les réglages de traduction, ou appuyez sur Réessayer.",
   'privacy.pii.warning': "N'entrez aucune information réelle sur des patients.",
   /* `[8c-2 — spec 17-7-6 4-7·7]` écran d'utilisation · alerte 80 % — [검토 — Nour·운영자] */
@@ -708,7 +713,7 @@ export default {
   'usage.ra': "Lecture traduite {calls} appels · {chars} caractères → {avg} caractères par appel · {per10k} appels pour 10 000 caractères",
   'usage.ra.none': "Lecture traduite {calls} appels · par appel —",
   'usage.pagesLeft': "Environ {n} pages avant la limite du jour — {title} ({perPage} caractères par page)",
-  'usage.blocked429': "Le service a refusé {n} requêtes pour quota — une limite par minute renvoie le même refus ; Réessayer après un instant la lève alors.",
+  'usage.blocked429': "Le service a refusé {n} requêtes pour quota — limite par minute et limite du jour comprises. Un refus par minute s’affiche dans le bandeau comme « Limite de requêtes par minute » et Réessayer après un instant le lève.", // `[다듬기 4]` [검토 — Nour·운영자]
   'usage.month': "Ce mois-ci",
   'usage.month.bars': "Appels par jour ce mois-ci — jour le plus chargé {max}",
   'usage.month.day': "Jour {d} : {n} appels",

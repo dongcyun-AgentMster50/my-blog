@@ -208,6 +208,42 @@ export const gemini = Object.freeze({
   },
 
   /**
+   * `[다듬기 4 — 8c1R · 8c-2]` 429(`RATE_LIMIT`) 본문에서 **어느 한도**에 걸렸는지와 다시 보낼 수 있는 때. 판정만 — 상태는 파이프라인이 바꾼다.
+   * Google 오류 꼴(google.rpc — `error.details[]`):
+   *   `{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier", …}]}`
+   *   `{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"41s"}`(Duration JSON — 소수 초 `"41.5s"` 도)
+   * - `quotaId` 에 `PerDay` 가 **하나라도** 있으면 `day`(보수 — 분·일이 함께 오면 오늘은 막힌 것으로) · 아니고 `PerMinute` 가 있으면 `minute` · 그 밖 null.
+   * - `retrySec` = `retryDelay` 초(올림, 1–3600 밖이면 null).
+   * ★ 꼴을 못 읽으면 `{scope:null, retrySec:null}` — 파이프라인은 지금처럼 exhausted. 실물 응답 꼴은 실기기 확인 전(`[M]`).
+   * @returns {{scope:'minute'|'day'|null, retrySec:number|null}}
+   */
+  rateLimitInfo(json) {
+    const details = json && json.error && Array.isArray(json.error.details) ? json.error.details : [];
+    const typeOk = (dt, name) => !dt || typeof dt['@type'] !== 'string' || dt['@type'].slice(-name.length) === name;
+    let minute = false;
+    let day = false;
+    let retrySec = null;
+    for (let i = 0; i < details.length; i++) {
+      const dt = details[i];
+      if (!dt || typeof dt !== 'object') continue;
+      if (Array.isArray(dt.violations) && typeOk(dt, 'google.rpc.QuotaFailure')) {
+        for (let k = 0; k < dt.violations.length; k++) {
+          const v = dt.violations[k];
+          const id = v && typeof v.quotaId === 'string' ? v.quotaId : '';
+          if (/PerDay/i.test(id)) day = true;
+          else if (/PerMinute/i.test(id)) minute = true;
+        }
+      }
+      if (typeof dt.retryDelay === 'string' && typeOk(dt, 'google.rpc.RetryInfo')) {
+        const m = /^\s*(\d+(?:\.\d+)?)s\s*$/.exec(dt.retryDelay);
+        const sec = m ? Math.ceil(Number(m[1])) : NaN;
+        if (Number.isFinite(sec) && sec >= 1 && sec <= 3600) retrySec = sec;
+      }
+    }
+    return { scope: day ? 'day' : minute ? 'minute' : null, retrySec: retrySec };
+  },
+
+  /**
    * 8-4 모델 목록 **한 쪽**. `GET /v1beta/models` 응답에서 번역에 쓸 수 있는 것만 추린다.
    * 이름은 `models/gemini-…` 로 오므로 접두사를 뗀다.
    *
