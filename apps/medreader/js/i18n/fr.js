@@ -20,11 +20,11 @@ export default {
   'nav.settings': 'Settings',
   'nav.usage': 'Usage',
   'nav.about': 'About',
-  'nav.back': 'Back',
+  'nav.back': 'Retour',   // `[다듬기 5 — 15R]` 영어였던 값 [검토 — Nour·운영자]
   'nav.menu': 'Menu',
 
   'common.retry': 'Try again',
-  'common.cancel': 'Cancel',
+  'common.cancel': 'Annuler',   // `[다듬기 5 — 15R]` 영어였던 값 [검토 — Nour·운영자]
   'common.close': 'Fermer',
   'common.continue': 'Continue',
   'common.dismiss': 'Fermer',   // `[다듬기 1 — 8l Review]` 영어 값이었다 [검토 — Nour·운영자]
@@ -82,7 +82,7 @@ export default {
   'library.card.extractFailed.one': '{n} page could not be read',
   'library.card.extractFailed.other': '{n} pages could not be read',
   'library.card.continue': 'Continue reading',
-  'library.card.delete': 'Delete',
+  'library.card.delete': 'Supprimer',   // `[다듬기 5]` 영어였던 값(삭제 대화 단추 — common.cancel 과 한 쌍) [검토 — Nour·운영자]
   // `[11-2]` [검토 — Nour·운영자]
   'library.card.deleteConfirm': 'Supprimer « {title} » ? Le PDF, la progression de lecture, l’historique des quiz et les traductions en cache seront supprimés.',
   // `[12-2 — spec 17-11 4]` 남는 것은 **한 줄**(`deleteKeeps` 의 {list} = 아래 조각들을 " · " 로 이음). [검토 — Nour·운영자] 조각·줄 전부.
@@ -441,6 +441,18 @@ export default {
   'cards.span.day': "{n} j",
   'cards.span.month': "{n} mois",
   'cards.span.year': "{n} an",
+  // `[다듬기 5 — 12-3R]` 수에 따른 꼴(`Intl.PluralRules` — fr 은 0·1 = one(기본 키), 2 이상 = other «2 ans»). [검토 — Nour·운영자]
+  'cards.span.min.few': "{n} min",
+  'cards.span.min.many': "{n} min",
+  'cards.span.hour.few': "{n} h",
+  'cards.span.hour.many': "{n} h",
+  'cards.span.day.few': "{n} j",
+  'cards.span.day.many': "{n} j",
+  'cards.span.month.few': "{n} mois",
+  'cards.span.month.many': "{n} mois",
+  'cards.span.year.few': "{n} ans",
+  'cards.span.year.many': "{n} ans",
+  'cards.span.year.other': "{n} ans",
   'cards.done': "Révisées aujourd’hui : {n} · demain : {m}",
   'cards.empty': "Aucune fiche pour l’instant. En lisant, appuyez sur [☆] dans le bandeau de traduction, ou faites un appui long sur le texte → [⋯] → [Fiche de révision].",
   'cards.noTr': "Mots sans traduction : {n} — traduisez-les dans le lexique",
@@ -959,6 +971,7 @@ export default {
   'planner.examOn': "Examen le {date}",
   'planner.days': "{n} jours avant l’examen · {m} jours d’étude",
   'planner.status.past': "La date de l’examen est révolue — modifiez-la.",
+  'planner.status.today': "L’examen a lieu aujourd’hui.",   // [검토 — Nour·운영자]
   'planner.status.done': "Vous avez tout lu pour cet examen.",
   'planner.status.tight': "Serré — peu de marge.",
   'planner.status.short': "Pas assez de temps au rythme actuel.",
@@ -1000,6 +1013,7 @@ export default {
   'planner.setup': "Planifier un examen",
   'library.todayExam': "Examen {name} : {n} jours restants",
   'library.todayExam.past': "Examen {name} : la date est révolue",
+  'library.todayExam.today': "Examen {name} : aujourd’hui",   // [검토 — Nour·운영자]
   'settings.reading.track': "Garder un journal de lecture sur cet appareil",
   'settings.reading.track.help': "Les minutes lues à voix haute et les pages lues jusqu’au bout restent sur cet appareil (et dans votre sauvegarde) pour le plan d’étude. Désactivé, le plan utilise une vitesse estimée.",
   /* `[20-2 — spec 17-16 5]` surlignage et notes `[검토 — Nour·운영자]` */

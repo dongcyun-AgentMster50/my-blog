@@ -121,8 +121,8 @@ test('L4 기본 목록 — null → DEFAULTS · 배열은 그대로(빈 배열 =
   assert.deepEqual(effectiveLinks({ not: 'array' }), []);
   const many = Array.from({ length: 40 }, (_, i) => ({ id: 'm' + i, name: 'M' + i, url: 'https://m' + i + '.example/' }));
   assert.equal(effectiveLinks(many).length, LINKS.MAX);
-  // 추천 목록: 기본에 없다 · 넷 다 [확인 필요] · 유료는 UpToDate 하나
-  assert.deepEqual(LINKS.SUGGESTED.map((s) => s.id), ['msd-pro', 'radiopaedia', 'ncbi-bookshelf', 'uptodate']);
+  // 추천 목록: 기본에 없다 · 모두 [확인 필요] · 유료는 UpToDate 하나 · `[다듬기 5 — 19 링크만]` Open-i 한 줄
+  assert.deepEqual(LINKS.SUGGESTED.map((s) => s.id), ['msd-pro', 'radiopaedia', 'ncbi-bookshelf', 'uptodate', 'openi']);
   for (const s of LINKS.SUGGESTED) {
     assert.equal(checkLink(s).ok, true, s.id);
     assert.equal(s.check, 'unverified', s.id);

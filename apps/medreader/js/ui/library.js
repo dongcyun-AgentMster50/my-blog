@@ -179,6 +179,8 @@ export function initLibrary() {
   // `[다듬기 4b — P4R 중간-1]` 확인 대화(삭제·다시 추출)가 열린 채 서재를 떠나면(주소 바뀜·뒤로가기) 숨은 화면 안의 `:modal` 이 앱을 막는다 →
   // 떠날 때 **취소로** 닫는다(데이터 무변 — 각 대화의 `cancel` 갈래가 `finish(false)`). 링크 설정의 `leaveLinksSettings` 와 같은 자리.
   window.addEventListener('hashchange', () => { if (parseRoute(location.hash).name !== 'library') cancelLibraryDialogs(); });
+  // `[다듬기 5]` 처음 열린 화면이 서재면 초점을 옮기지 않는다(부팅) — 다른 화면에서 **돌아온** 뒤에만 `focusLanding`
+  window.addEventListener('hashchange', () => { navigated = true; });
 
   // `[9c-3]` "PDF 필요" 카드의 `[PDF 가져오기]` — 서재 [가져오기]와 따로 감춘 input(고른 파일은 그 문서에만 붙인다). `index.html` 은 무변.
   els.needFile = document.createElement('input');
@@ -219,7 +221,33 @@ export async function showLibrary() {
   await renderToday();
   await renderList();
   focusPending();
+  focusLanding();
   await renderStorage();
+}
+
+/**
+ * `[다듬기 5 — P4bR 낮음-2]` 서재로 돌아왔는데 초점이 갈 곳을 잃었으면(BODY · 숨은 화면 안 — 다른 화면에서 대화를 취소로 닫은 뒤 등)
+ * 첫 카드의 첫 단추([계속]·[PDF 가져오기]), 카드가 없으면 서재 [PDF 가져오기]. 초점이 보이는 곳에 있으면 건드리지 않는다. 순수.
+ * @param {?Element} active  `document.activeElement`
+ * @param {?Element} list    `#docList`
+ * @param {?Element} importBtn
+ * @returns {?Element} 초점을 줄 곳(없으면 null)
+ */
+export function landingTarget(active, list, importBtn) {
+  const body = active && active.ownerDocument ? active.ownerDocument.body : null;
+  const lost = !active || active === body || (typeof active.closest === 'function' && !!active.closest('[hidden]'));
+  if (!lost) return null;
+  const card = list && typeof list.querySelector === 'function' ? list.querySelector('.doc-card') : null;
+  const first = card ? card.querySelector('.doc-actions button') : null;
+  if (first && !first.hidden) return first;
+  return importBtn && !importBtn.hidden ? importBtn : null;
+}
+
+let navigated = false;
+function focusLanding() {
+  if (!navigated || !els || !root || root.hidden || typeof document === 'undefined') return;
+  const to = landingTarget(document.activeElement, els.list, els.importBtn);
+  if (to) { try { to.focus({ preventScroll: true }); } catch (e) { /* 그대로 */ } }
 }
 
 /* ── `[12-3 — spec 17-11 6 · 12-D14]` "오늘" 줄 — 복습 글·[복습 시작]은 기억 카드가 1장 이상일 때만.
@@ -280,7 +308,9 @@ function renderTodayExam(ex) {
     p.className = 'lib-today-exam';
     p.setAttribute('data-days', ex.days == null ? '' : String(ex.days));
     const name = '⁨' + ex.exam.name + '⁩';
-    p.textContent = ex.past ? t('library.todayExam.past', { name: name }) : t('library.todayExam', { name: name, n: formatNumber(ex.days) });
+    // `[다듬기 5 — 13-2R]` 당일은 "오늘 시험입니다"(지난 것 아님)
+    p.textContent = ex.today ? t('library.todayExam.today', { name: name })
+      : ex.past ? t('library.todayExam.past', { name: name }) : t('library.todayExam', { name: name, n: formatNumber(ex.days) });
     box.appendChild(p);
   }
   const b = document.createElement('button');
@@ -721,9 +751,12 @@ async function importFile(file) {
 
     // `[20-3 — spec 17-16 6 · 20-D11]` 같은 PDF 를 지웠다가 다시 가져왔다 — 같은 `fileHash` 이고 문서가 없는 필기·요약·개요를 이 문서에
     // 다시 붙인다(`reattach` — documents 를 읽고 annotations 를 고치는 한 트랜잭션). 다른 PDF(다른 `fileHash`)의 것은 건드리지 않는다.
+    // `[다듬기 5 — 20-3R #4]` 알림 수는 레코드 수가 아니라 **화면·칩과 같은 셈**(필기 묶음 + 요약·개요 건) — 붙이기 전후 차이.
     let moved = 0;
+    const unitsBefore = await noteUnits(doc.id);
     try { moved = await annotationStore().reattach(doc.fileHash, doc.id); } catch (e) { moved = 0; }
-    if (moved > 0) setStatus(((els && els.status && els.status.textContent) || '') + ' ' + t('library.import.reattached', { n: formatNumber(moved) }));
+    const shown = moved > 0 ? reattachShown(moved, unitsBefore, await noteUnits(doc.id)) : 0;
+    if (shown > 0) setStatus(((els && els.status && els.status.textContent) || '') + ' ' + t('library.import.reattached', { n: formatNumber(shown) }));
 
     await attach(doc, pdfDoc);
     await renderList();
@@ -1541,6 +1574,30 @@ export async function deleteKeepCounts(docId, deps) {
   try { ai = Number(await ((deps && deps.ai) || aiQuiz).countForDoc(docId)) || 0; } catch (e) { ai = 0; }
   if (ai > 0) out.ai = ai;
   return out;
+}
+
+/**
+ * `[다듬기 5 — 20-3R #4]` 그 문서의 필기·요약 "건" — 필기 묶음 수(`annotationStore().count` — 쪽 칩·필기 화면·삭제 확인과 같은 셈) +
+ * 요약·개요 건(`summaryStore().count`). 읽기만, 못 읽으면 0.
+ * @param {string} docId
+ * @param {{summaries?:{count:Function}, notes?:{count:Function}}} [deps]  테스트가 가짜(또는 fake-idb 위 저장소)를 넣는다
+ */
+export async function noteUnits(docId, deps) {
+  let n = 0;
+  try { n += Number(await ((deps && deps.notes) || annotationStore()).count(docId)) || 0; } catch (e) { /* 0 */ }
+  try { n += Number(await ((deps && deps.summaries) || summaryStore()).count(docId)) || 0; } catch (e) { /* 0 */ }
+  return n;
+}
+
+/**
+ * 다시 붙인 뒤 상태 줄에 보일 수 — 붙이기 전후 "건" 차이(조각 레코드가 여럿인 묶음 = 1). 레코드는 옮겼는데 셈을 못 읽었으면
+ * (차이 0 이하) 옮긴 레코드 수로 둔다(알림이 사라지지 않게). 순수.
+ */
+export function reattachShown(moved, before, after) {
+  const m = Math.max(0, Math.floor(Number(moved)) || 0);
+  if (!m) return 0;
+  const d = Math.floor(Number(after) - Number(before));
+  return Number.isFinite(d) && d > 0 ? Math.min(d, m) : m;
 }
 
 /**

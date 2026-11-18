@@ -20,11 +20,11 @@ export default {
   'nav.settings': 'Settings',
   'nav.usage': 'Usage',
   'nav.about': 'About',
-  'nav.back': 'Back',
+  'nav.back': '뒤로',   // `[다듬기 5]` 영어였던 값
   'nav.menu': 'Menu',
 
   'common.retry': 'Try again',
-  'common.cancel': 'Cancel',
+  'common.cancel': '취소',   // `[다듬기 5 — 다듬기 4 남은 6]` 영어였던 값
   'common.close': '닫기',
   'common.continue': 'Continue',
   'common.dismiss': '닫기',   // `[다듬기 1 — 8l Review]` 14절 배너 닫기 — 띠의 [닫기](common.close)와 같은 말
@@ -82,7 +82,7 @@ export default {
   'library.card.extractFailed.one': '{n} page could not be read',
   'library.card.extractFailed.other': '{n} pages could not be read',
   'library.card.continue': 'Continue reading',
-  'library.card.delete': 'Delete',
+  'library.card.delete': '삭제',   // `[다듬기 5 — 다듬기 4 남은 6]` 영어였던 값
   'library.card.deleteConfirm': '“{title}”을(를) 지울까요? PDF·읽던 자리·퀴즈 기록·번역 캐시가 지워집니다.',
   // `[12-2 — spec 17-11 4]` 남는 것은 **한 줄**(`deleteKeeps` 의 {list} = 아래 조각들을 " · " 로 이음).
   // `[12-3 — 12-2R #5 ③]` 조각마다 받침 있는 단위(건·장)로 끝내 마지막 조각 뒤 조사가 늘 "은"("기억 카드 3장은" 꼴 — 숫자 뒤 "는" 없음).
@@ -440,6 +440,18 @@ export default {
   'cards.span.day': "{n}일",
   'cards.span.month': "{n}개월",
   'cards.span.year': "{n}년",
+  // `[다듬기 5 — 12-3R]` 수에 따른 꼴(`Intl.PluralRules` 범주 — ko 는 늘 other, 기본 키와 같은 값). 4언어 같은 키 집합.
+  'cards.span.min.few': "{n}분",
+  'cards.span.min.many': "{n}분",
+  'cards.span.hour.few': "{n}시간",
+  'cards.span.hour.many': "{n}시간",
+  'cards.span.day.few': "{n}일",
+  'cards.span.day.many': "{n}일",
+  'cards.span.month.few': "{n}개월",
+  'cards.span.month.many': "{n}개월",
+  'cards.span.year.few': "{n}년",
+  'cards.span.year.many': "{n}년",
+  'cards.span.year.other': "{n}년",
   'cards.done': "오늘 복습 {n}장 끝 · 내일 {m}장",
   'cards.empty': "기억 카드가 아직 없습니다. 읽다가 번역 띠의 [☆]를 누르거나, 글을 길게 눌러 [⋯] → [기억 카드]를 누르세요.",
   'cards.noTr': "번역 없는 단어 {n}개 — 단어장에서 번역하세요",
@@ -958,6 +970,7 @@ export default {
   'planner.examOn': "{date} 시험",
   'planner.days': "시험까지 {n}일 · 공부할 날 {m}일",
   'planner.status.past': "시험일이 지났습니다 — 날짜를 고치세요.",
+  'planner.status.today': "오늘 시험입니다.",   // `[다듬기 5 — 13-2R]` 당일
   'planner.status.done': "이 시험 범위를 다 읽었습니다.",
   'planner.status.tight': "빠듯합니다 — 남는 날이 거의 없습니다.",
   'planner.status.short': "지금 속도로는 시간이 모자랍니다.",
@@ -999,6 +1012,7 @@ export default {
   'planner.setup': "시험 계획 세우기",
   'library.todayExam': "{name} 시험까지 {n}일",
   'library.todayExam.past': "{name} 시험일이 지났습니다",
+  'library.todayExam.today': "오늘 {name} 시험입니다",   // `[다듬기 5 — 13-2R]` 당일
   'settings.reading.track': "이 기기에 낭독 기록 남기기",
   'settings.reading.track.help': "낭독한 시간과 끝까지 읽은 쪽을 이 기기에만(백업에도) 남겨 학습 계획에 씁니다. 끄면 계획은 추정 속도로 셉니다.",
   /* `[20-2 — spec 17-16 5]` 필기·하이라이트 — [⋯] 줄 · 메모 시트 · 쪽 필기 · 음성 "표시"(호출 0) */

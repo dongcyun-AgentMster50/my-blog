@@ -436,6 +436,18 @@ export default {
   'cards.span.day': "{n} يوم",
   'cards.span.month': "{n} شهر",
   'cards.span.year': "{n} سنة",
+  // `[다듬기 5 — 12-3R]` 수에 따른 꼴(`Intl.PluralRules` — 3–10 few · 11–99 many, 그 밖은 기본 키). [검토 — Nour·운영자]
+  'cards.span.min.few': "{n} دقائق",
+  'cards.span.min.many': "{n} دقيقة",
+  'cards.span.hour.few': "{n} ساعات",
+  'cards.span.hour.many': "{n} ساعة",
+  'cards.span.day.few': "{n} أيام",
+  'cards.span.day.many': "{n} يومًا",
+  'cards.span.month.few': "{n} أشهر",
+  'cards.span.month.many': "{n} شهرًا",
+  'cards.span.year.few': "{n} سنوات",
+  'cards.span.year.many': "{n} سنة",
+  'cards.span.year.other': "{n} سنة",
   'cards.done': "تمت مراجعته اليوم: {n} · غدًا: {m}",
   'cards.empty': "لا توجد بطاقات مراجعة بعد. أثناء القراءة اضغط [☆] في شريط الترجمة، أو اضغط مطولًا على النص ← [⋯] ← [بطاقة مراجعة].",
   'cards.noTr': "كلمات بلا ترجمة: {n} — ترجمها في قائمة الكلمات",
@@ -953,6 +965,7 @@ export default {
   'planner.examOn': "الامتحان في {date}",
   'planner.days': "{n} يومًا حتى الامتحان · {m} يوم دراسة",
   'planner.status.past': "مضى تاريخ الامتحان — عدّل التاريخ.",
+  'planner.status.today': "الامتحان اليوم.",   // [검토 — Nour·운영자]
   'planner.status.done': "قرأت كل مقرر هذا الامتحان.",
   'planner.status.tight': "الوقت ضيّق — لا يبقى إلا القليل.",
   'planner.status.short': "الوقت لا يكفي بالوتيرة الحالية.",
@@ -994,6 +1007,7 @@ export default {
   'planner.setup': "ضع خطة للامتحان",
   'library.todayExam': "امتحان {name}: بقي {n} يومًا",
   'library.todayExam.past': "امتحان {name}: مضى التاريخ",
+  'library.todayExam.today': "امتحان {name}: اليوم",   // [검토 — Nour·운영자]
   'settings.reading.track': "احتفظ بسجل القراءة على هذا الجهاز",
   'settings.reading.track.help': "تُحفظ دقائق القراءة بصوت عالٍ والصفحات المقروءة حتى نهايتها على هذا الجهاز فقط (وفي نسختك الاحتياطية) لخطة الدراسة. عند الإيقاف تستخدم الخطة سرعة تقديرية.",
   /* `[20-2 — spec 17-16 5]` التظليل والملاحظات `[검토 — Nour·운영자]` */

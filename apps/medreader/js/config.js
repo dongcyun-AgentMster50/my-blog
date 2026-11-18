@@ -1103,7 +1103,8 @@ export const LINKS = Object.freeze({
     Object.freeze({ id: 'msd-pro', name: 'MSD Manual (Professional)', url: 'https://www.msdmanuals.com/professional/searchresults?query={q}', check: 'unverified' }),
     Object.freeze({ id: 'radiopaedia', name: 'Radiopaedia', url: 'https://radiopaedia.org/search?q={q}', check: 'unverified' }),
     Object.freeze({ id: 'ncbi-bookshelf', name: 'NCBI Bookshelf (StatPearls)', url: 'https://www.ncbi.nlm.nih.gov/books/?term={q}', check: 'unverified' }),
-    Object.freeze({ id: 'uptodate', name: 'UpToDate', url: 'https://www.uptodate.com/contents/search?search={q}', check: 'unverified', paid: true })
+    Object.freeze({ id: 'uptodate', name: 'UpToDate', url: 'https://www.uptodate.com/contents/search?search={q}', check: 'unverified', paid: true }),
+    Object.freeze({ id: 'openi', name: 'Open-i (NLM)', url: 'https://openi.nlm.nih.gov/gridquery?q={q}&it=x', check: 'unverified' })   // `[다듬기 5 — 19 링크만, spec 17-15 2-4]` 새 탭만(앱 요청 0 — 19-Q1 결정 전)
   ])
 });
 

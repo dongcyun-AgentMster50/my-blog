@@ -135,9 +135,10 @@ test('K2 순수 — kindsOf · requeue · spanText · markParts · faceOf · lis
   assert.deepEqual(U.requeue(['a', 'b', 'a2'], 'a', 1), ['b', 'a', 'a2']);
   assert.equal(U.AGAIN_GAP, 3);
   const tr = (k, p) => k + ':' + (p ? p.n : '');
-  assert.equal(U.spanText({ n: 10, unit: 'min' }, tr), 'cards.span.min:10');
-  assert.equal(U.spanText({ n: 4, unit: 'day' }, tr), 'cards.span.day:4');
-  assert.equal(U.spanText({ n: 1, unit: 'weird' }, tr), 'cards.span.day:1');
+  // `[다듬기 5]` 수에 따른 꼴은 UI 언어 범주 키 — en 은 기본 키 그대로(ar·fr 범주 키는 polish-5 Z8)
+  assert.equal(U.spanText({ n: 10, unit: 'min' }, tr, 'en'), 'cards.span.min:10');
+  assert.equal(U.spanText({ n: 4, unit: 'day' }, tr, 'en'), 'cards.span.day:4');
+  assert.equal(U.spanText({ n: 1, unit: 'weird' }, tr, 'en'), 'cards.span.day:1');
   // 문맥 밑줄 — 대소문자 무시 · 정규식 글자 · 없으면 null
   assert.deepEqual(U.markParts('The Edema was noted.', 'edema'), ['The ', 'Edema', ' was noted.']);
   assert.deepEqual(U.markParts('dose (mg) given', '(mg)'), ['dose ', '(mg)', ' given']);

@@ -21,12 +21,12 @@
    import 방향(3-2): ui 계층 — `srs/cards`(서비스) · `srs/sm2`(순수) · `ai/cache` 의 순수 `keyFor`(키 문자열만) · `tts/*` · `ui/reader`(쪽 이동).
    ============================================================ */
 
-import { t, applyTranslations, onLangChange, dirOf, formatNumber, getLang } from '../i18n/index.js';
+import { t, applyTranslations, onLangChange, dirOf, formatNumber, getLang, hasKey } from '../i18n/index.js';
 import * as db from '../db.js';
 import * as settings from '../settings.js';
 import { SRS } from '../config.js';
 import { go, replace, cardsHash, readerHash, vocabHash } from '../router.js';
-import { cardStore, dayStartOf, dayKeyOf, dueMsOf, timeMs, clampNewPerDay } from '../srs/cards.js';
+import { cardStore, dayStartOf, dayKeyOf, dueMsOf, timeMs, clampNewPerDay, isNoTrTerm } from '../srs/cards.js';
 import { previewLabels, isNew } from '../srs/sm2.js';
 import { keyFor } from '../ai/cache.js';
 import { clean, cutText } from '../text/summary.js';
@@ -72,11 +72,36 @@ export function requeue(line, id, gap) {
   return rest;
 }
 
-/** 간격 한 칸 → 글자("10분"·"4일"). `p` = `previewLabels` 한 칸 `{n, unit}`. */
-export function spanText(p, tr) {
+/**
+ * 간격 한 칸 → 글자("10분"·"4일"). `p` = `previewLabels` 한 칸 `{n, unit}`.
+ * `[다듬기 5 — 12-3R]` 수에 따른 꼴 — `Intl.PluralRules(UI 언어)` 범주 키(`cards.span.day.few` 등)가 있으면 그것, 없으면 기본 키
+ * (ar «10 دقائق»·«4 أيام» · fr «2 ans»). `lang` 은 시험이 넣는다(없으면 UI 언어).
+ */
+export function spanText(p, tr, lang) {
   const tt = typeof tr === 'function' ? tr : t;
   const x = p || {};
-  return tt('cards.span.' + (['min', 'hour', 'day', 'month', 'year'].indexOf(x.unit) >= 0 ? x.unit : 'day'), { n: formatNumber(Number(x.n) || 0) });
+  const n = Number(x.n) || 0;
+  const base = 'cards.span.' + (['min', 'hour', 'day', 'month', 'year'].indexOf(x.unit) >= 0 ? x.unit : 'day');
+  let key = base;
+  try {
+    const cat = new Intl.PluralRules(lang || getLang()).select(n);
+    if (hasKey(base + '.' + cat, lang || getLang())) key = base + '.' + cat;
+  } catch (e) { key = base; }
+  return tt(key, { n: formatNumber(n) });
+}
+
+/**
+ * `[다듬기 5 — 12-3R]` 복습 키 → 단추 자리(0–3 = 다시·어려움·좋음·쉬움, 아니면 -1). 순수.
+ * `ev.key` 의 서방 숫자 `1`–`4` · 아랍-인도 숫자 `١`–`٤` · 동방 아랍-인도(페르시아) 숫자 `۱`–`۴`, 그다음 자판 배치와 상관없는
+ * `ev.code`(`Digit1`–`Digit4` · `Numpad1`–`Numpad4` — AZERTY 처럼 윗줄이 숫자가 아닌 자판도).
+ */
+export const GRADE_KEYS = Object.freeze(['1١۱', '2٢۲', '3٣۳', '4٤۴']);
+export function gradeKeyIndex(ev) {
+  const e = ev || {};
+  const k = typeof e.key === 'string' && Array.from(e.key).length === 1 ? e.key : '';
+  if (k) for (let i = 0; i < GRADE_KEYS.length; i++) if (GRADE_KEYS[i].indexOf(k) >= 0) return i;
+  const m = /^(?:Digit|Numpad)([1-4])$/.exec(typeof e.code === 'string' ? e.code : '');
+  return m ? Number(m[1]) - 1 : -1;
 }
 
 function escapeRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
@@ -182,8 +207,9 @@ export function createReviewFlow(deps) {
     let room = npd();
     try { const lg = await store.readLog(); const td = lg && lg[x.key]; room = Math.max(0, room - Math.max(0, Number(td && td.new) || 0)); } catch (e) { /* 몫 그대로 */ }
     const ks = kindsOf(st.chip);
+    // `[다듬기 5 — 15-2bR #5]` 번역 빈 단어 카드 판정은 `queue` 와 한 함수(`isNoTrTerm` — 사본 없음)
     const fresh = (await store.list({ docId: st.docId || undefined })).filter((c) => ks.indexOf(c.kind) >= 0 && !c.suspended && isNew(c) && inPages(c) &&
-      !(c.kind === 'term' && !clean(typeof c.translation === 'string' ? c.translation : ''))).slice(0, room);
+      !isNoTrTerm(c)).slice(0, room);
     const due = q.due.filter(inPages);
     return { due: due, fresh: fresh, counts: Object.assign({}, q.counts, { due: due.length, fresh: fresh.length }) };
   }
@@ -617,7 +643,7 @@ function onKey(ev) {
     if (v.face === 'front') { ev.preventDefault(); reveal(); }
     return;
   }
-  const k = ['1', '2', '3', '4'].indexOf(ev.key);
+  const k = gradeKeyIndex(ev);   // `[다듬기 5]` 아랍-인도 숫자 자판·ev.code 도
   if (k >= 0 && v.face === 'back') { ev.preventDefault(); grade(SRS.GRADES[k]); }
 }
 

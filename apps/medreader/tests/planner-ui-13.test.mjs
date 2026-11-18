@@ -105,8 +105,9 @@ test('P2 순수 — normExam · examsOf · sortExams/nearestExam · chapterRange
   assert.equal(U.examsOf(six).length, PLAN.EXAMS_MAX);
   assert.deepEqual(U.examsOf('x'), []);
   const list = U.examsOf([{ id: 'a', date: '2026-12-20' }, { id: 'b', date: '2026-11-20' }, { id: 'c', date: '2026-11-10' }, { id: 'd', date: '2026-11-01' }, { id: 'e', date: TODAY }]);
-  assert.deepEqual(U.sortExams(list, TODAY).map((e) => e.id), ['b', 'a', 'e', 'c', 'd'], '앞으로 가까운 것 → 지난 것(최근 먼저)');
-  assert.equal(U.nearestExam(list, TODAY).id, 'b');
+  // `[다듬기 5 — 13-2R]` 오늘(e) = 0 — 가장 가까운 것(앞 판은 지난 것 쪽으로 밀었다)
+  assert.deepEqual(U.sortExams(list, TODAY).map((e) => e.id), ['e', 'b', 'a', 'c', 'd'], '오늘 → 앞으로 가까운 것 → 지난 것(최근 먼저)');
+  assert.equal(U.nearestExam(list, TODAY).id, 'e');
   assert.equal(U.nearestExam([], TODAY), null);
   // 장 — 위 두 깊이, 끝 = 같거나 얕은 다음 항목 − 1
   const toc = { items: [{ t: 'Front', p: null, d: 1 }, { t: 'Ch 1', p: 3, d: 1 }, { t: '1.1', p: 3, d: 2 }, { t: '1.2', p: 7, d: 2 }, { t: '1.2.a', p: 8, d: 3 },

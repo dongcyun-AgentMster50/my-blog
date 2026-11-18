@@ -83,12 +83,15 @@ export function examsOf(v) {
   return (Array.isArray(v) ? v : []).map(normExam).filter((e) => e && e.id).slice(0, PLAN.EXAMS_MAX);
 }
 
-/** 가까운 날 먼저 — 오늘 이후(오늘 포함) 시험은 날짜 오름차순, 지난 시험은 그 뒤(최근 것 먼저). */
+/**
+ * 가까운 날 먼저 — 오늘 이후(오늘 포함) 시험은 날짜 오름차순, 지난 시험은 그 뒤(최근 것 먼저).
+ * `[다듬기 5 — 13-2R]` 오늘 = 0(가장 가까움) — 앞 판은 오늘 시험을 지난 시험 쪽으로 밀었다.
+ */
 export function sortExams(list, today) {
   const t0 = dayNum(today);
   const up = [];
   const past = [];
-  for (const e of Array.isArray(list) ? list : []) (dayNum(e.date) > t0 ? up : past).push(e);
+  for (const e of Array.isArray(list) ? list : []) (dayNum(e.date) >= t0 ? up : past).push(e);
   up.sort((a, b) => dayNum(a.date) - dayNum(b.date) || (a.createdAt - b.createdAt));
   past.sort((a, b) => dayNum(b.date) - dayNum(a.date) || (a.createdAt - b.createdAt));
   return up.concat(past);
@@ -152,6 +155,15 @@ export function planInputOf(exam, ctx) {
 }
 
 /**
+ * `[다듬기 5 — 13-2R]` 화면 상태 — `planFor` 는 시험일 당일도 `past`(공부할 날 0)로 돌려준다. 화면은 당일을 따로("오늘 시험입니다")
+ * 갈라 보인다(계산은 그대로 — 필요·호출 줄은 past 와 같이 없음). 순수.
+ */
+export function viewStatus(plan) {
+  const p = plan || {};
+  return p.status === 'past' && p.calendarDays === 0 ? 'today' : p.status;
+}
+
+/**
  * 결과 카드에 보일 것 — **`plan`(planFor 결과)의 숫자 그대로**. 화면이 계산하지 않는다(13-2 변이 "자체 계산"이 여기서 걸린다).
  * @param {Object} plan  `planFor` 결과
  * @param {Object} pi    `planInputOf` 결과
@@ -169,7 +181,7 @@ export function examView(plan, pi, aux) {
   }) : [];
   const dr = dayRead(a.log, a.today);
   return {
-    status: plan.status,
+    status: viewStatus(plan),
     days: { n: plan.calendarDays, m: plan.days },
     progress: pr ? { pct: pr.readPct, x: pr.readPages, y: pr.pages, left: plan.remaining, counted: pr.counted, needCount: pr.needCount } : null,
     ranges: perRange,
@@ -227,9 +239,22 @@ function fmtDay(key) {
   if (!Number.isFinite(n)) return '—';
   try { return new Intl.DateTimeFormat(getLang(), { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(n * 86400000); } catch (e) { return String(key); }
 }
-/** 요일 이름(UI 언어) — 2026-11-15 는 일요일(0). */
-function wdName(w, style) {
-  try { return new Intl.DateTimeFormat(getLang(), { weekday: style || 'short', timeZone: 'UTC' }).format((dayNum('2026-11-15') + w) * 86400000); } catch (e) { return String(w); }
+/** 요일 이름(UI 언어) — 2026-11-15 는 일요일(0). `lang` 은 시험이 넣는다. */
+function wdName(w, style, lang) {
+  try { return new Intl.DateTimeFormat(lang || getLang(), { weekday: style || 'short', timeZone: 'UTC' }).format((dayNum('2026-11-15') + w) * 86400000); } catch (e) { return String(w); }
+}
+
+/** `[다듬기 5 — 13-2R]` 요일 칩(48px)에 꺾이지 않고 들어가는 글자 수(코드 포인트) — `short` 이름이 이보다 길면 `narrow`. */
+export const WD_CHIP_MAX = 4;
+/**
+ * 요일 칩 글자 — `short`(일·Sun·dim.) 가 모두 `WD_CHIP_MAX` 자 안이면 그것, 하나라도 넘으면 일곱 모두 `narrow`(ar «الاثنين» 이
+ * 칩 가운데서 꺾이던 것 — ar `narrow` 는 «ح ن ث ر خ ج س» 로 서로 다르다). 온전한 이름은 `aria-label`(`long`). 순수(언어만 받는다).
+ * @returns {{style:'short'|'narrow', labels:string[]}}
+ */
+export function dayChipLabels(lang) {
+  const short = ALL_DAYS.map((w) => wdName(w, 'short', lang));
+  if (short.every((s) => Array.from(s).length <= WD_CHIP_MAX)) return { style: 'short', labels: short };
+  return { style: 'narrow', labels: ALL_DAYS.map((w) => wdName(w, 'narrow', lang)) };
 }
 
 function todayKey() { return dayKeyOf(Date.now()); }
@@ -387,7 +412,7 @@ function examCard(e) {
   box.setAttribute('data-exam-id', e.id);
   const v = (S.views.get(e.id) || {}).view;
   const plan = (S.views.get(e.id) || {}).plan;
-  box.setAttribute('data-status', plan ? plan.status : '');
+  box.setAttribute('data-status', plan ? viewStatus(plan) : '');
   const h = el('h2', 'pl-name', e.name);
   h.setAttribute('dir', 'auto');
   box.appendChild(h);
@@ -397,7 +422,7 @@ function examCard(e) {
   // 1. 날
   box.appendChild(line('pl-days', t('planner.days', { n: fmt(v.days.n), m: fmt(v.days.m) }), 'days', [v.days.n, v.days.m]));
   // 상태
-  const st = { past: 'planner.status.past', done: 'planner.status.done', tight: 'planner.status.tight', short: 'planner.status.short', ok: 'planner.status.ok' }[v.status];
+  const st = { past: 'planner.status.past', today: 'planner.status.today', done: 'planner.status.done', tight: 'planner.status.tight', short: 'planner.status.short', ok: 'planner.status.ok' }[v.status];
   if (st) box.appendChild(line('pl-st pl-st-' + v.status, t(st), 'status', v.status));
 
   // 2. 진도
@@ -534,8 +559,9 @@ function buildDayChips() {
   if (!els || !els.days) return;
   const on = new Set(S.form ? S.form.weekdays : ALL_DAYS);
   while (els.days.firstChild) els.days.removeChild(els.days.firstChild);
+  const chips = dayChipLabels();   // `[다듬기 5]` 긴 short 이름(ar)은 narrow
   for (const w of ALL_DAYS) {
-    const b = el('button', 'pl-chip', wdName(w, 'short'));
+    const b = el('button', 'pl-chip', chips.labels[w]);
     b.type = 'button';
     b.setAttribute('data-pa', 'wd');
     b.setAttribute('data-wd', String(w));
@@ -791,13 +817,15 @@ function cssId(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 
 /**
  * 서재 "오늘" 줄에 보일 시험 — 가까운 것 하나. 숫자는 `planFor`(날 수)에서.
- * @returns {{exam:Object, days:?number, past:boolean}|null}
+ * `[다듬기 5 — 13-2R]` 시험일 당일은 `today`(지난 것 아님 — "오늘 시험입니다").
+ * @returns {{exam:Object, days:?number, past:boolean, today:boolean}|null}
  */
 export function libraryExamLine(examsSetting, today) {
   const e = nearestExam(examsOf(examsSetting), today);
   if (!e) return null;
   const p = planFor({ today: today, exam: e.date, remaining: 1 });
-  return { exam: e, days: p.calendarDays, past: p.status === 'past' };
+  const st = viewStatus(p);
+  return { exam: e, days: p.calendarDays, past: st === 'past', today: st === 'today' };
 }
 
 /* ── 진단 ───────────────────────────────────────────── */

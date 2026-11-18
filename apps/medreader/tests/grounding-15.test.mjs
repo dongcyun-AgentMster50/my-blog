@@ -580,7 +580,10 @@ test('Q12 ★ 15-2R #1 — 낱말·수 가운데서 시작·끝 → rejected(mid
     { paraId: 'k1', pageNo: 18, text: '중등도 폐렴의 성인 환자에게 항생제를 4~6일 동안 투여한다. 검사실 정상 범위는 136～146 mEq/L 이며 이보다 낮으면 저나트륨혈증이다.' },
     { paraId: 'w1', pageNo: 18, text: 'Give ３～５ tablets daily for the first week only in frail adults.' },
     { paraId: 'x1', pageNo: 19, text: 'The rate constant was 3 × 10⁻⁸ per second and 2 × 10^-5 per minute in vitro.' },
-    { paraId: 'x2', pageNo: 19, text: 'Colonies grew from 10³–10⁴ per plate in the first culture series.' }
+    { paraId: 'x2', pageNo: 19, text: 'Colonies grew from 10³–10⁴ per plate in the first culture series.' },
+    // `[다듬기 5 — 15-2eR W2·W4]` 물결 대시 〜(U+301C)·`^+` 지수 — 지우면 살아남던 변이를 잡는 꼴
+    { paraId: 'k2', pageNo: 20, text: '편두통이 있는 성인 환자의 두통 발작은 보통 3〜4시간 지속되며 대개 저절로 가라앉는다.' },
+    { paraId: 'x3', pageNo: 20, text: 'In the treated group the colony counts reached 10^+3 per plate after the second day of culture.' }
   ];
   const runE = (ev, pid) => G.groundQuiz(PE2, { questions: [{ stem: 'Synthetic ' + ev.slice(0, 12) + '?', answer: 'A', evidence: ev, evidenceParaId: pid,
     options: opts(L5, ['the right choice', 'other b', 'other c', 'other d', 'other e']), explanation: { tr: '해설.', src: 'Explanation.' } }] }, { withSrc: true }).questions[0];
@@ -597,7 +600,11 @@ test('Q12 ★ 15-2R #1 — 낱말·수 가운데서 시작·끝 → rejected(mid
     ['⁻⁸ per second and 2 × 10^-5', 'x1'],                   // ★ ⁻⁸…(지수 가운데 시작)
     ['per second and 2 × 10', 'x1'],                                   // ★ 10^-5 → …10(캐럿 빼기 끝)
     ['-5 per minute in vitro.', 'x1'],                                     // ★ 10^-5 → -5…(캐럿 뒤 시작)
-    ['Colonies grew from 10³', 'x2']                                   // ★ 10³–10⁴ → …10³(위첨자 덩어리 — 15-2dR Z3)
+    ['Colonies grew from 10³', 'x2'],                                  // ★ 10³–10⁴ → …10³(위첨자 덩어리 — 15-2dR Z3)
+    ['편두통이 있는 성인 환자의 두통 발작은 보통 3', 'k2'],                  // ★ 3〜4시간 → …3(물결 대시 끝 — W2)
+    ['4시간 지속되며 대개 저절로 가라앉는다.', 'k2'],                        // 3〜4 → 4…(물결 대시 뒤 시작)
+    ['the colony counts reached 10', 'x3'],                                // ★ 10^+3 → …10(`^+` 지수 끝 — W4)
+    ['3 per plate after the second day of culture.', 'x3']                 // 10^+3 → 3…(지수 가운데 시작)
   ];
   for (const [ev, pid] of midE) {
     const r = runE(ev, pid);
@@ -616,7 +623,9 @@ test('Q12 ★ 15-2R #1 — 낱말·수 가운데서 시작·끝 → rejected(mid
     ['3 × 10⁻⁸ per second and', 'x1'],                       // 지수 덩어리 전체
     ['per second and 2 × 10^-5 per minute', 'x1'],
     ['per minute in vitro.', 'x1'],                                        // 덩어리 바로 뒤에서 시작
-    ['Colonies grew from 10³–10⁴ per plate', 'x2']
+    ['Colonies grew from 10³–10⁴ per plate', 'x2'],
+    ['성인 환자의 두통 발작은 보통 3〜4시간 지속되며', 'k2'],                           // 물결 대시 덩어리 전체
+    ['the colony counts reached 10^+3 per plate', 'x3']                    // `^+` 지수 덩어리 전체
   ];
   for (const [ev, pid] of okE) {
     const r = runE(ev, pid);
