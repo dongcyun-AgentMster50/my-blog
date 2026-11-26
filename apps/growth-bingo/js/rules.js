@@ -425,7 +425,9 @@
     if (today > R.DAYS) return true;
     var daysLeft = R.DAYS - t + 1;
 
-    if (cell.window && t > cell.window.to) return true;
+    /* 기간 끝 다음 날에도 "어제 한 일"로 기록할 수 있으므로(BACKDATE_DAYS) 그날까지는 살아 있다.
+       기간이 끝나자마자 죽은 칸으로 표시하면 아직 채울 수 있는 칸에 ×가 뜬다. */
+    if (cell.window && t > cell.window.to + R.BACKDATE_DAYS) return true;
     if (rem > daysLeft) return true;
     if (cell.weekly) {
       var weeksLeft = weekOf(R.DAYS) - weekOf(t) + 1;

@@ -141,7 +141,9 @@
   /* ── 저장 ──────────────────────────────────────────── */
   function persist() {
     if (EMBED) return;
-    store.save(S, nowIso());
+    /* updatedAt은 "다른 탭이 먼저 썼는가"를 가르는 표지라 밀리초까지 적는다.
+       초 단위면 같은 초 안의 두 탭 저장이 서로를 알아보지 못해 한쪽 기록이 덮인다. */
+    store.save(S, new Date().toISOString());
     renderBanners();
   }
 
@@ -576,10 +578,12 @@
       case 'SAME_CELL_SAME_DAY': return '이 칸은 하루에 1개입니다. ' + w + '는 이미 했습니다.';
       case 'OUT_OF_WINDOW':
         if (d.early) return d.from + '일차(' + dayMd(d.from) + ')부터 할 수 있습니다.';
+        /* 기간 끝 다음 날: 오늘 날짜로는 안 되지만 "어제 한 일"로는 아직 기록할 수 있다. */
+        if (!UI.claimYesterday && UI.day === d.to + board.rules.BACKDATE_DAYS) return '기간(' + d.from + '~' + d.to + '일차)이 어제 끝났습니다. 어제 했다면 [어제 한 일 기록]으로 바꿔 오늘까지 기록할 수 있습니다.';
         return '기간(' + d.from + '~' + d.to + '일차)이 지났습니다. 이 칸이 든 줄은 완성할 수 없습니다.';
       case 'LEVEL_LOCKED': {
         var lower = cellOf(d.lower);
-        if (d.confirmed + d.pending >= d.boxes) return lower.title + '의 도장을 다 받으면 열립니다. 가족 도장을 받으면 열립니다.';
+        if (d.confirmed + d.pending >= d.boxes) return lower.title + '에 확인 대기 중인 스티커가 있습니다(지금 ' + d.confirmed + '개 확정, ' + d.pending + '개 확인 대기). 가족 도장을 받으면 열립니다.';
         return lower.title + '에 도장 ' + d.boxes + '개가 다 찍혀야 열립니다 (지금 ' + d.confirmed + '개 확정, ' + d.pending + '개 확인 대기).';
       }
       case 'LADDER_DAILY': return board.ladderNames[cell.ladder] + ' 사다리는 하루에 한 계단만 오릅니다.';
@@ -1021,9 +1025,7 @@
     return gate.requestVerifier();
   }
 
-  function doStamp(id) {
-    var altEl = $('[data-alt="' + id + '"]');
-    var alt = !!(altEl && altEl.checked);
+  function doStamp(id, alt) {
     var before = completeLineIds();
     var msg = '';
     var failed = false;
@@ -1270,7 +1272,15 @@
       case 'line': UI.selectedLine = UI.selectedLine === el.getAttribute('data-line') ? null : el.getAttribute('data-line'); render(); break;
       case 'line-go': UI.selectedLine = el.getAttribute('data-line'); setTab('board'); break;
       case 'claim': doClaim(cellId); break;
-      case 'stamp': withVerifier(function () { doStamp(id); }); break;
+      case 'stamp': {
+        /* 같은 스티커의 체크 상자가 [오늘] 목록과 칸 상세 시트에 둘 다 있을 수 있다.
+           누른 도장 버튼이 든 줄의 상자만 읽는다. */
+        var row = el.closest('.srow');
+        var altBox = row ? row.querySelector('[data-alt]') : null;
+        var altOn = !!(altBox && altBox.checked);
+        withVerifier(function () { doStamp(id, altOn); });
+        break;
+      }
       case 'reject': withVerifier(function () { removeWithLog('reject', id, 'reject'); }); break;
       case 'revoke': withVerifier(function () { removeWithLog('revoke', id, 'revoke'); }); break;
       case 'cancel-own': removeWithLog('cancel', id, 'cancelOwn'); break;

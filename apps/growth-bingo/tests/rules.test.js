@@ -220,11 +220,12 @@ check('claim은 새 core를 돌려주고 id·일차·날짜·상태가 맞다', 
 });
 
 console.log('A-3 죽은 칸과 길잡이');
-check('11일차에 E-W1이 비어 있으면 죽은 칸이고, 길잡이 조합에 가로7·세로4가 들어가지 않는다', function () {
+check('12일차에 E-W1이 비어 있으면 죽은 칸이고, 길잡이 조합에 가로7·세로4가 들어가지 않는다 (11일차는 "어제 한 일"로 아직 가능)', function () {
   var core = mk([]);
-  assert.strictEqual(rules.isCellDead(board, core, 'E-W1', 11), true);
+  assert.strictEqual(rules.isCellDead(board, core, 'E-W1', 12), true);
+  assert.strictEqual(rules.isCellDead(board, core, 'E-W1', 11), false);
   assert.strictEqual(rules.isCellDead(board, core, 'E-W1', 10), false);
-  var p = guide.plan(board, core, { today: 11, mode: 'fewest' });
+  var p = guide.plan(board, core, { today: 12, mode: 'fewest' });
   assert.strictEqual(p.status, 'ok');
   assert.strictEqual(p.lines.indexOf('r7'), -1);
   assert.strictEqual(p.lines.indexOf('c4'), -1);
@@ -236,7 +237,8 @@ check('주 1회 칸: 가족 보고회를 1·2주차에 건너뛰고 15일차가 
 });
 check('주차 고정 칸은 기간이 끝나면 죽고, 이미 채웠으면 죽지 않는다', function () {
   assert.strictEqual(rules.isCellDead(board, mk([['F-W3', 15]]), 'F-W3', 30), false);
-  assert.strictEqual(rules.isCellDead(board, mk([]), 'F-W3', 25), true);
+  assert.strictEqual(rules.isCellDead(board, mk([]), 'F-W3', 25), false);
+  assert.strictEqual(rules.isCellDead(board, mk([]), 'F-W3', 26), true);
 });
 check('사다리 아래 레벨이 죽으면 위 레벨도 죽는다 (턱걸이는 하루 걸러라 남은 날이 두 배 필요)', function () {
   /* 34일차: 턱걸이 LV1~LV3를 모두 하려면 6개 → 하루 걸러 11일 필요, 남은 날 2 */

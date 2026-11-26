@@ -16,7 +16,14 @@
   }
 
   var params = new URLSearchParams(window.location.search);
-  var start = /^\d{4}-\d{2}-\d{2}$/.test(params.get('start') || '') ? params.get('start') : '';
+  /* 2026-13-45 같은 없는 날짜는 다른 날짜로 넘쳐 계산되므로 되돌려 보아 같은 날인지 확인한다. */
+  function validDate(s) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return false;
+    var p = s.split('-').map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    return d.getUTCFullYear() === p[0] && d.getUTCMonth() === p[1] - 1 && d.getUTCDate() === p[2];
+  }
+  var start = validDate(params.get('start')) ? params.get('start') : '';
   var detail = params.get('detail') === '1';
   var guide = params.get('guide') === '1';
 
