@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <!-- user-scalable=no는 쓰지 않는다: 두 손가락 확대를 막지 않는다. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>성장 빙고</title>
+  <meta name="description" content="영어·체력·AI를 섞은 5주 7×7 빙고. 하루 최대 4칸, 가족이 도장을 찍어야 스티커가 확정되고, 길잡이가 지금 가장 가까운 7줄을 알려 줍니다.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="stylesheet" href="style.css">
+  <!-- 읽는 순서가 의존 순서다. 모두 클래식 스크립트이고 전역은 window.GrowthBingo 하나뿐이다. -->
+  <script src="js/board-data.js" defer></script>
+  <script src="js/rules.js" defer></script>
+  <script src="js/guide.js" defer></script>
+  <script src="js/store.js" defer></script>
+  <script src="js/family-gate.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <div id="app" class="app">
+    <div id="banners" class="banners"></div>
+
+    <header class="head">
+      <div class="head-row">
+        <h1 class="head-title">성장 빙고</h1>
+        <span id="head-day" class="head-day"></span>
+        <span id="head-streak" class="head-streak"></span>
+      </div>
+      <div class="head-row">
+        <p id="head-summary" class="head-summary"></p>
+        <button type="button" id="head-family" class="btn btn-small" hidden>가족 도장</button>
+      </div>
+    </header>
+
+    <main id="panel" class="panel" role="tabpanel" aria-labelledby="tab-board" tabindex="-1"></main>
+
+    <nav class="tabbar" role="tablist" aria-label="화면 고르기">
+      <button type="button" role="tab" id="tab-board" class="tab" data-tab="board" aria-controls="panel" aria-selected="true">판</button>
+      <button type="button" role="tab" id="tab-today" class="tab" data-tab="today" aria-controls="panel" aria-selected="false" tabindex="-1">오늘</button>
+      <button type="button" role="tab" id="tab-status" class="tab" data-tab="status" aria-controls="panel" aria-selected="false" tabindex="-1">현황</button>
+      <button type="button" role="tab" id="tab-rules" class="tab" data-tab="rules" aria-controls="panel" aria-selected="false" tabindex="-1">규칙</button>
+      <button type="button" role="tab" id="tab-settings" class="tab" data-tab="settings" aria-controls="panel" aria-selected="false" tabindex="-1">설정</button>
+    </nav>
+
+    <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+    <noscript><p class="banner banner-error">성장 빙고는 자바스크립트가 켜져 있어야 동작합니다.</p></noscript>
+  </div>
+  <div id="modal-root"></div>
+</body>
+</html>
