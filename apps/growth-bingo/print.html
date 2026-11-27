@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>성장 빙고 — 인쇄용 판</title>
+  <meta name="description" content="성장 빙고 인쇄용 판 (A4). 빈 7×7 판과 규칙, 기간표를 종이로 뽑습니다.">
+  <meta name="color-scheme" content="light">
+  <link rel="stylesheet" href="print.css">
+  <!-- 판 내용은 앱과 같은 board-data.js 하나를 읽어 그린다. -->
+  <script src="js/board-data.js" defer></script>
+  <script src="js/print.js" defer></script>
+</head>
+<body>
+  <!-- 화면에서만 보이고 인쇄에서는 숨는다 -->
+  <div class="toolbar no-print">
+    <div class="toolbar-row">
+      <button type="button" id="do-print" class="tb-btn tb-primary">인쇄</button>
+      <a class="tb-btn" href="index.html">앱으로 돌아가기</a>
+    </div>
+    <fieldset class="toolbar-opts">
+      <legend>인쇄 옵션</legend>
+      <label>시작일 <input type="date" id="opt-start"></label>
+      <label><input type="checkbox" id="opt-detail"> 3장: 칸별 기준표 붙이기</label>
+      <label><input type="checkbox" id="opt-guide"> 길잡이 없이 쓸 때: 줄 번호에 표시</label>
+    </fieldset>
+    <p class="toolbar-note">A4 세로로 인쇄하세요. 채운 기록은 인쇄되지 않고, 종이 판은 빈 판입니다.</p>
+  </div>
+  <main id="sheets"></main>
+  <noscript><p>인쇄용 판은 자바스크립트가 켜져 있어야 그려집니다.</p></noscript>
+</body>
+</html>
